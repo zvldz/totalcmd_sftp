@@ -272,9 +272,17 @@ if ($vcToolsVersion) {
 Write-Host ""
 Write-Host "--- Preparing Build Directories ---" -ForegroundColor Cyan
 
-# Clean bin directory (only final output)
-if (-not (Remove-PathSafe -PathToRemove $binDir)) {
-    Write-Host "  Continuing with existing bin directory" -ForegroundColor Yellow
+# Clean only the final artifact, not the whole bin directory.
+# Avoids spurious failures when bin/ is held by AV, indexer, or a file monitor —
+# those typically lock the folder handle without locking individual files.
+$zipPath = Join-Path $binDir "$projectName.zip"
+if (Test-Path $zipPath) {
+    if (-not (Remove-PathSafe -PathToRemove $zipPath)) {
+        Write-Host "  Continuing with existing zip in place" -ForegroundColor Yellow
+    }
+}
+if (-not (Test-Path $binDir)) {
+    New-Item -ItemType Directory -Path $binDir -Force | Out-Null
 }
 New-Item -ItemType Directory -Path $binDir -Force | Out-Null
 
