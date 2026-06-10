@@ -337,6 +337,48 @@ int WINAPI FsGetFileW(LPCWSTR RemoteName, LPWSTR LocalName, int CopyFlags, Remot
             return CreateHelpFileLocalW(LocalName, OverWrite);
         }
 
+        // F3/F4 on a root-level saved session entry → open the Edit Session
+        // dialog instead of downloading the entry as a file. Same effect as
+        // RMB → Properties / Alt+Enter, but reachable from the keyboard.
+        //
+        // TC's View/Edit always wants a downloaded file: any non-OK return
+        // shows "Error downloading file", and FS_FILE_OK makes TC open the
+        // viewer/editor on the temp file afterwards (this cannot be
+        // suppressed — confirmed against the Registry plugin's behaviour).
+        // So after the dialog we write a short stub note into the temp file
+        // and return OK: no error, and the trailing viewer/editor shows a
+        // self-explanatory message instead of misleading editable settings.
+        if (remoteView.size() > 1 && remoteView.find(L'\\', 1) == std::wstring_view::npos) {
+            std::array<char, wdirtypemax> remoteserver{};
+            walcopy(remoteserver.data(), RemoteName + 1, remoteserver.size() - 1);
+            if (_stricmp(remoteserver.data(), s_f7newconnection) != 0 &&
+                _stricmp(remoteserver.data(), s_quickconnect)    != 0)
+            {
+                if (SftpConfigureServer(remoteserver.data(), inifilename)) {
+                    LoadServersFromIniW(inifilenameW, s_quickconnect);
+                    // Drop any active session so the next listing rebuilds it
+                    // with the edited settings (mirrors the properties path).
+                    std::array<char, wdirtypemax> disconnPath{};
+                    strlcpy(disconnPath.data(), "\\", disconnPath.size() - 1);
+                    strlcat(disconnPath.data(), remoteserver.data(), disconnPath.size() - 1);
+                    FsDisconnect(disconnPath.data());
+                }
+                // Stub note for the viewer/editor TC opens after FS_FILE_OK.
+                std::string note = "Session '";
+                note.append(remoteserver.data());
+                note.append("' was opened for editing in a dialog.\r\n"
+                             "This file is not used \xE2\x80\x94 you can close this window.\r\n");
+                HANDLE hStub = CreateFileW(LocalName, GENERIC_WRITE, 0, nullptr,
+                                           CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+                if (hStub != INVALID_HANDLE_VALUE) {
+                    DWORD written = 0;
+                    WriteFile(hStub, note.data(), static_cast<DWORD>(note.size()), &written, nullptr);
+                    CloseHandle(hStub);
+                }
+                return FS_FILE_OK;
+            }
+        }
+
         SanitizeLocalFileNameW(LocalName);
 
         std::wstring remotedir(wdirtypemax, L'\0');
