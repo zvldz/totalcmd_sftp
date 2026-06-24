@@ -8,6 +8,19 @@ detail.
 This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 `10.x` line to make divergence visible in TC's plugin manager.
 
+## 10.0.1.5 — unreleased
+
+### Internal
+
+- Removed `src/core/ConnectionDialogClass.cpp` (an unfinished class-extraction
+  refactor inherited from upstream) and the duplicate `src/php/sftp.php` (the
+  canonical PHP agent script lives at `src/agent/sftp.php`). Pure dead-code
+  cleanup, no behaviour change.
+- Removed the dead `2030-01-01` ZIP timestamp marker from `build.ps1`. It was
+  inherited broken (the LastWriteTime write ran before the FileStream was
+  released, so nothing was ever set), the purpose was never documented, and
+  mtime does not survive `git checkout` anyway. Simpler build script.
+
 ## 10.0.1.4 — 2026-06-24
 
 ### Features

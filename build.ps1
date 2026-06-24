@@ -449,12 +449,7 @@ version=10.0.1.2
         $readmeSource = Join-Path $projectRoot "src\help\readme.txt"
         if (Test-Path $readmeSource)   { Add-ZipFile $readmeSource   "readme.txt" }
 
-        # Set a future timestamp on the ZIP — signature of a static, dependency-free build
-        $futureDate = [DateTime]"2030-01-01 00:00:00"
-        (Get-Item $zipPath).LastWriteTime   = $futureDate
-        (Get-Item $zipPath).CreationTime    = $futureDate
-        (Get-Item $zipPath).LastAccessTime  = $futureDate
-        Write-Host "  Created: $projectName.zip (dated $($futureDate.ToString('yyyy-MM-dd')))" -ForegroundColor Green
+        Write-Host "  Created: $projectName.zip" -ForegroundColor Green
     } catch {
         Write-Host "  Failed to create ZIP: $($_.Exception.Message)" -ForegroundColor Red
     } finally {
