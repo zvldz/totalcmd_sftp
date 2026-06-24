@@ -1123,6 +1123,7 @@ User-facing summary; see `CHANGELOG.md` for per-version detail.
 - **F3 / F4 on a saved session** opens the Edit Session dialog (alternative to Alt+Enter)
 - **Diagnostic status lines are prefixed with the session name** — `[session] Upload file: …`, useful when multiple sessions are open in different TC tabs
 - **Saved-session folders** — group sessions hierarchically via `/` in the DisplayName (`[home/raspi]`). F7 inside a folder creates a session there; F6 covers rename / move / cross-folder / bulk folder rename; F8 covers session and bulk folder delete; jump-host references stay valid across every rename. Padlock icon shown for folder-nested sessions. Backwards compatible with flat session profiles.
+- **`[Active Sessions]` magic folder** — when at least one session is connected, a virtual folder appears in the plugin root. Entering it lists every active session in a flat view with a `[Disconnect All]` row at the top: F8 on a row disconnects that session; F8 on `[Disconnect All]` closes every connection at once; Enter on `[Disconnect All]` does the same and drops you back to the plugin root. The folder auto-hides when nothing is connected. No setup required.
 - **Transparency** — argon2 (used internally for PuTTY PPK v3 key files) is now built from public source instead of a pre-compiled blob
 
 ### In Progress

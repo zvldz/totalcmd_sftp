@@ -10,6 +10,20 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 
 ## 10.0.1.5 — unreleased
 
+### Features
+
+- **`[Active Sessions]` magic folder.** A virtual folder appears in the
+  plugin root whenever at least one saved session is connected.
+  Entering it shows a flat list of every currently-open session by
+  DisplayName (folder-nested sessions keep their slashes), with a
+  `[Disconnect All]` row at the top. Press F8 on a row to disconnect
+  that single session; F8 on `[Disconnect All]` closes everything at
+  once. Pressing Enter on `[Disconnect All]` does the same and
+  additionally drops you back to the plugin root in one gesture. The
+  folder auto-hides when nothing is connected — no setup, no menu
+  configuration. Useful when several sessions are open across TC tabs
+  and you want to pick which one to close without tab-juggling.
+
 ### Internal
 
 - Removed `src/core/ConnectionDialogClass.cpp` (an unfinished class-extraction

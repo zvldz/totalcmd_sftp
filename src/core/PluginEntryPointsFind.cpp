@@ -73,11 +73,19 @@ struct LanPairFindState {
 };
 
 // Plugin-side namespace entry: a saved session, a folder grouping saved
-// sessions, or the [F7 = new connection] pseudo-helper. Used to render the
-// listing for the plugin root and any folder under it.
+// sessions, the [F7 = new connection] pseudo-helper, or — inside the
+// [Active Sessions] magic folder — a live session row / bulk-disconnect
+// trigger. Used to render the listing for the plugin root and any folder
+// under it.
 struct PluginFolderEntry {
     std::string name;
-    enum class Kind { Folder, Session, Pseudo } kind = Kind::Session;
+    enum class Kind {
+        Folder,         // grouping of saved sessions (FILE_ATTRIBUTE_DIRECTORY)
+        Session,        // saved session leaf (IFLNK + UNIXMODE → padlock icon)
+        Pseudo,         // [F7 = new connection] help entry
+        ActiveSession,  // live session row inside [Active Sessions] (plain file)
+        ActiveBulkOp    // [Disconnect All] inside [Active Sessions] (plain file)
+    } kind = Kind::Session;
     DWORD       helpFileSize = 0;   // Pseudo only — used as nFileSizeLow.
 };
 
@@ -205,6 +213,12 @@ static void FillFindDataFromPluginEntry(WIN32_FIND_DATAW& fd, const PluginFolder
             fd.dwFileAttributes = FS_ATTR_UNIXMODE;
             fd.dwReserved0 = LIBSSH2_SFTP_S_IFLNK;
             break;
+        case PluginFolderEntry::Kind::ActiveSession:
+        case PluginFolderEntry::Kind::ActiveBulkOp:
+            // Plain-file rendering so Enter does nothing (the row is just a
+            // disconnect target) and F8 reaches FsDeleteFileW unambiguously.
+            fd.dwFileAttributes = FILE_ATTRIBUTE_NORMAL;
+            break;
     }
 }
 
@@ -238,11 +252,18 @@ static HANDLE BuildPluginFolderListing(const std::string& folderPrefix,
     std::set<std::string, CaseInsensitiveLess> foldersSeen;
     std::vector<PluginFolderEntry> sessions;
     std::vector<PluginFolderEntry> subfolders;
+    bool hasActiveSession = false;
     {
         std::array<char, wdirtypemax> nameBuf{};
         SERVERHANDLE hdl = FindFirstServer(nameBuf.data(), nameBuf.size() - 1);
         while (hdl) {
             std::string fullName = nameBuf.data();
+            // Track whether any session is currently connected — used at root
+            // to decide whether to surface the [Active Sessions] magic folder.
+            if (isRoot && !hasActiveSession &&
+                GetServerIdFromName(fullName.c_str(), GetCurrentThreadId()) != nullptr) {
+                hasActiveSession = true;
+            }
             std::string relative;
             bool include = false;
             if (isRoot) {
@@ -283,6 +304,16 @@ static HANDLE BuildPluginFolderListing(const std::string& folderPrefix,
         [&](const PluginFolderEntry& s) { return foldersSeen.contains(s.name); }),
         sessions.end());
 
+    // At root, if anything is currently connected, expose the magic
+    // [Active Sessions] folder right after the F7 helper entry so the user
+    // can see and disconnect open sessions without tab-juggling.
+    if (isRoot && hasActiveSession) {
+        PluginFolderEntry active;
+        active.name = kActiveSessionsFolder;
+        active.kind = PluginFolderEntry::Kind::Folder;
+        state->entries.push_back(std::move(active));
+    }
+
     // Folders first (TC convention), then leaf sessions.
     for (auto& e : subfolders) state->entries.push_back(std::move(e));
     for (auto& e : sessions)   state->entries.push_back(std::move(e));
@@ -305,6 +336,86 @@ static HANDLE BuildPluginFolderListing(const std::string& folderPrefix,
     return static_cast<HANDLE>(lf.release());
 }
 
+// Build a synthetic listing for the [Active Sessions] magic folder. First row
+// is a bulk [Disconnect All]; remaining rows are every currently-connected
+// session by its full DisplayName (folder-nested sessions keep their slashes,
+// so a row reads e.g. "home/raspi" — flat, one F8 away from disconnect).
+static HANDLE BuildActiveSessionsListing(WIN32_FIND_DATAW* FindData)
+{
+    auto state = std::make_unique<PluginFolderFindState>();
+
+    // Active sessions first; [Disconnect All] only appears when at least one
+    // session is connected (an empty listing after F8 simply leaves the user
+    // with TC's `..` parent entry to back out).
+    std::array<char, wdirtypemax> nameBuf{};
+    SERVERHANDLE hdl = FindFirstServer(nameBuf.data(), nameBuf.size() - 1);
+    while (hdl) {
+        if (GetServerIdFromName(nameBuf.data(), GetCurrentThreadId()) != nullptr) {
+            PluginFolderEntry e;
+            e.name = nameBuf.data();
+            e.kind = PluginFolderEntry::Kind::ActiveSession;
+            state->entries.push_back(std::move(e));
+        }
+        nameBuf[0] = 0;
+        hdl = FindNextServer(hdl, nameBuf.data(), nameBuf.size() - 1);
+    }
+    if (!state->entries.empty()) {
+        PluginFolderEntry bulk;
+        bulk.name = kDisconnectAllEntry;
+        bulk.kind = PluginFolderEntry::Kind::ActiveBulkOp;
+        state->entries.insert(state->entries.begin(), std::move(bulk));
+    }
+
+    auto lf = std::make_unique<tLastFindStuct>();
+    lf->sftpdataptr    = state.release();
+    lf->serverid       = nullptr;
+    lf->rootfindhandle = nullptr;
+    lf->rootfindfirst  = false;
+    lf->isLanPair      = false;
+    lf->isPluginFolder = true;
+
+    auto* st = static_cast<PluginFolderFindState*>(lf->sftpdataptr);
+    if (st->entries.empty()) {
+        SetLastError(ERROR_NO_MORE_FILES);
+        return static_cast<HANDLE>(lf.release());
+    }
+    FillFindDataFromPluginEntry(*FindData, st->entries[0]);
+    st->index = 1;
+    return static_cast<HANDLE>(lf.release());
+}
+
+// See PluginEntryPointsInternal.h for the contract.
+bool IsActiveSessionsPath(LPCWSTR path, std::string* outEntry)
+{
+    if (!path || path[0] != L'\\') return false;
+    const std::wstring_view view(path + 1);  // strip leading '\\'
+    const std::wstring_view magic(kActiveSessionsFolderW);
+    if (view.size() < magic.size()) return false;
+    if (_wcsnicmp(view.data(), magic.data(), magic.size()) != 0) return false;
+    const std::wstring_view after = view.substr(magic.size());
+    if (after.empty() || (after.size() == 1 && (after[0] == L'\\' || after[0] == L'/'))) {
+        if (outEntry) outEntry->clear();
+        return true;
+    }
+    if (after[0] != L'\\' && after[0] != L'/') return false;
+    if (outEntry) {
+        std::wstring_view trail = after.substr(1);
+        // Convert to narrow ANSI and replace any '\' with '/' so folder-
+        // nested DisplayNames round-trip cleanly.
+        const int needed = WideCharToMultiByte(CP_ACP, 0, trail.data(),
+                                                static_cast<int>(trail.size()),
+                                                nullptr, 0, nullptr, nullptr);
+        outEntry->assign(needed > 0 ? static_cast<size_t>(needed) : 0, '\0');
+        if (needed > 0) {
+            WideCharToMultiByte(CP_ACP, 0, trail.data(),
+                                 static_cast<int>(trail.size()),
+                                 outEntry->data(), needed, nullptr, nullptr);
+        }
+        std::replace(outEntry->begin(), outEntry->end(), '\\', '/');
+    }
+    return true;
+}
+
 HANDLE WINAPI FsFindFirstW(LPCWSTR Path, LPWIN32_FIND_DATAW FindData)
 {
     sftp::DllExceptionBarrier _barrier;
@@ -320,6 +431,19 @@ HANDLE WINAPI FsFindFirstW(LPCWSTR Path, LPWIN32_FIND_DATAW FindData)
             LoadServersFromIniW(inifilenameW, s_quickconnect);
             *FindData = {};
             return BuildPluginFolderListing(std::string{}, FindData);
+        }
+
+        // [Active Sessions] magic folder — synthetic listing of currently
+        // connected sessions. Detected before the resolver because the path
+        // doesn't correspond to any saved session and would otherwise fall
+        // through into the implicit-connect branch.
+        {
+            std::string trailingEntry;
+            if (IsActiveSessionsPath(Path, &trailingEntry) && trailingEntry.empty()) {
+                LoadServersFromIniW(inifilenameW, s_quickconnect);
+                *FindData = {};
+                return BuildActiveSessionsListing(FindData);
+            }
         }
 
         // Plugin-side folder navigation: the path is not a real session but a

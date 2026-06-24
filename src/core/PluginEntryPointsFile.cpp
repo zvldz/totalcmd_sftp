@@ -41,6 +41,36 @@ int WINAPI FsExecuteFileW(HWND MainWin, LPWSTR RemoteName, LPCWSTR Verb)
         std::array<char, wdirtypemax> remoteserver{};
         std::array<WCHAR, wdirtypemax> remotedir{};
         if (_wcsicmp(Verb, L"open") == 0) {   // follow symlink
+            // Rows inside the [Active Sessions] magic folder are virtual
+            // markers, not real files. Enter on them must NOT fall through
+            // to TC's "download then shell-open" path. Two cases:
+            //   1. [Disconnect All] — Enter performs the bulk action (same
+            //      gesture as F8 on it). There's nothing to navigate to,
+            //      so Enter == "execute" makes sense here.
+            //   2. A live session row — Enter is a silent no-op so an
+            //      accidental arrow-and-Enter doesn't kill a connection.
+            //      F8 stays the deliberate disconnect gesture.
+            {
+                std::string activeEntry;
+                if (IsActiveSessionsPath(RemoteName, &activeEntry)) {
+                    if (!activeEntry.empty() &&
+                        _stricmp(activeEntry.c_str(), kDisconnectAllEntry) == 0)
+                    {
+                        FsDeleteFileW(RemoteName);
+                        // After Disconnect All the [Active Sessions] folder
+                        // is empty (and gone from root since no active
+                        // sessions remain). Auto-navigate the panel back to
+                        // plugin root via TC's documented symlink-follow
+                        // protocol: rewrite RemoteName in place to the
+                        // target path and return FS_EXEC_SYMLINK.
+                        RemoteName[0] = L'\\';
+                        RemoteName[1] = 0;
+                        return FS_EXEC_SYMLINK;
+                    }
+                    return FS_EXEC_OK;
+                }
+            }
+
             // Pseudo helper entry "[F7 = new connection]" opens the
             // new-connection dialog directly, no resolver involvement.
             if (RemoteName[0] && RemoteName[1] &&
@@ -480,6 +510,29 @@ int WINAPI FsGetFileW(LPCWSTR RemoteName, LPWSTR LocalName, int CopyFlags, Remot
             return CreateHelpFileLocalW(LocalName, OverWrite);
         }
 
+        // F3/F4/F5 on a row inside the [Active Sessions] magic folder →
+        // write a one-line stub note into the temp file and return OK.
+        // Without this TC tries to download the row from the server and
+        // pops "Error downloading file" because none of these paths exist.
+        {
+            std::string entry;
+            if (IsActiveSessionsPath(RemoteName, &entry) && !entry.empty()) {
+                std::string note;
+                if (_stricmp(entry.c_str(), kDisconnectAllEntry) == 0)
+                    note = "Press F8 here to disconnect every active session.\r\n";
+                else
+                    note = "Press F8 here to disconnect session '" + entry + "'.\r\n";
+                HANDLE hStub = CreateFileW(LocalName, GENERIC_WRITE, 0, nullptr,
+                                           CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+                if (hStub != INVALID_HANDLE_VALUE) {
+                    DWORD written = 0;
+                    WriteFile(hStub, note.data(), static_cast<DWORD>(note.size()), &written, nullptr);
+                    CloseHandle(hStub);
+                }
+                return FS_FILE_OK;
+            }
+        }
+
         // F3/F4 on a saved-session entry (root-level OR nested in a folder)
         // → open the Edit Session dialog instead of downloading the entry as
         // a file. Same effect as RMB → Properties / Alt+Enter, but reachable
@@ -720,6 +773,46 @@ BOOL WINAPI FsDeleteFileW(LPCWSTR RemoteName)
         const std::wstring_view remoteView = RemoteName ? std::wstring_view(RemoteName) : std::wstring_view{};
         if (remoteView.size() < 2)
             return false;
+
+        // F8 on a row inside the [Active Sessions] magic folder → disconnect
+        // that session (not delete it from INI). Resolved before the path
+        // resolver because none of these paths correspond to a saved session.
+        {
+            std::string entry;
+            if (IsActiveSessionsPath(RemoteName, &entry) && !entry.empty()) {
+                if (_stricmp(entry.c_str(), kDisconnectAllEntry) == 0) {
+                    // Snapshot active sessions first, then walk and disconnect —
+                    // FsDisconnect mutates g_servers, so we can't iterate it
+                    // live.
+                    std::vector<std::string> active;
+                    {
+                        std::array<char, wdirtypemax> nameBuf{};
+                        SERVERHANDLE hdl = FindFirstServer(nameBuf.data(), nameBuf.size() - 1);
+                        while (hdl) {
+                            if (GetServerIdFromName(nameBuf.data(), GetCurrentThreadId()) != nullptr) {
+                                active.emplace_back(nameBuf.data());
+                            }
+                            nameBuf[0] = 0;
+                            hdl = FindNextServer(hdl, nameBuf.data(), nameBuf.size() - 1);
+                        }
+                    }
+                    for (const auto& name : active) {
+                        std::string disconnPath;
+                        disconnPath.reserve(name.size() + 1);
+                        disconnPath.append("\\").append(name);
+                        FsDisconnect(disconnPath.c_str());
+                    }
+                } else {
+                    std::string disconnPath;
+                    disconnPath.reserve(entry.size() + 1);
+                    disconnPath.append("\\").append(entry);
+                    FsDisconnect(disconnPath.c_str());
+                }
+                HWND hTcMain = FindWindowA("TTOTAL_CMD", nullptr);
+                if (hTcMain) PostMessage(hTcMain, WM_USER + 51, 540, 0);
+                return true;
+            }
+        }
 
         const PathResolution r = ResolvePathKindW(RemoteName);
 
