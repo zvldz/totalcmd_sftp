@@ -2,7 +2,7 @@
 // Microsoft Developer Studio generated include file.
 // Used by sftpplug.rc
 //
-#define IDD_WEBDAV                      101
+#define IDD_CONNECTION                      101
 #define IDI_ICON0                       102
 #define IDI_ICON1                       103
 #define IDD_PROPERTIES                  104
@@ -543,7 +543,7 @@
 // LAN Pair — TrustedInstaller checkbox
 // ---------------------------------------------------------------------------
 #define IDC_LAN_TI                      1108
-#define IDC_JUMP_SESSION_PICK           1109   // dropdown: pick existing session as jump host (in IDD_WEBDAV)
+#define IDC_JUMP_SESSION_PICK           1109   // dropdown: pick existing session as jump host (in IDD_CONNECTION)
 #define IDS_LAN_TI                      12093
 #define IDS_LAN_TI_ERR                  12094
 #define IDS_LAN_CONNECTING              12095

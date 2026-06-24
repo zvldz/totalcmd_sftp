@@ -3063,7 +3063,7 @@ bool ShowConnectDialog(pConnectSettings ConnectSettings, LPCSTR DisplayName, LPC
         dlgCtx.connectResults = ConnectSettings;
         dlgCtx.displayName = DisplayName;
         dlgCtx.iniFileName = inifilename;
-        return (IDOK == ShowLocalizedDialogBoxParam(IDD_WEBDAV, GetActiveWindow(), ConnectDlgProc, (LPARAM)&dlgCtx));
+        return (IDOK == ShowLocalizedDialogBoxParam(IDD_CONNECTION, GetActiveWindow(), ConnectDlgProc, (LPARAM)&dlgCtx));
     }
 }
 
