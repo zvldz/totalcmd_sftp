@@ -45,6 +45,7 @@ std::array<WCHAR, 32> s_f7newconnectionW{};
 std::array<WCHAR, 32> s_quickconnectW{};
 
 bool disablereading = false;   // disable reading of subdirs to delete whole drives
+bool g_inMultiOpTransfer = false;  // see header for purpose
 bool freportconnect = true;    // report connect to caller only on first connect
 bool CryptCheckPass = false;   // check 'store password encrypted' by default
 
@@ -410,28 +411,17 @@ pConnectSettings GetServerIdAndRelativePathFromPath(LPCSTR Path, LPSTR RelativeP
     if (!Path || !RelativePath || maxlen == 0)
         return nullptr;
 
-    auto extractRelative = [](std::string_view path) -> std::string_view {
-        const size_t firstNonSlash = path.find_first_not_of("\\/");
-        if (firstNonSlash == std::string_view::npos)
-            return std::string_view{};
-        const size_t sep = path.find_first_of("\\/", firstNonSlash);
-        if (sep == std::string_view::npos)
-            return std::string_view{};
-        return path.substr(sep);
-    };
-
-    std::array<char, wdirtypemax> displayName{};
-    GetDisplayNameFromPath(Path, displayName.data(), displayName.size() - 1);
-    pConnectSettings serverid = static_cast<pConnectSettings>(GetServerIdFromName(displayName.data(), GetCurrentThreadId()));
-    if (serverid) {
-        const std::string_view rel = extractRelative(Path);
-        if (!rel.empty()) {
-            const size_t copyLen = (std::min)(rel.size(), maxlen - 1);
-            memcpy(RelativePath, rel.data(), copyLen);
-            RelativePath[copyLen] = '\0';
-        } else {
-            strlcpy(RelativePath, "\\", maxlen - 1);
-        }
+    // Folder-aware resolver: identifies the session boundary by longest-prefix
+    // match against the loaded registry, returning the remote sub-path
+    // (already in backslash form) after the session prefix.
+    const PathResolution r = ResolvePathKind(Path);
+    pConnectSettings serverid = nullptr;
+    if (r.kind == PathKind::SessionLeaf || r.kind == PathKind::SessionWithSubpath) {
+        serverid = static_cast<pConnectSettings>(
+            GetServerIdFromName(r.displayName.c_str(), GetCurrentThreadId()));
+    }
+    if (serverid && !r.relative.empty()) {
+        strlcpy(RelativePath, r.relative.c_str(), maxlen - 1);
     } else {
         strlcpy(RelativePath, "\\", maxlen - 1);
     }
@@ -443,37 +433,17 @@ pConnectSettings GetServerIdAndRelativePathFromPathW(LPCWSTR Path, LPWSTR Relati
     if (!Path || !RelativePath || maxlen == 0)
         return nullptr;
 
-    auto extractRelativeW = [](std::wstring_view path) -> std::wstring_view {
-        const size_t firstNonSlash = path.find_first_not_of(L"\\/");
-        if (firstNonSlash == std::wstring_view::npos)
-            return std::wstring_view{};
-        const size_t sep = path.find_first_of(L"\\/", firstNonSlash);
-        if (sep == std::wstring_view::npos)
-            return std::wstring_view{};
-        return path.substr(sep);
-    };
-
-    std::array<char, wdirtypemax> displayName{};
-    const std::wstring_view pathView(Path);
-    const size_t firstNonSlash = pathView.find_first_not_of(L"\\/");
-    if (firstNonSlash == std::wstring_view::npos)
-        return nullptr;
-    const size_t sep = pathView.find_first_of(L"\\/", firstNonSlash);
-    const std::wstring_view displayW = (sep == std::wstring_view::npos)
-        ? pathView.substr(firstNonSlash)
-        : pathView.substr(firstNonSlash, sep - firstNonSlash);
-    walcopy(displayName.data(), std::wstring(displayW).c_str(), displayName.size() - 1);
-
-    pConnectSettings serverid = static_cast<pConnectSettings>(GetServerIdFromName(displayName.data(), GetCurrentThreadId()));
-    if (serverid) {
-        const std::wstring_view rel = extractRelativeW(pathView);
-        if (!rel.empty()) {
-            const size_t copyLen = (std::min)(rel.size(), maxlen - 1);
-            wmemcpy(RelativePath, rel.data(), copyLen);
-            RelativePath[copyLen] = L'\0';
-        } else {
-            wcslcpy(RelativePath, L"\\", maxlen - 1);
-        }
+    const PathResolution r = ResolvePathKindW(Path);
+    pConnectSettings serverid = nullptr;
+    if (r.kind == PathKind::SessionLeaf || r.kind == PathKind::SessionWithSubpath) {
+        serverid = static_cast<pConnectSettings>(
+            GetServerIdFromName(r.displayName.c_str(), GetCurrentThreadId()));
+    }
+    if (serverid && !r.relative.empty()) {
+        std::array<wchar_t, wdirtypemax> wrel{};
+        MultiByteToWideChar(CP_ACP, 0, r.relative.c_str(), -1,
+                            wrel.data(), static_cast<int>(wrel.size()));
+        wcslcpy(RelativePath, wrel.data(), maxlen - 1);
     } else {
         wcslcpy(RelativePath, L"\\", maxlen - 1);
     }
@@ -486,34 +456,6 @@ void ResetLastPercent(pConnectSettings ConnectSettings)
     if (ConnectSettings)
         ConnectSettings->lastpercent = 0;
 }
-
-bool is_full_name(LPCSTR path)
-{
-    return path && path[0] && path[1] && strchr(path + 1, '\\');
-}
-
-bool is_full_name(LPCWSTR path)
-{
-    return path && path[0] && path[1] && wcschr(path + 1, L'\\');
-}
-
-bool is_full_name(LPWSTR path)
-{
-    return path && path[0] && path[1] && wcschr(path + 1, L'\\');
-}
-
-LPWSTR cut_srv_name(LPWSTR path)
-{
-    if (path && path[0] && path[1]) {
-        LPWSTR p = wcschr(path + 1, L'\\');
-        if (p) {
-            p[0] = 0;
-            return path + 1;
-        }
-    }
-    return nullptr;
-}
-
 
 // Detects and applies TC language if not already loaded.
 // Called from both FsSetDefaultParams and _FsInit to cover all load orders.
@@ -615,7 +557,7 @@ BOOL WINAPI FsDisconnect(LPCSTR DisconnectRoot)
         displayName.resize(wdirtypemax);
         GetDisplayNameFromPath(DisconnectRoot, displayName.data(), displayName.size() - 1);
         displayName.resize(strlen(displayName.data()));
-    
+
         pConnectSettings serverid = static_cast<pConnectSettings>(GetServerIdFromName(displayName.data(), GetCurrentThreadId()));
         if (serverid) {
             // Build disconnect log message using std::string
@@ -641,6 +583,12 @@ void WINAPI FsStatusInfo(LPCSTR RemoteDir, int InfoStartEnd, int InfoOperation)
         if (strlen(RemoteDir) < 2)
             if (InfoOperation == FS_STATUS_OP_DELETE || InfoOperation == FS_STATUS_OP_RENMOV_MULTI)
                 disablereading = (InfoStartEnd == FS_STATUS_START) ? true : false;
+
+        // Independent of path scope — RENMOV_MULTI wraps both bulk copy and
+        // bulk move. FsMkDir uses this to suppress the new-session dialog
+        // when TC is auto-creating destination folders mid-transfer.
+        if (InfoOperation == FS_STATUS_OP_RENMOV_MULTI)
+            g_inMultiOpTransfer = (InfoStartEnd == FS_STATUS_START);
 
         if (InfoOperation == FS_STATUS_OP_PUT_MULTI ||
             InfoOperation == FS_STATUS_OP_PUT_SINGLE) {
@@ -795,22 +743,26 @@ int WINAPI FsExtractCustomIcon(LPCSTR RemoteName, int ExtractFlags, HICON * TheI
 {
     sftp::DllExceptionBarrier _barrier;
     return sftp::dll_invoke(_barrier, FS_ICON_USEDEFAULT, [&]() -> int {
-        if (strlen(RemoteName) > 1) {
-            if (!is_full_name(RemoteName)) {   // a server.
-                if (_stricmp(RemoteName + 1, s_f7newconnection) != 0) {
-                    std::array<char, wdirtypemax> remotedir{};
-                    pConnectSettings serverid = GetServerIdAndRelativePathFromPath(RemoteName, remotedir.data(), remotedir.size() - 1);
-                    bool sm = (ExtractFlags & FS_ICONFLAG_SMALL) != 0;
-                    // Show a different icon when connected.
-                    LPCSTR lpIconName = serverid
-                        ? MAKEINTRESOURCEA(sm ? IDI_ICON2SMALL : IDI_ICON2)
-                        : MAKEINTRESOURCEA(sm ? IDI_ICON1SMALL : IDI_ICON1);
-                    *TheIcon = LoadIconA(hinst, lpIconName);
-                    return FS_ICON_EXTRACTED;
-                }
-            }
-        } 
-        return FS_ICON_USEDEFAULT;
+        if (!RemoteName || strlen(RemoteName) <= 1)
+            return FS_ICON_USEDEFAULT;
+        // Supply our padlock icon for any leaf session entry, whether it's
+        // at the plugin root or nested inside a folder. Anything else
+        // (folder grouping, file inside an active session) keeps TC's
+        // default rendering.
+        const PathResolution r = ResolvePathKind(RemoteName);
+        if (r.kind != PathKind::SessionLeaf)
+            return FS_ICON_USEDEFAULT;
+        if (_stricmp(r.displayName.c_str(), s_f7newconnection) == 0)
+            return FS_ICON_USEDEFAULT;  // pseudo helper — let TC pick a default
+        const bool sm = (ExtractFlags & FS_ICONFLAG_SMALL) != 0;
+        pConnectSettings serverid = static_cast<pConnectSettings>(
+            GetServerIdFromName(r.displayName.c_str(), GetCurrentThreadId()));
+        // Connected sessions get a distinguishing icon variant.
+        LPCSTR lpIconName = serverid
+            ? MAKEINTRESOURCEA(sm ? IDI_ICON2SMALL : IDI_ICON2)
+            : MAKEINTRESOURCEA(sm ? IDI_ICON1SMALL : IDI_ICON1);
+        *TheIcon = LoadIconA(hinst, lpIconName);
+        return FS_ICON_EXTRACTED;
     });
 }
 

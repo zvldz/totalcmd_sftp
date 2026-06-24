@@ -167,3 +167,66 @@ bool LoadServerSettings(LPCSTR DisplayName, pConnectSettings ConnectResults, LPC
     ConnectResults->sendcommandmode = GetPrivateProfileInt(DisplayName, "sendcommandmode", 0, iniFileName);
     return !ConnectResults->server.empty();
 }
+
+void UpdateJumpRefsOnSessionRename(LPCSTR oldName, LPCSTR newName, LPCSTR iniFileName)
+{
+    if (!oldName || !oldName[0] || !iniFileName || !iniFileName[0])
+        return;
+
+    // GetPrivateProfileSectionNames returns section names as a
+    // double-null-terminated list. 65535 is the documented hard limit.
+    std::array<char, 65535> sectionList{};
+    GetPrivateProfileSectionNamesA(sectionList.data(),
+                                   static_cast<DWORD>(sectionList.size()),
+                                   iniFileName);
+
+    char* p = sectionList.data();
+    while (p[0]) {
+        std::array<char, MAX_PATH> currentRef{};
+        GetPrivateProfileStringA(p, "jumpsessionref", "",
+                                 currentRef.data(),
+                                 static_cast<DWORD>(currentRef.size()),
+                                 iniFileName);
+        if (currentRef[0] && _stricmp(currentRef.data(), oldName) == 0) {
+            // Exact match — rewrite (or clear if newName is null/empty).
+            if (newName && newName[0])
+                WritePrivateProfileStringA(p, "jumpsessionref", newName, iniFileName);
+            else
+                WritePrivateProfileStringA(p, "jumpsessionref", nullptr, iniFileName);
+        }
+        p += strlen(p) + 1;
+    }
+}
+
+void UpdateJumpRefsOnFolderRename(LPCSTR oldPrefix, LPCSTR newPrefix, LPCSTR iniFileName)
+{
+    if (!oldPrefix || !oldPrefix[0] || !newPrefix || !newPrefix[0] ||
+        !iniFileName || !iniFileName[0])
+        return;
+
+    const std::string oldNeedle = std::string(oldPrefix) + "/";
+    const std::string newReplacement = std::string(newPrefix) + "/";
+
+    std::array<char, 65535> sectionList{};
+    GetPrivateProfileSectionNamesA(sectionList.data(),
+                                   static_cast<DWORD>(sectionList.size()),
+                                   iniFileName);
+
+    char* p = sectionList.data();
+    while (p[0]) {
+        std::array<char, MAX_PATH> currentRef{};
+        GetPrivateProfileStringA(p, "jumpsessionref", "",
+                                 currentRef.data(),
+                                 static_cast<DWORD>(currentRef.size()),
+                                 iniFileName);
+        const size_t reflen = strlen(currentRef.data());
+        if (reflen > oldNeedle.size() &&
+            _strnicmp(currentRef.data(), oldNeedle.c_str(), oldNeedle.size()) == 0)
+        {
+            std::string updated = newReplacement;
+            updated.append(currentRef.data() + oldNeedle.size());
+            WritePrivateProfileStringA(p, "jumpsessionref", updated.c_str(), iniFileName);
+        }
+        p += strlen(p) + 1;
+    }
+}

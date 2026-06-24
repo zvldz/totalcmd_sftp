@@ -19,15 +19,17 @@ extern std::array<WCHAR, 32> s_f7newconnectionW;
 extern std::array<WCHAR, 32> s_quickconnectW;
 extern bool    disablereading;
 extern bool    freportconnect;
+// True while TC is running a multi-step transfer through our plugin
+// (RENMOV_MULTI: bulk copy/move). FsMkDir checks this to tell apart
+// "user pressed F7 to create a new session" from "TC is auto-creating a
+// destination folder mid-transfer" — the latter must not pop the Edit
+// Session dialog.
+extern bool    g_inMultiOpTransfer;
 
 // Path helpers — defined in PluginEntryPoints.cpp, used across all entry-point TUs.
 pConnectSettings GetServerIdAndRelativePathFromPath(LPCSTR Path, LPSTR RelativePath, size_t maxlen);
 pConnectSettings GetServerIdAndRelativePathFromPathW(LPCWSTR Path, LPWSTR RelativePath, size_t maxlen);
 void  ResetLastPercent(pConnectSettings ConnectSettings);
-bool  is_full_name(LPCSTR  path);
-bool  is_full_name(LPCWSTR path);
-bool  is_full_name(LPWSTR  path);
-LPWSTR cut_srv_name(LPWSTR path);
 void  ApplyTcLanguageToPluginResources(const char* tcIniPath) noexcept;
 
 // LAN path conversion — defined in PluginEntryPointsFind.cpp, also used by PluginEntryPointsFile.cpp.

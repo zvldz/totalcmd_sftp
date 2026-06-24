@@ -36,13 +36,35 @@
 
 <table border="1" cellpadding="5" cellspacing="0">
   <tr><th>Key</th><th>Action</th></tr>
-  <tr><td><code>F7</code></td><td>Create new session</td></tr>
-  <tr><td><code>F8 / Delete</code></td><td>Delete selected session</td></tr>
-  <tr><td><code>Enter</code></td><td>Connect with current settings</td></tr>
+  <tr><td><code>F7</code></td><td>Create new session (works inside folders too)</td></tr>
+  <tr><td><code>F8 / Delete</code></td><td>Delete selected session or folder (folders remove every session inside)</td></tr>
+  <tr><td><code>Enter</code></td><td>Open a folder, or connect to a session with current settings</td></tr>
+  <tr><td><code>F3 / F4</code></td><td>Edit selected session (alternative to <code>Alt+Enter</code>)</td></tr>
   <tr><td><code>Alt+Enter</code></td><td>Edit selected session</td></tr>
+  <tr><td><code>F6</code></td><td>Rename / move a session or folder (see "Folders" below)</td></tr>
   <tr><td><code>Ctrl+Down</code></td><td>Open session dropdown</td></tr>
   <tr><td><code>Escape</code></td><td>Cancel connection attempt</td></tr>
 </table>
+
+<h2>Organising Sessions in Folders</h2>
+
+<p>Saved sessions can be grouped into folders for easier navigation when you accumulate many of them. Folders are <em>implicit</em>: they exist as long as at least one session lives under them, and disappear when the last one is removed. There is no separate "create empty folder" step.</p>
+
+<h3>Putting Sessions into a Folder</h3>
+<ul>
+  <li><strong>From scratch:</strong> press <code>F7</code> inside an existing folder — the new session is created in that folder automatically (folder name is taken from the current path).</li>
+  <li><strong>Move an existing session:</strong> press <code>F6</code> on the session and type a new path that includes a folder, e.g. <code>\work\web1</code>. The folder appears in the listing on the next refresh.</li>
+  <li><strong>Manually:</strong> save a session whose Display Name uses <code>/</code> as a hierarchy separator (e.g. <code>work/web1</code>). The plugin splits on <code>/</code> when building the listing.</li>
+</ul>
+
+<h3>Renaming or Moving a Folder</h3>
+<p>Press <code>F6</code> on a folder entry to rename it. All sessions under the folder are renamed in one go — both the INI section names and any <code>jumpsessionref</code> values pointing into the folder are updated, so jump-host references survive the rename.</p>
+
+<h3>Deleting a Folder</h3>
+<p><code>F8</code> on a folder removes every session in it (recursively). Total Commander shows its standard "delete non-empty folder?" confirmation first. Jump-host references targeting the deleted sessions are cleared so the by-reference picker does not surface them as broken markers.</p>
+
+<h3>Copying and Moving with F5 / F6 / Drag-and-Drop</h3>
+<p>Drag-and-drop and TC's copy/move commands work uniformly across the plugin namespace: dropping a folder onto another folder relocates every session inside. Behind the scenes this is the same code path as <code>F6</code>, so jump-host references are kept consistent.</p>
 
 <h2>Session Storage</h2>
 

@@ -277,6 +277,17 @@ void GetDisplayNameFromPath(LPCSTR Path, LPSTR DisplayName, size_t maxlen) noexc
         DisplayName[0] = '\0';
         return;
     }
+    // Folder-aware: ask the resolver for the longest matching session prefix.
+    // For flat (slash-free) session names this is the same first-segment
+    // string the legacy code produced, so no regression.
+    const PathResolution r = ResolvePathKind(Path);
+    if (!r.displayName.empty()) {
+        strlcpy(DisplayName, r.displayName.c_str(), maxlen);
+        return;
+    }
+    // Fallback: path doesn't match any known session or folder yet (e.g. a
+    // brand-new quick-connect name about to be saved). Use the legacy
+    // first-segment extraction so downstream code gets a usable name.
     LPCSTR p = Path;
     while (*p == '\\' || *p == '/')
         p++;
@@ -285,6 +296,127 @@ void GetDisplayNameFromPath(LPCSTR Path, LPSTR DisplayName, size_t maxlen) noexc
     while (*out && *out != '\\' && *out != '/')
         out++;
     *out = 0;
+}
+
+namespace {
+
+std::string NormaliseTcPath(std::string_view path) noexcept
+{
+    while (!path.empty() && (path.front() == '\\' || path.front() == '/'))
+        path.remove_prefix(1);
+    std::string out(path);
+    std::replace(out.begin(), out.end(), '\\', '/');
+    return out;
+}
+
+// Returns the canonical (case-preserving) session name if a session exists
+// with a case-insensitive match for `name`; empty string otherwise.
+// Caller must hold g_registryMutex.
+std::string RegistryFindSession(const std::string& name) noexcept
+{
+    for (const auto& e : g_servers) {
+        if (!e->is_background && _stricmp(e->name.c_str(), name.c_str()) == 0)
+            return e->name;
+    }
+    return {};
+}
+
+// True if at least one session in the registry has a name starting with
+// prefix + "/" (i.e. lives strictly under that folder prefix).
+// Caller must hold g_registryMutex.
+bool RegistryHasAnyUnderFolder(const std::string& prefix) noexcept
+{
+    const std::string needle = prefix + "/";
+    for (const auto& e : g_servers) {
+        if (!e->is_background &&
+            e->name.size() > needle.size() &&
+            _strnicmp(e->name.c_str(), needle.c_str(), needle.size()) == 0)
+            return true;
+    }
+    return false;
+}
+
+}  // anonymous namespace
+
+PathResolution ResolvePathKind(LPCSTR path) noexcept
+{
+    PathResolution out;
+    if (!path)
+        return out;
+    const std::string norm = NormaliseTcPath(path);
+
+    std::lock_guard<std::mutex> lock(g_registryMutex);
+
+    // Root ("\\" or "/" or empty) → folder, no display name.
+    if (norm.empty()) {
+        out.kind = PathKind::Folder;
+        return out;
+    }
+
+    // Longest-prefix-match: full path first, then drop trailing segments.
+    std::string candidate = norm;
+    while (!candidate.empty()) {
+        std::string canonical = RegistryFindSession(candidate);
+        if (!canonical.empty()) {
+            out.displayName = std::move(canonical);
+            if (candidate.size() == norm.size()) {
+                out.kind = PathKind::SessionLeaf;
+            } else {
+                out.kind = PathKind::SessionWithSubpath;
+                // After candidate length the next char is '/'; restore to '\'.
+                std::string rel = norm.substr(candidate.size());
+                std::replace(rel.begin(), rel.end(), '/', '\\');
+                out.relative = std::move(rel);
+            }
+            return out;
+        }
+        const size_t lastSlash = candidate.find_last_of('/');
+        if (lastSlash == std::string::npos)
+            break;
+        candidate.resize(lastSlash);
+    }
+
+    // No session matches; folder iff at least one session lives under it.
+    if (RegistryHasAnyUnderFolder(norm)) {
+        out.kind = PathKind::Folder;
+        out.displayName = norm;
+    }
+    return out;
+}
+
+PathResolution ResolvePathKindW(LPCWSTR path) noexcept
+{
+    if (!path)
+        return {};
+    const int needed = WideCharToMultiByte(CP_ACP, 0, path, -1,
+                                           nullptr, 0, nullptr, nullptr);
+    if (needed <= 1)
+        return {};
+    std::string narrow(static_cast<size_t>(needed - 1), '\0');
+    WideCharToMultiByte(CP_ACP, 0, path, -1,
+                        narrow.data(), needed, nullptr, nullptr);
+    return ResolvePathKind(narrow.c_str());
+}
+
+std::string PathToDisplayName(LPCSTR path) noexcept
+{
+    if (!path)
+        return {};
+    return NormaliseTcPath(path);
+}
+
+std::string PathToDisplayNameW(LPCWSTR path) noexcept
+{
+    if (!path)
+        return {};
+    const int needed = WideCharToMultiByte(CP_ACP, 0, path, -1,
+                                           nullptr, 0, nullptr, nullptr);
+    if (needed <= 1)
+        return {};
+    std::string narrow(static_cast<size_t>(needed - 1), '\0');
+    WideCharToMultiByte(CP_ACP, 0, path, -1,
+                        narrow.data(), needed, nullptr, nullptr);
+    return NormaliseTcPath(narrow);
 }
 
 struct ServerEnumContext {

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 typedef LPVOID  SERVERID;
 typedef LPVOID  SERVERHANDLE;
 
@@ -25,6 +27,41 @@ bool SetServerIdForName(LPCSTR displayname, SERVERID newid) noexcept;
 
 // Path helpers
 void GetDisplayNameFromPath(LPCSTR Path, LPSTR DisplayName, size_t maxlen) noexcept;
+
+// Folder-aware path resolution. Consults the loaded session registry
+// (g_servers) and decides what a TC-style path refers to. Used by every
+// entry point that must distinguish "session vs folder vs remote sub-path".
+//
+// Algorithm: normalise leading slashes off and convert '\' to '/', then
+// longest-prefix-match against saved session names. If a prefix is a real
+// session and equals the full path → SessionLeaf. If a prefix is a real
+// session and the path has more segments after it → SessionWithSubpath
+// (those segments become `relative`, restored to backslash form). If no
+// prefix matches but at least one session starts with `path/` → Folder.
+// Otherwise → Invalid.
+enum class PathKind {
+    SessionLeaf,         // path resolves to a saved session; nothing after
+    SessionWithSubpath,  // path enters a saved session and has remote sub-path
+    Folder,              // path is a folder prefix containing at least one session
+    Invalid,             // path matches nothing in the registry
+};
+
+struct PathResolution {
+    PathKind    kind = PathKind::Invalid;
+    std::string displayName;  // session name (Session*) or folder prefix (Folder); empty for Invalid / root
+    std::string relative;     // server sub-path after the session prefix, '\\'-separated; empty unless SessionWithSubpath
+};
+
+PathResolution ResolvePathKind(LPCSTR path) noexcept;
+PathResolution ResolvePathKindW(LPCWSTR path) noexcept;
+
+// Convert a TC-style path to a canonical session DisplayName form:
+// strips leading slashes and converts '\\' separators to '/'. Used when
+// constructing the *target* name for create/rename operations where the
+// resolver can't yet find the session in the registry (because it doesn't
+// exist there until after this call commits).
+std::string PathToDisplayName(LPCSTR path) noexcept;
+std::string PathToDisplayNameW(LPCWSTR path) noexcept;
 
 SERVERHANDLE FindFirstServer(LPSTR displayname, size_t maxlen) noexcept;
 SERVERHANDLE FindNextServer(SERVERHANDLE searchhandle, LPSTR displayname, size_t maxlen) noexcept;

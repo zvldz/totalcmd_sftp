@@ -6,6 +6,7 @@
 #include <string>
 #include <string_view>
 #include <algorithm>
+#include <vector>
 #include "fsplugin.h"
 #include "CoreUtils.h"
 #include "res/resource.h"
@@ -14,10 +15,24 @@
 #include "ServerRegistry.h"
 #include "UnicodeHelpers.h"
 #include "PluginEntryPoints.h"
+#include "ProfileSettings.h"
 #include "DllExceptionBarrier.h"
 #include "LanPairSession.h"
 #include "PluginEntryPointsInternal.h"
 #include "PhpAgentClient.h"
+
+// Length (in wide chars) of the session's displayName once embedded in a
+// TC-style path — i.e. the number of wchars between the leading '\\' and the
+// '\\' that starts the server-side sub-path. Used to truncate RemoteName at
+// the session boundary instead of at the first internal slash (which would
+// be wrong for folder-nested sessions like "\\folder\\session\\subpath").
+static size_t SessionPrefixWideLen(const std::string& displayName) noexcept
+{
+    if (displayName.empty()) return 0;
+    const int wlen = MultiByteToWideChar(CP_ACP, 0, displayName.c_str(), -1,
+                                          nullptr, 0);
+    return wlen > 1 ? static_cast<size_t>(wlen - 1) : 0;
+}
 
 int WINAPI FsExecuteFileW(HWND MainWin, LPWSTR RemoteName, LPCWSTR Verb)
 {
@@ -26,13 +41,26 @@ int WINAPI FsExecuteFileW(HWND MainWin, LPWSTR RemoteName, LPCWSTR Verb)
         std::array<char, wdirtypemax> remoteserver{};
         std::array<WCHAR, wdirtypemax> remotedir{};
         if (_wcsicmp(Verb, L"open") == 0) {   // follow symlink
-            if (is_full_name(RemoteName)) {
+            // Pseudo helper entry "[F7 = new connection]" opens the
+            // new-connection dialog directly, no resolver involvement.
+            if (RemoteName[0] && RemoteName[1] &&
+                _wcsicmp(RemoteName + 1, s_f7newconnectionW.data()) == 0) {
+                pConnectSettings serveridQuick = SftpConnectToServer(s_quickconnect, inifilename, nullptr);
+                LoadServersFromIniW(inifilenameW, s_quickconnect);
+                return serveridQuick ? FS_EXEC_OK : FS_EXEC_YOURSELF;
+            }
+
+            const PathResolution r = ResolvePathKindW(RemoteName);
+
+            // Path enters a session and continues with a server-side sub-path
+            // → resolve symlink on the remote.
+            if (r.kind == PathKind::SessionWithSubpath) {
                 pConnectSettings serverid = GetServerIdAndRelativePathFromPathW(RemoteName, remotedir.data(), remotedir.size() - 1);
                 if (!serverid)
                     return FS_EXEC_YOURSELF;
-            
+
                 if (!SftpLinkFolderTargetW(serverid, remotedir.data(), wdirtypemax - 1)) {
-                    // Check if this is a tilde home shortcut — never let TC download it.
+                    // Tilde home shortcut — never let TC download it.
                     std::wstring_view rv(remotedir.data());
                     while (!rv.empty() && (rv.front() == L'\\' || rv.front() == L'/'))
                         rv.remove_prefix(1);
@@ -50,75 +78,101 @@ int WINAPI FsExecuteFileW(HWND MainWin, LPWSTR RemoteName, LPCWSTR Verb)
                         return FS_EXEC_YOURSELF;
                     }
                 }
-            
-                // now build the target name: server name followed by new path
-                LPWSTR p = cut_srv_name(RemoteName);
-                if (!p)
+
+                // Build the target: session prefix + resolved remote path.
+                // Truncate at the session boundary (which can span multiple
+                // path segments when the session is in a folder), then append
+                // the symlink target the server gave us.
+                const size_t prefixLen = SessionPrefixWideLen(r.displayName);
+                if (prefixLen == 0 || prefixLen + 1 > wcslen(RemoteName))
                     return FS_EXEC_ERROR;
-                // Ensure the target path is reachable.
+                RemoteName[1 + prefixLen] = 0;
                 wcslcat(RemoteName, remotedir.data(), wdirtypemax-1);
                 ReplaceSlashByBackslashW(RemoteName);
                 return FS_EXEC_SYMLINK;
             }
-            if (_wcsicmp(RemoteName + 1, s_f7newconnectionW.data()) != 0) {
+
+            // Path is a leaf session (root-level OR nested in a folder).
+            // Lazy-connect (or pick up an existing connection) and expand the
+            // path to include the session's last-active / base directory so
+            // TC navigates inside the remote filesystem on Enter.
+            if (r.kind == PathKind::SessionLeaf) {
+                strlcpy(remoteserver.data(), r.displayName.c_str(), remoteserver.size() - 1);
                 LPWSTR p = RemoteName + wcslen(RemoteName);
-                int pmaxlen = wdirtypemax - (size_t)(p - RemoteName) - 1;
-                walcopy(remoteserver.data(), RemoteName + 1, remoteserver.size() - 1);
-                pConnectSettings serverid = static_cast<pConnectSettings>(GetServerIdFromName(remoteserver.data(), GetCurrentThreadId()));
+                int pmaxlen = wdirtypemax - static_cast<int>(p - RemoteName) - 1;
+
+                pConnectSettings serverid = static_cast<pConnectSettings>(
+                    GetServerIdFromName(remoteserver.data(), GetCurrentThreadId()));
                 if (serverid) {
                     SftpGetLastActivePathW(serverid, p, pmaxlen);
+                } else if (_stricmp(remoteserver.data(), s_quickconnect) == 0) {
+                    // Quick connect: connect here, otherwise the selected sub-path can't be applied.
+                    serverid = SftpConnectToServer(remoteserver.data(), inifilename, nullptr);
+                    if (!serverid)
+                        return FS_EXEC_OK; // cancelled or save-only from quick dialog
+                    SetServerIdForName(remoteserver.data(), static_cast<SERVERID>(serverid));
+                    SftpGetLastActivePathW(serverid, p, pmaxlen);
                 } else {
-                    // Quick connect: connect here, otherwise the selected subpath cannot be applied.
-                    walcopy(remoteserver.data(), RemoteName + 1, remoteserver.size() - 1);
-                    if (_stricmp(remoteserver.data(), s_quickconnect) == 0) {
-                        serverid = SftpConnectToServer(remoteserver.data(), inifilename, nullptr);
-                        if (!serverid)
-                            return FS_EXEC_OK; // cancelled or save-only from quick dialog
-                        SetServerIdForName(remoteserver.data(), static_cast<SERVERID>(serverid));
-                        SftpGetLastActivePathW(serverid, p, pmaxlen);
-                    } else {
-                        SftpGetServerBasePathW(RemoteName + 1, p, pmaxlen, inifilename);
-                    }
+                    // Convert the (potentially slash-separated) DisplayName to wide
+                    // and read the session's base path from INI without connecting.
+                    std::array<wchar_t, wdirtypemax> displayNameW{};
+                    MultiByteToWideChar(CP_ACP, 0, r.displayName.c_str(), -1,
+                                        displayNameW.data(), static_cast<int>(displayNameW.size()));
+                    SftpGetServerBasePathW(displayNameW.data(), p, pmaxlen, inifilename);
                 }
                 if (p[0] == 0)
                     wcslcat(RemoteName, L"/", wdirtypemax-1);
                 ReplaceSlashByBackslashW(RemoteName);
                 return FS_EXEC_SYMLINK;
             }
-            // Open quick/new-connection dialog directly from the helper entry.
-            pConnectSettings serveridQuick = SftpConnectToServer(s_quickconnect, inifilename, nullptr);
-            LoadServersFromIniW(inifilenameW, s_quickconnect);
-            return serveridQuick ? FS_EXEC_OK : FS_EXEC_YOURSELF;
+
+            // Folder or Invalid → let TC do whatever it does (folders navigate
+            // via FsFindFirstW, not FsExecuteFile, so we usually don't get
+            // called for them; invalid paths fall back to TC).
+            return FS_EXEC_YOURSELF;
         }
         if (_wcsicmp(Verb, L"properties") == 0) {
-            if (RemoteName[1] && wcschr(RemoteName+1, L'\\') == 0) {
-                walcopy(remoteserver.data(), RemoteName+1, remoteserver.size() - 1);
-                if (_stricmp(remoteserver.data(), s_f7newconnection) != 0 && _stricmp(remoteserver.data(), s_quickconnect) != 0) {
-                    if (SftpConfigureServer(remoteserver.data(), inifilename)) {
+            const PathResolution r = ResolvePathKindW(RemoteName);
+
+            // SessionLeaf (root-level OR nested in a folder) → open the Edit
+            // Session dialog. Pseudo helper entries are skipped silently.
+            if (r.kind == PathKind::SessionLeaf) {
+                if (_stricmp(r.displayName.c_str(), s_f7newconnection) != 0 &&
+                    _stricmp(r.displayName.c_str(), s_quickconnect)    != 0)
+                {
+                    if (SftpConfigureServer(r.displayName.c_str(), inifilename)) {
                         LoadServersFromIniW(inifilenameW, s_quickconnect);
                         if (MainWin) PostMessage(MainWin, WM_USER + 51, 540, 0);
 
-                        // ZERWANIE "ZATRUTEJ SESJI":                        // Total Commander nie rozłącza aktywnej sesji przy edycji jej właściwości (Alt+Enter).
-                        // Wymuszamy rozłączenie, aby wtyczka natychmiast zbudowała nowe połączenie
-                        // z nowymi ustawieniami (np. przełączając między SFTP a PHP Agentem).
-                        std::array<char, wdirtypemax> disconnPath{};
-                        strlcpy(disconnPath.data(), "\\", disconnPath.size() - 1);
-                        strlcat(disconnPath.data(), remoteserver.data(), disconnPath.size() - 1);
-                        FsDisconnect(disconnPath.data());
+                        // Force a disconnect so the next listing rebuilds the
+                        // connection with the edited settings (TC by itself
+                        // does not drop the active session on Alt+Enter).
+                        std::string disconnPath;
+                        disconnPath.reserve(r.displayName.size() + 1);
+                        disconnPath.append("\\").append(r.displayName);
+                        FsDisconnect(disconnPath.c_str());
                     }
                 }
-            } else {
+                return FS_EXEC_OK;
+            }
+
+            // SessionWithSubpath → server-side properties on a real file.
+            if (r.kind == PathKind::SessionWithSubpath) {
                 std::array<WCHAR, wdirtypemax> remotenameW{};
                 pConnectSettings serverid = GetServerIdAndRelativePathFromPathW(RemoteName, remotenameW.data(), remotenameW.size() - 1);
                 if (serverid)
                     SftpShowPropertiesW(serverid, remotenameW.data());
                 else
                     return FS_EXEC_ERROR;
+                return FS_EXEC_OK;
             }
+
+            // Folder / Invalid / pseudo entries → nothing useful to show.
             return FS_EXEC_OK;
         }
         if (_wcsnicmp(Verb, L"chmod ", 6) == 0) {
-            if (RemoteName[1] && wcschr(RemoteName+1, '\\') != 0) {
+            const PathResolution rc = ResolvePathKindW(RemoteName);
+            if (rc.kind == PathKind::SessionWithSubpath) {
                 pConnectSettings serverid = GetServerIdAndRelativePathFromPathW(RemoteName, remotedir.data(), remotedir.size() - 1);
                 if (serverid && SftpChmodW(serverid, remotedir.data(), Verb+6))
                     return FS_EXEC_OK;
@@ -126,6 +180,7 @@ int WINAPI FsExecuteFileW(HWND MainWin, LPWSTR RemoteName, LPCWSTR Verb)
             return FS_EXEC_ERROR;
         }
         if (_wcsnicmp(Verb, L"quote ", 6) == 0) {
+            const PathResolution rq = ResolvePathKindW(RemoteName);
             if (wcsncmp(Verb+6, L"cd ", 3) == 0) {
                 // first get the start path within the plugin
                 pConnectSettings serverid = GetServerIdAndRelativePathFromPathW(RemoteName, remotedir.data(), remotedir.size() - 1);
@@ -138,15 +193,16 @@ int WINAPI FsExecuteFileW(HWND MainWin, LPWSTR RemoteName, LPCWSTR Verb)
                     wcslcpy(remotedir.data(), Verb+9, remotedir.size() - 1);
                 ReplaceSlashByBackslashW(remotedir.data());
 
-                LPWSTR p = cut_srv_name(RemoteName);
-                if (!p)
+                // Truncate at the session boundary, then append the new dir.
+                const size_t prefixLen = SessionPrefixWideLen(rq.displayName);
+                if (prefixLen == 0 || prefixLen + 1 > wcslen(RemoteName))
                     return FS_EXEC_ERROR;
-                // Ensure the target path is reachable.
+                RemoteName[1 + prefixLen] = 0;
                 wcslcat(RemoteName, remotedir.data(), wdirtypemax-1);
                 ReplaceSlashByBackslashW(RemoteName);
                 return FS_EXEC_SYMLINK;
             } else {
-                if (is_full_name(RemoteName)) {
+                if (rq.kind == PathKind::SessionWithSubpath || rq.kind == PathKind::SessionLeaf) {
                     std::array<WCHAR, wdirtypemax> quoteRemotedir{};
                     pConnectSettings serverid = GetServerIdAndRelativePathFromPathW(RemoteName, quoteRemotedir.data(), quoteRemotedir.size() - 1);
                     if (serverid && SftpQuoteCommand2W(serverid, quoteRemotedir.data(), Verb+6, nullptr, 0) != 0)
@@ -189,24 +245,44 @@ int WINAPI FsRenMovFileW(LPCWSTR OldName, LPCWSTR NewName, BOOL Move, BOOL OverW
 {
     sftp::DllExceptionBarrier _barrier;
     return sftp::dll_invoke(_barrier, FS_FILE_WRITEERROR, [&]() -> int {
-        // Use std::wstring instead of std::array<WCHAR, wdirtypemax>
-        std::wstring olddir(wdirtypemax, L'\0');
-        std::wstring newdir(wdirtypemax, L'\0');
+        const PathResolution rOld = ResolvePathKindW(OldName);
+        const PathResolution rNew = ResolvePathKindW(NewName);
 
-        // Rename or copy a server?
-        LPCWSTR p1 = wcschr(OldName + 1, L'\\');
-        LPCWSTR p2 = wcschr(NewName + 1, L'\\');
-        if (p1 == nullptr && p2 == nullptr) {
-            // Use std::string instead of std::array<char, MAX_PATH>
-            std::string oldNameA(MAX_PATH, '\0');
-            std::string newNameA(MAX_PATH, '\0');
-            walcopy(oldNameA.data(), OldName + 1, oldNameA.size() - 1);
-            walcopy(newNameA.data(), NewName + 1, newNameA.size() - 1);
-            oldNameA.resize(strlen(oldNameA.data()));
-            newNameA.resize(strlen(newNameA.data()));
-            int rc = CopyMoveServerInIniW(oldNameA.data(), newNameA.data(), !!Move, !!OverWrite, inifilenameW);
+        // --- 1. Session rename / move ---
+        // Covers all of: flat-flat rename, flat→folder move, folder→flat move,
+        // and cross-folder move. The new DisplayName comes from the path
+        // itself (PathToDisplayName), since the destination session can't
+        // exist in the registry yet (otherwise we'd be overwriting).
+        if (rOld.kind == PathKind::SessionLeaf) {
+            const std::string newDisplay = PathToDisplayNameW(NewName);
+            if (newDisplay.empty())
+                return FS_FILE_NOTFOUND;
+            if (_stricmp(rOld.displayName.c_str(), newDisplay.c_str()) == 0)
+                return FS_FILE_OK;
+            if (!OverWrite && (rNew.kind == PathKind::SessionLeaf ||
+                               rNew.kind == PathKind::Folder))
+                return FS_FILE_EXISTS;
+
+            // Disconnect the live connection (if any) before yanking the INI
+            // section out from under it — see the original F6 rename note.
+            if (Move) {
+                std::string disconnPath;
+                disconnPath.reserve(rOld.displayName.size() + 1);
+                disconnPath.append("\\").append(rOld.displayName);
+                FsDisconnect(disconnPath.c_str());
+            }
+            int rc = CopyMoveServerInIniW(rOld.displayName.c_str(),
+                                          newDisplay.c_str(),
+                                          !!Move, !!OverWrite, inifilenameW);
             if (rc == FS_FILE_OK) {
-                CopyMoveEncryptedPassword(oldNameA.data(), newNameA.data(), !!Move);
+                std::string newDisplayMut = newDisplay;
+                CopyMoveEncryptedPassword(rOld.displayName.c_str(),
+                                          newDisplayMut.data(), !!Move);
+                if (Move) {
+                    UpdateJumpRefsOnSessionRename(rOld.displayName.c_str(),
+                                                  newDisplay.c_str(),
+                                                  inifilename);
+                }
                 LoadServersFromIniW(inifilenameW, s_quickconnect);
                 HWND hTcMain = FindWindowA("TTOTAL_CMD", nullptr);
                 if (hTcMain) PostMessage(hTcMain, WM_USER + 51, 540, 0);
@@ -217,6 +293,73 @@ int WINAPI FsRenMovFileW(LPCWSTR OldName, LPCWSTR NewName, BOOL Move, BOOL OverW
             return FS_FILE_NOTFOUND;
         }
 
+        // --- 2. Folder rename / move (bulk) ---
+        // Every saved session whose name starts with `oldPrefix + "/"` is
+        // renamed to `newPrefix + "/" + leaf`, with jump-host references
+        // updated by prefix.
+        if (rOld.kind == PathKind::Folder && !rOld.displayName.empty()) {
+            const std::string newFolder = PathToDisplayNameW(NewName);
+            if (newFolder.empty())
+                return FS_FILE_NOTFOUND;
+            if (_stricmp(rOld.displayName.c_str(), newFolder.c_str()) == 0)
+                return FS_FILE_OK;
+            if (!OverWrite && (rNew.kind == PathKind::SessionLeaf ||
+                               rNew.kind == PathKind::Folder))
+                return FS_FILE_EXISTS;
+
+            // Build the {old, new} rename list up front so we don't mutate
+            // INI while enumerating its section list.
+            std::vector<std::pair<std::string, std::string>> renames;
+            {
+                std::array<wchar_t, 65535> serverlist{};
+                GetPrivateProfileStringW(nullptr, nullptr, L"", serverlist.data(),
+                                          static_cast<DWORD>(serverlist.size()),
+                                          inifilenameW);
+                const std::string needle = rOld.displayName + "/";
+                wchar_t* wp = serverlist.data();
+                while (wp[0]) {
+                    std::array<char, MAX_PATH> sectionA{};
+                    WideCharToMultiByte(CP_ACP, 0, wp, -1, sectionA.data(),
+                                         static_cast<int>(sectionA.size()),
+                                         nullptr, nullptr);
+                    const size_t len = strlen(sectionA.data());
+                    if (len > needle.size() &&
+                        _strnicmp(sectionA.data(), needle.c_str(), needle.size()) == 0) {
+                        std::string oldName(sectionA.data(), len);
+                        std::string newName = newFolder + "/" + (sectionA.data() + needle.size());
+                        renames.emplace_back(std::move(oldName), std::move(newName));
+                    }
+                    wp += wcslen(wp) + 1;
+                }
+            }
+            if (renames.empty())
+                return FS_FILE_NOTFOUND;
+
+            for (const auto& [oldName, newName] : renames) {
+                if (Move) {
+                    std::string disconnPath;
+                    disconnPath.reserve(oldName.size() + 1);
+                    disconnPath.append("\\").append(oldName);
+                    FsDisconnect(disconnPath.c_str());
+                }
+                CopyMoveServerInIniW(oldName.c_str(), newName.c_str(),
+                                      !!Move, !!OverWrite, inifilenameW);
+                std::string newNameMut = newName;
+                CopyMoveEncryptedPassword(oldName.c_str(), newNameMut.data(), !!Move);
+            }
+            if (Move) {
+                UpdateJumpRefsOnFolderRename(rOld.displayName.c_str(),
+                                              newFolder.c_str(), inifilename);
+            }
+            LoadServersFromIniW(inifilenameW, s_quickconnect);
+            HWND hTcMain = FindWindowA("TTOTAL_CMD", nullptr);
+            if (hTcMain) PostMessage(hTcMain, WM_USER + 51, 540, 0);
+            return FS_FILE_OK;
+        }
+
+        // --- 3. Server-side rename (file / directory inside a session) ---
+        std::wstring olddir(wdirtypemax, L'\0');
+        std::wstring newdir(wdirtypemax, L'\0');
         pConnectSettings serverid1 = GetServerIdAndRelativePathFromPathW(OldName, olddir.data(), olddir.size() - 1);
         pConnectSettings serverid2 = GetServerIdAndRelativePathFromPathW(NewName, newdir.data(), newdir.size() - 1);
         olddir.resize(wcslen(olddir.data()));
@@ -337,9 +480,10 @@ int WINAPI FsGetFileW(LPCWSTR RemoteName, LPWSTR LocalName, int CopyFlags, Remot
             return CreateHelpFileLocalW(LocalName, OverWrite);
         }
 
-        // F3/F4 on a root-level saved session entry → open the Edit Session
-        // dialog instead of downloading the entry as a file. Same effect as
-        // RMB → Properties / Alt+Enter, but reachable from the keyboard.
+        // F3/F4 on a saved-session entry (root-level OR nested in a folder)
+        // → open the Edit Session dialog instead of downloading the entry as
+        // a file. Same effect as RMB → Properties / Alt+Enter, but reachable
+        // from the keyboard.
         //
         // TC's View/Edit always wants a downloaded file: any non-OK return
         // shows "Error downloading file", and FS_FILE_OK makes TC open the
@@ -348,24 +492,24 @@ int WINAPI FsGetFileW(LPCWSTR RemoteName, LPWSTR LocalName, int CopyFlags, Remot
         // So after the dialog we write a short stub note into the temp file
         // and return OK: no error, and the trailing viewer/editor shows a
         // self-explanatory message instead of misleading editable settings.
-        if (remoteView.size() > 1 && remoteView.find(L'\\', 1) == std::wstring_view::npos) {
-            std::array<char, wdirtypemax> remoteserver{};
-            walcopy(remoteserver.data(), RemoteName + 1, remoteserver.size() - 1);
-            if (_stricmp(remoteserver.data(), s_f7newconnection) != 0 &&
-                _stricmp(remoteserver.data(), s_quickconnect)    != 0)
+        {
+            const PathResolution r = ResolvePathKindW(RemoteName);
+            if (r.kind == PathKind::SessionLeaf &&
+                _stricmp(r.displayName.c_str(), s_f7newconnection) != 0 &&
+                _stricmp(r.displayName.c_str(), s_quickconnect)    != 0)
             {
-                if (SftpConfigureServer(remoteserver.data(), inifilename)) {
+                if (SftpConfigureServer(r.displayName.c_str(), inifilename)) {
                     LoadServersFromIniW(inifilenameW, s_quickconnect);
                     // Drop any active session so the next listing rebuilds it
                     // with the edited settings (mirrors the properties path).
-                    std::array<char, wdirtypemax> disconnPath{};
-                    strlcpy(disconnPath.data(), "\\", disconnPath.size() - 1);
-                    strlcat(disconnPath.data(), remoteserver.data(), disconnPath.size() - 1);
-                    FsDisconnect(disconnPath.data());
+                    std::string disconnPath;
+                    disconnPath.reserve(r.displayName.size() + 1);
+                    disconnPath.append("\\").append(r.displayName);
+                    FsDisconnect(disconnPath.c_str());
                 }
                 // Stub note for the viewer/editor TC opens after FS_FILE_OK.
                 std::string note = "Session '";
-                note.append(remoteserver.data());
+                note.append(r.displayName);
                 note.append("' was opened for editing in a dialog.\r\n"
                              "This file is not used \xE2\x80\x94 you can close this window.\r\n");
                 HANDLE hStub = CreateFileW(LocalName, GENERIC_WRITE, 0, nullptr,
@@ -577,9 +721,10 @@ BOOL WINAPI FsDeleteFileW(LPCWSTR RemoteName)
         if (remoteView.size() < 2)
             return false;
 
-        const bool hasRemoteSubPath = remoteView.find(L'\\', 1) != std::wstring_view::npos;
-        if (hasRemoteSubPath) {
-            // Use std::wstring instead of std::array<WCHAR, wdirtypemax>
+        const PathResolution r = ResolvePathKindW(RemoteName);
+
+        // Real file inside a session → server-side delete.
+        if (r.kind == PathKind::SessionWithSubpath) {
             std::wstring remotedir(wdirtypemax, L'\0');
             pConnectSettings serverid = GetServerIdAndRelativePathFromPathW(RemoteName, remotedir.data(), remotedir.size() - 1);
             remotedir.resize(wcslen(remotedir.data()));
@@ -594,18 +739,33 @@ BOOL WINAPI FsDeleteFileW(LPCWSTR RemoteName)
             int rc = SftpDeleteFileW(serverid, remotedir.data(), false);
             return (rc == SFTP_OK) ? true : false;
         }
-        // delete server
-        const std::wstring_view serverNameW = remoteView.substr(1);
-        const std::wstring serverName(serverNameW);
-        if (_wcsicmp(serverName.c_str(), s_f7newconnectionW.data()) != 0 &&
-            _wcsicmp(serverName.c_str(), s_quickconnectW.data()) != 0) {
-            // Use std::string instead of std::array<char, wdirtypemax>
-            std::string remotedirA(wdirtypemax, '\0');
-            walcopy(remotedirA.data(), serverName.c_str(), remotedirA.size() - 1);
-            remotedirA.resize(strlen(remotedirA.data()));
-            if (DeleteServerFromIniW(remotedirA.data(), inifilenameW)) {
+
+        // Saved-session entry (root-level OR nested in a folder) → drop the
+        // INI section. Refuse the pseudo helper entries which are not real
+        // sessions and don't have an INI section to remove.
+        if (r.kind == PathKind::SessionLeaf) {
+            if (_stricmp(r.displayName.c_str(), s_f7newconnection) == 0 ||
+                _stricmp(r.displayName.c_str(), s_quickconnect) == 0)
+                return false;
+            // Disconnect any active connection under this name first so the
+            // registry doesn't preserve a ghost entry (LoadServersFromIniW
+            // keeps entries with a non-null serverid even after the INI
+            // section is gone, which would leave the deleted session
+            // visible in subsequent listings).
+            {
+                std::string disconnPath;
+                disconnPath.reserve(r.displayName.size() + 1);
+                disconnPath.append("\\").append(r.displayName);
+                FsDisconnect(disconnPath.c_str());
+            }
+            if (DeleteServerFromIniW(r.displayName.c_str(), inifilenameW)) {
                 if (CryptProc)
-                    CryptProc(PluginNumber, CryptoNumber, FS_CRYPT_DELETE_PASSWORD, remotedirA.data(), nullptr, 0);
+                    CryptProc(PluginNumber, CryptoNumber, FS_CRYPT_DELETE_PASSWORD,
+                              const_cast<char*>(r.displayName.c_str()), nullptr, 0);
+                // Clear any jump-host references that pointed at the deleted
+                // session so the by-reference picker doesn't surface them as
+                // "[!] (missing)" markers afterwards.
+                UpdateJumpRefsOnSessionRename(r.displayName.c_str(), nullptr, inifilename);
                 LoadServersFromIniW(inifilenameW, s_quickconnect);
                 HWND hTcMain = FindWindowA("TTOTAL_CMD", nullptr);
                 if (hTcMain) PostMessage(hTcMain, WM_USER + 51, 540, 0);
@@ -631,8 +791,12 @@ BOOL WINAPI FsRemoveDirW(LPCWSTR RemoteName)
 {
     sftp::DllExceptionBarrier _barrier;
     return sftp::dll_invoke(_barrier, FALSE, [&]() -> BOOL {
-        if (is_full_name(RemoteName)) {
-            // Use std::wstring instead of std::array<WCHAR, wdirtypemax>
+        if (!RemoteName || !RemoteName[0])
+            return false;
+        const PathResolution r = ResolvePathKindW(RemoteName);
+
+        // Real directory inside a session → server-side rmdir.
+        if (r.kind == PathKind::SessionWithSubpath) {
             std::wstring remotedir(wdirtypemax, L'\0');
             pConnectSettings serverid = GetServerIdAndRelativePathFromPathW(RemoteName, remotedir.data(), remotedir.size() - 1);
             remotedir.resize(wcslen(remotedir.data()));
@@ -647,6 +811,57 @@ BOOL WINAPI FsRemoveDirW(LPCWSTR RemoteName)
             int rc = SftpDeleteFileW(serverid, remotedir.data(), true);
             return (rc == SFTP_OK) ? true : false;
         }
+
+        // Folder grouping → wipe every saved session whose name lives under
+        // this folder (recursively — nested subfolders are caught by the same
+        // prefix match). TC has already shown the "delete non-empty folder?"
+        // confirmation by the time it calls us, so we just do the work.
+        if (r.kind == PathKind::Folder && !r.displayName.empty()) {
+            // Collect matching section names first; mutating the INI mid-
+            // enumeration would shift the underlying buffer.
+            std::vector<std::string> toDelete;
+            {
+                std::array<wchar_t, 65535> serverlist{};
+                GetPrivateProfileStringW(nullptr, nullptr, L"", serverlist.data(),
+                                          static_cast<DWORD>(serverlist.size()), inifilenameW);
+                const std::string needle = r.displayName + "/";
+                wchar_t* wp = serverlist.data();
+                while (wp[0]) {
+                    std::array<char, MAX_PATH> sectionA{};
+                    WideCharToMultiByte(CP_ACP, 0, wp, -1, sectionA.data(),
+                                         static_cast<int>(sectionA.size()), nullptr, nullptr);
+                    const size_t len = strlen(sectionA.data());
+                    if (len > needle.size() &&
+                        _strnicmp(sectionA.data(), needle.c_str(), needle.size()) == 0) {
+                        toDelete.emplace_back(sectionA.data(), len);
+                    }
+                    wp += wcslen(wp) + 1;
+                }
+            }
+
+            if (toDelete.empty())
+                return false;
+
+            for (const auto& name : toDelete) {
+                // Same disconnect-before-delete dance as the single-session
+                // path: avoid leaving a ghost entry in the registry.
+                std::string disconnPath;
+                disconnPath.reserve(name.size() + 1);
+                disconnPath.append("\\").append(name);
+                FsDisconnect(disconnPath.c_str());
+                DeleteServerFromIniW(name.c_str(), inifilenameW);
+                if (CryptProc)
+                    CryptProc(PluginNumber, CryptoNumber, FS_CRYPT_DELETE_PASSWORD,
+                              const_cast<char*>(name.c_str()), nullptr, 0);
+                UpdateJumpRefsOnSessionRename(name.c_str(), nullptr, inifilename);
+            }
+
+            LoadServersFromIniW(inifilenameW, s_quickconnect);
+            HWND hTcMain = FindWindowA("TTOTAL_CMD", nullptr);
+            if (hTcMain) PostMessage(hTcMain, WM_USER + 51, 540, 0);
+            return true;
+        }
+
         return false;
     });
 }
