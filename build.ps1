@@ -333,7 +333,7 @@ $msBuildBase = @(
     $vcxprojPath,
     "/t:Rebuild",
     "/p:Configuration=Release",
-    "/p:PlatformToolset=v143",
+    "/p:PlatformToolset=v145",
     "/p:WindowsTargetPlatformVersion=10.0",
     "/p:DebugSymbols=false",
     "/p:DebugType=none",
