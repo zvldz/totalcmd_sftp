@@ -559,6 +559,7 @@
 #define IDS_JUMP_SESSION_MISSING_SUFFIX 12105   // " (missing)" appended to deleted ref'd session name
 #define IDS_JUMP_SESSION_NOT_FOUND      12106   // error: ref'd session not in INI
 #define IDS_JUMP_SESSION_CHAINED        12107   // error: ref'd session has its own jump host
+#define IDS_IMP_LIST_HEADER             12108   // Import dialog ListView column header
 
 // Next default values for new objects
 //

@@ -1123,6 +1123,9 @@ static void EnumerateKittyFolder(const std::string& sessionsFolder,
             continue;
         if (strcmp(fd.cFileName, ".") == 0 || strcmp(fd.cFileName, "..") == 0)
             continue;
+        if (EqualsI(fd.cFileName, "Default Settings") ||
+            EqualsI(fd.cFileName, "Default%20Settings"))
+            continue;
 
         const std::string filePath = sessionsFolder + "\\" + fd.cFileName;
         std::string protocol;
@@ -1321,10 +1324,13 @@ static INT_PTR CALLBACK SessionPickerDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
 
         RECT rc;
         GetClientRect(hList, &rc);
-        LVCOLUMNA col = {};
-        col.mask = LVCF_WIDTH;
-        col.cx   = rc.right - GetSystemMetrics(SM_CXVSCROLL);
-        ListView_InsertColumn(hList, 0, &col);
+        std::wstring colHeader = LngStrW(IDS_IMP_LIST_HEADER);
+        if (colHeader.empty()) colHeader = L"Session";
+        LVCOLUMNW col = {};
+        col.mask    = LVCF_WIDTH | LVCF_TEXT;
+        col.cx      = rc.right - GetSystemMetrics(SM_CXVSCROLL);
+        col.pszText = const_cast<LPWSTR>(colHeader.c_str());
+        SendMessageW(hList, LVM_INSERTCOLUMNW, 0, reinterpret_cast<LPARAM>(&col));
 
         LVITEMA item = {};
         item.mask = LVIF_TEXT;

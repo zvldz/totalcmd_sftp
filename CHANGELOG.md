@@ -24,6 +24,26 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   configuration. Useful when several sessions are open across TC tabs
   and you want to pick which one to close without tab-juggling.
 
+### Fixes
+
+- **Import dialog (KiTTY Portable): `Default Settings` phantom row
+  removed.** KiTTY's per-session file `Default%20Settings` stores
+  defaults, not a real session, but with `Protocol=ssh` it passed the
+  filter and showed up in the picker. Filtered out alongside the
+  existing PuTTY/WinSCP handling.
+- **Import dialog: session list now shows a column header.** The
+  `SysListView32` column was inserted without `LVCF_TEXT`, so the
+  header bar was visible but empty. Now reads `Session` (localisable
+  via `IDS_IMP_LIST_HEADER`).
+- **Shift+F5 (same-panel copy) on a session or folder no longer
+  throws you out of the plugin.** After a successful copy the
+  plugin was posting `cm_RereadSource` unconditionally; for
+  same-panel intra-plugin copy this races with Total Commander's
+  own post-copy refresh and threw the user to the other panel's
+  drive root. The extra refresh is now sent only for rename
+  (`F6` / Move=TRUE), where our INI changes are invisible to TC
+  and an explicit refresh is genuinely needed.
+
 ### Internal
 
 - Removed `src/core/ConnectionDialogClass.cpp` (an unfinished class-extraction

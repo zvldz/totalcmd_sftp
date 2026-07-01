@@ -314,8 +314,16 @@ int WINAPI FsRenMovFileW(LPCWSTR OldName, LPCWSTR NewName, BOOL Move, BOOL OverW
                                                   inifilename);
                 }
                 LoadServersFromIniW(inifilenameW, s_quickconnect);
-                HWND hTcMain = FindWindowA("TTOTAL_CMD", nullptr);
-                if (hTcMain) PostMessage(hTcMain, WM_USER + 51, 540, 0);
+                // cm_RereadSource is needed after rename because the source
+                // DisplayName TC still holds no longer exists in our registry.
+                // For copy (Move=FALSE) TC's own post-copy refresh handles the
+                // panel, and posting cm_RereadSource on top races with TC's
+                // same-panel navigation on Shift+F5, throwing the user out of
+                // the plugin.
+                if (Move) {
+                    HWND hTcMain = FindWindowA("TTOTAL_CMD", nullptr);
+                    if (hTcMain) PostMessage(hTcMain, WM_USER + 51, 540, 0);
+                }
                 return FS_FILE_OK;
             }
             if (rc == FS_FILE_EXISTS)
@@ -382,8 +390,11 @@ int WINAPI FsRenMovFileW(LPCWSTR OldName, LPCWSTR NewName, BOOL Move, BOOL OverW
                                               newFolder.c_str(), inifilename);
             }
             LoadServersFromIniW(inifilenameW, s_quickconnect);
-            HWND hTcMain = FindWindowA("TTOTAL_CMD", nullptr);
-            if (hTcMain) PostMessage(hTcMain, WM_USER + 51, 540, 0);
+            // See the session branch above — cm_RereadSource only for rename.
+            if (Move) {
+                HWND hTcMain = FindWindowA("TTOTAL_CMD", nullptr);
+                if (hTcMain) PostMessage(hTcMain, WM_USER + 51, 540, 0);
+            }
             return FS_FILE_OK;
         }
 
