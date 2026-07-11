@@ -24,6 +24,36 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   configuration. Useful when several sessions are open across TC tabs
   and you want to pick which one to close without tab-juggling.
 
+- **`[Imports]` magic folder — SecureCRT sessions as live virtual entries.**
+  A new `[Imports]` folder appears in the plugin root and lists every
+  supported source program (SecureCRT is the first; PuTTY, WinSCP,
+  KiTTY, FileZilla to follow). Inside a source folder:
+  - `[Refresh]` re-scans and persists the session list to a cache next
+    to `sftpplug.ini` — sessions survive TC restarts, appear
+    immediately on the next launch.
+  - `[Add custom location...]` lets you point the plugin at any
+    portable install / backup folder in addition to the auto-detected
+    location.
+  - `[Manage custom locations]` lists what you've added; F8 removes an
+    entry and prunes only its cached sessions.
+  - Enter on a session connects using the cached settings.
+  - F5 / drag onto another panel materialises the session into your
+    own `sftpplug.ini` as a normal saved entry — from then on it
+    behaves like any other session you created yourself. F5 / drag to
+    a real filesystem path writes a portable INI snippet instead.
+  - Cached sessions that become unreachable (source uninstalled, USB
+    unplugged) stay visible until you explicitly remove them; refresh
+    never prunes on failure to reach, only on an empty-but-reachable
+    result.
+  - Dropping a session-INI file onto the plugin root creates a new
+    saved session in one gesture (reverse of the F5 export).
+
+  SecureCRT specifics: reads `%APPDATA%\VanDyke\Config\Sessions\` and
+  any custom path; passwords are intentionally not carried across —
+  the standard interactive prompt kicks in on first connect, or you
+  can save one via the Configure dialog. Non-SSH2 sessions are
+  skipped.
+
 ### Fixes
 
 - **Import dialog (KiTTY Portable): `Default Settings` phantom row

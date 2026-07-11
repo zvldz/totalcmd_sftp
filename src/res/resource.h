@@ -560,6 +560,13 @@
 #define IDS_JUMP_SESSION_NOT_FOUND      12106   // error: ref'd session not in INI
 #define IDS_JUMP_SESSION_CHAINED        12107   // error: ref'd session has its own jump host
 #define IDS_IMP_LIST_HEADER             12108   // Import dialog ListView column header
+#define IDS_SIMPORT_TITLE               12109   // MessageBox title for session-INI import errors
+#define IDS_SIMPORT_ERR_OPEN            12110   // Cannot open source file
+#define IDS_SIMPORT_ERR_EMPTY           12111   // Source file empty
+#define IDS_SIMPORT_ERR_NO_SECTIONS     12112   // File has no INI sections
+#define IDS_SIMPORT_ERR_NO_SERVER       12113   // No section with server= key
+#define IDS_SIMPORT_ERR_EMPTY_DEST      12114   // Empty destination path
+#define IDS_SIMPORT_ERR_WRITE           12115   // Failed to write to sftpplug.ini
 
 // Next default values for new objects
 //

@@ -1,8 +1,10 @@
 #include <winsock2.h>
 #include <windows.h>
+#include <shlobj.h>
 #include <stdlib.h>
 #include <array>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <algorithm>
@@ -20,6 +22,374 @@
 #include "LanPairSession.h"
 #include "PluginEntryPointsInternal.h"
 #include "PhpAgentClient.h"
+#include "ImportSourceRegistry.h"
+#include "ImportCache.h"
+#include "ImportIoUtil.h"
+
+// Serialise one session INI section into a human-readable INI-format text
+// file. Used by FsGetFile when TC copies (or "views"/"edits") a session
+// entry from the plugin panel out to a real filesystem path. The plugin
+// internal `_source` provenance marker is filtered out; the `[header]` in
+// the output uses `exportSection` (typically the DisplayName) rather than
+// the raw storage section name, so cache-prefixed virtual entries land as
+// a clean `[dron/hz-1]` header rather than the ugly cache name.
+static int ExportSessionAsIniFile(
+    LPCSTR srcSection, LPCSTR srcIni,
+    LPCSTR exportSection, LPCSTR headerComment,
+    LPCWSTR destFile, BOOL OverWrite)
+{
+    if (!OverWrite) {
+        const DWORD attrs = GetFileAttributesW(destFile);
+        if (attrs != INVALID_FILE_ATTRIBUTES &&
+            !(attrs & FILE_ATTRIBUTE_DIRECTORY))
+        {
+            return FS_FILE_EXISTS;
+        }
+    }
+
+    std::string content;
+    content.reserve(1024);
+    if (headerComment && headerComment[0])
+        content.append("; ").append(headerComment).append("\r\n");
+    content.append("[").append(exportSection).append("]\r\n");
+
+    std::array<char, 8192> keyList{};
+    GetPrivateProfileStringA(srcSection, nullptr, "",
+        keyList.data(),
+        static_cast<DWORD>(keyList.size() - 1),
+        srcIni);
+    const char* p = keyList.data();
+    while (p[0]) {
+        if (_stricmp(p, "_source") != 0) {
+            std::array<char, 2048> valueBuf{};
+            GetPrivateProfileStringA(srcSection, p, "",
+                valueBuf.data(),
+                static_cast<DWORD>(valueBuf.size() - 1),
+                srcIni);
+            content.append(p).append("=").append(valueBuf.data()).append("\r\n");
+        }
+        p += strlen(p) + 1;
+    }
+
+    HANDLE h = CreateFileW(destFile, GENERIC_WRITE, 0, nullptr,
+                           CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (h == INVALID_HANDLE_VALUE)
+        return FS_FILE_WRITEERROR;
+    DWORD written = 0;
+    WriteFile(h, content.data(),
+              static_cast<DWORD>(content.size()),
+              &written, nullptr);
+    CloseHandle(h);
+    return FS_FILE_OK;
+}
+
+static bool CopyIniSectionAcrossFiles(LPCSTR srcSection, LPCSTR srcIni,
+                                       LPCSTR dstSection, LPCSTR dstIni);
+
+// Try to import an uploaded file as a session-INI. Returns nullopt when the
+// destination path is (or could resolve to) a real session — FsPutFile then
+// proceeds with the normal upload flow. Returns FS_FILE_* when the file was
+// consumed as a session-import gesture: success, a user-visible validation
+// failure with an explanatory MessageBox, or a name collision. Callers must
+// return the wrapped value immediately.
+static std::optional<int> TryImportSessionFromUpload(
+    LPCWSTR LocalName, LPCWSTR RemoteName, BOOL OverWrite)
+{
+    std::array<WCHAR, wdirtypemax> probeDir{};
+    pConnectSettings probeServer = GetServerIdAndRelativePathFromPathW(
+        RemoteName, probeDir.data(), probeDir.size() - 1);
+    if (probeServer)
+        return std::nullopt;
+
+    // probeServer == null means "not registered in this thread's g_servers
+    // slot". The path may still resolve to a real saved session (present in
+    // the global registry but not yet opened in this thread) or to a session
+    // sub-path. Only paths that resolve to nothing at all are legitimate
+    // session-import targets; anything else is an ordinary upload whose
+    // auto-connect will happen elsewhere.
+    const PathResolution pr = ResolvePathKindW(RemoteName);
+    if (pr.kind == PathKind::SessionLeaf ||
+        pr.kind == PathKind::SessionWithSubpath)
+    {
+        return FS_FILE_WRITEERROR;
+    }
+
+    // Any validation failure surfaces through TC's themed request dialog
+    // (RequestProcW; falls back to a bare MessageBoxW if the callback is
+    // unavailable) so TC does not stack its generic "Error uploading file"
+    // popup on top. Returned as FS_FILE_USERABORT so TC treats it as a
+    // user-driven cancel — no additional error dialog.
+    auto abortWithMessage = [&](UINT msgId) -> int {
+        const std::string msgU8 = LngStrU8(msgId, "");
+        const std::string ttlU8 = LngStrU8(IDS_SIMPORT_TITLE,
+            "SFTP plugin - session import");
+        const std::wstring wmsg   = unicode_util::utf8_to_wstring(msgU8);
+        const std::wstring wtitle = unicode_util::utf8_to_wstring(ttlU8);
+        if (RequestProcW) {
+            RequestProcW(PluginNumber, RT_MsgOK,
+                const_cast<WCHAR*>(wtitle.c_str()),
+                const_cast<WCHAR*>(wmsg.c_str()),
+                nullptr, 0);
+        } else {
+            MessageBoxW(FindWindowA("TTOTAL_CMD", nullptr),
+                wmsg.c_str(), wtitle.c_str(),
+                MB_OK | MB_ICONWARNING);
+        }
+        return FS_FILE_USERABORT;
+    };
+
+    // Quick source-file sanity checks — openable, non-empty.
+    {
+        HANDLE hCheck = CreateFileW(LocalName, GENERIC_READ,
+            FILE_SHARE_READ | FILE_SHARE_WRITE,
+            nullptr, OPEN_EXISTING,
+            FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (hCheck == INVALID_HANDLE_VALUE)
+            return abortWithMessage(IDS_SIMPORT_ERR_OPEN);
+        LARGE_INTEGER fileSize{};
+        GetFileSizeEx(hCheck, &fileSize);
+        CloseHandle(hCheck);
+        if (fileSize.QuadPart == 0)
+            return abortWithMessage(IDS_SIMPORT_ERR_EMPTY);
+    }
+
+    std::array<char, MAX_PATH * 4> localA{};
+    WideCharToMultiByte(CP_ACP, 0, LocalName, -1,
+        localA.data(), static_cast<int>(localA.size()),
+        nullptr, nullptr);
+
+    std::array<char, 8192> sectionNames{};
+    const DWORD gotSects = GetPrivateProfileSectionNamesA(
+        sectionNames.data(),
+        static_cast<DWORD>(sectionNames.size() - 1),
+        localA.data());
+    if (gotSects == 0)
+        return abortWithMessage(IDS_SIMPORT_ERR_NO_SECTIONS);
+
+    // Look for the first section with a non-empty `server=`.
+    const char* sp = sectionNames.data();
+    std::string chosenSection;
+    while (sp[0]) {
+        std::array<char, 512> serverProbe{};
+        GetPrivateProfileStringA(sp, "server", "",
+            serverProbe.data(),
+            static_cast<DWORD>(serverProbe.size() - 1),
+            localA.data());
+        if (serverProbe[0]) {
+            chosenSection = sp;
+            break;
+        }
+        sp += strlen(sp) + 1;
+    }
+    if (chosenSection.empty())
+        return abortWithMessage(IDS_SIMPORT_ERR_NO_SERVER);
+
+    // Destination DisplayName: strip leading `\` and, if present, a
+    // trailing .ini extension. Folder structure is retained.
+    std::string display = PathToDisplayNameW(RemoteName);
+    if (display.size() > 4) {
+        const std::string tail = display.substr(display.size() - 4);
+        if (_stricmp(tail.c_str(), ".ini") == 0)
+            display.resize(display.size() - 4);
+    }
+    if (display.empty())
+        return abortWithMessage(IDS_SIMPORT_ERR_EMPTY_DEST);
+
+    if (!OverWrite && sftp::IniSectionExists(display, inifilename))
+        return FS_FILE_EXISTS;
+
+    if (!CopyIniSectionAcrossFiles(chosenSection.c_str(),
+            localA.data(), display.c_str(), inifilename))
+    {
+        return abortWithMessage(IDS_SIMPORT_ERR_WRITE);
+    }
+
+    LoadServersFromIniW(inifilenameW, s_quickconnect);
+    HWND hTcMain = FindWindowA("TTOTAL_CMD", nullptr);
+    if (hTcMain) PostMessage(hTcMain, WM_USER + 51, 540, 0);
+    return FS_FILE_OK;
+}
+
+// Enumerate every INI section name in `iniFileNameW` and return the ones
+// that live under `folderPrefix + '/'` — i.e. saved sessions organised
+// beneath a folder. ANSI names (via CP_ACP conversion) match the on-disk
+// section-name storage convention used everywhere else in this file. Used
+// by folder-rename (F6 on a folder) and folder-delete (F8 on a folder);
+// both first collect the affected session list, then mutate the INI.
+static std::vector<std::string> CollectSessionsUnderFolder(
+    const std::string& folderPrefix, LPCWSTR iniFileNameW)
+{
+    std::vector<std::string> out;
+    std::array<wchar_t, 65535> serverlist{};
+    GetPrivateProfileStringW(nullptr, nullptr, L"", serverlist.data(),
+                              static_cast<DWORD>(serverlist.size()),
+                              iniFileNameW);
+    const std::string needle = folderPrefix + "/";
+    wchar_t* wp = serverlist.data();
+    while (wp[0]) {
+        std::array<char, MAX_PATH> sectionA{};
+        WideCharToMultiByte(CP_ACP, 0, wp, -1, sectionA.data(),
+                             static_cast<int>(sectionA.size()),
+                             nullptr, nullptr);
+        const size_t len = strlen(sectionA.data());
+        if (len > needle.size() &&
+            _strnicmp(sectionA.data(), needle.c_str(), needle.size()) == 0)
+        {
+            out.emplace_back(sectionA.data(), len);
+        }
+        wp += wcslen(wp) + 1;
+    }
+    return out;
+}
+
+// Copy every key/value pair from `srcSection` in `srcIni` into `dstSection`
+// in `dstIni`. The plugin-internal `_source` provenance marker is filtered
+// out so the materialised session in the user's own INI carries only the
+// user-visible connect fields. The destination section is cleared first so
+// an overwrite is a full clean replace — leftover keys from a prior session
+// (password, proxy, jump-host refs) never survive materialisation.
+// Returns true if at least one key was copied.
+static bool CopyIniSectionAcrossFiles(LPCSTR srcSection, LPCSTR srcIni,
+                                       LPCSTR dstSection, LPCSTR dstIni)
+{
+    std::array<char, 4096> keyList{};
+    GetPrivateProfileStringA(srcSection, nullptr, "",
+                              keyList.data(),
+                              static_cast<DWORD>(keyList.size() - 1),
+                              srcIni);
+    if (!keyList[0]) return false;
+
+    WritePrivateProfileStringA(dstSection, nullptr, nullptr, dstIni);
+
+    bool any = false;
+    char* p = keyList.data();
+    while (p[0]) {
+        if (_stricmp(p, "_source") != 0) {
+            std::array<char, 2048> valueBuf{};
+            GetPrivateProfileStringA(srcSection, p, "",
+                                     valueBuf.data(),
+                                     static_cast<DWORD>(valueBuf.size() - 1),
+                                     srcIni);
+            WritePrivateProfileStringA(dstSection, p,
+                                       valueBuf[0] ? valueBuf.data() : nullptr,
+                                       dstIni);
+            any = true;
+        }
+        p += strlen(p) + 1;
+    }
+    return any;
+}
+
+// F5 materialise: copy a virtual session from the import cache into the
+// user's own sftpplug.ini as a real saved session. `sourceId` identifies
+// the adapter (e.g. "securecrt"), `subPath` is the virtual DisplayName
+// inside the source (e.g. "my/ha1_remote"), NewName is the destination
+// TC path the user copied to. The materialised session keeps only what the
+// adapter cached (host, user, key file, encoding); password / proxy details
+// are not carried across, and the user can add them manually through the
+// session Configure dialog afterwards.
+static int MaterialiseVirtualSession(const std::string& sourceId,
+                                      const std::string& subPath,
+                                      LPCWSTR NewName,
+                                      BOOL OverWrite)
+{
+    // Reject any subPath that is a pseudo entry, not a real cached session.
+    if (subPath == kRefreshEntry || subPath == kAddCustomEntry ||
+        subPath == kManageCustomFolder ||
+        subPath.find(" not currently detected") != std::string::npos)
+    {
+        return FS_FILE_NOTSUPPORTED;
+    }
+
+    const std::string newDisplay = PathToDisplayNameW(NewName);
+    if (newDisplay.empty())
+        return FS_FILE_NOTFOUND;
+
+    // Refuse overwrite unless TC's OverWrite flag is set.
+    if (!OverWrite && sftp::IniSectionExists(newDisplay, inifilename))
+        return FS_FILE_EXISTS;
+
+    const std::string cacheSection =
+        sftp::GetImportCache().SectionNameForConnect(sourceId, subPath);
+    const std::string& cachePath = sftp::GetImportCache().CacheFilePath();
+    if (cacheSection.empty() || cachePath.empty())
+        return FS_FILE_NOTFOUND;
+
+    if (!CopyIniSectionAcrossFiles(cacheSection.c_str(), cachePath.c_str(),
+                                    newDisplay.c_str(), inifilename))
+    {
+        return FS_FILE_NOTFOUND;
+    }
+
+    // Sync g_servers so the new session shows up in the plugin panel on the
+    // next FsFindFirst; refresh TC so the user sees the row immediately.
+    LoadServersFromIniW(inifilenameW, s_quickconnect);
+    HWND hTcMain = FindWindowA("TTOTAL_CMD", nullptr);
+    if (hTcMain) PostMessage(hTcMain, WM_USER + 51, 540, 0);
+    return FS_FILE_OK;
+}
+
+// Modal folder-picker for [Add custom location...]. Wrapped narrow because
+// the plugin's INI paths are ANSI throughout — the WFX API is ANSI at the
+// icon layer too. Returns false on Cancel or on a folder that cannot be
+// converted to a filesystem path (e.g. namespace-only selections).
+// The picker itself lives in ImportIoUtil so every future adapter's custom-
+// path enrollment reuses the same modern shell dialog.
+
+// Apply one enumeration result to the cache per the prune rules:
+//   Unreachable    → keep the cached entries (do nothing)
+//   OkEmpty        → prune this channel's cached entries
+//   OkWithSessions → replace this channel's cached entries with the new list
+static void ApplyEnumerationToCache(sftp::IExternalSessionSource* adapter,
+                                     const std::string& sourceId,
+                                     const std::string& channelTag,
+                                     sftp::EnumerationResult&& result)
+{
+    switch (result.status) {
+        case sftp::EnumerationStatus::Unreachable:
+            return;
+        case sftp::EnumerationStatus::OkEmpty:
+            sftp::GetImportCache().PruneChannel(sourceId, channelTag);
+            return;
+        case sftp::EnumerationStatus::OkWithSessions: {
+            // Fill tConnectSettings for every enumerated entry. The vector is
+            // pre-sized so its element addresses remain stable for the
+            // duration of the ReplaceChannel call (CacheWriteEntry holds a
+            // non-owning pointer to each).
+            std::vector<tConnectSettings> settingsStore(result.sessions.size());
+            std::vector<sftp::CacheWriteEntry> writes;
+            writes.reserve(result.sessions.size());
+            for (size_t i = 0; i < result.sessions.size(); ++i) {
+                if (!adapter->LoadSettings(result.sessions[i], &settingsStore[i]))
+                    continue;
+                sftp::CacheWriteEntry w;
+                w.displayName = result.sessions[i].displayName;
+                w.settings    = &settingsStore[i];
+                writes.push_back(std::move(w));
+            }
+            sftp::GetImportCache().ReplaceChannel(sourceId, channelTag, writes);
+            return;
+        }
+    }
+}
+
+// Re-scan every configured channel of one import source (the standard
+// registry / %APPDATA% location plus every user-added custom path) and
+// update the on-disk cache accordingly. Called from FsExecuteFileW when
+// the user activates [Refresh] inside an [Imports]\<Source>\ folder.
+static void RefreshImportSource(const std::string& sourceId)
+{
+    auto* adapter = sftp::GetImportSourceRegistry().Find(sourceId.c_str());
+    if (!adapter) return;
+
+    ApplyEnumerationToCache(adapter, sourceId, "standard",
+                            adapter->EnumerateStandard());
+
+    for (const auto& path : LoadImportCustomPaths(sourceId.c_str(), inifilename)) {
+        ApplyEnumerationToCache(adapter, sourceId, path,
+                                adapter->EnumerateCustomPath(path));
+    }
+}
 
 // Length (in wide chars) of the session's displayName once embedded in a
 // TC-style path — i.e. the number of wchars between the leading '\\' and the
@@ -78,6 +448,155 @@ int WINAPI FsExecuteFileW(HWND MainWin, LPWSTR RemoteName, LPCWSTR Verb)
                 pConnectSettings serveridQuick = SftpConnectToServer(s_quickconnect, inifilename, nullptr);
                 LoadServersFromIniW(inifilenameW, s_quickconnect);
                 return serveridQuick ? FS_EXEC_OK : FS_EXEC_YOURSELF;
+            }
+
+            // Entries inside the [Imports] magic folder — dispatch by the
+            // classification. Umbrella / unknown-source Enter events land
+            // here from TC too; those are navigations, not actions, so we
+            // return FS_EXEC_OK to keep TC from falling through to the
+            // download path.
+            {
+                std::string sourceId, subPath;
+                const ImportsPathKind kind = ClassifyImportsPath(RemoteName,
+                    &sourceId, &subPath);
+                if (kind != ImportsPathKind::NotImports) {
+                    if (kind == ImportsPathKind::Umbrella ||
+                        kind == ImportsPathKind::UnknownSource)
+                        return FS_EXEC_OK;
+
+                    if (subPath == kRefreshEntry) {
+                        // Re-scan every configured channel (standard +
+                        // custom paths).
+                        RefreshImportSource(sourceId);
+                        // Symlink back to the parent source folder so TC
+                        // rebuilds the listing with any new cache content.
+                        auto* adapter = sftp::GetImportSourceRegistry().Find(sourceId.c_str());
+                        if (adapter) {
+                            std::wstring target;
+                            target += L'\\';
+                            target += kImportsFolderW;
+                            target += L'\\';
+                            target += unicode_util::narrow_to_wide(adapter->FolderName());
+                            wcslcpy(RemoteName, target.c_str(), wdirtypemax - 1);
+                            return FS_EXEC_SYMLINK;
+                        }
+                        return FS_EXEC_OK;
+                    }
+
+                    // [Add custom location...] — modal picker (folder or
+                    // file, per adapter capability), persist the chosen
+                    // path, immediately scan it into the cache, then
+                    // FS_EXEC_SYMLINK back to the source folder so TC
+                    // rebuilds the listing with the new sessions included
+                    // and [Manage custom locations] surfaced.
+                    if (subPath == kAddCustomEntry) {
+                        HWND tcMain = FindWindowA("TTOTAL_CMD", nullptr);
+                        auto* pickerAdapter =
+                            sftp::GetImportSourceRegistry().Find(sourceId.c_str());
+                        if (!pickerAdapter)
+                            return FS_EXEC_OK;
+                        std::string chosen;
+                        bool picked = false;
+                        switch (pickerAdapter->CustomPathPicker()) {
+                            case sftp::CustomPathPickerKind::None:
+                                // Adapter declared no custom-path concept —
+                                // the entry should not have been surfaced,
+                                // but silently no-op if TC ever routes here.
+                                return FS_EXEC_OK;
+                            case sftp::CustomPathPickerKind::Folder:
+                                picked = sftp::BrowseForFolder(tcMain,
+                                    "Select folder to import sessions from",
+                                    nullptr, chosen);
+                                break;
+                            case sftp::CustomPathPickerKind::File:
+                                picked = sftp::BrowseForFile(tcMain,
+                                    "Select file to import sessions from",
+                                    pickerAdapter->CustomPathFileFilter(),
+                                    nullptr, chosen);
+                                break;
+                        }
+                        if (!picked)
+                            return FS_EXEC_OK;  // user cancelled
+                        if (!SaveImportCustomPath(sourceId.c_str(),
+                                chosen.c_str(), inifilename))
+                        {
+                            // Save failure (e.g. duplicate) — still scan the
+                            // path once so a duplicate-add still refreshes
+                            // that channel's cache. SaveImportCustomPath
+                            // reports true for duplicates too, so a false
+                            // return here is a genuine write failure and we
+                            // skip the scan to avoid dangling channel state.
+                            return FS_EXEC_OK;
+                        }
+                        auto* adapter = pickerAdapter;
+                        ApplyEnumerationToCache(adapter, sourceId, chosen,
+                            adapter->EnumerateCustomPath(chosen));
+                        // Symlink back to `[Imports]\<Source>\`.
+                        std::wstring target;
+                        target += L'\\';
+                        target += kImportsFolderW;
+                        target += L'\\';
+                        target += unicode_util::narrow_to_wide(adapter->FolderName());
+                        wcslcpy(RemoteName, target.c_str(), wdirtypemax - 1);
+                        return FS_EXEC_SYMLINK;
+                    }
+                    // Enter into [Manage custom locations] or one of its
+                    // listed path entries — no side-effect action. TC just
+                    // displays the folder view built by the listing code;
+                    // F8 on an entry deletes it via FsDeleteFile.
+                    if (subPath == kManageCustomFolder ||
+                        (subPath.size() > strlen(kManageCustomFolder) &&
+                         subPath.compare(0, strlen(kManageCustomFolder), kManageCustomFolder) == 0))
+                    {
+                        return FS_EXEC_OK;
+                    }
+
+                    // Virtual session Enter: subPath is the session's
+                    // DisplayName inside the source (e.g. "dron/hz-1-test2").
+                    // Compose the cache-INI section name and let
+                    // SftpConnectToServer connect against the cache file.
+                    // When the cached fields are complete (host, user, key
+                    // file), ShowConnectDialog's silent-connect branch fires
+                    // and no dialog appears. Cached sessions never carry a
+                    // password (the cache writer skips it), so any session
+                    // that requires one falls back to the standard
+                    // interactive password prompt exactly as a real saved
+                    // session would.
+                    const std::string cacheSection =
+                        sftp::GetImportCache().SectionNameForConnect(sourceId, subPath);
+                    const std::string& cachePath =
+                        sftp::GetImportCache().CacheFilePath();
+                    if (cacheSection.empty() || cachePath.empty()) {
+                        return FS_EXEC_OK;
+                    }
+                    pConnectSettings virtualServer = SftpConnectToServer(
+                        cacheSection.c_str(), cachePath.c_str(), nullptr);
+                    if (!virtualServer)
+                        return FS_EXEC_OK;
+
+                    // Bind the connected session to `cacheSection` in the
+                    // per-thread registry, mirroring what the implicit-
+                    // connect branch of FsFindFirstW does. Without this
+                    // bind, GetServerIdFromName returns null on the
+                    // follow-up FsFindFirstW that FS_EXEC_SYMLINK triggers,
+                    // and TC would treat the redirected path as a fresh
+                    // URL — SftpConnectToServer would then re-run with an
+                    // empty settings buffer and pop the connection dialog.
+                    SetServerIdForName(cacheSection.c_str(),
+                        static_cast<SERVERID>(virtualServer));
+
+                    // Redirect TC to the registry-name path so
+                    // ResolvePathKindW resolves it as SessionLeaf and
+                    // normal SFTP navigation into the remote root takes
+                    // over. `__import.` sessions are filtered out of the
+                    // plugin root listing (see BuildPluginFolderListing),
+                    // so no ghost row surfaces there; the internal section
+                    // name remains visible in the panel breadcrumb.
+                    std::wstring target = L"\\";
+                    target += unicode_util::narrow_to_wide(cacheSection);
+                    wcslcpy(RemoteName, target.c_str(), wdirtypemax - 1);
+                    return FS_EXEC_SYMLINK;
+                }
             }
 
             const PathResolution r = ResolvePathKindW(RemoteName);
@@ -275,6 +794,33 @@ int WINAPI FsRenMovFileW(LPCWSTR OldName, LPCWSTR NewName, BOOL Move, BOOL OverW
 {
     sftp::DllExceptionBarrier _barrier;
     return sftp::dll_invoke(_barrier, FS_FILE_WRITEERROR, [&]() -> int {
+        // \[Imports]\ interactions with FsRenMovFile:
+        //   OldName in Imports + NewName outside → materialise (both F5 copy
+        //     and F6 move; the "delete source" leg of a move is a no-op for
+        //     virtual entries — the source is a mirror of the third-party
+        //     app's state and will simply reappear on the next refresh, so
+        //     move degrades to copy without any user-visible weirdness).
+        //   OldName outside + NewName in Imports → refuse (Imports is
+        //     read-only from outside).
+        //   Both in Imports → refuse (virtual→virtual has no semantics).
+        {
+            std::string oldSourceId, oldSubPath;
+            const ImportsPathKind oldKind = ClassifyImportsPath(OldName,
+                &oldSourceId, &oldSubPath);
+            const bool newInImports = IsImportsPath(NewName);
+            if (oldKind != ImportsPathKind::NotImports || newInImports) {
+                if (newInImports)
+                    return FS_FILE_NOTSUPPORTED;
+                // Only a real virtual session (adapter matched + concrete
+                // sub-path) materialises; umbrella / source-root / unknown-
+                // source / pseudo-entry gestures refuse.
+                if (oldKind != ImportsPathKind::SourceSubPath)
+                    return FS_FILE_NOTSUPPORTED;
+                return MaterialiseVirtualSession(oldSourceId, oldSubPath,
+                                                  NewName, OverWrite);
+            }
+        }
+
         const PathResolution rOld = ResolvePathKindW(OldName);
         const PathResolution rNew = ResolvePathKindW(NewName);
 
@@ -347,31 +893,18 @@ int WINAPI FsRenMovFileW(LPCWSTR OldName, LPCWSTR NewName, BOOL Move, BOOL OverW
 
             // Build the {old, new} rename list up front so we don't mutate
             // INI while enumerating its section list.
-            std::vector<std::pair<std::string, std::string>> renames;
-            {
-                std::array<wchar_t, 65535> serverlist{};
-                GetPrivateProfileStringW(nullptr, nullptr, L"", serverlist.data(),
-                                          static_cast<DWORD>(serverlist.size()),
-                                          inifilenameW);
-                const std::string needle = rOld.displayName + "/";
-                wchar_t* wp = serverlist.data();
-                while (wp[0]) {
-                    std::array<char, MAX_PATH> sectionA{};
-                    WideCharToMultiByte(CP_ACP, 0, wp, -1, sectionA.data(),
-                                         static_cast<int>(sectionA.size()),
-                                         nullptr, nullptr);
-                    const size_t len = strlen(sectionA.data());
-                    if (len > needle.size() &&
-                        _strnicmp(sectionA.data(), needle.c_str(), needle.size()) == 0) {
-                        std::string oldName(sectionA.data(), len);
-                        std::string newName = newFolder + "/" + (sectionA.data() + needle.size());
-                        renames.emplace_back(std::move(oldName), std::move(newName));
-                    }
-                    wp += wcslen(wp) + 1;
-                }
-            }
-            if (renames.empty())
+            const std::vector<std::string> oldNames =
+                CollectSessionsUnderFolder(rOld.displayName, inifilenameW);
+            if (oldNames.empty())
                 return FS_FILE_NOTFOUND;
+            std::vector<std::pair<std::string, std::string>> renames;
+            renames.reserve(oldNames.size());
+            const std::string needle = rOld.displayName + "/";
+            for (const auto& oldName : oldNames) {
+                std::string newName =
+                    newFolder + "/" + oldName.substr(needle.size());
+                renames.emplace_back(oldName, std::move(newName));
+            }
 
             for (const auto& [oldName, newName] : renames) {
                 if (Move) {
@@ -517,6 +1050,110 @@ int WINAPI FsGetFileW(LPCWSTR RemoteName, LPWSTR LocalName, int CopyFlags, Remot
         if (remoteView.size() < 3 || !LocalName || !ri)
             return FS_FILE_NOTFOUND;
 
+        // Virtual sessions under \[Imports]\ are exported as INI-format
+        // text files: user F5/F6 to a real filesystem path yields a
+        // human-readable snippet with the connect fields we cached. Pseudo
+        // rows and the [Manage custom locations] sub-tree have no useful
+        // download representation and refuse silently.
+        {
+            std::string sourceId, subPath;
+            const ImportsPathKind kind = ClassifyImportsPath(RemoteName,
+                &sourceId, &subPath);
+            if (kind != ImportsPathKind::NotImports) {
+                if (kind != ImportsPathKind::SourceSubPath)
+                    return FS_FILE_NOTSUPPORTED;
+                // Pseudo rows and manage-locations entries have no INI
+                // section to export. FS_FILE_USERABORT isn't silent in the
+                // FsGetFile path (TC still pops "Error downloading file"),
+                // so mirror the [Active Sessions] / F7-help pattern: write a
+                // short explanatory stub note and return OK. TC opens its
+                // viewer on the stub file, and the user sees a description
+                // of what the entry does instead of a scary error.
+                const std::string managePrefix =
+                    std::string(kManageCustomFolder) + "/";
+                auto writeStub = [&](const std::string& note) -> int {
+                    HANDLE h = CreateFileW(LocalName, GENERIC_WRITE, 0,
+                        nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+                    if (h == INVALID_HANDLE_VALUE) return FS_FILE_WRITEERROR;
+                    DWORD written = 0;
+                    WriteFile(h, note.data(),
+                              static_cast<DWORD>(note.size()),
+                              &written, nullptr);
+                    CloseHandle(h);
+                    return FS_FILE_OK;
+                };
+
+                if (subPath == kRefreshEntry) {
+                    return writeStub(
+                        "This is the [Refresh] action.\r\n"
+                        "Press Enter here to re-scan every configured channel "
+                        "(standard location plus any custom paths).\r\n");
+                }
+                if (subPath == kAddCustomEntry) {
+                    return writeStub(
+                        "This is the [Add custom location...] action.\r\n"
+                        "Press Enter here to open a folder-picker dialog "
+                        "and enroll a custom import location.\r\n");
+                }
+                if (subPath == kManageCustomFolder) {
+                    return writeStub(
+                        "This is the [Manage custom locations] sub-folder.\r\n"
+                        "Enter it to see and remove configured custom paths.\r\n");
+                }
+                if (subPath.size() > managePrefix.size() &&
+                    subPath.compare(0, managePrefix.size(), managePrefix) == 0)
+                {
+                    std::string customPath = subPath.substr(managePrefix.size());
+                    std::replace(customPath.begin(), customPath.end(), '/', '\\');
+                    std::string note = "Custom import path for source: ";
+                    note.append(sourceId).append("\r\n");
+                    note.append("Path: ").append(customPath).append("\r\n\r\n");
+                    note.append("Press F8 to remove this custom location. "
+                                "Cached sessions with this path as their "
+                                "source will be pruned.\r\n");
+                    return writeStub(note);
+                }
+                if (subPath.find(" not currently detected") != std::string::npos) {
+                    std::string note = "The standard location for source '";
+                    note.append(sourceId);
+                    note.append("' is not currently detected on this system.\r\n"
+                                "Cached sessions remain visible. Use "
+                                "[Add custom location...] to enroll a "
+                                "portable folder as the source.\r\n");
+                    return writeStub(note);
+                }
+
+                // Must be a real cached session — confirm via
+                // ImportCache::ListSource so folder segments (dron, my,
+                // ...) also refuse cleanly instead of yielding an empty
+                // file.
+                const auto sessions =
+                    sftp::GetImportCache().ListSource(sourceId);
+                bool matched = false;
+                for (const auto& s : sessions) {
+                    if (_stricmp(s.displayName.c_str(), subPath.c_str()) == 0) {
+                        matched = true;
+                        break;
+                    }
+                }
+                if (!matched)
+                    return FS_FILE_NOTSUPPORTED;
+
+                const std::string cacheSection =
+                    sftp::GetImportCache().SectionNameForConnect(sourceId, subPath);
+                const std::string& cachePath =
+                    sftp::GetImportCache().CacheFilePath();
+                if (cacheSection.empty() || cachePath.empty())
+                    return FS_FILE_NOTFOUND;
+
+                std::string header = "Imported session from [Imports]\\[";
+                header.append(sourceId).append("]\\").append(subPath);
+                return ExportSessionAsIniFile(cacheSection.c_str(),
+                    cachePath.c_str(), subPath.c_str(),
+                    header.c_str(), LocalName, OverWrite);
+            }
+        }
+
         if (remoteView.substr(1) == std::wstring_view(s_f7newconnectionW.data())) {
             return CreateHelpFileLocalW(LocalName, OverWrite);
         }
@@ -556,34 +1193,30 @@ int WINAPI FsGetFileW(LPCWSTR RemoteName, LPWSTR LocalName, int CopyFlags, Remot
         // So after the dialog we write a short stub note into the temp file
         // and return OK: no error, and the trailing viewer/editor shows a
         // self-explanatory message instead of misleading editable settings.
+        // F3/F4/F5 on a saved session (root-level or nested in a folder)
+        // → export the session's INI section into the download target as a
+        // human-readable INI snippet. Symmetric with the reverse-import
+        // path in FsPutFileW, and with the virtual-session export above.
+        //
+        // OPEN UX DECISION (see TODO — "F3/F4 vs F5 behaviour"):
+        // TC's WFX API routes F3 (view), F4 (edit) and F5 (copy) through
+        // the same FsGetFile entry point with no reliable "intent" hint.
+        // All three gestures export the session's raw INI content — F3/F5
+        // work naturally; F4 opens an editor on the snapshot but saving
+        // does NOT round-trip back to sftpplug.ini. Alt+Enter (a separate
+        // FsExecuteFile path) still opens the editable Configure dialog.
+        // See AUDIT.md "F3/F4/F5 UX для обычных сессий" for the follow-up.
         {
             const PathResolution r = ResolvePathKindW(RemoteName);
             if (r.kind == PathKind::SessionLeaf &&
                 _stricmp(r.displayName.c_str(), s_f7newconnection) != 0 &&
                 _stricmp(r.displayName.c_str(), s_quickconnect)    != 0)
             {
-                if (SftpConfigureServer(r.displayName.c_str(), inifilename)) {
-                    LoadServersFromIniW(inifilenameW, s_quickconnect);
-                    // Drop any active session so the next listing rebuilds it
-                    // with the edited settings (mirrors the properties path).
-                    std::string disconnPath;
-                    disconnPath.reserve(r.displayName.size() + 1);
-                    disconnPath.append("\\").append(r.displayName);
-                    FsDisconnect(disconnPath.c_str());
-                }
-                // Stub note for the viewer/editor TC opens after FS_FILE_OK.
-                std::string note = "Session '";
-                note.append(r.displayName);
-                note.append("' was opened for editing in a dialog.\r\n"
-                             "This file is not used \xE2\x80\x94 you can close this window.\r\n");
-                HANDLE hStub = CreateFileW(LocalName, GENERIC_WRITE, 0, nullptr,
-                                           CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-                if (hStub != INVALID_HANDLE_VALUE) {
-                    DWORD written = 0;
-                    WriteFile(hStub, note.data(), static_cast<DWORD>(note.size()), &written, nullptr);
-                    CloseHandle(hStub);
-                }
-                return FS_FILE_OK;
+                std::string header = "Session '";
+                header.append(r.displayName).append("' from sftpplug.ini");
+                return ExportSessionAsIniFile(r.displayName.c_str(),
+                    inifilename, r.displayName.c_str(),
+                    header.c_str(), LocalName, OverWrite);
             }
         }
 
@@ -711,12 +1344,33 @@ int WINAPI FsPutFileW(LPCWSTR LocalName, LPCWSTR RemoteName, int CopyFlags)
         if (remoteView.size() < 3 || localView.empty())
             return FS_FILE_WRITEERROR;
 
+        // \[Imports]\ is read-only from outside: no user-driven upload
+        // ever lands there. FS_FILE_USERABORT is documented as "user
+        // pressed abort in progress dialog"; TC pops "Error uploading
+        // file" for it when no dialog was involved. Return FS_FILE_OK
+        // instead — the plugin discards the incoming bytes, TC thinks
+        // the upload succeeded, and the user gets no error. Matches the
+        // silent-no-op UX pattern the regular-session F4 write-back path
+        // uses. Real-disk → panel session-INI import lives on the else
+        // branch below.
+        if (IsImportsPath(RemoteName))
+            return FS_FILE_OK;
+
+        // Reverse of the [Imports] INI-export path: when the destination
+        // path does NOT resolve to any existing session, treat the upload
+        // as an attempt to import a session-INI file. The helper handles
+        // validation, user-visible error dialogs and the actual section
+        // copy; nullopt means "not our target — carry on with the normal
+        // upload".
+        if (const auto rc = TryImportSessionFromUpload(LocalName, RemoteName, OverWrite))
+            return *rc;
+
         int err = ProgressProcT(PluginNumber, LocalName, RemoteName, 0);
         if (err)
             return FS_FILE_USERABORT;
 
         std::array<WCHAR, wdirtypemax> remotedir{};
-    
+
         pConnectSettings serverid = GetServerIdAndRelativePathFromPathW(RemoteName, remotedir.data(), remotedir.size() - 1);
         if (serverid == nullptr)
             return FS_FILE_READERROR;
@@ -784,6 +1438,43 @@ BOOL WINAPI FsDeleteFileW(LPCWSTR RemoteName)
         const std::wstring_view remoteView = RemoteName ? std::wstring_view(RemoteName) : std::wstring_view{};
         if (remoteView.size() < 2)
             return false;
+
+        // F8 inside \[Imports]\ has two paths:
+        //   1. On a row inside [Manage custom locations]\  → remove that
+        //      custom path from the INI and prune its cached sessions.
+        //   2. Anywhere else under \[Imports]\  → silently refused (virtual
+        //      entries mirror source-program state; deleting them from TC
+        //      would wipe cache sections without affecting the source).
+        {
+            std::string importsSource, importsSub;
+            if (IsImportsPath(RemoteName, &importsSource, &importsSub)) {
+                const std::string managePrefix =
+                    std::string(kManageCustomFolder) + "/";
+                if (!importsSource.empty() &&
+                    importsSub.size() > managePrefix.size() &&
+                    _strnicmp(importsSub.c_str(), managePrefix.c_str(),
+                              managePrefix.size()) == 0)
+                {
+                    // Extract the custom path portion and reverse the '/'
+                    // normalisation that IsImportsPath applied so we match
+                    // the Windows-style entry stored in `[Imports]`.
+                    std::string customPath = importsSub.substr(managePrefix.size());
+                    std::replace(customPath.begin(), customPath.end(), '/', '\\');
+                    if (customPath.empty())
+                        return false;
+                    if (!RemoveImportCustomPath(importsSource.c_str(),
+                            customPath.c_str(), inifilename))
+                    {
+                        return false;
+                    }
+                    sftp::GetImportCache().PruneChannel(importsSource, customPath);
+                    HWND hTcMain = FindWindowA("TTOTAL_CMD", nullptr);
+                    if (hTcMain) PostMessage(hTcMain, WM_USER + 51, 540, 0);
+                    return true;
+                }
+                return false;  // any other F8 under Imports is refused
+            }
+        }
 
         // F8 on a row inside the [Active Sessions] magic folder → disconnect
         // that session (not delete it from INI). Resolved before the path
@@ -923,26 +1614,8 @@ BOOL WINAPI FsRemoveDirW(LPCWSTR RemoteName)
         if (r.kind == PathKind::Folder && !r.displayName.empty()) {
             // Collect matching section names first; mutating the INI mid-
             // enumeration would shift the underlying buffer.
-            std::vector<std::string> toDelete;
-            {
-                std::array<wchar_t, 65535> serverlist{};
-                GetPrivateProfileStringW(nullptr, nullptr, L"", serverlist.data(),
-                                          static_cast<DWORD>(serverlist.size()), inifilenameW);
-                const std::string needle = r.displayName + "/";
-                wchar_t* wp = serverlist.data();
-                while (wp[0]) {
-                    std::array<char, MAX_PATH> sectionA{};
-                    WideCharToMultiByte(CP_ACP, 0, wp, -1, sectionA.data(),
-                                         static_cast<int>(sectionA.size()), nullptr, nullptr);
-                    const size_t len = strlen(sectionA.data());
-                    if (len > needle.size() &&
-                        _strnicmp(sectionA.data(), needle.c_str(), needle.size()) == 0) {
-                        toDelete.emplace_back(sectionA.data(), len);
-                    }
-                    wp += wcslen(wp) + 1;
-                }
-            }
-
+            const std::vector<std::string> toDelete =
+                CollectSessionsUnderFolder(r.displayName, inifilenameW);
             if (toDelete.empty())
                 return false;
 

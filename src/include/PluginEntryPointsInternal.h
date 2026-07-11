@@ -50,3 +50,56 @@ inline constexpr const char*    kDisconnectAllEntry    = "[Disconnect All]";
 // written into `outEntry`. On folder-itself matches `outEntry` is cleared.
 // Implementation in PluginEntryPointsFind.cpp.
 bool IsActiveSessionsPath(LPCWSTR path, std::string* outEntry = nullptr);
+
+// Umbrella folder in the plugin root that groups every known import source
+// under a single entry, avoiding one-folder-per-source clutter in the root.
+// Its children are the registered adapters' FolderName() values (always all
+// of them, detection state only affects the display suffix). Content of
+// [Imports]\<Source>\ is served from ImportCache (persistent snapshot) plus
+// adapter-driven pseudo entries.
+inline constexpr const char*    kImportsFolder      = "[Imports]";
+inline constexpr const wchar_t* kImportsFolderW     = L"[Imports]";
+inline constexpr const char*    kRefreshEntry       = "[Refresh]";
+inline constexpr const char*    kAddCustomEntry     = "[Add custom location...]";
+inline constexpr const char*    kManageCustomFolder = "[Manage custom locations]";
+
+// Path classifier for the [Imports] magic folder tree. Each variant tells
+// callers unambiguously what part of the tree `path` addresses; the boolean
+// combinations that used to be re-derived from (outSourceId.empty(),
+// outSubPath.empty()) at every call site now correspond to a single enum
+// value each.
+enum class ImportsPathKind {
+    NotImports,     // path is not under \[Imports]
+    Umbrella,       // path is \[Imports] itself (no source segment)
+    UnknownSource,  // path is under \[Imports] but the source segment does
+                    // not match any registered adapter — callers refuse it
+    SourceRoot,     // \[Imports]\<Source> or \[Imports]\<Source>\ (no subpath)
+    SourceSubPath,  // \[Imports]\<Source>\<something-after>
+};
+
+// Classify `path` against the [Imports] tree. For every non-NotImports
+// result:
+//   outSourceId is the lowercase adapter SourceId() when the source
+//               segment matched a registered adapter (SourceRoot,
+//               SourceSubPath); empty for Umbrella / UnknownSource.
+//   outSubPath  is what comes after \[Imports]\<Source>\, with backslashes
+//               normalised to forward slashes (mirrors IsActiveSessionsPath);
+//               non-empty only for SourceSubPath. For UnknownSource it holds
+//               the unrecognised segment plus any trailing path so a caller
+//               can log or display it.
+// Implementation in PluginEntryPointsFind.cpp.
+ImportsPathKind ClassifyImportsPath(LPCWSTR path,
+                                    std::string* outSourceId = nullptr,
+                                    std::string* outSubPath  = nullptr);
+
+// Boolean convenience: is `path` under \[Imports] at all? Callers that only
+// need "yes/no" (e.g. FsFindFirstW dispatch, FsPutFile no-op guard) use this
+// wrapper; callers that need to distinguish umbrella from source-level or
+// SourceRoot from SourceSubPath call ClassifyImportsPath directly.
+inline bool IsImportsPath(LPCWSTR path,
+                          std::string* outSourceId = nullptr,
+                          std::string* outSubPath  = nullptr)
+{
+    return ClassifyImportsPath(path, outSourceId, outSubPath) !=
+           ImportsPathKind::NotImports;
+}

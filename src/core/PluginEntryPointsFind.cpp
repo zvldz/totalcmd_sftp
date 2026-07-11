@@ -20,6 +20,9 @@
 #include "LanPairSession.h"
 #include "PluginEntryPointsInternal.h"
 #include "PhpAgentClient.h"
+#include "ImportSourceRegistry.h"
+#include "ImportCache.h"
+#include "ProfileSettings.h"
 
 // Path of the most recent FsFindFirstW call that returned PATH_NOT_FOUND.
 // TC's "paste into a non-existent folder" flow does FsFindFirstW (to check
@@ -80,13 +83,22 @@ struct LanPairFindState {
 struct PluginFolderEntry {
     std::string name;
     enum class Kind {
-        Folder,         // grouping of saved sessions (FILE_ATTRIBUTE_DIRECTORY)
-        Session,        // saved session leaf (IFLNK + UNIXMODE → padlock icon)
-        Pseudo,         // [F7 = new connection] help entry
-        ActiveSession,  // live session row inside [Active Sessions] (plain file)
-        ActiveBulkOp    // [Disconnect All] inside [Active Sessions] (plain file)
+        Folder,           // grouping of saved sessions (FILE_ATTRIBUTE_DIRECTORY)
+        Session,          // saved session leaf (IFLNK + UNIXMODE → padlock icon)
+        Pseudo,           // [F7 = new connection] help entry
+        ActiveSession,    // live session row inside [Active Sessions] (plain file)
+        ActiveBulkOp,     // [Disconnect All] inside [Active Sessions] (plain file)
+        ImportsUmbrella,  // [Imports] in the plugin root (directory)
+        ImportSource,     // [SecureCRT] etc. inside [Imports] (directory)
+        ImportSession,    // cached virtual session inside a source (plain file)
+        ImportPseudo      // [Refresh]/[Add custom...]/[Manage custom locations]
     } kind = Kind::Session;
-    DWORD       helpFileSize = 0;   // Pseudo only — used as nFileSizeLow.
+    DWORD       helpFileSize   = 0;      // Pseudo only — used as nFileSizeLow.
+    bool        pseudoAsFolder = false;  // ImportPseudo only — true for [Manage
+                                         // custom locations] (Enter navigates
+                                         // into a subfolder); false for
+                                         // [Refresh]/[Add custom...] (Enter
+                                         // triggers an action).
 };
 
 struct PluginFolderFindState {
@@ -189,6 +201,63 @@ struct CaseInsensitiveLess {
     }
 };
 
+// Working buffers shared by every "listing a directory of session paths"
+// pass: `subfolders` receives Folder entries, `sessions` receives leaf
+// entries; `foldersSeen` deduplicates folder heads across the input stream.
+// The plugin-root and Imports-source listings both hydrate one of these
+// and finalise it identically.
+struct DedupBuckets {
+    std::set<std::string, CaseInsensitiveLess> foldersSeen;
+    std::vector<PluginFolderEntry>             subfolders;
+    std::vector<PluginFolderEntry>             sessions;
+};
+
+// Given one path relative to the listing root (e.g. "team/aws/prod-web1"),
+// route into either a Folder head (first segment before '/') or a session
+// leaf (no '/'). Session leaves carry `sessionKind`; adapters use
+// ImportSession, the plugin root uses Session.
+//
+// `sessionsSeen`, when non-null, deduplicates session names across calls —
+// used by the Imports listing where the same displayName can appear in more
+// than one channel. Plugin root passes nullptr (session names are unique in
+// the underlying registry already).
+void ClassifyRelativeEntry(DedupBuckets&                       buckets,
+                            std::string                         relative,
+                            PluginFolderEntry::Kind             sessionKind,
+                            std::set<std::string, CaseInsensitiveLess>* sessionsSeen)
+{
+    const size_t slashPos = relative.find('/');
+    if (slashPos == std::string::npos) {
+        if (sessionsSeen && !sessionsSeen->insert(relative).second)
+            return;
+        PluginFolderEntry e;
+        e.name = std::move(relative);
+        e.kind = sessionKind;
+        buckets.sessions.push_back(std::move(e));
+        return;
+    }
+    std::string sub = relative.substr(0, slashPos);
+    if (buckets.foldersSeen.insert(sub).second) {
+        PluginFolderEntry e;
+        e.name = std::move(sub);
+        e.kind = PluginFolderEntry::Kind::Folder;
+        buckets.subfolders.push_back(std::move(e));
+    }
+}
+
+// Folder wins on a name collision; then move subfolders + sessions into
+// `outEntries` in TC's convention order (folders first, leaves last).
+void EmitDedupBuckets(DedupBuckets&                     buckets,
+                      std::vector<PluginFolderEntry>&   outEntries)
+{
+    buckets.sessions.erase(std::remove_if(buckets.sessions.begin(),
+                                           buckets.sessions.end(),
+        [&](const PluginFolderEntry& s) { return buckets.foldersSeen.contains(s.name); }),
+        buckets.sessions.end());
+    for (auto& e : buckets.subfolders) outEntries.push_back(std::move(e));
+    for (auto& e : buckets.sessions)   outEntries.push_back(std::move(e));
+}
+
 }  // anonymous namespace
 
 // Fill a WIN32_FIND_DATAW from one PluginFolderEntry. Pseudo entries advertise
@@ -218,6 +287,32 @@ static void FillFindDataFromPluginEntry(WIN32_FIND_DATAW& fd, const PluginFolder
             // Plain-file rendering so Enter does nothing (the row is just a
             // disconnect target) and F8 reaches FsDeleteFileW unambiguously.
             fd.dwFileAttributes = FILE_ATTRIBUTE_NORMAL;
+            break;
+        case PluginFolderEntry::Kind::ImportsUmbrella:
+        case PluginFolderEntry::Kind::ImportSource:
+            // Directories: user navigates into them like any TC folder.
+            fd.dwFileAttributes = FILE_ATTRIBUTE_DIRECTORY;
+            break;
+        case PluginFolderEntry::Kind::ImportSession:
+            // Plain file so Enter routes through FsExecuteFile "open" (where
+            // the virtual-session connect branch lives). F5 (copy) triggers
+            // materialise in FsRenMovFile.
+            fd.dwFileAttributes = FILE_ATTRIBUTE_NORMAL;
+            break;
+        case PluginFolderEntry::Kind::ImportPseudo:
+            // pseudoAsFolder=true → [Manage custom locations] (a real
+            // sub-listing lives inside). pseudoAsFolder=false → [Refresh]
+            // or [Add custom location...] (Enter triggers an action; TC
+            // treats the row as a file and calls FsExecuteFile).
+            // Plain attributes — no FILE_ATTRIBUTE_SYSTEM. TC appears to
+            // short-circuit its icon pipeline for system-flagged entries
+            // and paint its own warning glyph regardless of what our
+            // FsExtractCustomIcon returns, so the SYSTEM tag hid the
+            // stock-icon path. Visual distinction is provided by the
+            // custom icon returned in FsExtractCustomIcon.
+            fd.dwFileAttributes = e.pseudoAsFolder
+                ? FILE_ATTRIBUTE_DIRECTORY
+                : FILE_ATTRIBUTE_NORMAL;
             break;
     }
 }
@@ -249,20 +344,31 @@ static HANDLE BuildPluginFolderListing(const std::string& folderPrefix,
         state->entries.push_back(std::move(pe));
     }
 
-    std::set<std::string, CaseInsensitiveLess> foldersSeen;
-    std::vector<PluginFolderEntry> sessions;
-    std::vector<PluginFolderEntry> subfolders;
+    DedupBuckets buckets;
     bool hasActiveSession = false;
     {
         std::array<char, wdirtypemax> nameBuf{};
         SERVERHANDLE hdl = FindFirstServer(nameBuf.data(), nameBuf.size() - 1);
         while (hdl) {
             std::string fullName = nameBuf.data();
+            // Skip cache-only virtual sessions: SftpConnectToServer registers
+            // them in the server registry under their cache-section name
+            // (prefixed "__import.") when the user opens a virtual session
+            // from inside [Imports]. They must still count towards
+            // hasActiveSession (so [Active Sessions] can list them for the
+            // disconnect gesture) but must not appear as fake sessions in
+            // the plugin root listing.
+            const bool isVirtual = fullName.compare(0, 9, "__import.") == 0;
             // Track whether any session is currently connected — used at root
             // to decide whether to surface the [Active Sessions] magic folder.
             if (isRoot && !hasActiveSession &&
                 GetServerIdFromName(fullName.c_str(), GetCurrentThreadId()) != nullptr) {
                 hasActiveSession = true;
+            }
+            if (isVirtual) {
+                nameBuf[0] = 0;
+                hdl = FindNextServer(hdl, nameBuf.data(), nameBuf.size() - 1);
+                continue;
             }
             std::string relative;
             bool include = false;
@@ -278,31 +384,13 @@ static HANDLE BuildPluginFolderListing(const std::string& folderPrefix,
                 }
             }
             if (include) {
-                const size_t slashPos = relative.find('/');
-                if (slashPos == std::string::npos) {
-                    PluginFolderEntry e;
-                    e.name = std::move(relative);
-                    e.kind = PluginFolderEntry::Kind::Session;
-                    sessions.push_back(std::move(e));
-                } else {
-                    std::string sub = relative.substr(0, slashPos);
-                    if (foldersSeen.insert(sub).second) {
-                        PluginFolderEntry e;
-                        e.name = std::move(sub);
-                        e.kind = PluginFolderEntry::Kind::Folder;
-                        subfolders.push_back(std::move(e));
-                    }
-                }
+                ClassifyRelativeEntry(buckets, std::move(relative),
+                    PluginFolderEntry::Kind::Session, nullptr);
             }
             nameBuf[0] = 0;
             hdl = FindNextServer(hdl, nameBuf.data(), nameBuf.size() - 1);
         }
     }
-
-    // Folder wins on a name collision.
-    sessions.erase(std::remove_if(sessions.begin(), sessions.end(),
-        [&](const PluginFolderEntry& s) { return foldersSeen.contains(s.name); }),
-        sessions.end());
 
     // At root, if anything is currently connected, expose the magic
     // [Active Sessions] folder right after the F7 helper entry so the user
@@ -314,9 +402,19 @@ static HANDLE BuildPluginFolderListing(const std::string& folderPrefix,
         state->entries.push_back(std::move(active));
     }
 
-    // Folders first (TC convention), then leaf sessions.
-    for (auto& e : subfolders) state->entries.push_back(std::move(e));
-    for (auto& e : sessions)   state->entries.push_back(std::move(e));
+    // At root, always expose the umbrella [Imports] folder that groups every
+    // known session-import source. Detection state of individual sources
+    // does not gate this — the umbrella itself is unconditional so the user
+    // can always reach [Add custom location...] for a source whose program
+    // is not currently installed.
+    if (isRoot) {
+        PluginFolderEntry imports;
+        imports.name = kImportsFolder;
+        imports.kind = PluginFolderEntry::Kind::ImportsUmbrella;
+        state->entries.push_back(std::move(imports));
+    }
+
+    EmitDedupBuckets(buckets, state->entries);
 
     auto lf = std::make_unique<tLastFindStuct>();
     lf->sftpdataptr    = state.release();
@@ -384,6 +482,175 @@ static HANDLE BuildActiveSessionsListing(WIN32_FIND_DATAW* FindData)
     return static_cast<HANDLE>(lf.release());
 }
 
+// Build the listing shown inside [Imports]\<Source>\ (source root or any
+// nested folder under it). At the source root the listing is prepended with
+// pseudo entries: an optional "not detected" hint, [Refresh], [Add custom
+// location...], and [Manage custom locations] when at least one custom path
+// is persisted for this source. Below that come the cache-driven sessions
+// from ImportCache filtered by subPath, with sub-folder de-duplication
+// mirroring BuildPluginFolderListing.
+static HANDLE BuildImportsSourceListing(const std::string& sourceId,
+                                         const std::string& subPath,
+                                         WIN32_FIND_DATAW* FindData)
+{
+    auto state = std::make_unique<PluginFolderFindState>();
+    sftp::IExternalSessionSource* adapter =
+        sftp::GetImportSourceRegistry().Find(sourceId.c_str());
+
+    const bool isManageView = (subPath == kManageCustomFolder);
+    const bool atSourceRoot = subPath.empty();
+
+    if (atSourceRoot) {
+        // Detection hint — shown only when the standard location is not
+        // currently reachable. The hint is a plain-file pseudo so Enter does
+        // nothing; F8 also does nothing (delete guard blocks pseudos).
+        if (adapter && !adapter->DetectStandard()) {
+            PluginFolderEntry hint;
+            hint.name = std::string(adapter->FolderName()) + " not currently detected";
+            hint.kind = PluginFolderEntry::Kind::ImportPseudo;
+            hint.pseudoAsFolder = false;
+            state->entries.push_back(std::move(hint));
+        }
+
+        PluginFolderEntry refresh;
+        refresh.name = kRefreshEntry;
+        refresh.kind = PluginFolderEntry::Kind::ImportPseudo;
+        refresh.pseudoAsFolder = false;
+        state->entries.push_back(std::move(refresh));
+
+        // [Add custom location...] appears only when the adapter has a
+        // custom-path concept at all (Folder or File). A registry-only or
+        // similarly locked source returns None and gets no entry.
+        const bool hasCustomPicker = adapter &&
+            adapter->CustomPathPicker() != sftp::CustomPathPickerKind::None;
+        if (hasCustomPicker) {
+            PluginFolderEntry addCustom;
+            addCustom.name = kAddCustomEntry;
+            addCustom.kind = PluginFolderEntry::Kind::ImportPseudo;
+            addCustom.pseudoAsFolder = false;
+            state->entries.push_back(std::move(addCustom));
+        }
+
+        // [Manage custom locations] appears only when the user has
+        // configured at least one custom path for this source. Reading the
+        // list here is cheap (single GetPrivateProfileString) and TC calls
+        // this once per FsFindFirst.
+        const auto customPaths = hasCustomPicker
+            ? LoadImportCustomPaths(sourceId.c_str(), inifilename)
+            : std::vector<std::string>{};
+        if (!customPaths.empty()) {
+            PluginFolderEntry manage;
+            manage.name = kManageCustomFolder;
+            manage.kind = PluginFolderEntry::Kind::ImportPseudo;
+            manage.pseudoAsFolder = true;   // sub-folder — Enter navigates in
+            state->entries.push_back(std::move(manage));
+        }
+    }
+
+    // [Manage custom locations]\ sub-view: list the persisted custom paths
+    // as plain-file entries. F8 on a row removes that path (dispatched in
+    // FsDeleteFileW with a positive-match branch for this sub-view).
+    //
+    // Display trick: TC treats `\` in an entry name as a path separator and
+    // only renders the trailing leaf, which for absolute Windows paths like
+    // `C:\Users\vladn\...\Sessions` shows just `Sessions` — useless. We
+    // replace `\` with `/` for display (matching our internal path
+    // normalisation everywhere else). The F8-remove handler in
+    // FsDeleteFileW reverses the substitution before hitting the INI, so
+    // the persisted path stays in canonical Windows form.
+    if (isManageView) {
+        const auto customPaths = LoadImportCustomPaths(sourceId.c_str(), inifilename);
+        for (const auto& p : customPaths) {
+            PluginFolderEntry e;
+            e.name = p;
+            std::replace(e.name.begin(), e.name.end(), '\\', '/');
+            e.kind = PluginFolderEntry::Kind::ImportPseudo;
+            e.pseudoAsFolder = false;
+            state->entries.push_back(std::move(e));
+        }
+    }
+
+    // Cache-driven listing. Skipped when we are inside the [Manage custom
+    // locations] view (that's handled by the block above). Uses the same
+    // classify/emit helpers as BuildPluginFolderListing — the only Imports-
+    // specific detail is that the same displayName can appear in more than
+    // one channel, so session names get an extra dedup set.
+    if (!isManageView) {
+        DedupBuckets buckets;
+        std::set<std::string, CaseInsensitiveLess> sessionsSeen;
+
+        const auto cached = sftp::GetImportCache().ListSource(sourceId);
+        for (const auto& s : cached) {
+            std::string relative;
+            if (atSourceRoot) {
+                relative = s.displayName;
+            } else {
+                const std::string needle = subPath + "/";
+                if (s.displayName.size() > needle.size() &&
+                    _strnicmp(s.displayName.c_str(), needle.c_str(), needle.size()) == 0)
+                {
+                    relative = s.displayName.substr(needle.size());
+                } else {
+                    continue;
+                }
+            }
+            ClassifyRelativeEntry(buckets, std::move(relative),
+                PluginFolderEntry::Kind::ImportSession, &sessionsSeen);
+        }
+
+        EmitDedupBuckets(buckets, state->entries);
+    }
+
+    auto lf = std::make_unique<tLastFindStuct>();
+    lf->sftpdataptr    = state.release();
+    lf->serverid       = nullptr;
+    lf->rootfindhandle = nullptr;
+    lf->rootfindfirst  = false;
+    lf->isLanPair      = false;
+    lf->isPluginFolder = true;
+
+    auto* st = static_cast<PluginFolderFindState*>(lf->sftpdataptr);
+    if (st->entries.empty()) {
+        SetLastError(ERROR_NO_MORE_FILES);
+        return static_cast<HANDLE>(lf.release());
+    }
+    FillFindDataFromPluginEntry(*FindData, st->entries[0]);
+    st->index = 1;
+    return static_cast<HANDLE>(lf.release());
+}
+
+// Build the top-level [Imports]\ listing. One directory entry per registered
+// adapter, no detection-state suffix (the "not detected" hint appears inside
+// each source folder — see BuildImportsSourceListing when it lands).
+static HANDLE BuildImportsUmbrellaListing(WIN32_FIND_DATAW* FindData)
+{
+    auto state = std::make_unique<PluginFolderFindState>();
+
+    for (const auto& adapter : sftp::GetImportSourceRegistry().Adapters()) {
+        PluginFolderEntry e;
+        e.name = adapter->FolderName();
+        e.kind = PluginFolderEntry::Kind::ImportSource;
+        state->entries.push_back(std::move(e));
+    }
+
+    auto lf = std::make_unique<tLastFindStuct>();
+    lf->sftpdataptr    = state.release();
+    lf->serverid       = nullptr;
+    lf->rootfindhandle = nullptr;
+    lf->rootfindfirst  = false;
+    lf->isLanPair      = false;
+    lf->isPluginFolder = true;
+
+    auto* st = static_cast<PluginFolderFindState*>(lf->sftpdataptr);
+    if (st->entries.empty()) {
+        SetLastError(ERROR_NO_MORE_FILES);
+        return static_cast<HANDLE>(lf.release());
+    }
+    FillFindDataFromPluginEntry(*FindData, st->entries[0]);
+    st->index = 1;
+    return static_cast<HANDLE>(lf.release());
+}
+
 // See PluginEntryPointsInternal.h for the contract.
 bool IsActiveSessionsPath(LPCWSTR path, std::string* outEntry)
 {
@@ -416,6 +683,96 @@ bool IsActiveSessionsPath(LPCWSTR path, std::string* outEntry)
     return true;
 }
 
+namespace {
+
+// Widen ANSI to a heap-allocated wide string for case-insensitive match.
+std::wstring AnsiToWide(const char* s)
+{
+    if (!s || !s[0]) return {};
+    const int wchars = MultiByteToWideChar(CP_ACP, 0, s, -1, nullptr, 0);
+    if (wchars <= 0) return {};
+    std::wstring out(static_cast<size_t>(wchars - 1), L'\0');
+    MultiByteToWideChar(CP_ACP, 0, s, -1, out.data(), wchars);
+    return out;
+}
+
+// Narrow-copy a wide substring using CP_ACP, mirroring the pattern in
+// IsActiveSessionsPath. Also normalises backslashes to '/' so nested paths
+// round-trip cleanly through our path normalisation.
+void WideRangeToNarrowSlash(std::wstring_view src, std::string& out)
+{
+    const int needed = WideCharToMultiByte(CP_ACP, 0, src.data(),
+                                            static_cast<int>(src.size()),
+                                            nullptr, 0, nullptr, nullptr);
+    out.assign(needed > 0 ? static_cast<size_t>(needed) : 0, '\0');
+    if (needed > 0) {
+        WideCharToMultiByte(CP_ACP, 0, src.data(),
+                             static_cast<int>(src.size()),
+                             out.data(), needed, nullptr, nullptr);
+    }
+    std::replace(out.begin(), out.end(), '\\', '/');
+}
+
+}  // namespace
+
+// See PluginEntryPointsInternal.h for the contract.
+ImportsPathKind ClassifyImportsPath(LPCWSTR path,
+                                    std::string* outSourceId,
+                                    std::string* outSubPath)
+{
+    if (outSourceId) outSourceId->clear();
+    if (outSubPath)  outSubPath->clear();
+
+    if (!path || path[0] != L'\\') return ImportsPathKind::NotImports;
+    const std::wstring_view view(path + 1);  // strip leading '\\'
+    const std::wstring_view umbrella(kImportsFolderW);
+    if (view.size() < umbrella.size()) return ImportsPathKind::NotImports;
+    if (_wcsnicmp(view.data(), umbrella.data(), umbrella.size()) != 0)
+        return ImportsPathKind::NotImports;
+
+    const std::wstring_view after = view.substr(umbrella.size());
+
+    // At the umbrella itself ("\[Imports]" or "\[Imports]\").
+    if (after.empty() || (after.size() == 1 && (after[0] == L'\\' || after[0] == L'/')))
+        return ImportsPathKind::Umbrella;
+
+    // Must have a separator before the source segment.
+    if (after[0] != L'\\' && after[0] != L'/') return ImportsPathKind::NotImports;
+    std::wstring_view rest = after.substr(1);
+    if (rest.empty()) return ImportsPathKind::Umbrella;  // trailing slash consumed
+
+    // Extract next segment — the source folder name (e.g. "[SecureCRT]").
+    size_t seg_end = rest.find_first_of(L"\\/");
+    const std::wstring_view segment = (seg_end == std::wstring_view::npos)
+        ? rest
+        : rest.substr(0, seg_end);
+
+    // Match against every registered adapter's FolderName() (wide, case-insensitive).
+    const auto& adapters = sftp::GetImportSourceRegistry().Adapters();
+    for (const auto& adapter : adapters) {
+        const std::wstring fname = AnsiToWide(adapter->FolderName());
+        if (fname.size() != segment.size()) continue;
+        if (_wcsnicmp(fname.data(), segment.data(), fname.size()) != 0) continue;
+
+        if (outSourceId) *outSourceId = adapter->SourceId();
+
+        if (seg_end == std::wstring_view::npos)
+            return ImportsPathKind::SourceRoot;
+
+        const std::wstring_view trail = rest.substr(seg_end + 1);
+        if (trail.empty())
+            return ImportsPathKind::SourceRoot;  // "\[Imports]\<Source>\" trailing slash
+        if (outSubPath)
+            WideRangeToNarrowSlash(trail, *outSubPath);
+        return ImportsPathKind::SourceSubPath;
+    }
+
+    // Second segment did not match any registered adapter. Surface the
+    // unrecognised segment (plus any trailing path) so callers can log it.
+    if (outSubPath) WideRangeToNarrowSlash(rest, *outSubPath);
+    return ImportsPathKind::UnknownSource;
+}
+
 HANDLE WINAPI FsFindFirstW(LPCWSTR Path, LPWIN32_FIND_DATAW FindData)
 {
     sftp::DllExceptionBarrier _barrier;
@@ -443,6 +800,31 @@ HANDLE WINAPI FsFindFirstW(LPCWSTR Path, LPWIN32_FIND_DATAW FindData)
                 LoadServersFromIniW(inifilenameW, s_quickconnect);
                 *FindData = {};
                 return BuildActiveSessionsListing(FindData);
+            }
+        }
+
+        // [Imports] magic folder — umbrella at Path == "\[Imports]" lists
+        // every registered adapter; a deeper path routes to the per-source
+        // listing (source root, cache subfolder, or [Manage custom locations]).
+        // An unrecognised source segment is treated as path-not-found rather
+        // than falling through to the normal session/folder resolver.
+        {
+            std::string sourceId, subPath;
+            const ImportsPathKind kind = ClassifyImportsPath(Path,
+                &sourceId, &subPath);
+            switch (kind) {
+                case ImportsPathKind::NotImports:
+                    break;
+                case ImportsPathKind::Umbrella:
+                    *FindData = {};
+                    return BuildImportsUmbrellaListing(FindData);
+                case ImportsPathKind::SourceRoot:
+                case ImportsPathKind::SourceSubPath:
+                    *FindData = {};
+                    return BuildImportsSourceListing(sourceId, subPath, FindData);
+                case ImportsPathKind::UnknownSource:
+                    SetLastError(ERROR_NO_MORE_FILES);
+                    return INVALID_HANDLE_VALUE;
             }
         }
 
@@ -711,6 +1093,13 @@ BOOL WINAPI FsMkDirW(LPCWSTR Path)
     return sftp::dll_invoke(_barrier, FALSE, [&]() -> BOOL {
         const std::wstring_view pathView = Path ? std::wstring_view(Path) : std::wstring_view{};
         if (pathView.size() < 2)
+            return false;
+
+        // Block F7 (create folder / new session) anywhere under \[Imports]\.
+        // The magic folder mirrors source-program state — the plugin does not
+        // create sessions there; it only surfaces them. Users promote a
+        // virtual session into their own INI with F5 (materialise).
+        if (IsImportsPath(Path))
             return false;
 
         // Folder-aware routing: classify the path via the resolver.

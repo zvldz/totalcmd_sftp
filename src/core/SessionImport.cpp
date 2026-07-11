@@ -1,5 +1,6 @@
 #include "global.h"
 #include "SessionImport.h"
+#include "ImportIoUtil.h"
 #include "KittyDecrypt.h"
 #include "WindowsUserFeedback.h"
 #include "SftpInternal.h"
@@ -191,22 +192,14 @@ bool SessionExistsInIni(const std::string& section, LPCSTR iniFileName)
     return len > 0;
 }
 
-static bool IniSectionExists(const std::string& name, LPCSTR iniFileName)
-{
-    std::array<char, 16> buf{};
-    if (GetPrivateProfileStringA(name.c_str(), "server", nullptr, buf.data(), buf.size(), iniFileName) > 0)
-        return true;
-    return GetPrivateProfileStringA(name.c_str(), "user", nullptr, buf.data(), buf.size(), iniFileName) > 0;
-}
-
 std::string MakeUniqueIniSection(const std::string& baseName, SessionSource source, LPCSTR iniFileName)
 {
-    if (!IniSectionExists(baseName, iniFileName))
+    if (!sftp::IniSectionExists(baseName, iniFileName))
         return baseName;
 
     for (int n = 2; n < 1000; ++n) {
         std::string candidate = baseName + "_" + std::to_string(n);
-        if (!IniSectionExists(candidate, iniFileName))
+        if (!sftp::IniSectionExists(candidate, iniFileName))
             return candidate;
     }
     return baseName;
@@ -677,46 +670,7 @@ static bool BrowseForIniFile(HWND owner, const char* title, const char* initialD
     return true;
 }
 
-static int CALLBACK BrowseFolderInitCallback(HWND hwnd, UINT msg, LPARAM /*lParam*/, LPARAM lpData)
-{
-    if (msg == BFFM_INITIALIZED && lpData)
-        SendMessageW(hwnd, BFFM_SETSELECTIONW, TRUE, lpData);
-    return 0;
-}
-
-static bool BrowseForFolder(HWND owner, const char* title, const char* initialPath, std::string& outPath)
-{
-    wchar_t wTitle[256] = {};
-    MultiByteToWideChar(CP_ACP, 0, title, -1, wTitle, 256);
-
-    wchar_t wInitial[MAX_PATH] = {};
-    if (initialPath && initialPath[0])
-        MultiByteToWideChar(CP_ACP, 0, initialPath, -1, wInitial, MAX_PATH);
-
-    BROWSEINFOW bi = {};
-    bi.hwndOwner   = owner;
-    bi.lpszTitle   = wTitle;
-    bi.ulFlags     = BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE | BIF_USENEWUI;
-    if (wInitial[0]) {
-        bi.lpfn  = BrowseFolderInitCallback;
-        bi.lParam = reinterpret_cast<LPARAM>(wInitial);
-    }
-
-    LPITEMIDLIST pidl = SHBrowseForFolderW(&bi);
-    if (!pidl)
-        return false;
-
-    wchar_t wPath[MAX_PATH] = {};
-    const bool ok = SHGetPathFromIDListW(pidl, wPath) != 0;
-    CoTaskMemFree(pidl);
-    if (!ok)
-        return false;
-
-    char narrow[MAX_PATH] = {};
-    WideCharToMultiByte(CP_ACP, 0, wPath, -1, narrow, MAX_PATH, nullptr, nullptr);
-    outPath = narrow;
-    return true;
-}
+// Folder picker lives in ImportIoUtil now (sftp::BrowseForFolder).
 
 // Recursively searches dir (up to maxDepth levels) for a file named putty.reg.
 // Returns the full path if found, or empty string.

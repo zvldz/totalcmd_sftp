@@ -164,6 +164,11 @@
     <ClCompile Include="..\src\core\Libssh2Backend.cpp" />
     <ClCompile Include="..\src\core\KittyDecrypt.cpp" />
     <ClCompile Include="..\src\core\SessionImport.cpp" />
+    <ClCompile Include="..\src\core\VanDykeIniParser.cpp" />
+    <ClCompile Include="..\src\core\ImportCache.cpp" />
+    <ClCompile Include="..\src\core\SecureCrtAdapter.cpp" />
+    <ClCompile Include="..\src\core\ImportSourceRegistry.cpp" />
+    <ClCompile Include="..\src\core\ImportIoUtil.cpp" />
     <ClCompile Include="..\src\core\PluginEntryPoints.cpp" />
     <ClCompile Include="..\src\core\PluginEntryPointsFind.cpp" />
     <ClCompile Include="..\src\core\PluginEntryPointsFile.cpp" />
@@ -206,6 +211,12 @@
     <ClInclude Include="..\src\include\SshBackendFactory.h" />
     <ClInclude Include="..\src\include\KittyDecrypt.h" />
     <ClInclude Include="..\src\include\SessionImport.h" />
+    <ClInclude Include="..\src\include\IExternalSessionSource.h" />
+    <ClInclude Include="..\src\include\VanDykeIniParser.h" />
+    <ClInclude Include="..\src\include\ImportCache.h" />
+    <ClInclude Include="..\src\include\SecureCrtAdapter.h" />
+    <ClInclude Include="..\src\include\ImportSourceRegistry.h" />
+    <ClInclude Include="..\src\include\ImportIoUtil.h" />
     <ClInclude Include="..\src\include\PluginEntryPoints.h" />
     <ClInclude Include="..\src\include\PluginEntryPointsInternal.h" />
     <ClInclude Include="..\src\include\LngLoader.h" />

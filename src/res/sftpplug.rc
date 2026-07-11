@@ -309,8 +309,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 10,0,0,17
- PRODUCTVERSION 10,0,0,17
+ FILEVERSION VER_FILEVERSION
+ PRODUCTVERSION VER_FILEVERSION
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -327,12 +327,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "kvc.pl"
             VALUE "FileDescription", "SFTP Plugin for Total Commander"
-            VALUE "FileVersion", "10.0.1.2"
+            VALUE "FileVersion", VER_FILEVERSION_STR
             VALUE "InternalName", "sftpplug"
             VALUE "LegalCopyright", "Copyright (C) 2026 kvc.pl"
             VALUE "OriginalFilename", "sftpplug.wfx"
             VALUE "ProductName", "SFTPplug"
-            VALUE "ProductVersion", "10.0.1.2"
+            VALUE "ProductVersion", VER_PRODUCTVERSION_STR
         END
     END
     BLOCK "VarFileInfo"
@@ -866,6 +866,13 @@ BEGIN
     IDS_JUMP_SESSION_NOT_FOUND      "Jump session '{}' not found in saved sessions"
     IDS_JUMP_SESSION_CHAINED        "Jump session '{}' has its own jump-host configuration — chained or cyclic jump hosts are not supported. Pick a session that connects directly to the bastion."
     IDS_IMP_LIST_HEADER             "Session"
+    IDS_SIMPORT_TITLE               "SFTP plugin - session import"
+    IDS_SIMPORT_ERR_OPEN            "Cannot open the source file for reading."
+    IDS_SIMPORT_ERR_EMPTY           "Cannot import session: the source file is empty."
+    IDS_SIMPORT_ERR_NO_SECTIONS     "Cannot import session: the source file has no INI sections.\r\nExpected a file with at least one [section] and a `server=` key."
+    IDS_SIMPORT_ERR_NO_SERVER       "Cannot import session: no INI section with a non-empty `server=` key was found."
+    IDS_SIMPORT_ERR_EMPTY_DEST      "Cannot import session: the destination path is empty."
+    IDS_SIMPORT_ERR_WRITE           "Cannot import session: failed to write to sftpplug.ini."
 END
 
 #endif    // English (United States) resources

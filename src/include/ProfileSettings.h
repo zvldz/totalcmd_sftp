@@ -1,8 +1,26 @@
 #pragma once
 #include "SftpClient.h"
 
+#include <string>
+#include <vector>
+
 bool LoadProxySettingsFromNr(int proxynr, pConnectSettings ConnectResults, LPCSTR iniFileName);
 bool LoadServerSettings(LPCSTR DisplayName, pConnectSettings ConnectResults, LPCSTR iniFileName);
+
+// Read / write the per-source list of user-added custom scan paths. Storage
+// lives in the plugin's own sftpplug.ini under the [Imports] section, with
+// one key per source: "<sourceId>.custom_paths=path1;path2;...". Semicolons
+// are the separator; paths that contain a literal `;` are not supported yet
+// (documented gap — none of the target OSes place `;` in normal folder
+// names). Empty list means the source has no custom paths configured.
+//
+// LoadImportCustomPaths reads the ";"-joined list and returns the split
+// vector (empty if key absent). SaveImportCustomPath appends `path` if not
+// already present (case-insensitive dedup). RemoveImportCustomPath drops
+// `path` from the list if present.
+std::vector<std::string> LoadImportCustomPaths(LPCSTR sourceId, LPCSTR iniFileName);
+bool SaveImportCustomPath  (LPCSTR sourceId, LPCSTR path, LPCSTR iniFileName);
+bool RemoveImportCustomPath(LPCSTR sourceId, LPCSTR path, LPCSTR iniFileName);
 
 // Walk every section in the INI, locate any `jumpsessionref` value that
 // exactly matches `oldName` (case-insensitive), and rewrite it to `newName`.

@@ -1,7 +1,10 @@
 #include "global.h"
 #include <windows.h>
+#include <algorithm>
 #include <array>
 #include <format>
+#include <sstream>
+#include <string_view>
 #include "SftpClient.h"
 #include "SftpInternal.h"
 #include "ConnectionDialog.h"
@@ -229,4 +232,126 @@ void UpdateJumpRefsOnFolderRename(LPCSTR oldPrefix, LPCSTR newPrefix, LPCSTR ini
         }
         p += strlen(p) + 1;
     }
+}
+
+// ===========================================================================
+// Import custom paths — [Imports] section
+// ===========================================================================
+
+namespace {
+
+constexpr const char* kImportsSection = "Imports";
+
+// Strip trailing `\` and `/` so equivalent paths normalise before dedup and
+// remove-match comparisons.
+std::string NormaliseImportPath(std::string_view s) noexcept
+{
+    while (!s.empty() && (s.back() == '\\' || s.back() == '/'))
+        s.remove_suffix(1);
+    return std::string(s);
+}
+
+// Split "a|b|c" into {"a","b","c"} (empty segments discarded, whitespace
+// preserved — folder names may contain them). Accepts both `|` (current)
+// and `;` (older stored form) as separators so a pre-existing INI value
+// migrates transparently on the next save; `|` is illegal in Windows paths
+// while `;` is not, so `|` is the only fully safe choice going forward.
+std::vector<std::string> SplitByPipe(std::string_view value)
+{
+    std::vector<std::string> out;
+    size_t start = 0;
+    while (start <= value.size()) {
+        const size_t sep = value.find_first_of("|;", start);
+        const size_t end = (sep == std::string_view::npos) ? value.size() : sep;
+        if (end > start)
+            out.emplace_back(value.substr(start, end - start));
+        if (sep == std::string_view::npos)
+            break;
+        start = sep + 1;
+    }
+    return out;
+}
+
+std::string JoinByPipe(const std::vector<std::string>& parts)
+{
+    std::string out;
+    for (size_t i = 0; i < parts.size(); ++i) {
+        if (i) out.push_back('|');
+        out.append(parts[i]);
+    }
+    return out;
+}
+
+std::string PathsKey(LPCSTR sourceId)
+{
+    std::string key(sourceId ? sourceId : "");
+    key.append(".custom_paths");
+    return key;
+}
+
+}  // namespace
+
+std::vector<std::string> LoadImportCustomPaths(LPCSTR sourceId, LPCSTR iniFileName)
+{
+    if (!sourceId || !sourceId[0] || !iniFileName || !iniFileName[0])
+        return {};
+    // Custom paths list can be long; oversize the buffer generously vs
+    // MAX_PATH so tens of concatenated paths fit.
+    std::array<char, 8192> buf{};
+    GetPrivateProfileStringA(kImportsSection, PathsKey(sourceId).c_str(), "",
+                             buf.data(), static_cast<DWORD>(buf.size() - 1),
+                             iniFileName);
+    return SplitByPipe(buf.data());
+}
+
+bool SaveImportCustomPath(LPCSTR sourceId, LPCSTR path, LPCSTR iniFileName)
+{
+    if (!sourceId || !sourceId[0] || !path || !path[0] ||
+        !iniFileName || !iniFileName[0])
+        return false;
+
+    const std::string normalized = NormaliseImportPath(path);
+    if (normalized.empty())
+        return false;
+
+    std::vector<std::string> paths = LoadImportCustomPaths(sourceId, iniFileName);
+
+    // Case-insensitive dedup — Windows paths compare that way.
+    const auto exists = std::any_of(paths.begin(), paths.end(),
+        [&](const std::string& p) {
+            return _stricmp(NormaliseImportPath(p).c_str(), normalized.c_str()) == 0;
+        });
+    if (exists)
+        return true;  // Already registered; treat as successful no-op.
+
+    paths.push_back(normalized);
+    const std::string joined = JoinByPipe(paths);
+    return WritePrivateProfileStringA(kImportsSection,
+        PathsKey(sourceId).c_str(),
+        joined.empty() ? nullptr : joined.c_str(),
+        iniFileName) != 0;
+}
+
+bool RemoveImportCustomPath(LPCSTR sourceId, LPCSTR path, LPCSTR iniFileName)
+{
+    if (!sourceId || !sourceId[0] || !path || !path[0] ||
+        !iniFileName || !iniFileName[0])
+        return false;
+
+    const std::string normalized = NormaliseImportPath(path);
+    std::vector<std::string> paths = LoadImportCustomPaths(sourceId, iniFileName);
+
+    const auto before = paths.size();
+    paths.erase(std::remove_if(paths.begin(), paths.end(),
+        [&](const std::string& p) {
+            return _stricmp(NormaliseImportPath(p).c_str(), normalized.c_str()) == 0;
+        }), paths.end());
+    if (paths.size() == before)
+        return false;  // Nothing removed.
+
+    const std::string joined = JoinByPipe(paths);
+    return WritePrivateProfileStringA(kImportsSection,
+        PathsKey(sourceId).c_str(),
+        joined.empty() ? nullptr : joined.c_str(),
+        iniFileName) != 0;
 }

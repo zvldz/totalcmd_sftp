@@ -4,6 +4,7 @@
 
 #include <winsock2.h>
 #include <windows.h>
+#include <shellapi.h>
 #include <stdlib.h>
 #include <array>
 #include <memory>
@@ -22,6 +23,8 @@
 #include "LanPairSession.h"
 #include "LngLoader.h"
 #include "PhpAgentClient.h"
+#include "PluginEntryPointsInternal.h"
+#include "ImportCache.h"
 
 // Declared in SftpConnection.cpp
 void StartGlobalLanServices(bool startServer = true);
@@ -584,11 +587,23 @@ void WINAPI FsStatusInfo(LPCSTR RemoteDir, int InfoStartEnd, int InfoOperation)
             if (InfoOperation == FS_STATUS_OP_DELETE || InfoOperation == FS_STATUS_OP_RENMOV_MULTI)
                 disablereading = (InfoStartEnd == FS_STATUS_START) ? true : false;
 
-        // Independent of path scope — RENMOV_MULTI wraps both bulk copy and
-        // bulk move. FsMkDir uses this to suppress the new-session dialog
-        // when TC is auto-creating destination folders mid-transfer.
-        if (InfoOperation == FS_STATUS_OP_RENMOV_MULTI)
+        // Track an in-progress bulk copy/move so FsMkDir/FsFindFirst suppress
+        // the new-session dialog when TC is auto-creating destination folders
+        // or probing a target path mid-transfer. RENMOV_MULTI applies to any
+        // plugin path — TC's bulk rename/move probe is always an internal
+        // check, never a user quick-connect. PUT_SINGLE / PUT_MULTI are gated
+        // to destinations inside \[Imports]\ (a silent no-op region for
+        // uploads); outside Imports a PUT to a valid-but-unconnected session
+        // must auto-connect normally.
+        const bool isPutOp = InfoOperation == FS_STATUS_OP_PUT_SINGLE ||
+                             InfoOperation == FS_STATUS_OP_PUT_MULTI;
+        const bool destInImports = RemoteDir &&
+            _strnicmp(RemoteDir, "\\[Imports]\\", 11) == 0;
+        if (InfoOperation == FS_STATUS_OP_RENMOV_MULTI ||
+            (isPutOp && destInImports))
+        {
             g_inMultiOpTransfer = (InfoStartEnd == FS_STATUS_START);
+        }
 
         if (InfoOperation == FS_STATUS_OP_PUT_MULTI ||
             InfoOperation == FS_STATUS_OP_PUT_SINGLE) {
@@ -739,12 +754,95 @@ void WINAPI FsSetDefaultParams(FsDefaultParamStruct * dps)
     });
 }
 
+// Icon selection for entries under `\[Imports]\`. Returns FS_ICON_USEDEFAULT
+// (fall through to the caller's default logic) when the path is not an
+// Imports leaf, or when no Imports rule matched — the caller then handles
+// regular saved-session rendering. Returns FS_ICON_EXTRACTED or
+// FS_ICON_EXTRACTED_DESTROY when a specific icon was selected.
+static int TryExtractImportIcon(LPCSTR RemoteName, int ExtractFlags, HICON* TheIcon)
+{
+    const std::wstring w = unicode_util::narrow_to_wide(RemoteName);
+    if (w.empty()) return FS_ICON_USEDEFAULT;
+
+    std::string sourceId, subPath;
+    if (ClassifyImportsPath(w.c_str(), &sourceId, &subPath) !=
+        ImportsPathKind::SourceSubPath)
+    {
+        return FS_ICON_USEDEFAULT;
+    }
+
+    const bool sm = (ExtractFlags & FS_ICONFLAG_SMALL) != 0;
+
+    // Gear icon (imageres.dll resource id 114 = Control Panel gear on
+    // Windows 10/11) for the two action pseudo entries. ExtractIconExW
+    // hands us fresh HICONs we own, hence FS_ICON_EXTRACTED_DESTROY. Note:
+    // `small` is a legacy RPC macro from windows.h that expands to `char`,
+    // so we use *Icon suffixes for the locals. The gear glyph carries a
+    // checkbox-corner overlay baked into the shipped Windows icon; a
+    // proper plugin-owned .ico set is the follow-up task recorded in TODO.
+    if (subPath == kRefreshEntry || subPath == kAddCustomEntry) {
+        HICON largeIcon = nullptr, smallIcon = nullptr;
+        const UINT extracted = ExtractIconExW(L"imageres.dll",
+            -114, &largeIcon, &smallIcon, 1);
+        HICON pick = sm ? smallIcon : largeIcon;
+        HICON drop = sm ? largeIcon : smallIcon;
+        if (drop) DestroyIcon(drop);
+        if (extracted > 0 && pick) {
+            *TheIcon = pick;
+            return FS_ICON_EXTRACTED_DESTROY;
+        }
+        return FS_ICON_USEDEFAULT;
+    }
+
+    // "not currently detected" hint keeps the classic Windows warning
+    // triangle via LoadIcon (shared handle, so plain FS_ICON_EXTRACTED).
+    if (subPath.find("not currently detected") != std::string::npos) {
+        HICON h = LoadIconW(nullptr, MAKEINTRESOURCEW(32515));  // IDI_WARNING
+        if (h) {
+            *TheIcon = h;
+            return FS_ICON_EXTRACTED;
+        }
+        return FS_ICON_USEDEFAULT;
+    }
+
+    // Virtual session leaves inside a source (e.g. [Imports]\[SecureCRT]\
+    // dron\hz-1) get the same padlock glyph as real saved sessions so the
+    // user reads them as sessions. The distinguisher against nested folder
+    // segments (dron, my, ...) is a direct match against
+    // ImportCache::ListSource — only leaf sessions have an entry there.
+    // Skip when subPath is under the [Manage custom locations] sub-tree.
+    const std::string managePrefix = std::string(kManageCustomFolder) + "/";
+    if (subPath == kManageCustomFolder ||
+        subPath.compare(0, managePrefix.size(), managePrefix) == 0)
+    {
+        return FS_ICON_USEDEFAULT;
+    }
+    const auto sessions = sftp::GetImportCache().ListSource(sourceId);
+    for (const auto& s : sessions) {
+        if (_stricmp(s.displayName.c_str(), subPath.c_str()) == 0) {
+            LPCSTR name = MAKEINTRESOURCEA(sm ? IDI_ICON1SMALL : IDI_ICON1);
+            *TheIcon = LoadIconA(hinst, name);
+            return FS_ICON_EXTRACTED;
+        }
+    }
+    return FS_ICON_USEDEFAULT;
+}
+
 int WINAPI FsExtractCustomIcon(LPCSTR RemoteName, int ExtractFlags, HICON * TheIcon)
 {
     sftp::DllExceptionBarrier _barrier;
     return sftp::dll_invoke(_barrier, FS_ICON_USEDEFAULT, [&]() -> int {
         if (!RemoteName || strlen(RemoteName) <= 1)
             return FS_ICON_USEDEFAULT;
+
+        // Import-magic-folder pseudo entries and virtual session rows use
+        // their own icon set (Windows stock glyphs + our padlock). The
+        // WFX icon API is ANSI-only, so the widening happens inside the
+        // helper.
+        const int importResult = TryExtractImportIcon(RemoteName, ExtractFlags, TheIcon);
+        if (importResult != FS_ICON_USEDEFAULT)
+            return importResult;
+
         // Supply our padlock icon for any leaf session entry, whether it's
         // at the plugin root or nested inside a folder. Anything else
         // (folder grouping, file inside an active session) keeps TC's
