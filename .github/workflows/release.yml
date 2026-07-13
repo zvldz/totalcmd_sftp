@@ -68,6 +68,14 @@ jobs:
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
+      - name: Install NASM
+        # OpenSSL 3.x requires NASM for both x64 and x86 assembly. Not
+        # pre-installed on windows-2022. Chocolatey drops nasm.exe into
+        # C:\Program Files\NASM\, which matches build-deps.ps1's search
+        # path — no PATH tweaking needed.
+        shell: pwsh
+        run: choco install nasm -y --no-progress
+
       - name: Build dependencies (OpenSSL, libssh2, argon2) — FULL from source
         shell: pwsh
         # Every release build compiles the third-party stack from scratch,
