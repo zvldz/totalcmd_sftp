@@ -20,7 +20,13 @@ permissions:
 
 jobs:
   build:
-    runs-on: windows-latest
+    # Pinned to windows-2022 because the vcxproj targets the v143 Platform
+    # Toolset (VS 2022, MSVC 14.3x). `windows-latest` now maps to VS 2026
+    # runners with MSVC 14.5x, which triggers MSB8052 "Toolset Version is
+    # not compatible with v143". Move to `windows-latest` only after we
+    # bump PlatformToolset in the vcxproj — likely never, since v143 is
+    # LTS and every dev has VS 2022 installed locally.
+    runs-on: windows-2022
 
     steps:
       - name: Checkout with submodules
