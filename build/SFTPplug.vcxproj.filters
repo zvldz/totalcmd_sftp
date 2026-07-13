@@ -253,6 +253,9 @@
     <ClInclude Include="..\src\include\VirtualSessionRegistry.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\src\include\BuildInfo.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="..\src\include\ISshBackend.h">
       <Filter>Header Files</Filter>
     </ClInclude>

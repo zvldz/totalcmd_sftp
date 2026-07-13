@@ -26,6 +26,7 @@
 #include "ImportCache.h"
 #include "ImportIoUtil.h"
 #include "VirtualSessionRegistry.h"
+#include "BuildInfo.h"
 
 // Serialise one session INI section into a human-readable INI-format text
 // file. Used by FsGetFile when TC copies (or "views"/"edits") a session
@@ -1031,11 +1032,24 @@ static int CreateHelpFileLocalW(LPCWSTR localName, bool overwrite)
         return FS_FILE_WRITEERROR;
     }
 
-    std::array<char, 256> helpText{};
+    // IDS_HELPTEXT holds the full user-facing help block; the historical
+    // 256-byte buffer truncated it. Size to comfortably fit the string
+    // plus the build-info trailer appended below.
+    std::array<char, 4096> helpText{};
     LoadString(hinst, IDS_HELPTEXT, helpText.data(), static_cast<int>(helpText.size()));
+    std::string body(helpText.data());
+
+    // Trailer with the exact build so a user reporting an issue can copy
+    // it verbatim. Values fall back to `local` when no CI-generated
+    // build_info_gen.h is present (developer local build).
+    body.append("\r\n\r\n--- Build ---\r\n");
+    body.append("Tag:   ").append(SFTP_BUILD_TAG).append("\r\n");
+    body.append("SHA:   ").append(SFTP_BUILD_SHA).append("\r\n");
+    body.append("Date:  ").append(SFTP_BUILD_DATE).append("\r\n");
+
     DWORD written = 0;
-    const BOOL ok = WriteFile(outFile.get(), helpText.data(),
-                              static_cast<DWORD>(strlen(helpText.data())), &written, nullptr);
+    const BOOL ok = WriteFile(outFile.get(), body.data(),
+                              static_cast<DWORD>(body.size()), &written, nullptr);
     return ok ? FS_FILE_OK : FS_FILE_WRITEERROR;
 }
 

@@ -219,6 +219,7 @@
     <ClInclude Include="..\src\include\ImportSourceRegistry.h" />
     <ClInclude Include="..\src\include\ImportIoUtil.h" />
     <ClInclude Include="..\src\include\VirtualSessionRegistry.h" />
+    <ClInclude Include="..\src\include\BuildInfo.h" />
     <ClInclude Include="..\src\include\PluginEntryPoints.h" />
     <ClInclude Include="..\src\include\PluginEntryPointsInternal.h" />
     <ClInclude Include="..\src\include\LngLoader.h" />

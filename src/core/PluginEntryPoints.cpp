@@ -12,6 +12,7 @@
 #include <string_view>
 #include <algorithm>
 #include "fsplugin.h"
+#include "BuildInfo.h"
 #include "CoreUtils.h"
 #include "res/resource.h"
 #include "SftpClient.h"
@@ -511,6 +512,13 @@ static int _FsInit(int PluginNr)
     }
     PluginNumber = PluginNr;
     mainthreadid = GetCurrentThreadId();
+
+    // Emitted once per plugin load so a user submitting a bug report can
+    // paste the log tail and everyone knows exactly which build they are
+    // running — matters most in the beta cycle where version.h stays put
+    // between beta1/2/... and only git tag + SHA differ.
+    SFTP_LOG("STARTUP", "SFTPplug build tag=%s sha=%s date=%s",
+             SFTP_BUILD_TAG, SFTP_BUILD_SHA, SFTP_BUILD_DATE);
 
     // Load language now in case FsSetDefaultParams was not called yet or registry lookup failed.
     DetectAndApplyLanguage(nullptr);
