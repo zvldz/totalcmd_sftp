@@ -13,6 +13,12 @@ build/bin/*.wfx64
 build/bin/*.wfx
 build/bin/tc-installer/64/
 
+# The bin/ folder is populated by build.ps1 with SFTPplug.zip for local
+# smoke-testing. Since 10.0.1.5 the canonical download lives on the
+# GitHub Release page, produced by the release.yml workflow — do not
+# commit build artefacts here anymore.
+bin/
+
 # MSBuild intermediate / output directories
 build/x64/
 build/Debug/
