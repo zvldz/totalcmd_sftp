@@ -165,10 +165,34 @@ struct tConnectSettings {
 
 using pConnectSettings = tConnectSettings*;
 
-pConnectSettings SftpConnectToServer(LPCSTR DisplayName, LPCSTR inifilename, LPCSTR overridepass);
+// `loggingAliasName`, when non-null, overrides the name reported to TC via
+// LogProc(MSGTYPE_CONNECT). Used for virtual (Imports-cache-backed)
+// sessions whose real DisplayName is the internal "__import.<...>" cache
+// section — TC needs a clean single-segment path in its toolbar so the
+// standard Disconnect button works normally. All non-Import callers pass
+// nullptr and get the historical behaviour.
+pConnectSettings SftpConnectToServer(LPCSTR DisplayName, LPCSTR inifilename,
+                                     LPCSTR overridepass,
+                                     LPCSTR loggingAliasName = nullptr);
 void SftpGetServerBasePathW(LPCWSTR DisplayName, LPWSTR RelativePath, size_t maxlen, LPCSTR inifilename);
 bool SftpConfigureServer(LPCSTR DisplayName, LPCSTR inifilename);
 int  SftpCloseConnection(pConnectSettings ConnectSettings);
+
+// Cheap TCP/transport liveness probe on an already-open connection. Answers
+// the question "is this session usable RIGHT NOW, without a full round-trip"
+// so callers that would otherwise blindly reuse a cached `serverid` can
+// detect that the peer (SSH server, LAN pair, PHP agent) died — most often
+// via reboot or firewall — and force a fresh implicit connect instead of
+// hanging inside SftpFindFirstFileW's openDir retry loop.
+//
+// Semantics: true = still alive as far as we can tell without generating
+// SSH traffic; false = definitely dead (FIN/RST received, transport gone).
+// A false positive is safe (the very next libssh2 call will surface the
+// real error and reconnect via the existing SftpFindFirstFileW loop); a
+// false negative just means we skip the shortcut and pay for the full
+// hang detection path, which is the pre-fix behaviour.
+bool IsSessionAlive(pConnectSettings ConnectSettings) noexcept;
+
 int  SftpFindFirstFileW(pConnectSettings ConnectSettings, LPCWSTR remotedir, LPVOID * davdataptr);
 int  SftpFindNextFileW(pConnectSettings ConnectSettings, LPVOID davdataptr, LPWIN32_FIND_DATAW FindData) noexcept;
 int  SftpFindClose(pConnectSettings ConnectSettings, LPVOID davdataptr);

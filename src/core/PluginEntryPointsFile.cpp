@@ -25,6 +25,7 @@
 #include "ImportSourceRegistry.h"
 #include "ImportCache.h"
 #include "ImportIoUtil.h"
+#include "VirtualSessionRegistry.h"
 
 // Serialise one session INI section into a human-readable INI-format text
 // file. Used by FsGetFile when TC copies (or "views"/"edits") a session
@@ -553,15 +554,12 @@ int WINAPI FsExecuteFileW(HWND MainWin, LPWSTR RemoteName, LPCWSTR Verb)
 
                     // Virtual session Enter: subPath is the session's
                     // DisplayName inside the source (e.g. "dron/hz-1-test2").
-                    // Compose the cache-INI section name and let
-                    // SftpConnectToServer connect against the cache file.
-                    // When the cached fields are complete (host, user, key
-                    // file), ShowConnectDialog's silent-connect branch fires
-                    // and no dialog appears. Cached sessions never carry a
-                    // password (the cache writer skips it), so any session
-                    // that requires one falls back to the standard
-                    // interactive password prompt exactly as a real saved
-                    // session would.
+                    // The cache-INI section name carries the fields; connect
+                    // reads them silently when complete (host, user, key
+                    // file). Any missing password falls back to the standard
+                    // interactive prompt exactly as a real saved session
+                    // would — the cache writer never persists passwords for
+                    // adapters that don't recover them.
                     const std::string cacheSection =
                         sftp::GetImportCache().SectionNameForConnect(sourceId, subPath);
                     const std::string& cachePath =
@@ -569,31 +567,37 @@ int WINAPI FsExecuteFileW(HWND MainWin, LPWSTR RemoteName, LPCWSTR Verb)
                     if (cacheSection.empty() || cachePath.empty()) {
                         return FS_EXEC_OK;
                     }
+
+                    // TC-safe alias: no dots, brackets, slashes — TC treats
+                    // it as a single-segment session name, so its toolbar
+                    // Disconnect button works normally instead of forcing a
+                    // fallback to the real filesystem on click. The
+                    // BuildPluginFolderListing filter hides names starting
+                    // with the alias prefix from the plugin root view.
+                    const std::string aliasName =
+                        sftp::MakeVirtualSessionAlias(sourceId, cacheSection);
+
                     pConnectSettings virtualServer = SftpConnectToServer(
-                        cacheSection.c_str(), cachePath.c_str(), nullptr);
+                        cacheSection.c_str(), cachePath.c_str(), nullptr,
+                        aliasName.c_str());
                     if (!virtualServer)
                         return FS_EXEC_OK;
 
-                    // Bind the connected session to `cacheSection` in the
-                    // per-thread registry, mirroring what the implicit-
-                    // connect branch of FsFindFirstW does. Without this
-                    // bind, GetServerIdFromName returns null on the
-                    // follow-up FsFindFirstW that FS_EXEC_SYMLINK triggers,
-                    // and TC would treat the redirected path as a fresh
-                    // URL — SftpConnectToServer would then re-run with an
-                    // empty settings buffer and pop the connection dialog.
-                    SetServerIdForName(cacheSection.c_str(),
+                    // Register under the alias (not the raw cache-section
+                    // name) so every downstream lookup — implicit connect
+                    // suppression on the follow-up FsFindFirstW, toolbar
+                    // Disconnect via FsDisconnect, [Active Sessions] listing
+                    // — routes through one uniform TC-safe key.
+                    SetServerIdForName(aliasName.c_str(),
                         static_cast<SERVERID>(virtualServer));
+                    sftp::RegisterVirtualSession(aliasName,
+                        {sourceId, cacheSection, subPath});
 
-                    // Redirect TC to the registry-name path so
-                    // ResolvePathKindW resolves it as SessionLeaf and
-                    // normal SFTP navigation into the remote root takes
-                    // over. `__import.` sessions are filtered out of the
-                    // plugin root listing (see BuildPluginFolderListing),
-                    // so no ghost row surfaces there; the internal section
-                    // name remains visible in the panel breadcrumb.
+                    // Redirect TC to the alias path. ResolvePathKindW
+                    // resolves it as SessionLeaf; normal SFTP navigation
+                    // into the remote root takes over from there.
                     std::wstring target = L"\\";
-                    target += unicode_util::narrow_to_wide(cacheSection);
+                    target += unicode_util::narrow_to_wide(aliasName);
                     wcslcpy(RemoteName, target.c_str(), wdirtypemax - 1);
                     return FS_EXEC_SYMLINK;
                 }

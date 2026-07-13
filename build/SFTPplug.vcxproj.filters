@@ -103,6 +103,9 @@
     <ClCompile Include="..\src\core\ImportIoUtil.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\core\VirtualSessionRegistry.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\src\core\WindowsUserFeedback.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -245,6 +248,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\src\include\ImportIoUtil.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\include\VirtualSessionRegistry.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\src\include\ISshBackend.h">

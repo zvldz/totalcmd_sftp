@@ -231,6 +231,58 @@ bool IsSocketError(SOCKET s)
     return 1 == select(0, nullptr, nullptr, &fds, &timeout);
 }
 
+// True if the raw TCP endpoint has been closed by the peer (server reboot,
+// firewall reset, or half-closed FIN). Non-destructive: uses select+recv
+// with MSG_PEEK so any bytes in the receive buffer stay there for the next
+// legitimate read by libssh2.
+static bool IsTcpSocketDead(SOCKET s) noexcept
+{
+    if (s == INVALID_SOCKET) return true;
+
+    fd_set rfds;
+    FD_ZERO(&rfds);
+    FD_SET(s, &rfds);
+    struct timeval tv = { 0, 0 };  // instant, no wait
+    const int selRet = select(0, &rfds, nullptr, nullptr, &tv);
+    if (selRet < 0)                  return true;   // select failed → treat as dead
+    if (selRet == 0)                 return false;  // no data pending, idle-but-alive
+
+    // Socket is readable — could be legit incoming data OR a FIN/RST. Peek
+    // one byte non-destructively. recv == 0 is the WinSock signal for a
+    // gracefully closed peer; a real error other than WOULDBLOCK is a hard
+    // dead connection.
+    char peek = 0;
+    const int rc = recv(s, &peek, 1, MSG_PEEK);
+    if (rc == 0)                     return true;
+    if (rc < 0) {
+        const int err = WSAGetLastError();
+        return err != WSAEWOULDBLOCK;
+    }
+    return false;  // real data present → alive
+}
+
+bool IsSessionAlive(pConnectSettings cs) noexcept
+{
+    if (!cs) return false;
+
+    // LAN Pair carries its own connected-state accessor.
+    if (IsLanPairTransport(cs))
+        return cs->lanSession && cs->lanSession->isConnected();
+
+    // PHP Agent uses HTTP-over-transport; no long-lived TCP to probe. If
+    // the client object exists we optimistically consider it alive — the
+    // next request will error normally and drive a reconnect through the
+    // agent's own retry path.
+    if (IsPhpAgentTransport(cs))
+        return true;
+
+    // Regular SSH / SCP path.
+    if (!cs->session)                return false;
+    if (cs->sock == INVALID_SOCKET)  return false;
+    if (IsTcpSocketDead(cs->sock))   return false;
+    return true;
+}
+
 bool IsSocketWritable(SOCKET s)
 {
     fd_set fds;

@@ -3071,7 +3071,8 @@ bool ShowConnectDialog(pConnectSettings ConnectSettings, LPCSTR DisplayName, LPC
 #define HWND_MESSAGE ((HWND)(-3))
 #endif
 
-pConnectSettings SftpConnectToServer(LPCSTR DisplayName, LPCSTR inifilename, LPCSTR overridepass)
+pConnectSettings SftpConnectToServer(LPCSTR DisplayName, LPCSTR inifilename,
+                                     LPCSTR overridepass, LPCSTR loggingAliasName)
 {
     tConnectSettings ConnectSettings{};
     ConnectSettings.sock = INVALID_SOCKET; // Zabezpieczenie przed zamykaniem gniazda 0 przez PHP Agent
@@ -3166,11 +3167,27 @@ pConnectSettings SftpConnectToServer(LPCSTR DisplayName, LPCSTR inifilename, LPC
             return nullptr;
         }
         {
-            // This will show ftp toolbar
-            std::array<char, MAX_PATH> connbuf{};
-            strlcpy(connbuf.data(), "CONNECT \\", connbuf.size() - 1);
-            strlcat(connbuf.data(), DisplayName, connbuf.size() - 1);
-            LogProc(PluginNumber, MSGTYPE_CONNECT, connbuf.data());
+            // Tell TC about the new connection so its per-panel FTP toolbar
+            // switches on. The path we report is what TC then feeds back
+            // through FsDisconnect and uses as the "root of connection"
+            // when the user clicks the toolbar Disconnect button — so it
+            // must be a clean, TC-parseable single-hierarchy path:
+            //   * forward slashes inside folder-nested DisplayNames like
+            //     "work/ha1" are converted to backslashes; TC sees
+            //     "\work\ha1" and treats it as a normal nested path (parent
+            //     "\work" is our implicit folder). Our own
+            //     GetDisplayNameFromPath goes through NormaliseTcPath which
+            //     converts `\` back to `/`, so registry lookup on disconnect
+            //     still finds the session.
+            //   * virtual (Imports-cache) sessions pass loggingAliasName —
+            //     a `__vimp_<sourceId>_<hash>` alias with no dots, brackets
+            //     or slashes, which TC also handles cleanly.
+            const char* announceName = loggingAliasName ? loggingAliasName : DisplayName;
+            std::string connbuf = "CONNECT \\";
+            connbuf.append(announceName);
+            if (!loggingAliasName)
+                std::replace(connbuf.begin(), connbuf.end(), '/', '\\');
+            LogProc(PluginNumber, MSGTYPE_CONNECT, connbuf.c_str());
 
             // Move the connected settings to the heap ? unique_ptrs transfer ownership.
             // Critical: SftpConnect() called createSession() with the LOCAL

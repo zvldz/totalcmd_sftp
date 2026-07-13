@@ -25,6 +25,7 @@
 #include "PhpAgentClient.h"
 #include "PluginEntryPointsInternal.h"
 #include "ImportCache.h"
+#include "VirtualSessionRegistry.h"
 
 // Declared in SftpConnection.cpp
 void StartGlobalLanServices(bool startServer = true);
@@ -554,22 +555,48 @@ void WINAPI FsSetCryptCallback(tCryptProc pCryptProc, int CryptoNr, int Flags)
 BOOL WINAPI FsDisconnect(LPCSTR DisconnectRoot)
 {
     sftp::DllExceptionBarrier _barrier;
+    SFTP_LOG("DISCONNECT", "FsDisconnect ENTRY path='%s' tid=%lu",
+             DisconnectRoot ? DisconnectRoot : "(null)",
+             GetCurrentThreadId());
     return sftp::dll_invoke(_barrier, FALSE, [&]() -> BOOL {
-        // Use std::string instead of std::array<char, wdirtypemax>
         std::string displayName;
         displayName.resize(wdirtypemax);
         GetDisplayNameFromPath(DisconnectRoot, displayName.data(), displayName.size() - 1);
         displayName.resize(strlen(displayName.data()));
+        SFTP_LOG("DISCONNECT", "  displayName='%s'", displayName.c_str());
 
-        pConnectSettings serverid = static_cast<pConnectSettings>(GetServerIdFromName(displayName.data(), GetCurrentThreadId()));
-        if (serverid) {
-            // Build disconnect log message using std::string
-            std::string connBuf = "DISCONNECT \\";
-            connBuf += displayName;
-            LogProc(PluginNumber, MSGTYPE_DISCONNECT, connBuf.c_str());
-            SftpCloseConnection(serverid);
-            SetServerIdForName(displayName.data(), nullptr); // this also frees the entry.
+        if (displayName.empty()) {
+            SFTP_LOG("DISCONNECT", "  empty displayName, returning TRUE");
+            return true;
         }
+
+        // Thread-agnostic close: TC can post FsDisconnect from a
+        // background thread (observed empirically when the click fires
+        // while the panel is at plugin root `\`). The old code path
+        // called GetServerIdFromName with GetCurrentThreadId(), and for
+        // a background thread FindEntry with is_background=true+matching
+        // tid returned null even though the main-thread entry existed —
+        // the session leaked, its SSH channel stayed open, and the next
+        // Enter reused the stale connection (visible to the user as
+        // "instant reconnect without a key exchange").
+        //
+        // DisconnectServerByName closes the underlying SSH session once
+        // and drops every registry row referencing this name regardless
+        // of thread. Safe to call for background-thread invocations;
+        // idempotent for a double-close (removed==0).
+        std::string connBuf = "DISCONNECT \\";
+        connBuf += displayName;
+        LogProc(PluginNumber, MSGTYPE_DISCONNECT, connBuf.c_str());
+
+        const size_t removed = DisconnectServerByName(displayName.c_str());
+        SFTP_LOG("DISCONNECT", "  DisconnectServerByName removed=%zu", removed);
+
+        // Housekeeping for virtual (Imports-backed) sessions — drop the
+        // alias→(sourceId, cacheSection, displayName) binding so the map
+        // does not grow unbounded across many connect/disconnect cycles.
+        // No-op for native sessions and for double-disconnects.
+        if (sftp::IsVirtualSessionAlias(displayName.data()))
+            sftp::UnregisterVirtualSession(displayName);
         return true;
     });
 }

@@ -25,6 +25,19 @@ int  CopyMoveServerInIni(LPCSTR oldservername, LPCSTR newservername, bool Move, 
 SERVERID GetServerIdFromName(LPCSTR servername, DWORD threadid) noexcept;
 bool SetServerIdForName(LPCSTR displayname, SERVERID newid) noexcept;
 
+// Thread-agnostic full disconnect: find every registry entry with `name`
+// across ALL threads (main + any background), close the underlying SSH
+// session exactly once (via the first non-null serverid), free the
+// tConnectSettings memory once, and drop every entry. Returns the number
+// of entries removed. Zero means the name was not registered anywhere.
+//
+// Used by FsDisconnect — TC can call the WFX disconnect entry from a
+// non-main thread, and the per-thread lookup pattern
+// `GetServerIdFromName(name, GetCurrentThreadId())` returns null in that
+// case even when the main-thread entry exists, so the connection would
+// otherwise be leaked.
+size_t DisconnectServerByName(LPCSTR name) noexcept;
+
 // Path helpers
 void GetDisplayNameFromPath(LPCSTR Path, LPSTR DisplayName, size_t maxlen) noexcept;
 

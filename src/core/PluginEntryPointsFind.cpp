@@ -22,6 +22,7 @@
 #include "PhpAgentClient.h"
 #include "ImportSourceRegistry.h"
 #include "ImportCache.h"
+#include "VirtualSessionRegistry.h"
 #include "ProfileSettings.h"
 
 // Path of the most recent FsFindFirstW call that returned PATH_NOT_FOUND.
@@ -351,14 +352,14 @@ static HANDLE BuildPluginFolderListing(const std::string& folderPrefix,
         SERVERHANDLE hdl = FindFirstServer(nameBuf.data(), nameBuf.size() - 1);
         while (hdl) {
             std::string fullName = nameBuf.data();
-            // Skip cache-only virtual sessions: SftpConnectToServer registers
-            // them in the server registry under their cache-section name
-            // (prefixed "__import.") when the user opens a virtual session
-            // from inside [Imports]. They must still count towards
-            // hasActiveSession (so [Active Sessions] can list them for the
-            // disconnect gesture) but must not appear as fake sessions in
-            // the plugin root listing.
-            const bool isVirtual = fullName.compare(0, 9, "__import.") == 0;
+            // Skip virtual (Imports-cache-backed) sessions. When the user
+            // opens one from inside [Imports], we register it in the server
+            // registry under a TC-safe alias (`__vimp_<sourceId>_<hash>`).
+            // The alias must still count towards hasActiveSession so
+            // [Active Sessions] can list it for the disconnect gesture, but
+            // must not appear as a fake session row in the plugin root
+            // listing.
+            const bool isVirtual = sftp::IsVirtualSessionAlias(fullName.c_str());
             // Track whether any session is currently connected — used at root
             // to decide whether to surface the [Active Sessions] magic folder.
             if (isRoot && !hasActiveSession &&
@@ -445,6 +446,15 @@ static HANDLE BuildActiveSessionsListing(WIN32_FIND_DATAW* FindData)
     // Active sessions first; [Disconnect All] only appears when at least one
     // session is connected (an empty listing after F8 simply leaves the user
     // with TC's `..` parent entry to back out).
+    //
+    // Virtual (Imports-backed) sessions are surfaced under their TC-safe
+    // alias (`__vimp_<sourceId>_<hash>`) rather than the human-readable
+    // displayName they carry inside `[Imports]`. This keeps the F8-in-Active
+    // Sessions round-trip correct — IsActiveSessionsPath must be able to
+    // split the entry off the parent, which forbids `/`, `[`, or `\` inside
+    // the entry name. A future polish task can render a pretty label using
+    // a non-splitting substitute character; for now the alias is what the
+    // user sees.
     std::array<char, wdirtypemax> nameBuf{};
     SERVERHANDLE hdl = FindFirstServer(nameBuf.data(), nameBuf.size() - 1);
     while (hdl) {
@@ -857,6 +867,24 @@ HANDLE WINAPI FsFindFirstW(LPCWSTR Path, LPWIN32_FIND_DATAW FindData)
         GetDisplayNameFromPath(pathA.data(), displayName.data(), displayName.size() - 1);
         serverid = static_cast<pConnectSettings>(GetServerIdFromName(displayName.data(), GetCurrentThreadId()));
         bool wasconnected = serverid != nullptr;
+
+        // Stale-session detection: the cached serverid is only trustworthy
+        // if the underlying TCP connection is still live. Server reboot,
+        // firewall reset, or a half-closed FIN leaves g_servers holding a
+        // valid-looking pointer with a dead socket beneath — reusing it
+        // sends libssh2 into an EAGAIN retry loop that TC surfaces as
+        // "nothing happens on Enter". A cheap select+MSG_PEEK on the raw
+        // socket catches that state; on failure we drop the registry entry
+        // (across all threads, via DisconnectServerByName) so the block
+        // below re-runs the implicit connect from scratch.
+        if (wasconnected && !IsSessionAlive(serverid)) {
+            SFTP_LOG("FIND", "Stale session detected for '%s' — dropping and reconnecting",
+                     displayName.data());
+            DisconnectServerByName(displayName.data());
+            serverid = nullptr;
+            wasconnected = false;
+        }
+
         if (!wasconnected) {
             // During a TC multi-step transfer (RENMOV_MULTI), an unresolved
             // path is almost always TC probing a destination as part of its

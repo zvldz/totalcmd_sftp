@@ -6,6 +6,7 @@
 #include "SftpInternal.h"
 #include "PluginEntryPoints.h"
 #include "SftpClient.h"
+#include <algorithm>
 #include <string>
 #include <vector>
 #include <mutex>
@@ -53,6 +54,48 @@ SERVERID GetServerIdFromName(LPCSTR name, DWORD threadId) noexcept
     bool is_bg = (threadId != mainthreadid && threadId != 0);
     SERVERENTRY* entry = FindEntry(threadId, name, is_bg);
     return entry ? entry->serverid : nullptr;
+}
+
+size_t DisconnectServerByName(LPCSTR name) noexcept
+{
+    if (!name || !name[0]) return 0;
+
+    pConnectSettings toClose = nullptr;
+    size_t removed = 0;
+    {
+        std::lock_guard<std::mutex> lock(g_registryMutex);
+
+        // Collect the unique tConnectSettings pointer (any registry entry
+        // for the same session name must reference the same heap object —
+        // there is only one connection per DisplayName). Then drop every
+        // matching entry regardless of its thread/is_background flag so
+        // the session cannot leak on background-thread FsDisconnect calls.
+        for (const auto& srv : g_servers) {
+            if (_stricmp(srv->name.c_str(), name) == 0) {
+                if (!toClose && srv->serverid)
+                    toClose = static_cast<pConnectSettings>(srv->serverid);
+                srv->serverid = nullptr;   // decouple before erase (defensive)
+            }
+        }
+        const size_t before = g_servers.size();
+        g_servers.erase(
+            std::remove_if(g_servers.begin(), g_servers.end(),
+                [&](const std::unique_ptr<SERVERENTRY>& e) {
+                    return _stricmp(e->name.c_str(), name) == 0;
+                }),
+            g_servers.end());
+        removed = before - g_servers.size();
+    }
+
+    // SftpCloseConnection and delete happen outside the registry lock —
+    // libssh2 shutdown can block on socket send for the SSH_MSG_DISCONNECT
+    // packet, and holding the registry mutex through it would starve any
+    // parallel FsFindFirst on other sessions.
+    if (toClose) {
+        SftpCloseConnection(toClose);
+        delete toClose;
+    }
+    return removed;
 }
 
 bool SetServerIdForName(LPCSTR name, SERVERID id) noexcept
