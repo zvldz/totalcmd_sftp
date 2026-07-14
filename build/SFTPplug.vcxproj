@@ -167,6 +167,7 @@
     <ClCompile Include="..\src\core\VanDykeIniParser.cpp" />
     <ClCompile Include="..\src\core\ImportCache.cpp" />
     <ClCompile Include="..\src\core\SecureCrtAdapter.cpp" />
+    <ClCompile Include="..\src\core\PuttyAdapter.cpp" />
     <ClCompile Include="..\src\core\ImportSourceRegistry.cpp" />
     <ClCompile Include="..\src\core\ImportIoUtil.cpp" />
     <ClCompile Include="..\src\core\VirtualSessionRegistry.cpp" />
@@ -216,6 +217,7 @@
     <ClInclude Include="..\src\include\VanDykeIniParser.h" />
     <ClInclude Include="..\src\include\ImportCache.h" />
     <ClInclude Include="..\src\include\SecureCrtAdapter.h" />
+    <ClInclude Include="..\src\include\PuttyAdapter.h" />
     <ClInclude Include="..\src\include\ImportSourceRegistry.h" />
     <ClInclude Include="..\src\include\ImportIoUtil.h" />
     <ClInclude Include="..\src\include\VirtualSessionRegistry.h" />

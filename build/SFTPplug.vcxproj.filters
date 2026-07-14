@@ -97,6 +97,9 @@
     <ClCompile Include="..\src\core\SecureCrtAdapter.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\core\PuttyAdapter.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\src\core\ImportSourceRegistry.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -242,6 +245,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\src\include\SecureCrtAdapter.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\include\PuttyAdapter.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\src\include\ImportSourceRegistry.h">

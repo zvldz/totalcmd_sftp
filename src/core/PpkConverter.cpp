@@ -840,6 +840,101 @@ static bool BuildTraditionalEcDer(const PpkData& ppk, const std::vector<uint8_t>
 // PEM output
 // ---------------------------------------------------------------------------
 
+// PPK stores an ed25519 key as two SSH-wire blobs:
+//   publicBlob  = string "ssh-ed25519" || string <32-byte ed25519 public key>
+//   privateBlob = string <32-byte ed25519 private scalar>
+//
+// The "traditional PEM" format libssh2 accepts for RSA and ECDSA has no
+// well-supported ed25519 counterpart, so we output the OpenSSH key
+// container (`openssh-key-v1\0` + PROTOCOL.key layout) instead. The
+// same file format `ssh-keygen -t ed25519` writes; libssh2 with the
+// modern crypto backend handles it directly.
+//
+// Unencrypted-only for now — the encrypted PPK path is a separate
+// derivation exercise that no maintainer session currently needs.
+static bool BuildOpenSshEd25519(const PpkData& ppk,
+                                 const std::vector<uint8_t>& privateBlobPlain,
+                                 std::vector<uint8_t>& out)
+{
+    // Extract the 32-byte public key from the PPK publicBlob.
+    // Layout: [u32 len=11]["ssh-ed25519"][u32 len=32][32-byte pubkey] = 51 bytes.
+    size_t pubOffset = 0;
+    std::string algoLabel;
+    std::vector<uint8_t> pubkey;
+    if (!ReadSshStrVec(ppk.publicBlob, pubOffset, pubkey) ||
+        pubkey.size() != 11 ||
+        memcmp(pubkey.data(), "ssh-ed25519", 11) != 0)
+    {
+        return false;
+    }
+    if (!ReadSshStrVec(ppk.publicBlob, pubOffset, pubkey) || pubkey.size() != 32)
+        return false;
+
+    // Extract the 32-byte private scalar from the (possibly decrypted)
+    // privateBlob. Layout: [u32 len=32][32-byte scalar] = 36 bytes.
+    size_t privOffset = 0;
+    std::vector<uint8_t> privScalar;
+    if (!ReadSshStrVec(privateBlobPlain, privOffset, privScalar) ||
+        privScalar.size() != 32)
+    {
+        return false;
+    }
+
+    // Two random checkint bytes let the OpenSSH loader validate that a
+    // decryption round-trip did not scramble the private-key section.
+    // For an unencrypted container this is only a sentinel; still pull
+    // fresh randomness so the container matches what ssh-keygen writes.
+    uint8_t checkintBytes[4] = { 0 };
+    BCryptGenRandom(nullptr, checkintBytes, sizeof(checkintBytes),
+                    BCRYPT_USE_SYSTEM_PREFERRED_RNG);
+
+    // Public-key block that appears once, verbatim, in the container's
+    // outer public section.
+    std::vector<uint8_t> pubkeyBlock;
+    AppendSshStr(pubkeyBlock, "ssh-ed25519");
+    AppendSshStr(pubkeyBlock, pubkey.data(), pubkey.size());
+
+    // Private-key block (per PROTOCOL.key: two checkints, then per-key
+    // fields, then per-key padding to the cipher block boundary; the
+    // "none" cipher has an effective block size of 8).
+    std::vector<uint8_t> privBlock;
+    privBlock.insert(privBlock.end(), checkintBytes, checkintBytes + 4);
+    privBlock.insert(privBlock.end(), checkintBytes, checkintBytes + 4);
+    AppendSshStr(privBlock, "ssh-ed25519");
+    AppendSshStr(privBlock, pubkey.data(), pubkey.size());
+    // OpenSSH stores the private key as scalar||pubkey (64 bytes), which
+    // matches the SUPERCOP ed25519 secret-key convention libssh2 uses.
+    std::vector<uint8_t> privConcat;
+    privConcat.insert(privConcat.end(), privScalar.begin(), privScalar.end());
+    privConcat.insert(privConcat.end(), pubkey.begin(), pubkey.end());
+    AppendSshStr(privBlock, privConcat.data(), privConcat.size());
+    // Comment: match whatever the PPK carried. Empty is legal.
+    AppendSshStr(privBlock, ppk.comment.c_str());
+    // Padding: 1, 2, 3, ... up to a multiple of 8 (unencrypted uses the
+    // "none" cipher's block size).
+    uint8_t padByte = 1;
+    while ((privBlock.size() % 8) != 0)
+        privBlock.push_back(padByte++);
+
+    // Assemble the whole container.
+    static const char kMagic[] = "openssh-key-v1";
+    out.clear();
+    out.reserve(15 + pubkeyBlock.size() + privBlock.size() + 64);
+    // 15 = 14 chars + trailing NUL, per the OpenSSH spec.
+    out.insert(out.end(), kMagic, kMagic + sizeof(kMagic));
+    AppendSshStr(out, "none");                                 // ciphername
+    AppendSshStr(out, "none");                                 // kdfname
+    AppendSshStr(out, "");                                     // kdfoptions
+    AppendU32(out, 1);                                         // number of keys
+    AppendSshStr(out, pubkeyBlock.data(), pubkeyBlock.size()); // wrapped pubkey
+    AppendSshStr(out, privBlock.data(), privBlock.size());     // wrapped privs
+
+    // Wipe stack copies of secret material.
+    SecureZeroMemory(privScalar.data(), privScalar.size());
+    SecureZeroMemory(privConcat.data(), privConcat.size());
+    return true;
+}
+
 static bool WritePem(const char* path, const char* label, const std::vector<uint8_t>& data)
 {
     const size_t maxB64 = data.size() * 2 + 16;
@@ -1018,8 +1113,16 @@ static bool ConvertPpkToOpenSshImpl(const char* ppkPath, const char* passphrase,
             return false;
         }
         pemLabel = "EC PRIVATE KEY";
+    } else if (ppk.algorithm == "ssh-ed25519") {
+        // Ed25519 has no traditional-PEM form the way RSA/ECDSA do; emit
+        // the OpenSSH key container instead. libssh2 with the modern
+        // crypto backend consumes it directly.
+        if (!BuildOpenSshEd25519(ppk, privatePlain, pemDer)) {
+            err = PpkConvertError::invalid_format;
+            return false;
+        }
+        pemLabel = "OPENSSH PRIVATE KEY";
     } else {
-        // ssh-ed25519 has no classic "traditional" PEM that old libssh2 consistently accepts.
         err = PpkConvertError::unsupported_algorithm;
         return false;
     }

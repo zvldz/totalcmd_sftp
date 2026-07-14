@@ -1,4 +1,5 @@
 #include "ImportSourceRegistry.h"
+#include "PuttyAdapter.h"
 #include "SecureCrtAdapter.h"
 
 #include <cassert>
@@ -54,6 +55,7 @@ ImportSourceRegistry::ImportSourceRegistry()
     // the user under normal panel-sort settings. It only surfaces if the
     // panel is switched to "no sort".
     RegisterAdapter(m_adapters, std::make_unique<SecureCrtAdapter>());
+    RegisterAdapter(m_adapters, std::make_unique<PuttyAdapter>());
 }
 
 IExternalSessionSource* ImportSourceRegistry::Find(const char* sourceId) const noexcept

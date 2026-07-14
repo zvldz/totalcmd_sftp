@@ -54,6 +54,39 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   can save one via the Configure dialog. Non-SSH2 sessions are
   skipped.
 
+- **`[Imports]\[PuTTY]` — PuTTY sessions as live virtual entries.**
+  Same magic-folder UX as SecureCRT. Reads `HKCU\Software\SimonTatham\
+  PuTTY\Sessions` (the standard registry key every PuTTY-compatible
+  tool writes into — PuTTY itself, ExtraPuTTY, PuTTY CAC, and the
+  tabbed runners mtPuTTY / SuperPuTTY that delegate storage back to
+  PuTTY). `[Add custom location…]` accepts a portable
+  `putty.reg` export file (the same one PortableApps'
+  `PuTTYPortable\Data\settings\putty.reg` stores) — pick the file
+  and its sessions merge into the source folder alongside the
+  registry ones. Field mapping: `HostName` → `server`,
+  `PortNumber` → server suffix, `UserName` → `user`,
+  `PublicKeyFile` (`.ppk` / `.pem` / `.pub`) → key file, `AgentFwd`
+  / `AuthAgent` → `useagent`, `LineCodePage=UTF-8` → `utf8=1`. Proxy
+  fields are intentionally not carried across for now — they need a
+  separate cross-adapter materialise pass planned around Phase 4/5;
+  PuTTY sessions behind a SOCKS/HTTP proxy import cleanly today but
+  the proxy has to be re-entered manually on the materialised copy.
+
+- **PPK ed25519 keys now work end-to-end.** Previously any imported
+  or user-configured session pointing at an ed25519 `.ppk` failed
+  auth silently (`PpkConverter` reported `unsupported_algorithm`;
+  `SftpAuth` aborted with "Public-key auth aborted due to local key
+  file error"). The converter now parses ed25519 PPK v3 blobs and
+  emits a proper OpenSSH key container (`-----BEGIN OPENSSH PRIVATE
+  KEY-----` — the same file format `ssh-keygen -t ed25519` writes),
+  which libssh2 with the mbedTLS backend consumes directly. Fix
+  applies plugin-wide, not just to Import-related paths: hand-
+  configured sessions with `privkeyfile=<...>.ppk` benefit too.
+  RSA / ECDSA PPKs are unchanged. Encrypted-ed25519 PPKs are not
+  covered — the maintainer's use case does not need them yet;
+  extend if a report shows up. Same for the Ed448 curve (PuTTY
+  0.75+ can write it), tracked in TODO.
+
 ### Fixes
 
 - **Import dialog (KiTTY Portable): `Default Settings` phantom row
