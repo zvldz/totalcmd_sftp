@@ -127,6 +127,19 @@ void WriteSessionSection(const std::string& section,
         WritePrivateProfileStringA(section.c_str(), "useagent",
                                     "1", iniPath.c_str());
 
+    // SCP-only transfer mode. Populated by adapters whose source can
+    // configure a session for SCP instead of SFTP (WinSCP with
+    // FSProtocol == 1). Persisted as "1" only — a default `false` is
+    // the sentinel meaning "adapter did not set this"; unsetting an
+    // existing scponly flag would need explicit "0", which no adapter
+    // currently does.
+    if (s->scponly)
+        WritePrivateProfileStringA(section.c_str(), "scponly",
+                                    "1", iniPath.c_str());
+    if (s->scpfordata)
+        WritePrivateProfileStringA(section.c_str(), "scpfordata",
+                                    "1", iniPath.c_str());
+
     // Password lands in the cache when the adapter successfully recovered
     // it (WinSCP weak-XOR, KiTTY external decrypt helper). SecureCRT leaves
     // it empty by design and it is not cached. The stored value uses the
@@ -145,6 +158,27 @@ void WriteSessionSection(const std::string& section,
     if (s->unixlinebreaks == 0 || s->unixlinebreaks == 1)
         WritePrivateProfileStringA(section.c_str(), "unixlinebreaks",
                                     s->unixlinebreaks == 1 ? "1" : "0",
+                                    iniPath.c_str());
+
+    // codepage: 0 = "adapter did not touch this" (matches
+    // LoadServerSettings' default in ProfileSettings.cpp:112). Only
+    // meaningful when utf8names == 0; adapters that map PuTTY-style
+    // LineCodePage values like KOI8-R, ISO-8859-2, CP1251, WIN1252
+    // populate both — utf8names=0 and codepage=<numeric Windows CP>.
+    if (s->codepage > 0) {
+        char cpBuf[16];
+        std::snprintf(cpBuf, sizeof(cpBuf), "%d", s->codepage);
+        WritePrivateProfileStringA(section.c_str(), "codepage",
+                                    cpBuf, iniPath.c_str());
+    }
+
+    // scpserver64bit is tri-state (-1 = auto, 0 = no, 1 = yes) and is
+    // persisted under the historical INI key `largefilesupport`. WinSCP
+    // sessions configured as SCP get 0 written explicitly so the plugin
+    // does not run the shell probe that legacy import also blocked.
+    if (s->scpserver64bit == 0 || s->scpserver64bit == 1)
+        WritePrivateProfileStringA(section.c_str(), "largefilesupport",
+                                    s->scpserver64bit == 1 ? "1" : "0",
                                     iniPath.c_str());
 }
 

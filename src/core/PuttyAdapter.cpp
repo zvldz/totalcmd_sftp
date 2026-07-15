@@ -1,4 +1,5 @@
 #include "PuttyAdapter.h"
+#include "ImportIoUtil.h"
 #include "SftpClient.h"
 
 #define WIN32_LEAN_AND_MEAN
@@ -424,8 +425,8 @@ bool PuttyAdapter::LoadSettings(const ExternalSessionEntry& entry,
     // Field values, populated from whichever channel this entry came
     // from. Empty string / zero here means "field not present".
     std::string host, userName, keyFile, lineCodePage;
-    DWORD       port = 0, useAgent = 0;
-    bool        hasPort = false;
+    DWORD       port = 0, useAgent = 0, enterSendsCrLf = 0;
+    bool        hasPort = false, hasEnterSendsCrLf = false;
 
     if (entry.sourceOrigin == "standard") {
         // Standard channel: fields live under
@@ -455,6 +456,7 @@ bool PuttyAdapter::LoadSettings(const ExternalSessionEntry& entry,
             keyFile = ExpandEnv(UrlDecode(keyFile));
 
         ReadRegString(key, "LineCodePage", lineCodePage);
+        hasEnterSendsCrLf = ReadRegDword(key, "EnterSendsCrLf", enterSendsCrLf);
         RegCloseKey(key);
     } else {
         // Custom channel: entry.sourceOrigin is the literal path to a
@@ -500,6 +502,7 @@ bool PuttyAdapter::LoadSettings(const ExternalSessionEntry& entry,
         keyFile = ExpandEnv(UrlDecode(keyFile));
 
         pickString("LineCodePage", lineCodePage);
+        pickDword("EnterSendsCrLf", enterSendsCrLf, hasEnterSendsCrLf);
     }
 
     // Compose the connect fields the cache writer will persist. The
@@ -530,8 +533,24 @@ bool PuttyAdapter::LoadSettings(const ExternalSessionEntry& entry,
             out->pubkeyfile = keyFile;
     }
 
-    if (_stricmp(lineCodePage.c_str(), "UTF-8") == 0)
-        out->utf8names = 1;
+    // LineCodePage: PuTTY writes strings like "UTF-8", "KOI8-R",
+    // "ISO-8859-2", "CP1251", "WIN-1252", or leaves it blank to mean
+    // "use font encoding". ParseLineCodePage maps every form legacy F11
+    // import understood into the (utf8, codepage) pair the plugin's INI
+    // uses. Blank / unrecognised → leave both plugin defaults untouched.
+    if (!lineCodePage.empty()) {
+        int cpUtf8 = 0, cpNum = 0;
+        if (ParseLineCodePage(lineCodePage, cpUtf8, cpNum)) {
+            out->utf8names = static_cast<char>(cpUtf8);
+            if (!cpUtf8 && cpNum > 0)
+                out->codepage = cpNum;
+        }
+    }
+
+    // EnterSendsCrLf → unixlinebreaks tri-state. Present only for PuTTY
+    // (not WinSCP). Matches wesmar's legacy F11 import behaviour.
+    if (hasEnterSendsCrLf)
+        out->unixlinebreaks = enterSendsCrLf ? 1 : 0;
 
     return true;
 }

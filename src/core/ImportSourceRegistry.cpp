@@ -1,6 +1,8 @@
 #include "ImportSourceRegistry.h"
+#include "FileZillaAdapter.h"
 #include "PuttyAdapter.h"
 #include "SecureCrtAdapter.h"
+#include "WinScpAdapter.h"
 
 #include <cassert>
 #include <cstring>
@@ -56,6 +58,8 @@ ImportSourceRegistry::ImportSourceRegistry()
     // panel is switched to "no sort".
     RegisterAdapter(m_adapters, std::make_unique<SecureCrtAdapter>());
     RegisterAdapter(m_adapters, std::make_unique<PuttyAdapter>());
+    RegisterAdapter(m_adapters, std::make_unique<WinScpAdapter>());
+    RegisterAdapter(m_adapters, std::make_unique<FileZillaAdapter>());
 }
 
 IExternalSessionSource* ImportSourceRegistry::Find(const char* sourceId) const noexcept

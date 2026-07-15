@@ -48,4 +48,20 @@ bool BrowseForFile(HWND               owner,
                    const char*        initialPath,
                    std::string&       outPath);
 
+// Parse a PuTTY-style `LineCodePage` value ("UTF-8", "KOI8-R", "ISO-8859-2",
+// "CP1251", "WIN-1252", "Windows-1250", …) into the two-field representation
+// the plugin's INI uses: `outUtf8` is 0 or 1 (feeds `utf8=` INI key), and
+// `outCodepage` is a numeric Windows codepage (feeds `codepage=`). When both
+// come back as their default (0, 0) with the function returning false the
+// value is either empty or unrecognised — caller should leave existing
+// settings untouched. `outUtf8=1` implies `outCodepage=0`; the two are
+// mutually exclusive by contract.
+//
+// Portable across adapters — PuTTY and WinSCP both write `LineCodePage`
+// entries with the same alphabet, and both new adapters (PuttyAdapter,
+// WinScpAdapter) call this to reach feature parity with wesmar's legacy
+// F11 import.
+bool ParseLineCodePage(const std::string& raw,
+                       int& outUtf8, int& outCodepage) noexcept;
+
 }  // namespace sftp

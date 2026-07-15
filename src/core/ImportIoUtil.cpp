@@ -4,6 +4,7 @@
 #include <shlobj.h>
 
 #include <array>
+#include <cstdlib>
 #include <cstring>
 #include <vector>
 
@@ -110,6 +111,95 @@ bool WalkImpl(const std::wstring& dir,
 }
 
 }  // namespace
+
+namespace {
+
+std::string TrimAscii(const std::string& s)
+{
+    size_t a = 0, b = s.size();
+    while (a < b && (s[a] == ' ' || s[a] == '\t' || s[a] == '\r' || s[a] == '\n')) ++a;
+    while (b > a && (s[b - 1] == ' ' || s[b - 1] == '\t' ||
+                     s[b - 1] == '\r' || s[b - 1] == '\n')) --b;
+    return s.substr(a, b - a);
+}
+
+bool EqualsI(const std::string& a, const char* b) noexcept
+{
+    return _stricmp(a.c_str(), b) == 0;
+}
+
+bool StartsWithI(const std::string& s, const char* prefix) noexcept
+{
+    const size_t plen = std::strlen(prefix);
+    if (s.size() < plen) return false;
+    return _strnicmp(s.c_str(), prefix, plen) == 0;
+}
+
+}  // namespace
+
+bool ParseLineCodePage(const std::string& raw,
+                       int& outUtf8, int& outCodepage) noexcept
+{
+    outUtf8 = 0;
+    outCodepage = 0;
+
+    const std::string v = TrimAscii(raw);
+    if (v.empty())
+        return false;  // "Use font encoding" in PuTTY — leave plugin defaults
+
+    if (EqualsI(v, "UTF-8") || EqualsI(v, "UTF8")) {
+        outUtf8 = 1;
+        return true;
+    }
+
+    // Cyrillic PuTTY presets.
+    if (EqualsI(v, "KOI8-R") || EqualsI(v, "KOI8R")) {
+        outCodepage = 20866;
+        return true;
+    }
+    if (EqualsI(v, "KOI8-U") || EqualsI(v, "KOI8U")) {
+        outCodepage = 21866;
+        return true;
+    }
+
+    // ISO-8859-N — Windows codepage math: N in 1..14 maps to 28590+N,
+    // and 15 is the outlier at 28605.
+    if (StartsWithI(v, "ISO-8859-")) {
+        const char* p = v.c_str() + std::strlen("ISO-8859-");
+        char* end = nullptr;
+        unsigned long n = std::strtoul(p, &end, 10);
+        if (end && *end == '\0' && n > 0) {
+            outCodepage = (n == 15) ? 28605 : (28590 + static_cast<int>(n));
+            return true;
+        }
+    }
+
+    // Windows / OEM codepages: "CP1251", "WIN-1252", "Windows-1250", or
+    // bare "1251". The PuTTY dropdown ships all of these variants.
+    const char* p = nullptr;
+    if      (StartsWithI(v, "CP"))          p = v.c_str() + 2;
+    else if (StartsWithI(v, "WINDOWS-"))    p = v.c_str() + std::strlen("WINDOWS-");
+    else if (StartsWithI(v, "WINDOWS"))     p = v.c_str() + std::strlen("WINDOWS");
+    else if (StartsWithI(v, "WIN"))         p = v.c_str() + 3;
+    else                                    p = v.c_str();
+
+    if (p && *p) {
+        while (*p == '-' || *p == '_') ++p;
+        char* end = nullptr;
+        unsigned long cp = std::strtoul(p, &end, 10);
+        if (end && *end == '\0' && cp > 0) {
+            if (cp == 65001) {
+                // Numeric UTF-8 alias — collapse to the utf8 flag.
+                outUtf8 = 1;
+                outCodepage = 0;
+            } else {
+                outCodepage = static_cast<int>(cp);
+            }
+            return true;
+        }
+    }
+    return false;
+}
 
 bool IniSectionExists(const std::string& section, LPCSTR iniPath) noexcept
 {

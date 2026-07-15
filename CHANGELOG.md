@@ -81,11 +81,42 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   registry ones. Field mapping: `HostName` → `server`,
   `PortNumber` → server suffix, `UserName` → `user`,
   `PublicKeyFile` (`.ppk` / `.pem` / `.pub`) → key file, `AgentFwd`
-  / `AuthAgent` → `useagent`, `LineCodePage=UTF-8` → `utf8=1`. Proxy
-  fields are intentionally not carried across for now — they need a
-  separate cross-adapter materialise pass planned around Phase 4/5;
-  PuTTY sessions behind a SOCKS/HTTP proxy import cleanly today but
-  the proxy has to be re-entered manually on the materialised copy.
+  / `AuthAgent` → `useagent`, `LineCodePage` (`UTF-8`, `KOI8-R`,
+  `KOI8-U`, `ISO-8859-N`, `CP1251`, `WIN-1252`, `Windows-1250`, and
+  raw numeric codepages) → `utf8` / `codepage`, `EnterSendsCrLf` →
+  `unixlinebreaks`. Proxy fields are intentionally not carried
+  across for now — they need a separate cross-adapter materialise
+  pass planned around Phase 4/5; PuTTY sessions behind a SOCKS/HTTP
+  proxy import cleanly today but the proxy has to be re-entered
+  manually on the materialised copy.
+
+- **`[Imports]\[WinSCP]` — WinSCP sessions as live virtual entries.**
+  Same magic-folder UX as PuTTY. Reads
+  `HKCU\Software\Martin Prikryl\WinSCP 2\Sessions` (standard
+  install) and any portable `WinSCP.ini` you point
+  `[Add custom location…]` at. FSProtocol is honoured correctly:
+  SFTP-only (2) and SFTP-with-SCP-fallback (1) open as regular
+  SFTP sessions, SCP-only (0) sessions force the plugin's SCP
+  transport (`scponly=1`, `scpfordata=1`, `unixlinebreaks=1`,
+  `largefilesupport=0` — matches WinSCP's own SCP-mode default),
+  and unsupported transports (FTP / WebDAV / S3) are silently
+  hidden from the folder. Field mapping is otherwise identical to
+  PuTTY. Passwords are intentionally not imported.
+
+- **`[Imports]\[FileZilla]` — FileZilla sessions as live virtual
+  entries.** Same magic-folder UX. Reads
+  `%APPDATA%\FileZilla\sitemanager.xml` (standard install) and any
+  portable `sitemanager.xml` you point `[Add custom location…]` at.
+  Only `Protocol=1` (SFTP) is exposed; FTP / FTPS / WebDAV / S3
+  entries are silently hidden. Nested `<Folder>` elements become
+  nested subfolders in the panel (`Team/prod/host1`). Key files
+  are picked up from `<Keyfile>` — including OpenSSH-style paths
+  without an extension (`id_rsa`, `id_ed25519`), which FileZilla
+  routinely writes because its fzsftp back-end reads OpenSSH PEM
+  directly. Passwords are intentionally not imported. Host-key
+  fingerprints from `hostkeys.xml` are not inherited either — TC
+  shows its own TOFU prompt on first connect, same as for any
+  other imported session.
 
 - **PPK ed25519 keys now work end-to-end.** Previously any imported
   or user-configured session pointing at an ed25519 `.ppk` failed
