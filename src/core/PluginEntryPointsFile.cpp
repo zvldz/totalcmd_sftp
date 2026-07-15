@@ -561,6 +561,17 @@ int WINAPI FsExecuteFileW(HWND MainWin, LPWSTR RemoteName, LPCWSTR Verb)
                     // interactive prompt exactly as a real saved session
                     // would — the cache writer never persists passwords for
                     // adapters that don't recover them.
+                    //
+                    // We do NOT connect here — we only pre-register the
+                    // alias so the follow-up FsFindFirstW knows which cache
+                    // section to load, then redirect TC via FS_EXEC_SYMLINK
+                    // to the alias path. The SSH connect happens inside
+                    // that FsFindFirstW, which TC treats as an in-flight
+                    // navigation and decorates with its native progress UI
+                    // — the same UI real sessions get on Enter. Doing the
+                    // connect here (as this code used to) hides the
+                    // handshake from TC's UI accounting and makes the
+                    // panel look frozen on slow first-connects.
                     const std::string cacheSection =
                         sftp::GetImportCache().SectionNameForConnect(sourceId, subPath);
                     const std::string& cachePath =
@@ -578,25 +589,13 @@ int WINAPI FsExecuteFileW(HWND MainWin, LPWSTR RemoteName, LPCWSTR Verb)
                     const std::string aliasName =
                         sftp::MakeVirtualSessionAlias(sourceId, cacheSection);
 
-                    pConnectSettings virtualServer = SftpConnectToServer(
-                        cacheSection.c_str(), cachePath.c_str(), nullptr,
-                        aliasName.c_str());
-                    if (!virtualServer)
-                        return FS_EXEC_OK;
-
-                    // Register under the alias (not the raw cache-section
-                    // name) so every downstream lookup — implicit connect
-                    // suppression on the follow-up FsFindFirstW, toolbar
-                    // Disconnect via FsDisconnect, [Active Sessions] listing
-                    // — routes through one uniform TC-safe key.
-                    SetServerIdForName(aliasName.c_str(),
-                        static_cast<SERVERID>(virtualServer));
+                    // Idempotent pre-registration: repeat Enters overwrite
+                    // the same alias entry (same sourceId+cacheSection hash
+                    // to the same alias). Info is picked up by FsFindFirstW
+                    // on the redirect target below.
                     sftp::RegisterVirtualSession(aliasName,
                         {sourceId, cacheSection, subPath});
 
-                    // Redirect TC to the alias path. ResolvePathKindW
-                    // resolves it as SessionLeaf; normal SFTP navigation
-                    // into the remote root takes over from there.
                     std::wstring target = L"\\";
                     target += unicode_util::narrow_to_wide(aliasName);
                     wcslcpy(RemoteName, target.c_str(), wdirtypemax - 1);

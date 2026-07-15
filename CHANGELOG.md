@@ -12,6 +12,21 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 
 ### Features
 
+- **Virtual sessions now show TC's connect-progress bar on Enter.**
+  Before this pass, entering a session inside `[Imports]\...` did the
+  SSH handshake silently inside our `FsExecuteFileW` handler — the
+  panel just sat there for the couple of seconds it took to connect,
+  with no visual indication that anything was happening. Now the
+  handshake runs inside `FsFindFirstW`, the same call TC uses for
+  real sessions, and TC decorates it with its native connect-progress
+  dialog identical to what a real session shows on Enter. Two side
+  benefits: connect failures now surface with TC's standard error
+  message instead of failing silently, and entering a virtual session
+  via a bookmark or a hand-typed path (previously broken) works
+  correctly.
+
+### Prior features (already shipped in earlier 10.0.1.5 beta tags)
+
 - **`[Active Sessions]` magic folder.** A virtual folder appears in the
   plugin root whenever at least one saved session is connected.
   Entering it shows a flat list of every currently-open session by

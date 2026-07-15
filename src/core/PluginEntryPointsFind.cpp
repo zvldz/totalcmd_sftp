@@ -886,29 +886,67 @@ HANDLE WINAPI FsFindFirstW(LPCWSTR Path, LPWIN32_FIND_DATAW FindData)
         }
 
         if (!wasconnected) {
-            // During a TC multi-step transfer (RENMOV_MULTI), an unresolved
-            // path is almost always TC probing a destination as part of its
-            // check-then-create flow — NOT a quick-connect URL the user
-            // typed. SftpConnectToServer would open the new-session dialog
-            // here (empty fields because nothing is in INI), which is the
-            // confusing popup the user reported. Short-circuit: remember the
-            // path for FsMkDirW to recognise as the immediate next call, and
-            // report "path not found" without prompting.
-            if (g_inMultiOpTransfer) {
+            // Virtual (Imports-cache-backed) session — recognised by the
+            // __vimp_<sourceId>_<hash> alias prefix. FsExecuteFileW's
+            // virtual-Enter handler pre-registered the alias in
+            // VirtualSessionRegistry before returning FS_EXEC_SYMLINK; we
+            // do the actual SSH connect here so TC's navigation-flow
+            // progress UI applies just like it does for real sessions.
+            // The bonus: an FsFindFirstW(\__vimp_...) invoked without
+            // any prior FsExecuteFileW (TC bookmark, hand-typed path)
+            // fails cleanly with PATH_NOT_FOUND instead of the old
+            // SftpConnect-with-empty-settings dialog.
+            if (sftp::IsVirtualSessionAlias(displayName.data())) {
+                auto info = sftp::LookupVirtualSession(displayName.data());
+                if (!info) {
+                    g_lastFailedFindPath = Path;
+                    SetLastError(ERROR_PATH_NOT_FOUND);
+                    return INVALID_HANDLE_VALUE;
+                }
+                const std::string& cachePath =
+                    sftp::GetImportCache().CacheFilePath();
+                if (cachePath.empty()) {
+                    g_lastFailedFindPath = Path;
+                    SetLastError(ERROR_PATH_NOT_FOUND);
+                    return INVALID_HANDLE_VALUE;
+                }
+                new_serverid = SftpConnectToServer(
+                    info->cacheSection.c_str(), cachePath.c_str(),
+                    nullptr, displayName.data());
+                if (!new_serverid) {
+                    g_lastFailedFindPath = Path;
+                    SetLastError(ERROR_PATH_NOT_FOUND);
+                    return INVALID_HANDLE_VALUE;
+                }
+                serverid = new_serverid;
+                SetServerIdForName(displayName.data(),
+                    static_cast<SERVERID>(serverid));
+            }
+            else if (g_inMultiOpTransfer) {
+                // During a TC multi-step transfer (RENMOV_MULTI), an unresolved
+                // path is almost always TC probing a destination as part of its
+                // check-then-create flow — NOT a quick-connect URL the user
+                // typed. SftpConnectToServer would open the new-session dialog
+                // here (empty fields because nothing is in INI), which is the
+                // confusing popup the user reported. Short-circuit: remember the
+                // path for FsMkDirW to recognise as the immediate next call, and
+                // report "path not found" without prompting.
                 g_lastFailedFindPath = Path;
                 SetLastError(ERROR_PATH_NOT_FOUND);
                 return INVALID_HANDLE_VALUE;
             }
-            new_serverid = SftpConnectToServer(displayName.data(), inifilename, nullptr);
-            if (!new_serverid) {
-                // Remember this path so FsMkDirW can recognise the TC
-                // "check-then-create" copy/move flow that immediately follows.
-                g_lastFailedFindPath = Path;
-                SetLastError(ERROR_PATH_NOT_FOUND);
-                return INVALID_HANDLE_VALUE;
+            else {
+                new_serverid = SftpConnectToServer(displayName.data(), inifilename, nullptr);
+                if (!new_serverid) {
+                    // Remember this path so FsMkDirW can recognise the TC
+                    // "check-then-create" copy/move flow that immediately follows.
+                    g_lastFailedFindPath = Path;
+                    SetLastError(ERROR_PATH_NOT_FOUND);
+                    return INVALID_HANDLE_VALUE;
+                }
+                serverid = new_serverid;
+                SetServerIdForName(displayName.data(), static_cast<SERVERID>(serverid));
             }
-            serverid = new_serverid;
-            SetServerIdForName(displayName.data(), static_cast<SERVERID>(serverid));
         }
         // Connection to the selected server is now established.
 
