@@ -1,4 +1,5 @@
 #include "ImportCache.h"
+#include "ImportIoUtil.h"
 #include "PluginEntryPointsInternal.h"
 #include "SftpClient.h"
 
@@ -26,19 +27,6 @@ std::string ResolveCachePath()
     const size_t sep = p.find_last_of("\\/");
     std::string dir = (sep == std::string::npos) ? std::string(".") : p.substr(0, sep);
     return dir + "\\sftpplug-imports-cache.ini";
-}
-
-// FNV-1a 32-bit hash. Stable across runs and platforms; we only need it as
-// a short opaque identifier for the channel string inside on-disk section
-// names, so any deterministic hash would do. Chosen for its brevity.
-uint32_t Fnv1aHash(std::string_view s) noexcept
-{
-    uint32_t h = 0x811c9dc5u;
-    for (unsigned char c : s) {
-        h ^= c;
-        h *= 0x01000193u;
-    }
-    return h;
 }
 
 std::string ChannelTag(std::string_view channel) noexcept
@@ -87,17 +75,9 @@ std::string ReadSourceTag(const std::string& section, const std::string& iniPath
 //   * std::string  — empty
 //   * bool         — false
 //   * utf8names / unixlinebreaks — -1 (the tri-state "auto")
-// A field left at its sentinel means "unknown, don't cache" (not "off"),
-// so downstream materialise leaves the corresponding session key absent
-// and native code paths fall back to their own defaults.
-//
-// EXTEND CAUTION: when a future adapter starts populating a new field
-// (proxy references, jump-host references, per-session codepage, …),
-// add the corresponding `if (sentinel) ... else Write(...)` block below
-// so the field actually reaches the cache. Silent drops here surface as
-// "everything looked right in the enumerate, but the materialised session
-// has no proxy" bugs three phases downstream. See TODO — Phase 1 audit
-// remaining polish for the field-mask alternative.
+// A field left at its sentinel means "unknown, don't cache" (not "off"):
+// downstream materialise omits the corresponding INI key and native code
+// paths fall back to their own defaults.
 void WriteSessionSection(const std::string& section,
                          const std::string& iniPath,
                          const tConnectSettings* s,
@@ -140,11 +120,7 @@ void WriteSessionSection(const std::string& section,
         WritePrivateProfileStringA(section.c_str(), "scpfordata",
                                     "1", iniPath.c_str());
 
-    // Password lands in the cache when the adapter successfully recovered
-    // it (WinSCP weak-XOR, KiTTY external decrypt helper). SecureCRT leaves
-    // it empty by design and it is not cached. The stored value uses the
-    // same DPAPI-encrypted representation the native session store does —
-    // the cache file lives next to sftpplug.ini and is not more exposed.
+    // Password is stored DPAPI-obfuscated — the same shape sftpplug.ini uses.
     if (!s->password.empty())
         WritePrivateProfileStringA(section.c_str(), "password",
                                     s->password.c_str(), iniPath.c_str());
@@ -160,11 +136,9 @@ void WriteSessionSection(const std::string& section,
                                     s->unixlinebreaks == 1 ? "1" : "0",
                                     iniPath.c_str());
 
-    // codepage: 0 = "adapter did not touch this" (matches
-    // LoadServerSettings' default in ProfileSettings.cpp:112). Only
-    // meaningful when utf8names == 0; adapters that map PuTTY-style
-    // LineCodePage values like KOI8-R, ISO-8859-2, CP1251, WIN1252
-    // populate both — utf8names=0 and codepage=<numeric Windows CP>.
+    // codepage: 0 = not populated. Meaningful only when utf8names == 0;
+    // adapters that map LineCodePage-style names write both — utf8names=0
+    // plus a numeric Windows codepage.
     if (s->codepage > 0) {
         char cpBuf[16];
         std::snprintf(cpBuf, sizeof(cpBuf), "%d", s->codepage);
@@ -173,9 +147,8 @@ void WriteSessionSection(const std::string& section,
     }
 
     // scpserver64bit is tri-state (-1 = auto, 0 = no, 1 = yes) and is
-    // persisted under the historical INI key `largefilesupport`. WinSCP
-    // sessions configured as SCP get 0 written explicitly so the plugin
-    // does not run the shell probe that legacy import also blocked.
+    // persisted under the INI key `largefilesupport`. Written explicitly
+    // as 0 for SCP-only sessions so the plugin skips the >2 GB shell probe.
     if (s->scpserver64bit == 0 || s->scpserver64bit == 1)
         WritePrivateProfileStringA(section.c_str(), "largefilesupport",
                                     s->scpserver64bit == 1 ? "1" : "0",

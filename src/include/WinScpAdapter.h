@@ -27,13 +27,9 @@ namespace sftp {
 //                                     unixlinebreaks = 1 (WinSCP SCP)
 //   FSProtocol != 0 && != 1         → session skipped (FTP / WebDAV / S3)
 //
-// Password is intentionally not carried across — WinSCP's on-disk
-// obfuscation is trivially reversible but importing it silently
-// contradicts the user's expectation that setting a password in
-// WinSCP does not automatically hand it to every other tool on the
-// machine. Matches wesmar's legacy F11 import behaviour ("PuTTY and
-// WinSCP passwords are never imported — you will be prompted on
-// first connection" — see src/help/import-migration.html).
+// Password is not carried across. On first connect the plugin's own
+// interactive prompt kicks in, or the user can save one via the
+// Configure dialog.
 class WinScpAdapter final : public IExternalSessionSource {
 public:
     const char* SourceId()    const noexcept override { return "winscp";  }

@@ -22,120 +22,9 @@ namespace {
 // Software\SimonTatham\PuTTY\Sessions under HKEY_CURRENT_USER.
 constexpr const char* kPuttySessionsRoot = "Software\\SimonTatham\\PuTTY\\Sessions";
 
-// PuTTY escapes session name characters outside a small allowed set
-// using RFC 1738 style %XX hex, so the on-disk registry key name is
-// URL-encoded and the human-friendly form we want to show the user
-// requires decoding. LoadSettings then re-encodes to reopen the key.
-int HexToInt(char c) noexcept
-{
-    if (c >= '0' && c <= '9') return c - '0';
-    if (c >= 'a' && c <= 'f') return 10 + (c - 'a');
-    if (c >= 'A' && c <= 'F') return 10 + (c - 'A');
-    return -1;
-}
-
-std::string UrlDecode(const std::string& encoded)
-{
-    std::string out;
-    out.reserve(encoded.size());
-    for (size_t i = 0; i < encoded.size(); ++i) {
-        const char ch = encoded[i];
-        if (ch == '%' && i + 2 < encoded.size()) {
-            const int hi = HexToInt(encoded[i + 1]);
-            const int lo = HexToInt(encoded[i + 2]);
-            if (hi >= 0 && lo >= 0) {
-                out.push_back(static_cast<char>((hi << 4) | lo));
-                i += 2;
-                continue;
-            }
-        }
-        out.push_back(ch);
-    }
-    return out;
-}
-
-// PuTTY's own encode routine: unreserved ASCII stays, everything else
-// becomes %XX. Matches winstore.c:mungestr() in the PuTTY sources.
-std::string UrlEncode(const std::string& raw)
-{
-    std::string out;
-    out.reserve(raw.size());
-    for (unsigned char ch : raw) {
-        const bool safe =
-            (ch >= 'A' && ch <= 'Z') ||
-            (ch >= 'a' && ch <= 'z') ||
-            (ch >= '0' && ch <= '9') ||
-            ch == '-' || ch == '_' || ch == '.';
-        if (safe) {
-            out.push_back(static_cast<char>(ch));
-        } else {
-            char buf[4];
-            std::snprintf(buf, sizeof(buf), "%%%02X", ch);
-            out.append(buf);
-        }
-    }
-    return out;
-}
-
-bool ReadRegString(HKEY key, const char* valueName, std::string& out)
-{
-    DWORD type = 0;
-    DWORD bytes = 0;
-    LONG rc = RegQueryValueExA(key, valueName, nullptr, &type, nullptr, &bytes);
-    if (rc != ERROR_SUCCESS ||
-        (type != REG_SZ && type != REG_EXPAND_SZ) ||
-        bytes == 0)
-        return false;
-    std::string buffer(bytes, '\0');
-    rc = RegQueryValueExA(key, valueName, nullptr, &type,
-                           reinterpret_cast<LPBYTE>(buffer.data()), &bytes);
-    if (rc != ERROR_SUCCESS) return false;
-    // Strip the NUL RegQueryValueExA reports in `bytes`.
-    while (!buffer.empty() && buffer.back() == '\0')
-        buffer.pop_back();
-    out = std::move(buffer);
-    return !out.empty();
-}
-
-bool ReadRegDword(HKEY key, const char* valueName, DWORD& out)
-{
-    DWORD type = 0;
-    DWORD value = 0;
-    DWORD bytes = sizeof(value);
-    LONG rc = RegQueryValueExA(key, valueName, nullptr, &type,
-                                reinterpret_cast<LPBYTE>(&value), &bytes);
-    if (rc != ERROR_SUCCESS || type != REG_DWORD)
-        return false;
-    out = value;
-    return true;
-}
-
-// Expand any %ENV% references in a Windows path string. PuTTY sessions
-// commonly reference key files via %USERPROFILE%\...\id_rsa; we resolve
-// the substitution before writing the path into our INI so the plugin's
-// SFTP auth stage can use it verbatim.
-std::string ExpandEnv(const std::string& raw)
-{
-    std::string expanded(MAX_PATH, '\0');
-    DWORD len = ExpandEnvironmentStringsA(raw.c_str(), expanded.data(),
-                                           static_cast<DWORD>(expanded.size()));
-    if (len == 0 || len > expanded.size())
-        return raw;
-    expanded.resize(len - 1);
-    return expanded;
-}
-
-bool EndsWithI(const std::string& s, const char* suffix) noexcept
-{
-    const size_t slen = std::strlen(suffix);
-    if (s.size() < slen) return false;
-    return _stricmp(s.c_str() + s.size() - slen, suffix) == 0;
-}
-
-// Load a `.reg` file into a UTF-8 std::string. `.reg` files come in
-// three encodings — PortableApps PuTTY writes UTF-16 LE with BOM, older
-// exports use ANSI ("REGEDIT4" header) or UTF-8. Detect from BOM, fall
-// back to CP_ACP for the raw case; caller then parses lines.
+// Load a `.reg` file into a UTF-8 `std::string`. Handles the three encodings
+// that appear in the wild: UTF-16 LE with BOM, UTF-8 with BOM, and headerless
+// ANSI. BOM detection first, then CP_ACP fallback.
 bool ReadRegFileAsUtf8(const std::string& path, std::string& outUtf8)
 {
     HANDLE h = CreateFileA(path.c_str(), GENERIC_READ,
@@ -182,7 +71,7 @@ bool ReadRegFileAsUtf8(const std::string& path, std::string& outUtf8)
                         raw.size() - 3);
         return true;
     }
-    // No BOM — treat as CP_ACP (ANSI), the "REGEDIT4" era default.
+    // No BOM — treat the bytes as CP_ACP (ANSI).
     const int need = MultiByteToWideChar(CP_ACP, 0,
         reinterpret_cast<const char*>(raw.data()),
         static_cast<int>(raw.size()), nullptr, 0);
@@ -224,10 +113,9 @@ std::string UnescapeRegString(std::string_view input)
     return out;
 }
 
-// Everything we care about in a parsed `.reg` file: which Sessions\<name>
-// subkeys exist, and the field values inside each. Callers pull sessions
-// through `sessions` (URL-encoded key names, ready to be UrlDecode'd for
-// display), and look each up in `values` by "<sessionKey>::<valueName>".
+// Parsed contents of a `.reg` file. `sessions` lists the URL-encoded
+// Sessions\<name> subkeys; per-session fields sit in `strings` / `dwords`
+// keyed as "<sess>::<name>".
 struct RegFileParsed {
     std::vector<std::string>                       sessions;   // URL-encoded names
     std::unordered_map<std::string, std::string>   strings;    // "<sess>::<name>" → REG_SZ
@@ -261,9 +149,7 @@ void ParseRegFile(const std::string& utf8, RegFileParsed& out)
                           kSessionsPrefix.size()) == 0)
             {
                 std::string sess(inner.substr(kSessionsPrefix.size()));
-                // Guard against nested subkeys under a session (rare;
-                // PuTTY does not create any today). Reject anything with
-                // a backslash inside — we only track leaf sessions.
+                // Only leaf sessions — reject any nested subkey with `\` inside.
                 if (sess.find('\\') == std::string::npos && !sess.empty()) {
                     currentSession = std::move(sess);
                     out.sessions.push_back(currentSession);
@@ -284,9 +170,8 @@ void ParseRegFile(const std::string& utf8, RegFileParsed& out)
         const size_t eq = line.find('=', nameEnd);
         if (eq == std::string_view::npos) return;
         std::string_view rhs = line.substr(eq + 1);
-        // REG_SZ: `"value"` (may contain escaped \" or \\; multi-line
-        // string values are legal but PuTTY never writes them so we do
-        // not try to reassemble continuation lines).
+        // REG_SZ: `"value"` (escaped \" or \\ handled; multi-line
+        // continuation not reassembled — session fields never use it).
         if (!rhs.empty() && rhs.front() == '"') {
             const std::string key = currentSession + "::" + name;
             out.strings[key] = UnescapeRegString(rhs);
@@ -359,15 +244,14 @@ EnumerationResult PuttyAdapter::EnumerateStandard()
         if (rc != ERROR_SUCCESS)
             continue;
 
-        // The wesmar-import path filters "Default%20Settings" — PuTTY's
-        // template row that carries fallback field values, never a real
-        // session. Same treatment here so it does not surface as an
-        // openable session in the panel.
-        if (_stricmp(nameBuf.data(), "Default%20Settings") == 0)
+        // "Default Settings" / "Default%20Settings" carry PuTTY's template
+        // fallback field values, never a real session.
+        if (_stricmp(nameBuf.data(), "Default%20Settings") == 0 ||
+            _stricmp(nameBuf.data(), "Default Settings")   == 0)
             continue;
 
         ExternalSessionEntry e;
-        e.displayName  = UrlDecode(std::string(nameBuf.data(), nameLen));
+        e.displayName  = PuttyUrlDecode(std::string(nameBuf.data(), nameLen));
         e.sourceOrigin = "standard";
         r.sessions.push_back(std::move(e));
     }
@@ -401,7 +285,7 @@ EnumerationResult PuttyAdapter::EnumerateCustomPath(const std::string& path)
             continue;
 
         ExternalSessionEntry e;
-        e.displayName  = UrlDecode(sessKeyName);
+        e.displayName  = PuttyUrlDecode(sessKeyName);
         e.sourceOrigin = path;   // literal file path — see LoadSettings
         r.sessions.push_back(std::move(e));
     }
@@ -420,7 +304,7 @@ bool PuttyAdapter::LoadSettings(const ExternalSessionEntry& entry,
     // Round-trip the displayName back through URL encoding to hit the
     // exact subkey PuTTY stored it under — the same encoding scheme is
     // used both in the registry and in .reg export files.
-    const std::string subKeyName = UrlEncode(entry.displayName);
+    const std::string subKeyName = PuttyUrlEncode(entry.displayName);
 
     // Field values, populated from whichever channel this entry came
     // from. Empty string / zero here means "field not present".
@@ -442,18 +326,18 @@ bool PuttyAdapter::LoadSettings(const ExternalSessionEntry& entry,
             RegCloseKey(key);
             return false;
         }
-        host = UrlDecode(host);
+        host = PuttyUrlDecode(host);
 
         hasPort = ReadRegDword(key, "PortNumber", port);
 
         if (ReadRegString(key, "UserName", userName))
-            userName = UrlDecode(userName);
+            userName = PuttyUrlDecode(userName);
 
         if (!ReadRegDword(key, "AgentFwd", useAgent))
             ReadRegDword(key, "AuthAgent", useAgent);
 
         if (ReadRegString(key, "PublicKeyFile", keyFile))
-            keyFile = ExpandEnv(UrlDecode(keyFile));
+            keyFile = ExpandEnvA(PuttyUrlDecode(keyFile));
 
         ReadRegString(key, "LineCodePage", lineCodePage);
         hasEnterSendsCrLf = ReadRegDword(key, "EnterSendsCrLf", enterSendsCrLf);
@@ -485,13 +369,13 @@ bool PuttyAdapter::LoadSettings(const ExternalSessionEntry& entry,
         };
 
         pickString("HostName", host);
-        host = UrlDecode(host);
+        host = PuttyUrlDecode(host);
         if (host.empty()) return false;
 
         pickDword("PortNumber", port, hasPort);
 
         pickString("UserName", userName);
-        userName = UrlDecode(userName);
+        userName = PuttyUrlDecode(userName);
 
         bool hadAgent = false;
         pickDword("AgentFwd", useAgent, hadAgent);
@@ -499,7 +383,7 @@ bool PuttyAdapter::LoadSettings(const ExternalSessionEntry& entry,
             pickDword("AuthAgent", useAgent, hadAgent);
 
         pickString("PublicKeyFile", keyFile);
-        keyFile = ExpandEnv(UrlDecode(keyFile));
+        keyFile = ExpandEnvA(PuttyUrlDecode(keyFile));
 
         pickString("LineCodePage", lineCodePage);
         pickDword("EnterSendsCrLf", enterSendsCrLf, hasEnterSendsCrLf);
@@ -520,24 +404,16 @@ bool PuttyAdapter::LoadSettings(const ExternalSessionEntry& entry,
     out->user = userName;
     out->useagent = (useAgent != 0);
 
-    if (!keyFile.empty()) {
-        // PuTTY calls it "PublicKeyFile" but always stores the *private*
-        // key path; the .pub companion is a separate concept. Match the
-        // wesmar import heuristic: .ppk / .pem → privkeyfile,
-        // .pub → pubkeyfile. Unknown extensions get dropped rather than
-        // guessed at. PpkConverter handles the .ppk → OpenSSH temp-file
-        // conversion downstream in SftpAuth.
-        if (EndsWithI(keyFile, ".ppk") || EndsWithI(keyFile, ".pem"))
-            out->privkeyfile = keyFile;
-        else if (EndsWithI(keyFile, ".pub"))
-            out->pubkeyfile = keyFile;
-    }
+    // PuTTY calls it "PublicKeyFile" but always stores the *private*
+    // key path; the `.pub` companion is a separate concept. Route via
+    // the shared helper — `.pub` → pubkeyfile, everything else →
+    // privkeyfile. `PpkConverter` handles the `.ppk` → OpenSSH
+    // temp-file conversion downstream in SftpAuth.
+    AssignImportedKeyFile(keyFile, out->privkeyfile, out->pubkeyfile);
 
-    // LineCodePage: PuTTY writes strings like "UTF-8", "KOI8-R",
-    // "ISO-8859-2", "CP1251", "WIN-1252", or leaves it blank to mean
-    // "use font encoding". ParseLineCodePage maps every form legacy F11
-    // import understood into the (utf8, codepage) pair the plugin's INI
-    // uses. Blank / unrecognised → leave both plugin defaults untouched.
+    // LineCodePage strings ("UTF-8", "KOI8-R", "CP1251", "WIN-1252", …)
+    // map to the (utf8, codepage) pair used by the plugin's INI. Blank or
+    // unrecognised → leave existing defaults.
     if (!lineCodePage.empty()) {
         int cpUtf8 = 0, cpNum = 0;
         if (ParseLineCodePage(lineCodePage, cpUtf8, cpNum)) {
@@ -547,8 +423,6 @@ bool PuttyAdapter::LoadSettings(const ExternalSessionEntry& entry,
         }
     }
 
-    // EnterSendsCrLf → unixlinebreaks tri-state. Present only for PuTTY
-    // (not WinSCP). Matches wesmar's legacy F11 import behaviour.
     if (hasEnterSendsCrLf)
         out->unixlinebreaks = enterSendsCrLf ? 1 : 0;
 

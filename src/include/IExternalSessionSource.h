@@ -10,10 +10,10 @@ namespace sftp {
 
 // One session reported by an adapter.
 // displayName uses '/' as folder separator (round-trips through our path
-// normalisation). sourceOrigin identifies the channel the entry came from —
-// the literal strings "registry", "appdata", or the custom-path itself.
-// Used as the _source tag in the on-disk cache to support per-channel prune
-// rules.
+// normalisation). sourceOrigin identifies the channel the entry came from:
+// literal `"standard"` for the auto-detected system location, or the full
+// user-supplied path for a custom location. Stored as the `_source` tag
+// in the on-disk cache to support per-channel prune rules.
 struct ExternalSessionEntry {
     std::string displayName;
     std::string sourceOrigin;

@@ -2,8 +2,10 @@
 
 #include <windows.h>
 
+#include <cstdint>
 #include <functional>
 #include <string>
+#include <string_view>
 
 namespace sftp {
 
@@ -51,17 +53,47 @@ bool BrowseForFile(HWND               owner,
 // Parse a PuTTY-style `LineCodePage` value ("UTF-8", "KOI8-R", "ISO-8859-2",
 // "CP1251", "WIN-1252", "Windows-1250", …) into the two-field representation
 // the plugin's INI uses: `outUtf8` is 0 or 1 (feeds `utf8=` INI key), and
-// `outCodepage` is a numeric Windows codepage (feeds `codepage=`). When both
-// come back as their default (0, 0) with the function returning false the
-// value is either empty or unrecognised — caller should leave existing
-// settings untouched. `outUtf8=1` implies `outCodepage=0`; the two are
-// mutually exclusive by contract.
-//
-// Portable across adapters — PuTTY and WinSCP both write `LineCodePage`
-// entries with the same alphabet, and both new adapters (PuttyAdapter,
-// WinScpAdapter) call this to reach feature parity with wesmar's legacy
-// F11 import.
+// `outCodepage` is a numeric Windows codepage (feeds `codepage=`). Returns
+// false with (0, 0) on empty / unrecognised input — caller leaves existing
+// settings untouched. `outUtf8=1` implies `outCodepage=0`; mutually
+// exclusive by contract.
 bool ParseLineCodePage(const std::string& raw,
                        int& outUtf8, int& outCodepage) noexcept;
+
+// Route an imported key-file path into the right slot of the plugin's
+// connect settings. `.pub` → public-key sidecar; anything else →
+// private key (covers `.ppk`, `.pem`, and bare OpenSSH paths without
+// an extension). `outPriv` / `outPub` are the connect-settings string
+// fields; only the matching one is written, the other is left alone.
+// Empty `path` is a no-op.
+void AssignImportedKeyFile(const std::string& path,
+                            std::string& outPriv,
+                            std::string& outPub);
+
+// Percent-decoder for the PuTTY-style on-disk name scheme. Malformed
+// `%XX` runs pass through untouched.
+std::string PuttyUrlDecode(const std::string& encoded);
+
+// Percent-encoder for the PuTTY-style scheme. Escapes any byte < 0x20 or
+// > 0x7E, plus space / `%` / `\` / `*` / `?`, plus a leading `.`.
+std::string PuttyUrlEncode(const std::string& raw);
+
+// Hex nibble to int. Returns -1 on non-hex input.
+int  HexNibble(char c) noexcept;
+
+// REG_SZ / REG_EXPAND_SZ reader that trims trailing NULs. Returns false
+// when the value is absent, wrong-typed, or empty.
+bool ReadRegString(HKEY key, const char* valueName, std::string& out);
+
+// REG_DWORD reader. Returns false when the value is absent or wrong-typed.
+bool ReadRegDword(HKEY key, const char* valueName, DWORD& out) noexcept;
+
+// ExpandEnvironmentStrings wrapper that returns the input unchanged if
+// expansion fails or the input is empty.
+std::string ExpandEnvA(const std::string& raw);
+
+// FNV-1a 32-bit hash. Used for channel-tag hashing in the import cache and
+// for the virtual-session alias suffix.
+uint32_t Fnv1aHash(std::string_view s) noexcept;
 
 }  // namespace sftp

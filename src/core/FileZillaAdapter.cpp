@@ -1,5 +1,7 @@
 #include "FileZillaAdapter.h"
 #include "SftpClient.h"
+#include "SftpInternal.h"     // EncryptString
+#include "CoreUtils.h"        // MimeDecode (base64)
 #include "global.h"
 
 #define WIN32_LEAN_AND_MEAN
@@ -76,9 +78,8 @@ void StripUtf8Bom(std::string& s)
 // FileZilla sitemanager.xml is a well-known, machine-written file with a
 // tiny subset of XML: elements, text nodes, and a handful of attributes.
 // No DTDs, no namespaces, no processing instructions beyond the leading
-// `<?xml ... ?>` prolog, no CDATA in the fields we read. That's simple
-// enough to parse by hand and keeps the plugin free of the MSXML COM
-// dependency (matches the same style as PuttyAdapter's `.reg` parser).
+// `<?xml ... ?>` prolog, no CDATA in the fields we read — a small hand-
+// written parser is enough and keeps the plugin free of MSXML COM.
 // -------------------------------------------------------------------------
 
 struct XmlNode {
@@ -343,41 +344,8 @@ std::string ElementDisplayName(const XmlNode& node)
     return ChildText(node, "Name");
 }
 
-bool EndsWithI(const std::string& s, const char* suffix) noexcept
-{
-    const size_t slen = std::strlen(suffix);
-    if (s.size() < slen) return false;
-    return _stricmp(s.c_str() + s.size() - slen, suffix) == 0;
-}
-
-std::string ExpandEnv(const std::string& raw)
-{
-    if (raw.empty()) return raw;
-    std::string expanded(MAX_PATH, '\0');
-    DWORD len = ExpandEnvironmentStringsA(raw.c_str(), expanded.data(),
-                                           static_cast<DWORD>(expanded.size()));
-    if (len == 0 || len > expanded.size()) return raw;
-    expanded.resize(len - 1);
-    return expanded;
-}
-
-void AssignKeyFile(pConnectSettings out, const std::string& keyFile)
-{
-    // FileZilla, unlike PuTTY/WinSCP, happily stores OpenSSH-style key
-    // paths with no extension at all (`id_rsa`, `id_ed25519`, and the
-    // user's own `rpi_ed25519`) because its fzsftp back-end reads the
-    // OpenSSH PEM format directly. Treat anything that is not clearly a
-    // public-key sidecar (`.pub`) as a private key — safer default than
-    // silently dropping the reference.
-    if (EndsWithI(keyFile, ".pub"))
-        out->pubkeyfile = keyFile;
-    else
-        out->privkeyfile = keyFile;
-}
-
-// FileZilla protocol enum — only SFTP is in scope for this plugin.
-// See FileZilla source `src/include/serverprotocol.h`; the values used
-// in sitemanager.xml are the numeric ServerProtocol enum members:
+// FileZilla `<Protocol>` numeric enum stored in sitemanager.xml.
+// Only SFTP is in scope for this plugin — everything else is skipped.
 //   0 = FTP (with optional encryption)
 //   1 = SFTP                                    ← accepted
 //   3 = FTPS (implicit)
@@ -393,10 +361,9 @@ bool ProtocolIsSftp(int protoRaw) noexcept { return protoRaw == 1; }
 // Session tree walk
 //
 // Sessions live under <Servers>. Each direct child of <Servers> is either
-// another <Server> (a leaf) or a <Folder> (a subtree). We flatten the
-// tree to `/`-joined paths so nested folders show up as nested subfolders
-// in the magic-folder listing — same convention as WinSCP's Sessions\
-// hierarchy.
+// another <Server> (a leaf) or a <Folder> (a subtree). Flatten the tree
+// to `/`-joined display names so nested folders render as nested
+// subfolders in the panel.
 // -------------------------------------------------------------------------
 
 void CollectSessions(const XmlNode& node,
@@ -406,6 +373,12 @@ void CollectSessions(const XmlNode& node,
 {
     for (const auto& child : node.children) {
         if (_stricmp(child.name.c_str(), "Server") == 0) {
+            // Skip non-SFTP entries so FTP / FTPS / S3 / WebDAV rows do
+            // not appear in the panel only to fail silently on Enter.
+            const std::string protoStr = ChildText(child, "Protocol");
+            const int protoRaw = protoStr.empty() ? 0 : std::atoi(protoStr.c_str());
+            if (!ProtocolIsSftp(protoRaw)) continue;
+
             std::string leaf = ElementDisplayName(child);
             if (leaf.empty()) leaf = ChildText(child, "Host");
             if (leaf.empty()) continue;
@@ -606,17 +579,14 @@ bool FileZillaAdapter::LoadSettings(const ExternalSessionEntry& entry,
     const std::string user = ChildText(*srv, "User");
     if (!user.empty()) out->user = user;
 
-    // Key file — FileZilla writes this into <Keyfile> when LogonType is
-    // Key (5) or Key File. Older builds may put it under <KeyFile>.
-    std::string keyFile = ChildText(*srv, "Keyfile");
-    if (keyFile.empty()) keyFile = ChildText(*srv, "KeyFile");
-    keyFile = ExpandEnv(keyFile);
-    if (!keyFile.empty()) AssignKeyFile(out, keyFile);
+    // <Keyfile> holds the private-key path for LogonType 4 (Key file).
+    // Absent for any other LogonType.
+    std::string keyFile = ExpandEnvA(ChildText(*srv, "Keyfile"));
+    AssignImportedKeyFile(keyFile, out->privkeyfile, out->pubkeyfile);
 
-    // Encoding: <EncodingType> is either "Auto" (leave defaults),
-    // "UTF-8", or "Custom" (read <CustomEncoding>). Fall back to
-    // ParseLineCodePage so we accept the same alphabet PuTTY / WinSCP
-    // use — keeps the framework consistent.
+    // <EncodingType>: "Auto" → leave defaults; "UTF-8" → utf8=1;
+    // "Custom" → resolve via <CustomEncoding>. Any other literal (rare)
+    // is passed to ParseLineCodePage as-is.
     const std::string encType   = ChildText(*srv, "EncodingType");
     const std::string customEnc = ChildText(*srv, "CustomEncoding");
     std::string encName;
@@ -633,10 +603,36 @@ bool FileZillaAdapter::LoadSettings(const ExternalSessionEntry& entry,
         }
     }
 
+    // Optional password import. `<Pass encoding="base64">` is a plain
+    // reversible obfuscation FileZilla writes when the "Save password"
+    // radio is chosen. Master-password mode uses `encoding="crypt"`
+    // (Argon2 + AES-GCM under the master password) — skipped, the plugin
+    // falls back to the interactive prompt on connect.
+    const XmlNode* passNode = FindChild(*srv, "Pass");
+    if (passNode) {
+        std::string encAttr;
+        for (const auto& a : passNode->attrs) {
+            if (_stricmp(a.first.c_str(), "encoding") == 0) { encAttr = a.second; break; }
+        }
+        const std::string b64 = TrimAscii(passNode->text);
+        if (!b64.empty() && _stricmp(encAttr.c_str(), "base64") == 0) {
+            std::vector<char> decoded(b64.size());
+            const int n = MimeDecode(b64.c_str(), b64.size(),
+                                       decoded.data(), decoded.size());
+            if (n > 0) {
+                std::string plain(decoded.data(), static_cast<size_t>(n));
+                std::array<char, 1024> encBuf{};
+                EncryptString(plain.c_str(), encBuf.data(),
+                              static_cast<UINT>(encBuf.size()));
+                out->password = encBuf.data();
+            }
+        }
+    }
+
     SFTP_LOG("FILEZILLA",
-             "LoadSettings ok: display='%s' server='%s' user='%s' priv='%s' pub='%s'",
-             entry.displayName.c_str(), out->server.c_str(), out->user.c_str(),
-             out->privkeyfile.c_str(), out->pubkeyfile.c_str());
+             "LoadSettings ok display='%s' server='%s' user='%s' pass=%s",
+             entry.displayName.c_str(), out->server.c_str(),
+             out->user.c_str(), out->password.empty() ? "no" : "yes");
     return true;
 }
 

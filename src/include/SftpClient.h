@@ -96,9 +96,9 @@ struct tConnectSettings {
     bool detailedlog;
     bool neednewchannel;   // kill the sftp channel in case of an error
     SYSTICKS findstarttime; // time findfirstfile started, MUST be int
-    char utf8names;        // 0=no, 1=yes, -1=auto-detect
-    int codepage;          // only used when utf8names=0
-    char unixlinebreaks;   // 0=no, 1=yes, -1=auto-detect
+    char utf8names       = -1;   // 0=no, 1=yes, -1=auto-detect
+    int  codepage        = 0;    // only used when utf8names=0 (0 = not set)
+    char unixlinebreaks  = -1;   // 0=no, 1=yes, -1=auto-detect
     int proxynr;           // 0=no proxy, >0 use entry  [proxy], [proxy2] etc.
     sftp::Proxy proxytype;
     std::string proxyserver;
@@ -109,7 +109,7 @@ struct tConnectSettings {
     sftp::PassSaveMode passSaveMode;
     bool InteractivePasswordSent;
     int trycustomlistcommand;  // set to 2 initially, reduce to 1 or 0 if failing
-    int scpserver64bit;     // 0=no, 1=yes, -1, auto-detect
+    int  scpserver64bit  = -1;   // 0=no, 1=yes, -1=auto-detect
     bool scpserver64bittemporary;  // true=user allowed transfers>2GB
     std::string scpShellMsgBuf;
     std::string scpShellErrBuf;

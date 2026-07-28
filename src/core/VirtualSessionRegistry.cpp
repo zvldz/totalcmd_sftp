@@ -1,4 +1,5 @@
 #include "VirtualSessionRegistry.h"
+#include "ImportIoUtil.h"
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -15,19 +16,6 @@ namespace {
 
 constexpr const char* kAliasPrefix    = "__vimp_";
 constexpr size_t      kAliasPrefixLen = 7;
-
-// FNV-1a 32-bit — the same variant used inside ImportCache for channel-tag
-// hashing; kept local here rather than shared to avoid an include dependency
-// on ImportCache internals from this stand-alone registry.
-uint32_t Fnv1a(std::string_view s) noexcept
-{
-    uint32_t h = 0x811c9dc5u;
-    for (unsigned char c : s) {
-        h ^= c;
-        h *= 0x01000193u;
-    }
-    return h;
-}
 
 std::mutex&                                    Mutex()
 {
@@ -51,7 +39,7 @@ std::string MakeVirtualSessionAlias(const std::string& sourceId,
     // routes to the same slot, and mismatched sourceId cannot collide with
     // a session from a different adapter.
     char hex[16];
-    std::snprintf(hex, sizeof(hex), "%08x", Fnv1a(cacheSection));
+    std::snprintf(hex, sizeof(hex), "%08x", Fnv1aHash(cacheSection));
 
     std::string out(kAliasPrefix);
     out.append(sourceId);

@@ -118,6 +118,30 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   shows its own TOFU prompt on first connect, same as for any
   other imported session.
 
+- **`[Imports]\[KiTTY]` — KiTTY sessions as live virtual entries.**
+  Same magic-folder UX. KiTTY is portable-first and has no canonical
+  install path; the plugin probes three common locations in order
+  (`%APPDATA%\KiTTY\Sessions\`, `%LOCALAPPDATA%\KiTTY\Sessions\`,
+  `%USERPROFILE%\KiTTY\Sessions\`) and, as a last resort, resolves
+  the KiTTY exe via the `HKCR\.kitty` file association registered
+  by the KiTTY installer. If none match, the folder still appears
+  once you add a portable directory through
+  `[Add custom location...]` — pick either the `Sessions\` folder
+  itself or the KiTTY install root (the adapter auto-descends when
+  a `Sessions\` sibling of `kitty.exe` is present). Field mapping
+  follows PuTTY (`HostName`, `PortNumber`, `UserName`,
+  `PublicKeyFile`, `AgentFwd` / `AuthAgent`, `LineCodePage`,
+  `EnterSendsCrLf`). Only `Protocol=ssh` entries appear;
+  `Default%20Settings` template file is filtered out.
+  **Passwords ARE imported** for KiTTY — deliberate exception to
+  the "no password import" rule used for PuTTY / WinSCP / FileZilla,
+  because autosave-password in KiTTY is an explicit user opt-in
+  (not the default) and previous versions of this plugin's F11 flow
+  always imported it. Decoded natively via the built-in
+  `KittyDecrypt` (no external `kitty-decryptpassword.exe` helper
+  needed) and re-wrapped with the plugin's own DPAPI obfuscation
+  before it lands in the cache.
+
 - **PPK ed25519 keys now work end-to-end.** Previously any imported
   or user-configured session pointing at an ed25519 `.ppk` failed
   auth silently (`PpkConverter` reported `unsupported_algorithm`;
@@ -135,6 +159,36 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 
 ### Fixes
 
+- **Imported sessions no longer lose encoding / line-ending
+  auto-detection.** Every session materialised from an `[Imports]`
+  folder was written with `utf8=0`, `unixlinebreaks=0` and
+  `largefilesupport=0` pinned, even when the source program had no
+  opinion on those settings. The plugin's own auto-detection was
+  therefore permanently disabled for imported sessions — non-UTF-8
+  servers showed mangled filenames, and the >2 GB capability probe
+  never ran. The three fields now stay at their "auto" default
+  unless the source program actually specifies a value.
+- **WinSCP sessions with non-ASCII names now open.** A session named
+  in Cyrillic, Greek, CJK, or anything else outside plain ASCII
+  appeared in `[Imports]\[WinSCP]\` but silently failed on Enter —
+  the plugin re-encoded the name using a narrower character set than
+  WinSCP itself uses, so the lookup missed. Same fix covers names
+  containing `/`, `?`, `*`, `"`, `<`, `>`, `|`, and a leading dot.
+- **PuTTY and KiTTY sessions with punctuation in the name now open.**
+  A session called e.g. `web01 (staging)` or `deploy@prod` was
+  over-escaped on lookup and could not be found. The encoder now
+  matches what PuTTY actually writes to disk — brackets, `@`, `+`,
+  `=`, `;`, `#` and friends stay literal.
+- **WinSCP workspace entries no longer show up as phantom sessions.**
+  WinSCP stores saved window layouts under `Sessions\Workspaces\…`;
+  these were listed as if they were real sessions and failed on
+  Enter. Now filtered out, along with the unencoded
+  `Default Settings` template row.
+- **FileZilla: non-SFTP sites are hidden instead of failing on
+  Enter.** FTP, FTPS, WebDAV and S3 entries from `sitemanager.xml`
+  were listed in the folder and only rejected once you tried to open
+  them. They are now filtered during the folder listing, matching how
+  the WinSCP and KiTTY sources already behave.
 - **Import dialog (KiTTY Portable): `Default Settings` phantom row
   removed.** KiTTY's per-session file `Default%20Settings` stores
   defaults, not a real session, but with `Protocol=ssh` it passed the
@@ -155,6 +209,16 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 
 ### Internal
 
+- Session-import adapters share one set of primitives instead of
+  carrying private copies: percent-encode / decode, registry string
+  and DWORD readers, environment-variable expansion, key-file slot
+  routing, and the cache hash all live in `ImportIoUtil` now. Removes
+  roughly 200 lines of duplication across the five adapters and rules
+  out the copies drifting apart.
+- Removed `src/include/KittyDecryptDeploy.h` — an interface-only stub
+  for deploying an external KiTTY password-decrypt helper. The
+  decryptor is native C++ in the plugin, so no external binary was
+  ever needed and nothing referenced the header.
 - Removed `src/core/ConnectionDialogClass.cpp` (an unfinished class-extraction
   refactor inherited from upstream) and the duplicate `src/php/sftp.php` (the
   canonical PHP agent script lives at `src/agent/sftp.php`). Pure dead-code

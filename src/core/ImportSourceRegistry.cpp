@@ -1,5 +1,6 @@
 #include "ImportSourceRegistry.h"
 #include "FileZillaAdapter.h"
+#include "KittyAdapter.h"
 #include "PuttyAdapter.h"
 #include "SecureCrtAdapter.h"
 #include "WinScpAdapter.h"
@@ -60,6 +61,7 @@ ImportSourceRegistry::ImportSourceRegistry()
     RegisterAdapter(m_adapters, std::make_unique<PuttyAdapter>());
     RegisterAdapter(m_adapters, std::make_unique<WinScpAdapter>());
     RegisterAdapter(m_adapters, std::make_unique<FileZillaAdapter>());
+    RegisterAdapter(m_adapters, std::make_unique<KittyAdapter>());
 }
 
 IExternalSessionSource* ImportSourceRegistry::Find(const char* sourceId) const noexcept

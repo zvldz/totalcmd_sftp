@@ -175,7 +175,7 @@ bool ParseLineCodePage(const std::string& raw,
     }
 
     // Windows / OEM codepages: "CP1251", "WIN-1252", "Windows-1250", or
-    // bare "1251". The PuTTY dropdown ships all of these variants.
+    // bare "1251".
     const char* p = nullptr;
     if      (StartsWithI(v, "CP"))          p = v.c_str() + 2;
     else if (StartsWithI(v, "WINDOWS-"))    p = v.c_str() + std::strlen("WINDOWS-");
@@ -333,6 +333,128 @@ bool BrowseForFolder(HWND               owner,
                          narrow, sizeof(narrow), nullptr, nullptr);
     outPath.assign(narrow);
     return !outPath.empty();
+}
+
+void AssignImportedKeyFile(const std::string& path,
+                            std::string& outPriv,
+                            std::string& outPub)
+{
+    if (path.empty()) return;
+
+    const size_t n = path.size();
+    const bool isPub =
+        n >= 4 &&
+        _stricmp(path.c_str() + n - 4, ".pub") == 0;
+
+    if (isPub) outPub  = path;
+    else       outPriv = path;
+}
+
+int HexNibble(char c) noexcept
+{
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return 10 + (c - 'a');
+    if (c >= 'A' && c <= 'F') return 10 + (c - 'A');
+    return -1;
+}
+
+std::string PuttyUrlDecode(const std::string& encoded)
+{
+    std::string out;
+    out.reserve(encoded.size());
+    for (size_t i = 0; i < encoded.size(); ++i) {
+        const char ch = encoded[i];
+        if (ch == '%' && i + 2 < encoded.size()) {
+            const int hi = HexNibble(encoded[i + 1]);
+            const int lo = HexNibble(encoded[i + 2]);
+            if (hi >= 0 && lo >= 0) {
+                out.push_back(static_cast<char>((hi << 4) | lo));
+                i += 2;
+                continue;
+            }
+        }
+        out.push_back(ch);
+    }
+    return out;
+}
+
+std::string PuttyUrlEncode(const std::string& raw)
+{
+    // Escape set that matches PuTTY's own on-disk names:
+    //   any byte < 0x20 or > 0x7E   (controls and non-ASCII)
+    //   space, '%', '\\', '*', '?'  (path-breaking characters)
+    //   leading '.'                 (registry subkey rule)
+    // Everything else — including '(', ')', '@', '+', '=', ';', '#', '&' —
+    // stays literal, exactly as PuTTY stores it.
+    std::string out;
+    out.reserve(raw.size());
+    for (size_t i = 0; i < raw.size(); ++i) {
+        const unsigned char ch = static_cast<unsigned char>(raw[i]);
+        const bool needsEscape =
+            ch < 0x20 || ch > 0x7E ||
+            ch == ' ' || ch == '%' || ch == '\\' || ch == '*' || ch == '?' ||
+            (i == 0 && ch == '.');
+        if (needsEscape) {
+            char buf[4];
+            std::snprintf(buf, sizeof(buf), "%%%02X", ch);
+            out.append(buf);
+        } else {
+            out.push_back(static_cast<char>(ch));
+        }
+    }
+    return out;
+}
+
+bool ReadRegString(HKEY key, const char* valueName, std::string& out)
+{
+    DWORD type = 0;
+    DWORD bytes = 0;
+    LONG rc = RegQueryValueExA(key, valueName, nullptr, &type, nullptr, &bytes);
+    if (rc != ERROR_SUCCESS ||
+        (type != REG_SZ && type != REG_EXPAND_SZ) ||
+        bytes == 0)
+        return false;
+    std::string buffer(bytes, '\0');
+    rc = RegQueryValueExA(key, valueName, nullptr, &type,
+                           reinterpret_cast<LPBYTE>(buffer.data()), &bytes);
+    if (rc != ERROR_SUCCESS) return false;
+    while (!buffer.empty() && buffer.back() == '\0')
+        buffer.pop_back();
+    out = std::move(buffer);
+    return !out.empty();
+}
+
+bool ReadRegDword(HKEY key, const char* valueName, DWORD& out) noexcept
+{
+    DWORD type = 0;
+    DWORD value = 0;
+    DWORD bytes = sizeof(value);
+    LONG rc = RegQueryValueExA(key, valueName, nullptr, &type,
+                                reinterpret_cast<LPBYTE>(&value), &bytes);
+    if (rc != ERROR_SUCCESS || type != REG_DWORD) return false;
+    out = value;
+    return true;
+}
+
+std::string ExpandEnvA(const std::string& raw)
+{
+    if (raw.empty()) return raw;
+    std::string expanded(MAX_PATH, '\0');
+    DWORD len = ExpandEnvironmentStringsA(raw.c_str(), expanded.data(),
+                                           static_cast<DWORD>(expanded.size()));
+    if (len == 0 || len > expanded.size()) return raw;
+    expanded.resize(len - 1);
+    return expanded;
+}
+
+uint32_t Fnv1aHash(std::string_view s) noexcept
+{
+    uint32_t h = 0x811C9DC5u;
+    for (unsigned char c : s) {
+        h ^= c;
+        h *= 0x01000193u;
+    }
+    return h;
 }
 
 }  // namespace sftp

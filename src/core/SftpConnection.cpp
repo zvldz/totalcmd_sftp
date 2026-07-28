@@ -28,7 +28,6 @@
 #include <fstream>
 #include <iterator>
 #include <vector>
-#include "SessionImport.h"
 #include "PhpAgentClient.h"
 #include "PhpShellConsole.h"
 #include "ConnectionDialog.h"

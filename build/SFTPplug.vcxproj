@@ -170,6 +170,7 @@
     <ClCompile Include="..\src\core\PuttyAdapter.cpp" />
     <ClCompile Include="..\src\core\WinScpAdapter.cpp" />
     <ClCompile Include="..\src\core\FileZillaAdapter.cpp" />
+    <ClCompile Include="..\src\core\KittyAdapter.cpp" />
     <ClCompile Include="..\src\core\ImportSourceRegistry.cpp" />
     <ClCompile Include="..\src\core\ImportIoUtil.cpp" />
     <ClCompile Include="..\src\core\VirtualSessionRegistry.cpp" />
@@ -222,6 +223,7 @@
     <ClInclude Include="..\src\include\PuttyAdapter.h" />
     <ClInclude Include="..\src\include\WinScpAdapter.h" />
     <ClInclude Include="..\src\include\FileZillaAdapter.h" />
+    <ClInclude Include="..\src\include\KittyAdapter.h" />
     <ClInclude Include="..\src\include\ImportSourceRegistry.h" />
     <ClInclude Include="..\src\include\ImportIoUtil.h" />
     <ClInclude Include="..\src\include\VirtualSessionRegistry.h" />

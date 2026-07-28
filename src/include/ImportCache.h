@@ -15,7 +15,7 @@ namespace sftp {
 struct CachedSessionRef {
     std::string sourceId;       // "securecrt", "putty", ...
     std::string displayName;    // "dron/hz-1"
-    std::string sourceOrigin;   // "registry" | "appdata" | literal custom path
+    std::string sourceOrigin;   // "standard" | literal custom path
 };
 
 // One session about to be persisted: display name plus a non-owning pointer
@@ -60,7 +60,8 @@ public:
 
     // Replace all cached sessions for (sourceId, channel) with `newSessions`.
     // Corresponds to a refresh whose channel result was OkWithSessions.
-    // Rewrites the whole cache file atomically (temp + rename).
+    // Wipes the affected `[__import.<sourceId>.<channelHash>.*]` sections
+    // then writes the new ones via WritePrivateProfileString.
     void ReplaceChannel(const std::string& sourceId,
                         const std::string& channel,
                         const std::vector<CacheWriteEntry>& newSessions);

@@ -7,37 +7,29 @@ namespace sftp {
 // PuTTY session source.
 //
 // Standard channel: HKCU\Software\SimonTatham\PuTTY\Sessions — the
-// registry key Simon Tatham's official PuTTY (and every drop-in fork
-// that reuses it: ExtraPuTTY, PuTTY CAC, PuTTY portable that wraps
-// official PuTTY) writes into. Tabbed-runners like mtPuTTY and
-// SuperPuTTY also delegate storage here, so they are covered
-// transparently.
+// registry key PuTTY and every drop-in fork (ExtraPuTTY, PuTTY CAC,
+// PuTTY Portable that wraps official PuTTY) write into. Tabbed
+// runners like mtPuTTY and SuperPuTTY delegate storage here too.
 //
-// Detection: RegOpenKeyEx on the sessions root. A stripped install or
-// portable-only setup yields ERROR_FILE_NOT_FOUND; anything else with
-// the key present is treated as reachable, even if 0 sessions are
-// stored inside.
+// Detection: RegOpenKeyEx on the sessions root. Absent key → adapter
+// treats source as unreachable; present-but-empty is a valid state.
 //
 // Field mapping (PuTTY registry value → tConnectSettings):
-//   HostName          (REG_SZ)    → server (URL-decoded; :<port> appended when port != 22)
+//   HostName          (REG_SZ)    → server (URL-decoded; :<port> when port != 22)
 //   PortNumber        (REG_DWORD) → server ":<port>" suffix
 //   UserName          (REG_SZ)    → user (URL-decoded)
-//   PublicKeyFile     (REG_SZ)    → privkeyfile when the extension is .ppk / .pem,
-//                                   pubkeyfile when the extension is .pub
-//                                   (environment variables expanded)
+//   PublicKeyFile     (REG_SZ)    → privkeyfile / pubkeyfile via
+//                                   AssignImportedKeyFile (env vars expanded)
 //   AgentFwd / AuthAgent (REG_DWORD) → useagent = 1 when non-zero
-//   LineCodePage = "UTF-8" (REG_SZ)  → utf8names = 1
+//   LineCodePage      (REG_SZ)    → utf8names / codepage via ParseLineCodePage
+//   EnterSendsCrLf    (REG_DWORD) → unixlinebreaks
 //
-// Password is intentionally not handled — PuTTY does not store one by
-// design (Simon Tatham's stated position). Users get the standard
-// interactive prompt on first connect after materialise, same as the
-// SecureCRT adapter.
+// Password is not handled — PuTTY does not store one on disk.
 //
-// Custom channel: PuTTY Portable — a single `putty.reg` file exported
-// from PortableApps' PuTTYPortable\Data\settings\ (Windows Registry
-// Editor Version 5.00, UTF-16 LE with BOM). Users pick the file via
-// [Add custom location...]; the adapter parses the SessionSubKey
-// entries and surfaces them alongside the standard registry channel.
+// Custom channel: `putty.reg` file exported from PuTTY Portable
+// (Windows Registry Editor Version 5.00, UTF-16 LE with BOM). Users
+// pick the file via [Add custom location...]; the adapter parses
+// its SessionSubKey entries and merges them with the registry channel.
 class PuttyAdapter final : public IExternalSessionSource {
 public:
     const char* SourceId()    const noexcept override { return "putty";   }
