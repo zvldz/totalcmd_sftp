@@ -170,6 +170,13 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 
 ### Fixes
 
+- **Pageant authentication to a jump host works now.** If an SSH agent
+  key was the only credential for the jump host, connecting failed
+  immediately — the plugin never actually offered the key to the server.
+  A saved key file or password for the jump host masked this, because
+  the connection then succeeded through those instead. Reported and
+  fixed by bukephalos (PR #2).
+
 - **The jump-host session dropdown showed garbled text in translated
   builds, and its "(none)" entry did not work.** The list was filled
   through the ANSI window messages while the translations themselves

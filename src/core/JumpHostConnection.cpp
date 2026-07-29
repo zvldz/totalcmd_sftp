@@ -307,6 +307,8 @@ static bool AuthJumpHost(
             agent->listIdentities();
             struct libssh2_agent_publickey* prev = nullptr;
             struct libssh2_agent_publickey* id   = nullptr;
+            // getIdentity returns 0 when it stored an identity, 1 at the end
+            // of the list, negative on error — so 0 is the "keep going" case.
             while (agent->getIdentity(&id, prev) == 0) {
                 int r = LIBSSH2_ERROR_EAGAIN;
                 while (r == LIBSSH2_ERROR_EAGAIN) {
