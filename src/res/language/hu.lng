@@ -223,7 +223,6 @@
 305=&Közvetítő gazdagép használata
 306=Proxy beállításai:
 307=Proxy törlése
-308=Importálás...
 309=Proxy beállításai
 310=Proxy beállításai
 311=Proxy gazdagép:
@@ -243,25 +242,9 @@
 321=Nyilvános kulcs fájlja (*.pub):
 322=Titkos kulcs fájlja (*.pem;*.ppk):
 323=SSH-ügynök &(Pageant) használata a közvetítő gazdagép hitelesítéséhez
-12056=PuTTY munkamenetek importálása
-12057=WinSCP munkamenetek importálása
-12058=Hordozható PuTTY munkamenetek importálása
-12059={} {} munkamenet találva (rendszerleíró):
-12060={} munkamenet találva a következőben: {}:
-12061=&Mindet kijelöl
-12062=&Kijelölés törlése
-12063=&Importálás
-12064=Mégse
-12065=Nem importáltak munkameneteket.
-12066=Nem találhatók munkamenetek a következőben: {}.
 324=Súgó
 325=Mégse
 326=TAR adatfolyam
-12067=Összes importálása ({})
-12068=Importálás PuTTY Portable mappából...
-12069=Importálás WinSCP hordozható mappájából...
-12070=Hordozható KiTTY munkamenetek importálása
-12071=Importálás KiTTY Portable mappából...
 
 327=Rendszer:
 328=Módszer:
@@ -355,14 +338,6 @@
 416=TAR feltöltés sikertelen
 417=Nyilvános kulcsfájl kiválasztása
 418=Privát kulcsfájl kiválasztása
-419=PuTTY Portable mappa kiválasztása
-420=PuTTY ({})...
-421=WinSCP ({})...
-422={} munkamenet importálva.
-423={} munkamenet importálva.
-{} {} kihagyva.
-424=nem támogatott munkamenet(ek)
-425=nem támogatott WinSCP munkamenet(ek)
 426=SOCKS4a: 
 427=SOCKS5: 
 428=Kódlap
@@ -374,12 +349,6 @@
 12094=LAN Pair: a TrustedInstaller megszemélyesítése sikertelen. A folyamat esetleg nem fut rendszergazdaként.
 12095=LAN Pair: csatlakozás: {}...
 12096=LAN Pair: kapcsolódás sikertelen
-12097=PuTTY
-12098=WinSCP
-12099=Egyéb
-12100=WinSCP hordozható mappa kiválasztása
-12101=A WinSCP.ini nem található a kiválasztott mappában.
-12102=KiTTY hordozható mappa kiválasztása
 12103=LAN Pair: ez a számítógép Adóként van konfigurálva. A távoli Vevőnek ide kell csatlakoznia.
 450=Windows (CR/LF)
 451=Unix (LF)
@@ -395,10 +364,6 @@
 12081=A proxy jelszó betöltése sikertelen!
 12082=Érvénytelen szerver cím.
 12083=Nincs elég memória a kapcsolat beállításainak létrehozásakor.
-12084=Nem importáltak munkameneteket (nem támogatott protokoll).
-12085=A putty.reg nem található a kiválasztott mappában vagy almappáiban.
-12086=A putty.reg beolvasása vagy feldolgozása sikertelen.
-12087=A Sessions mappa nem található a kiválasztott KiTTY Portable könyvtárban.
 12088=Már létezik ilyen nevű munkamenet.\nKérjük, válasszon másik nevet.
 12089=SFTP
 

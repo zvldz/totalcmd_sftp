@@ -87,9 +87,8 @@ BEGIN
     COMBOBOX        IDC_PROXYCOMBO,5,283,282,30,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
     PUSHBUTTON      ">>",IDC_PROXYBUTTON,290,282,20,14
     PUSHBUTTON      "Delete last proxy",IDC_DELETELAST,5,301,105,14
-    PUSHBUTTON      "Import...",IDC_IMPORTSESSIONS,113,301,70,14
-    PUSHBUTTON      "Help",IDC_PLUGINHELP,186,301,40,14
-    DEFPUSHBUTTON   "OK",IDOK,229,301,26,14
+    PUSHBUTTON      "Help",IDC_PLUGINHELP,155,301,45,14
+    DEFPUSHBUTTON   "OK",IDOK,204,301,50,14
     PUSHBUTTON      "Cancel",IDCANCEL,258,301,50,14
 END
 
@@ -171,19 +170,6 @@ BEGIN
     PUSHBUTTON      "Cancel",IDCANCEL,260,163,50,14
 END
 
-IDD_SESSION_PICKER DIALOGEX 0, 0, 315, 202
-STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "Import Sessions"
-FONT 8, "MS Shell Dlg", 0, 0, 0x1
-BEGIN
-    LTEXT           "",IDC_SESSION_SOURCE_LABEL,5,5,305,8
-    CONTROL         "",IDC_SESSION_LIST,"SysListView32",LVS_REPORT | LVS_SHOWSELALWAYS | WS_BORDER | WS_TABSTOP,5,18,305,152
-    PUSHBUTTON      "Select &All",IDC_SELECTALL,5,178,70,14
-    PUSHBUTTON      "&Deselect All",IDC_DESELECTALL,81,178,76,14
-    DEFPUSHBUTTON   "&Import",IDOK,184,178,66,14
-    PUSHBUTTON      "Cancel",IDCANCEL,256,178,54,14
-END
-
 IDD_PAIRING_PROGRESS DIALOGEX 0, 0, 220, 62
 STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION
 CAPTION "LAN Pair"
@@ -230,11 +216,6 @@ BEGIN
     BEGIN
     END
 
-    IDD_SESSION_PICKER, DIALOG
-    BEGIN
-        RIGHTMARGIN, 310
-        BOTTOMMARGIN, 201
-    END
 END
 #endif    // APSTUDIO_INVOKED
 
@@ -293,11 +274,6 @@ BEGIN
 END
 
 IDD_PROXY AFX_DIALOG_LAYOUT
-BEGIN
-    0
-END
-
-IDD_SESSION_PICKER AFX_DIALOG_LAYOUT
 BEGIN
     0
 END
@@ -416,26 +392,10 @@ BEGIN
     IDS_STRING12053         "Insert CD-ROM"
     IDS_LAN_ROLE_PROMPT     "LAN Pair peer found.\nChoose role:\n\nYes = Donor\nNo = Receiver\nCancel = no change"
     IDS_LAN_SESSION_TIMEOUT "Session timeout: [__] min (0=no limit)"
-    IDS_IMP_TITLE_PUTTY     "Import PuTTY Sessions"
-    IDS_IMP_TITLE_WINSCP    "Import WinSCP Sessions"
-    IDS_IMP_TITLE_PUTTY_PORT "Import PuTTY Portable Sessions"
-    IDS_IMP_FOUND_REG       "Found {} {} sessions (registry):"
-    IDS_IMP_FOUND_FILE      "Found {} sessions in {}:"
-    IDS_IMP_BTN_SELECT_ALL  "Select &All"
-    IDS_IMP_BTN_DESELECT_ALL "&Deselect All"
-    IDS_IMP_BTN_IMPORT      "&Import"
 END
 
 STRINGTABLE
 BEGIN
-    IDS_IMP_BTN_CANCEL      "Cancel"
-    IDS_IMP_MSG_NONE        "No sessions imported."
-    IDS_IMP_MSG_NOT_FOUND   "No sessions found in {}."
-    IDS_IMP_MENU_ALL        "Import all ({})"
-    IDS_IMP_MENU_FROM_PUTTY_PORT "Import from PuTTY Portable folder..."
-    IDS_IMP_MENU_FROM_WINSCP "Import from WinSCP Portable folder..."
-    IDS_IMP_TITLE_KITTY_PORT "Import KiTTY Portable Sessions"
-    IDS_IMP_MENU_FROM_KITTY_PORT "Import from KiTTY Portable folder..."
     IDS_SCP_PROTOCOL_ERROR  "SCP Protocol Error"
     IDS_SCP_EXEC_FAILED     "Cannot execute SCP to start transfer. Please make sure that SCP is installed on the server and path to it is included in PATH.\n\nYou may also try SFTP instead of SCP (uncheck 'Use SCP for all' in connection settings)."
     IDS_LAN_ERR_NO_PEER     "LAN Pair: no peer configured. Open connection settings and pair first."
@@ -452,15 +412,8 @@ BEGIN
     IDS_ERR_LOAD_PASS       "Failed to load password!"
     IDS_ERR_LOAD_PROXY_PASS "Failed to load proxy password!"
     IDS_ERR_INVALID_SERVER  "Invalid server address."
-    IDS_ERR_OOM_CONN_SETTINGS 
+    IDS_ERR_OOM_CONN_SETTINGS
                             "Out of memory while creating connection settings."
-    IDS_IMP_MSG_UNSUPPORTED_PROTO 
-                            "No sessions imported (unsupported protocol type)."
-    IDS_IMP_ERR_NO_PUTTY_REG 
-                            "putty.reg not found in the selected folder or its subfolders."
-    IDS_IMP_ERR_PARSE_PUTTY_REG "Failed to read or parse putty.reg."
-    IDS_IMP_ERR_NO_KITTY_SESSIONS 
-                            "Sessions folder not found in the selected KiTTY Portable directory."
     IDS_ERR_SESSION_EXISTS  "Session with this name already exists.\nChoose a different session name."
     IDS_TITLE_SFTP          "SFTP"
     IDS_PAIRING_SEARCH      "Searching for LAN Pair peer on local network..."
@@ -609,13 +562,6 @@ BEGIN
     IDS_LOG_TAR_UPLOAD_FAIL "TAR upload failed"
     IDS_DLG_SELECT_PUBKEY   "Select public key file"
     IDS_DLG_SELECT_PRIVKEY  "Select private key file"
-    IDS_IMP_BROWSE_PUTTY_FOLDER "Select PuTTY Portable folder"
-    IDS_IMP_MENU_PUTTY      "PuTTY ({})..."
-    IDS_IMP_MENU_WINSCP     "WinSCP ({})..."
-    IDS_IMP_MSG_IMPORTED    "Imported {} session(s)."
-    IDS_IMP_MSG_IMPORTED_SKIPPED "Imported {} session(s).\nSkipped {} {}."
-    IDS_IMP_MSG_SKIP_UNSUPPORTED "unsupported session(s)"
-    IDS_IMP_MSG_SKIP_WINSCP "unsupported WinSCP session(s)"
     IDS_PROXY_LABEL_SOCKS4A "SOCKS4a: "
     IDS_PROXY_LABEL_SOCKS5  "SOCKS5: "
     IDS_DLG_CODEPAGE_TITLE  "Code page"
@@ -837,7 +783,6 @@ BEGIN
     IDS_DLG_USE_JUMPHOST    "Use &jump host"
     IDS_DLG_PROXY_SETTINGS  "Proxy settings:"
     IDS_DLG_DELETELAST      "Delete proxy"
-    IDS_DLG_IMPORT          "Import..."
     IDS_PROXY_DLG_CAPTION   "Proxy Settings"
     IDS_PROXY_DLG_GROUP     "Proxy settings"
     IDS_PROXY_DLG_HOST      "Proxy host:"
@@ -854,18 +799,11 @@ END
 STRINGTABLE
 BEGIN
     IDS_LAN_ERR_CONN_FAILED "LAN Pair: connection failed"
-    IDS_IMP_MENU_PUTTY_HDR       "PuTTY"
-    IDS_IMP_MENU_WINSCP_HDR      "WinSCP"
-    IDS_IMP_MENU_OTHER_HDR       "Other"
-    IDS_IMP_BROWSE_WINSCP_FOLDER "Select WinSCP Portable folder"
-    IDS_IMP_ERR_NO_WINSCP_INI    "WinSCP.ini not found in the selected folder."
-    IDS_IMP_BROWSE_KITTY_FOLDER  "Select KiTTY Portable folder"
     IDS_LAN_ERR_DONOR_NO_CONNECT "LAN Pair: this machine is configured as Donor. The remote Receiver must connect here."
     IDS_JUMP_SESSION_NONE           "(none)"
     IDS_JUMP_SESSION_MISSING_SUFFIX " (missing)"
     IDS_JUMP_SESSION_NOT_FOUND      "Jump session '{}' not found in saved sessions"
     IDS_JUMP_SESSION_CHAINED        "Jump session '{}' has its own jump-host configuration — chained or cyclic jump hosts are not supported. Pick a session that connects directly to the bastion."
-    IDS_IMP_LIST_HEADER             "Session"
     IDS_SIMPORT_TITLE               "SFTP plugin - session import"
     IDS_SIMPORT_ERR_OPEN            "Cannot open the source file for reading."
     IDS_SIMPORT_ERR_EMPTY           "Cannot import session: the source file is empty."

@@ -172,13 +172,13 @@
 <ul>
   <li>Sessions stored in <code>sftpplug.ini</code> in Total Commander directory</li>
   <li>Passwords encrypted with Windows DPAPI (user-specific)</li>
-  <li>Import from PuTTY (registry + Portable), WinSCP (registry + .ini), and KiTTY Portable via <b>Import...</b> button</li>
-  <li>Checkbox picker — select any combination of sessions in one step</li>
-  <li>Last 4 browse paths remembered per source in <code>[ImportPaths]</code> of <code>sftpplug.ini</code></li>
+  <li>Sessions from SecureCRT, PuTTY, WinSCP, FileZilla and KiTTY appear in the <code>[Imports]</code> folder in the plugin root</li>
+  <li>Cached session lists live next to <code>sftpplug.ini</code>, so imported entries are available right after Total Commander starts</li>
+  <li>Custom locations added through <code>[Add custom location...]</code> are stored per source in <code>sftpplug.ini</code></li>
 </ul>
 
 <div class="note">
-  <b>Tip:</b> After importing from WinSCP, verify transfer mode settings — SCP sessions are imported with <code>scponly=1</code> and <code>scpfordata=1</code>. For KiTTY Portable, point the browser at the KiTTYPortable root folder; the plugin locates the <code>Sessions</code> subfolder automatically. KiTTY passwords are decrypted and imported automatically when possible; PuTTY and WinSCP passwords are never imported — you will be prompted on first connection.
+  <b>Tip:</b> After importing from WinSCP, verify transfer mode settings — SCP sessions arrive with <code>scponly=1</code> and <code>scpfordata=1</code>. Proxy definitions are not imported from any source and have to be set up again. See <a href="import-migration.html">Import sessions from other programs</a>.
 </div>
 
 <p><a href="index.html">Back to index</a></p>

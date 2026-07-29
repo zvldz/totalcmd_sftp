@@ -223,7 +223,6 @@
 305=Folosire &gazdă intermediară
 306=Setări proxy:
 307=Eliminare proxy
-308=Import...
 309=Setări proxy
 310=Setări proxy
 311=Gazdă proxy:
@@ -243,25 +242,9 @@
 321=Fișier cheie publică (*.pub):
 322=Fișier cheie privată (*.pem;*.ppk):
 323=Folosire agent SSH &(Pageant) pentru autentificarea gazdei intermediare
-12056=Importă sesiuni PuTTY
-12057=Importă sesiuni WinSCP
-12058=Importă sesiuni PuTTY Portable
-12059=Au fost găsite {} sesiuni {} (registru):
-12060=Au fost găsite {} sesiuni în {}:
-12061=&Selectează tot
-12062=&Deselectează tot
-12063=&Importă
-12064=Anulare
-12065=Nicio sesiune importată.
-12066=Nicio sesiune găsită în {}.
 324=Ajutor
 325=Anulare
 326=Flux TAR
-12067=Importă tot ({})
-12068=Importă din folderul PuTTY Portable...
-12069=Importați din folderul portabil WinSCP...
-12070=Importă sesiuni KiTTY Portable
-12071=Importă din folderul KiTTY Portable...
 
 327=Sistem:
 328=Metodă:
@@ -355,14 +338,6 @@
 416=Trimitere TAR eșuată
 417=Selectați fișierul cheii publice
 418=Selectați fișierul cheii private
-419=Selectați folderul PuTTY Portable
-420=PuTTY ({})...
-421=WinSCP ({})...
-422={} sesiune/sesiuni importată/importate.
-423={} sesiune/sesiuni importată/importate.
-{} {} omisă/omise.
-424=sesiune/sesiuni neacceptată/neacceptate
-425=sesiune/sesiuni WinSCP neacceptată/neacceptate
 426=SOCKS4a: 
 427=SOCKS5: 
 428=Pagină de cod
@@ -374,12 +349,6 @@
 12094=LAN Pair: personificarea TrustedInstaller a esuat. Este posibil ca procesul sa nu ruleze ca Administrator.
 12095=LAN Pair: conectare la {}...
 12096=LAN Pair: conexiune eșuată
-12097=PuTTY
-12098=WinSCP
-12099=Altele
-12100=Selectați folderul portabil WinSCP
-12101=WinSCP.ini nu a fost găsit în folderul selectat.
-12102=Selectați folderul portabil KiTTY
 12103=LAN Pair: acest computer este configurat ca Donator. Receptorul de la distanță trebuie să se conecteze aici.
 450=Windows (CR/LF)
 451=Unix (LF)
@@ -395,10 +364,6 @@
 12081=Eșec la încărcarea parolei proxy!
 12082=Adresă server nevalidă.
 12083=Memorie insuficientă la crearea setărilor conexiunii.
-12084=Nu au fost importate sesiuni (tip de protocol neacceptat).
-12085=putty.reg nu a fost găsit în folderul selectat sau în subfolderele sale.
-12086=Eșec la citirea sau analizarea putty.reg.
-12087=Folderul Sessions nu a fost găsit în directorul KiTTY Portable selectat.
 12088=Există deja o sesiune cu acest nume.\nAlegeți un alt nume de sesiune.
 12089=SFTP
 

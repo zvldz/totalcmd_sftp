@@ -194,17 +194,6 @@
 280=Pairing-Passwort:
 12054=LAN Pair Peer gefunden.\nRolle wählen:\n\nJa = Sender\nNein = Empfänger\nAbbrechen = keine Änderung
 12055=Sitzungs-Timeout: [__] Min (0=kein Limit)
-12056=PuTTY-Sitzungen importieren
-12057=WinSCP-Sitzungen importieren
-12058=Portable PuTTY-Sitzungen importieren
-12059={} {}-Sitzungen gefunden (Registrierung):
-12060={} Sitzungen gefunden in {}:
-12061=&Alle auswählen
-12062=&Alle abwählen
-12063=&Importieren
-12064=Abbrechen
-12065=Keine Sitzungen importiert.
-12066=Keine Sitzungen gefunden in {}.
 281=LAN Pair Empfanger läuft bereits.
 282=LAN Pair akzeptiert: {} ({})
 283=LAN Pair: Lausche. Rollendialog erscheint bei Peer-Erkennung.
@@ -234,7 +223,6 @@
 305=&Jump-Host verwenden
 306=Proxy-Einstellungen:
 307=Proxy löschen
-308=Importieren...
 309=Proxy-Einstellungen
 310=Proxy-Einstellungen
 311=Proxy-Host:
@@ -258,11 +246,6 @@
 324=Hilfe
 325=Abbrechen
 326=TAR-Stream
-12067=Alle importieren ({})
-12068=Aus PuTTY Portable-Ordner importieren...
-12069=Aus portablem WinSCP-Ordner importieren...
-12070=KiTTY Portable-Sitzungen importieren
-12071=Aus KiTTY Portable-Ordner importieren...
 
 327=System:
 328=Methode:
@@ -356,14 +339,6 @@
 416=TAR-Upload fehlgeschlagen
 417=Öffentliche Schlüsseldatei auswählen
 418=Private Schlüsseldatei auswählen
-419=PuTTY-Portable-Ordner auswählen
-420=PuTTY ({})...
-421=WinSCP ({})...
-422={} Sitzung(en) importiert.
-423={} Sitzung(en) importiert.
-{} {} übersprungen.
-424=nicht unterstützte Sitzung(en)
-425=nicht unterstützte WinSCP-Sitzung(en)
 426=SOCKS4a: 
 427=SOCKS5: 
 428=Zeichensatz
@@ -375,12 +350,6 @@
 12094=LAN Pair: TrustedInstaller-Identitaetswechsel fehlgeschlagen. Der Prozess laeuft moeglicherweise nicht als Administrator.
 12095=LAN Pair: verbinde mit {}...
 12096=LAN Pair: Verbindung fehlgeschlagen
-12097=PuTTY
-12098=WinSCP
-12099=Andere
-12100=Portablen WinSCP-Ordner auswählen
-12101=WinSCP.ini wurde im ausgewählten Ordner nicht gefunden.
-12102=Portablen KiTTY-Ordner auswählen
 12103=LAN Pair: Dieser Computer ist als Geber konfiguriert. Der entfernte Empfänger muss sich hier verbinden.
 450=Windows (CR/LF)
 451=Unix (LF)
@@ -396,10 +365,6 @@
 12081=Proxy-Passwort konnte nicht geladen werden!
 12082=Ungültige Serveradresse.
 12083=Nicht genügend Arbeitsspeicher beim Erstellen der Verbindungseinstellungen.
-12084=Keine Sitzungen importiert (nicht unterstützter Protokolltyp).
-12085=putty.reg wurde im ausgewählten Ordner oder dessen Unterordnern nicht gefunden.
-12086=putty.reg konnte nicht gelesen oder verarbeitet werden.
-12087=Der Ordner Sessions wurde im ausgewählten KiTTY Portable-Verzeichnis nicht gefunden.
 12088=Eine Verbindung mit diesem Namen existiert bereits.\nBitte einen anderen Namen wählen.
 12089=SFTP
 

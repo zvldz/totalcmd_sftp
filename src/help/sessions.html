@@ -99,50 +99,46 @@
 
 <h2>Import Sessions</h2>
 
-<p>Click <b>Import...</b> to open the import menu. Sessions are imported without modifying the source data. See <a href="import-migration.html">Import from PuTTY / WinSCP / KiTTY</a> for full details.</p>
+<p>Sessions from other programs appear in the <code>[Imports]</code> folder in the plugin root, one subfolder per source program. Nothing in the source program is modified.</p>
 
 <h3>Supported sources</h3>
 <ul>
-  <li><b>PuTTY (registry)</b> — <code>HKCU\Software\SimonTatham\PuTTY\Sessions</code></li>
-  <li><b>PuTTY Portable</b> — browse to the portable folder; plugin finds <code>putty.reg</code> automatically (up to 4 levels deep)</li>
-  <li><b>WinSCP (registry)</b> — <code>HKCU\Software\Martin Prikryl\WinSCP 2\Sessions</code></li>
-  <li><b>WinSCP Portable</b> — browse to <code>WinSCP.ini</code> directly</li>
-  <li><b>KiTTY Portable</b> — browse to the KiTTYPortable root; plugin finds the <code>Sessions</code> folder automatically (up to 4 levels deep); only SSH sessions imported</li>
+  <li><b>SecureCRT</b> — <code>%APPDATA%\VanDyke\Config\Sessions\</code></li>
+  <li><b>PuTTY</b> — <code>HKCU\Software\SimonTatham\PuTTY\Sessions</code>, or a <code>putty.reg</code> export</li>
+  <li><b>WinSCP</b> — <code>HKCU\Software\Martin Prikryl\WinSCP 2\Sessions</code>, or a portable <code>WinSCP.ini</code></li>
+  <li><b>FileZilla</b> — <code>%APPDATA%\FileZilla\sitemanager.xml</code></li>
+  <li><b>KiTTY</b> — common install locations, or any <code>Sessions\</code> folder you point the plugin at</li>
 </ul>
 
-<h3>Checkbox picker</h3>
+<h3>Using an imported session</h3>
 <ul>
-  <li>All found sessions are shown in a checkbox list — pick any combination</li>
-  <li>Select All / Deselect All buttons for bulk operations</li>
-  <li>Only checked sessions are imported</li>
+  <li><code>Enter</code> — connect straight away, using the settings read from the source program</li>
+  <li><code>F5</code> — copy into your own session list; select several first, or <code>Ctrl+A</code> for all of them</li>
+  <li><code>[Refresh]</code> inside a source folder — pick up sessions added or renamed in the source program</li>
+  <li><code>[Add custom location...]</code> — point the plugin at a portable install or a backup folder</li>
 </ul>
 
-<h3>Path memory</h3>
+<h3>Passwords</h3>
 <ul>
-  <li>Last 4 used folder/file paths stored in <code>[ImportPaths]</code> of <code>sftpplug.ini</code></li>
-  <li>Browse dialog pre-selects the last used location automatically</li>
-</ul>
-
-<h3>Protocol Mapping</h3>
-<ul>
-  <li><b>WinSCP SFTP:</b> Imported as SSH (SFTP/SCP) mode</li>
-  <li><b>WinSCP SCP:</b> Imported with <code>scponly=1</code> and <code>scpfordata=1</code></li>
-  <li><b>Unsupported protocols (FTP, WebDAV, S3):</b> Skipped with summary report</li>
+  <li>KiTTY and FileZilla passwords are carried over when the source has one saved</li>
+  <li>PuTTY keeps no password on disk; WinSCP and SecureCRT passwords are not imported</li>
+  <li>Imported passwords are re-protected with Windows DPAPI, never stored in plain text</li>
 </ul>
 
 <h3>Key File Compatibility</h3>
 <ul>
-  <li>Imported key paths preserved as-is</li>
-  <li>Supports both <code>.pem</code> and <code>.ppk</code> extensions</li>
-  <li>PPK v2 and PPK v3 (Argon2) converted natively — no external puttygen needed</li>
-  <li>Passwords are not imported — you will be prompted on first connection</li>
+  <li>Key paths preserved as-is, with environment variables resolved</li>
+  <li>Supports <code>.pem</code>, <code>.ppk</code>, and OpenSSH keys with no extension</li>
+  <li>PPK v2, PPK v3 (Argon2) and ed25519 converted natively — no external puttygen needed</li>
 </ul>
+
+<p>See <a href="import-migration.html">Import sessions from other programs</a> for full details.</p>
 
 <h2>After Import Checklist</h2>
 <ol>
   <li>Open imported session with <code>Alt+Enter</code></li>
   <li>Verify transfer mode matches server capabilities</li>
-  <li>Check proxy settings if applicable</li>
+  <li>Check proxy settings if applicable — proxy definitions are not imported</li>
   <li>Verify key file paths are valid</li>
   <li>Test connection</li>
   <li>Adjust SCP/Shell options for restrictive hosts</li>

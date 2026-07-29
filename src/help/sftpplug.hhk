@@ -17,7 +17,7 @@
   <LI><OBJECT type="text/sitemap"><param name="Name" value="PHP Agent"><param name="Local" value="php-agent.html"></OBJECT>
   <LI><OBJECT type="text/sitemap"><param name="Name" value="PHP Agent Operations"><param name="Local" value="php-agent-operations.html"></OBJECT>
   <LI><OBJECT type="text/sitemap"><param name="Name" value="PHP Shell Console"><param name="Local" value="php-shell.html"></OBJECT>
-  <LI><OBJECT type="text/sitemap"><param name="Name" value="Import PuTTY/WinSCP"><param name="Local" value="import-migration.html"></OBJECT>
+  <LI><OBJECT type="text/sitemap"><param name="Name" value="Import from other programs"><param name="Local" value="import-migration.html"></OBJECT>
   <LI><OBJECT type="text/sitemap"><param name="Name" value="Security"><param name="Local" value="security.html"></OBJECT>
   <LI><OBJECT type="text/sitemap"><param name="Name" value="Troubleshooting"><param name="Local" value="troubleshooting.html"></OBJECT>
   <LI><OBJECT type="text/sitemap"><param name="Name" value="Advanced Troubleshooting"><param name="Local" value="troubleshooting-advanced.html"></OBJECT>

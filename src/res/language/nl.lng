@@ -223,7 +223,6 @@
 305=&Tussenliggende host gebruiken
 306=Proxy-instellingen:
 307=Proxy verwijderen
-308=Importeren...
 309=Proxy-instellingen
 310=Proxy-instellingen
 311=Proxyhost:
@@ -243,25 +242,9 @@
 321=Bestand met publieke sleutel (*.pub):
 322=Bestand met privésleutel (*.pem;*.ppk):
 323=SSH-agent &(Pageant) gebruiken voor verificatie van de tussenliggende host
-12056=PuTTY-sessies importeren
-12057=WinSCP-sessies importeren
-12058=Draagbare PuTTY-sessies importeren
-12059={} {}-sessies gevonden (register):
-12060={} sessies gevonden in {}:
-12061=&Alles selecteren
-12062=&Alles deselecteren
-12063=&Importeren
-12064=Annuleren
-12065=Geen sessies geïmporteerd.
-12066=Geen sessies gevonden in {}.
 324=Help
 325=Annuleren
 326=TAR-stroom
-12067=Alles importeren ({})
-12068=Importeren uit PuTTY Portable-map...
-12069=Importeren uit draagbare WinSCP-map...
-12070=Draagbare KiTTY-sessies importeren
-12071=Importeren uit KiTTY Portable-map...
 
 327=Systeem:
 328=Methode:
@@ -355,14 +338,6 @@
 416=TAR-upload mislukt
 417=Selecteer bestand met publieke sleutel
 418=Selecteer bestand met privésleutel
-419=Selecteer PuTTY Portable-map
-420=PuTTY ({})...
-421=WinSCP ({})...
-422={} sessie(s) geïmporteerd.
-423={} sessie(s) geïmporteerd.
-{} {} overgeslagen.
-424=niet-ondersteunde sessie(s)
-425=niet-ondersteunde WinSCP-sessie(s)
 426=SOCKS4a: 
 427=SOCKS5: 
 428=Codepagina
@@ -374,12 +349,6 @@
 12094=LAN Pair: imitatie van TrustedInstaller mislukt. Het proces wordt mogelijk niet als Administrator uitgevoerd.
 12095=LAN Pair: verbinding maken met {}...
 12096=LAN Pair: verbinding mislukt
-12097=PuTTY
-12098=WinSCP
-12099=Overig
-12100=Draagbare WinSCP-map selecteren
-12101=WinSCP.ini niet gevonden in de geselecteerde map.
-12102=Draagbare KiTTY-map selecteren
 12103=LAN Pair: deze computer is geconfigureerd als Donor. De externe Ontvanger moet hier verbinding maken.
 450=Windows (CR/LF)
 451=Unix (LF)
@@ -395,10 +364,6 @@
 12081=Kan proxywachtwoord niet laden!
 12082=Ongeldig serveradres.
 12083=Onvoldoende geheugen bij het maken van verbindingsinstellingen.
-12084=Geen sessies geïmporteerd (niet-ondersteund protocoltype).
-12085=putty.reg niet gevonden in de geselecteerde map of de submappen ervan.
-12086=Kan putty.reg niet lezen of parseren.
-12087=Map Sessions niet gevonden in de geselecteerde KiTTY Portable-map.
 12088=Er bestaat al een sessie met deze naam.\nKies een andere sessienaam.
 12089=SFTP
 

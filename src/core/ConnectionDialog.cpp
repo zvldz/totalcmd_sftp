@@ -30,7 +30,6 @@ extern void LanFileServerSetTrustedInstaller(bool enabled);
 #include "FtpDirectoryParser.h"
 #include "SftpInternal.h"
 #include "WindowsUserFeedback.h"
-#include "SessionImport.h"
 #include "PhpAgentClient.h"
 #include "PhpShellConsole.h"
 #include "ConnectionDialog.h"
@@ -383,7 +382,6 @@ private:
     void    OnProxyButton();
     void    OnProxyComboChanged();
     void    OnDeleteLastProxy();
-    void    OnImportSessions();
     void    OnPluginHelp();
     void    OnCertHelp();
     void    OnPasswordHelp();
@@ -2063,37 +2061,6 @@ static void OnDeleteLastProxyCommand(HWND hWnd, pConnectSettings dlgConnectResul
     }
 }
 
-static void OnImportSessionsCommand(HWND hWnd, pConnectSettings dlgConnectResults, ConnectDialogContext* dlgCtx)
-{
-    pConnectSettings importApplyTarget = dlgConnectResults->dialogforconnection ? nullptr : dlgConnectResults;
-    std::string importedSession(wdirtypemax, '\0');
-    
-    int importedCount = sftp::ShowExternalSessionImportMenu(
-        hWnd, dlgCtx->iniFileName, importApplyTarget, importedSession.data(), static_cast<int>(importedSession.size()));
-    
-    LoadServersFromIni(dlgCtx->iniFileName, s_quickconnect);
-    
-    std::string currentSession(wdirtypemax, '\0');
-    const UINT curLen = GetDlgItemTextA(hWnd, IDC_SESSIONCOMBO, currentSession.data(), static_cast<int>(currentSession.size()));
-    currentSession.resize(curLen);
-    
-    if (importedCount > 0) {
-        HWND hTcMain = FindWindowA("TTOTAL_CMD", nullptr);
-        if (hTcMain) PostMessage(hTcMain, WM_USER + 51, 540, 0);
-    }
-
-    if (importedCount > 0 && importedSession[0]) {
-        importedSession.resize(strlen(importedSession.data()));
-        FillSessionCombo(hWnd, importedSession.data());
-        tConnectSettings loaded{};
-        if (LoadServerSettings(importedSession.data(), &loaded, dlgCtx->iniFileName))
-            ApplyLoadedSessionToDialog(hWnd, &loaded, dlgCtx->iniFileName);
-    } else {
-        FillSessionCombo(hWnd, currentSession.data());
-    }
-    fillProxyCombobox(hWnd, dlgConnectResults->proxynr, dlgCtx->iniFileName);
-}
-
 static void OnSessionChangedCommand(HWND hWnd, ConnectDialogContext* dlgCtx, LPCSTR dlgIniFileName)
 {
     std::string sessionName(wdirtypemax, '\0');
@@ -2245,7 +2212,6 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
         { IDC_PHP_TAR,              IDS_DLG_PHP_TAR         },
         { IDC_LAN_TI,               IDS_LAN_TI              },
         { IDC_DELETELAST,         IDS_DLG_DELETELAST        },
-        { IDC_IMPORTSESSIONS,     IDS_DLG_IMPORT            },
         { IDC_PLUGINHELP,         IDS_BTN_HELP              },
         { IDOK,                   IDS_BTN_OK                },
         { IDCANCEL,               IDS_BTN_CANCEL            },
@@ -2501,9 +2467,6 @@ INT_PTR ConnectionDialog::OnCommand(WPARAM wParam, LPARAM /*lParam*/)
         break;
     case IDC_DELETELAST:
         OnDeleteLastProxy();
-        break;
-    case IDC_IMPORTSESSIONS:
-        OnImportSessions();
         break;
     case IDC_PLUGINHELP:
         OnPluginHelp();
@@ -2974,11 +2937,6 @@ void ConnectionDialog::OnProxyComboChanged()
 void ConnectionDialog::OnDeleteLastProxy()
 {
     OnDeleteLastProxyCommand(m_hWnd, m_settings, m_ctx->iniFileName);
-}
-
-void ConnectionDialog::OnImportSessions()
-{
-    OnImportSessionsCommand(m_hWnd, m_settings, m_ctx);
 }
 
 void ConnectionDialog::OnPluginHelp()

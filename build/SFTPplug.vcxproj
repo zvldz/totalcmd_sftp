@@ -163,7 +163,6 @@
     <ClCompile Include="..\src\core\SftpShell.cpp" />
     <ClCompile Include="..\src\core\Libssh2Backend.cpp" />
     <ClCompile Include="..\src\core\KittyDecrypt.cpp" />
-    <ClCompile Include="..\src\core\SessionImport.cpp" />
     <ClCompile Include="..\src\core\VanDykeIniParser.cpp" />
     <ClCompile Include="..\src\core\ImportCache.cpp" />
     <ClCompile Include="..\src\core\SecureCrtAdapter.cpp" />
@@ -215,7 +214,6 @@
     <ClInclude Include="..\src\include\Libssh2Backend.h" />
     <ClInclude Include="..\src\include\SshBackendFactory.h" />
     <ClInclude Include="..\src\include\KittyDecrypt.h" />
-    <ClInclude Include="..\src\include\SessionImport.h" />
     <ClInclude Include="..\src\include\IExternalSessionSource.h" />
     <ClInclude Include="..\src\include\VanDykeIniParser.h" />
     <ClInclude Include="..\src\include\ImportCache.h" />

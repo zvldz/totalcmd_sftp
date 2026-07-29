@@ -194,22 +194,6 @@
 12054=Znaleziono peera LAN Pair.\nWybierz rolę:\n\nTak = Dawca\nNie = Biorca\nAnuluj = bez zmian
 280=Hasło parowania:
 12055=Czas sesji: [__] min (0=bez limitu)
-12056=Importuj sesje PuTTY
-12057=Importuj sesje WinSCP
-12058=Importuj przenośne sesje PuTTY
-12059=Znaleziono {} sesji {} (rejestr):
-12060=Znaleziono {} sesji w {}:
-12061=Zaznacz &wszystko
-12062=&Odznacz wszystko
-12063=&Importuj
-12064=Anuluj
-12065=Nie zaimportowano żadnych sesji.
-12066=Nie znaleziono sesji w {}.
-12067=Importuj wszystko ({})
-12068=Importuj z przenośnego folderu PuTTY...
-12069=Importuj z przenośnego folderu WinSCP...
-12070=Importuj przenośne sesje KiTTY
-12071=Importuj z przenośnego folderu KiTTY...
 324=Pomoc
 325=Anuluj
 326=Strumień TAR
@@ -242,7 +226,6 @@
 305=Użyj &hosta pośredniego
 306=Ustawienia proxy:
 307=Usuń proxy
-308=Importuj...
 309=Ustawienia proxy
 310=Ustawienia proxy
 311=Host proxy:
@@ -354,13 +337,6 @@
 416=Przesyłanie TAR nieudane
 417=Wybierz plik klucza publicznego
 418=Wybierz plik klucza prywatnego
-419=Wybierz folder PuTTY Portable
-420=PuTTY ({})...
-421=WinSCP ({})...
-422=Zaimportowano {} sesji.
-423=Zaimportowano {} sesji.\nPominięto {} {}.
-424=nieobsługiwana sesja/sesje
-425=nieobsługiwana sesja/sesje WinSCP
 426=SOCKS4a: 
 427=SOCKS5: 
 428=Strona kodowa
@@ -377,10 +353,6 @@
 12081=Nie udało się załadować hasła proxy!
 12082=Nieprawidłowy adres serwera.
 12083=Brak pamięci podczas tworzenia ustawień połączenia.
-12084=Nie zaimportowano żadnych sesji (nieobsługiwany typ protokołu).
-12085=Nie znaleziono pliku putty.reg w wybranym folderze lub jego podfolderach.
-12086=Nie udało się odczytać lub przetworzyć pliku putty.reg.
-12087=Nie znaleziono folderu Sessions w wybranym katalogu KiTTY Portable.
 12088=Sesja o tej nazwie już istnieje.\nWybierz inną nazwę sesji.
 12089=SFTP
 12090=Szukam peera LAN Pair w sieci lokalnej...
@@ -390,12 +362,6 @@
 12094=LAN Pair: nie udało się podszyć pod TrustedInstaller. Proces może nie być uruchomiony jako Administrator.
 12095=LAN Pair: łączę z {}...
 12096=LAN Pair: błąd połączenia
-12097=PuTTY
-12098=WinSCP
-12099=Inne
-12100=Wybierz przenośny folder WinSCP
-12101=Plik WinSCP.ini nie został znaleziony w wybranym folderze.
-12102=Wybierz przenośny folder KiTTY
 12103=LAN Pair: ten komputer jest skonfigurowany jako Dawca. Zdalny Biorca musi się tutaj połączyć.
 450=Windows (CR/LF)
 451=Unix (LF)

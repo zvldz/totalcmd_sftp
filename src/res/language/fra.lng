@@ -194,17 +194,6 @@
 280=Mot de passe pairage:
 12054=Peer LAN Pair trouvé.\nChoisissez le rôle:\n\nOui = Donneur\nNon = Receveur\nAnnuler = pas de changement
 12055=Délai session: [__] min (0=illimité)
-12056=Importer les sessions PuTTY
-12057=Importer les sessions WinSCP
-12058=Importer les sessions PuTTY Portable
-12059={} sessions {} trouvées (registre) :
-12060={} sessions trouvées dans {} :
-12061=&Tout sélectionner
-12062=Tout &désélectionner
-12063=&Importer
-12064=Annuler
-12065=Aucune session importée.
-12066=Aucune session trouvée dans {}.
 281=Receveur LAN Pair déjà en cours.
 282=LAN Pair accepté: {} ({})
 283=LAN Pair: en écoute. Dialogue de rôle au premier peer détecté.
@@ -234,7 +223,6 @@
 305=Utiliser l'&hôte intermédiaire
 306=Paramètres du proxy :
 307=Supprimer le proxy
-308=Importer...
 309=Paramètres du proxy
 310=Paramètres du proxy
 311=Hôte proxy :
@@ -258,11 +246,6 @@
 324=Aide
 325=Annuler
 326=Flux TAR
-12067=Tout importer ({})
-12068=Importer depuis le dossier PuTTY Portable...
-12069=Importer depuis le dossier portable WinSCP...
-12070=Importer les sessions KiTTY Portable
-12071=Importer depuis le dossier KiTTY Portable...
 
 327=Système:
 328=Méthode:
@@ -356,14 +339,6 @@
 416=Envoi TAR échoué
 417=Sélectionner le fichier de clé publique
 418=Sélectionner le fichier de clé privée
-419=Sélectionner le dossier PuTTY Portable
-420=PuTTY ({})...
-421=WinSCP ({})...
-422={} session(s) importée(s).
-423={} session(s) importée(s).
-{} {} ignorée(s).
-424=session(s) non prise(s) en charge
-425=session(s) WinSCP non prise(s) en charge
 426=SOCKS4a : 
 427=SOCKS5 : 
 428=Page de code
@@ -375,12 +350,6 @@
 12094=LAN Pair: l'emprunt d'identite TrustedInstaller a echoue. Le processus ne s'execute peut-etre pas en tant qu'Administrateur.
 12095=LAN Pair: connexion à {}...
 12096=LAN Pair: connexion échouée
-12097=PuTTY
-12098=WinSCP
-12099=Autre
-12100=Sélectionner le dossier portable WinSCP
-12101=WinSCP.ini introuvable dans le dossier sélectionné.
-12102=Sélectionner le dossier portable KiTTY
 12103=LAN Pair : cet ordinateur est configuré en tant que Donneur. Le Récepteur distant doit se connecter ici.
 450=Windows (CR/LF)
 451=Unix (LF)
@@ -396,10 +365,6 @@
 12081=Échec du chargement du mot de passe proxy !
 12082=Adresse de serveur non valide.
 12083=Mémoire insuffisante lors de la création des paramètres de connexion.
-12084=Aucune session importée (type de protocole non pris en charge).
-12085=putty.reg introuvable dans le dossier sélectionné ou ses sous-dossiers.
-12086=Échec de la lecture ou de l'analyse de putty.reg.
-12087=Dossier Sessions introuvable dans le répertoire KiTTY Portable sélectionné.
 12088=Une session avec ce nom existe déjà.\nChoisissez un nom de session différent.
 12089=SFTP
 

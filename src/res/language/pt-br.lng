@@ -223,7 +223,6 @@
 305=Usar &host intermediário
 306=Configurações de proxy:
 307=Remover proxy
-308=Importar...
 309=Configurações de proxy
 310=Configurações de proxy
 311=Host do proxy:
@@ -243,25 +242,9 @@
 321=Arquivo de chave pública (*.pub):
 322=Arquivo de chave privada (*.pem;*.ppk):
 323=Usar agente SSH &(Pageant) para autenticar o host intermediário
-12056=Importar sessões do PuTTY
-12057=Importar sessões do WinSCP
-12058=Importar sessões portáteis do PuTTY
-12059={} sessões {} encontradas (registro):
-12060={} sessões encontradas em {}:
-12061=&Selecionar tudo
-12062=&Desmarcar tudo
-12063=&Importar
-12064=Cancelar
-12065=Nenhuma sessão importada.
-12066=Nenhuma sessão encontrada em {}.
 324=Ajuda
 325=Cancelar
 326=Fluxo TAR
-12067=Importar tudo ({})
-12068=Importar da pasta PuTTY Portable...
-12069=Importar da pasta portátil do WinSCP...
-12070=Importar sessões portáteis do KiTTY
-12071=Importar da pasta KiTTY Portable...
 
 327=Sistema:
 328=Método:
@@ -355,14 +338,6 @@
 416=Falha no upload TAR
 417=Selecionar arquivo de chave pública
 418=Selecionar arquivo de chave privada
-419=Selecionar pasta do PuTTY Portable
-420=PuTTY ({})...
-421=WinSCP ({})...
-422={} sessão/sessões importada(s).
-423={} sessão/sessões importada(s).
-{} {} ignorada(s).
-424=sessão/sessões não suportada(s)
-425=sessão/sessões WinSCP não suportada(s)
 426=SOCKS4a: 
 427=SOCKS5: 
 428=Página de código
@@ -374,12 +349,6 @@
 12094=LAN Pair: falha ao personificar TrustedInstaller. O processo pode nao estar sendo executado como Administrador.
 12095=LAN Pair: conectando a {}...
 12096=LAN Pair: falha na conexão
-12097=PuTTY
-12098=WinSCP
-12099=Outros
-12100=Selecionar pasta portátil do WinSCP
-12101=WinSCP.ini não encontrado na pasta selecionada.
-12102=Selecionar pasta portátil do KiTTY
 12103=LAN Pair: este computador está configurado como Doador. O Receptor remoto deve conectar-se aqui.
 450=Windows (CR/LF)
 451=Unix (LF)
@@ -395,10 +364,6 @@
 12081=Falha ao carregar a senha do proxy!
 12082=Endereço de servidor inválido.
 12083=Memória insuficiente ao criar configurações de conexão.
-12084=Nenhuma sessão importada (tipo de protocolo não suportado).
-12085=putty.reg não encontrado na pasta selecionada ou em suas subpastas.
-12086=Falha ao ler ou analisar putty.reg.
-12087=A pasta Sessions não foi encontrada no diretório KiTTY Portable selecionado.
 12088=Já existe uma sessão com este nome.\nEscolha um nome de sessão diferente.
 12089=SFTP
 

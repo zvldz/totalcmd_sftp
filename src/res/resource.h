@@ -212,7 +212,6 @@
 #define IDC_PROXYCOMBO                  1048
 #define IDC_PROXYBUTTON                 1049
 #define IDC_DELETELAST                  1050
-#define IDC_IMPORTSESSIONS              1051
 #define IDC_SESSIONCOMBO                1052
 #define IDC_SHELLTRANSFER               1053
 #define IDC_TRANSFERMODE                1054
@@ -281,17 +280,6 @@
 #define IDS_STRING12053                 12053
 #define IDS_LAN_ROLE_PROMPT             12054
 #define IDS_LAN_SESSION_TIMEOUT         12055
-#define IDS_IMP_TITLE_PUTTY             12056
-#define IDS_IMP_TITLE_WINSCP            12057
-#define IDS_IMP_TITLE_PUTTY_PORT        12058
-#define IDS_IMP_FOUND_REG               12059
-#define IDS_IMP_FOUND_FILE              12060
-#define IDS_IMP_BTN_SELECT_ALL          12061
-#define IDS_IMP_BTN_DESELECT_ALL        12062
-#define IDS_IMP_BTN_IMPORT              12063
-#define IDS_IMP_BTN_CANCEL              12064
-#define IDS_IMP_MSG_NONE                12065
-#define IDS_IMP_MSG_NOT_FOUND           12066
 #define IDC_LANPAIR_GROUP               1061
 #define IDC_LAN_TIMEOUT                 1062
 #define IDC_PERMISSIONS_GROUP           1063
@@ -342,11 +330,6 @@
 // ---------------------------------------------------------------------------
 // Session picker dialog
 // ---------------------------------------------------------------------------
-#define IDD_SESSION_PICKER              116
-#define IDC_SESSION_LIST                1101
-#define IDC_SELECTALL                   1102
-#define IDC_DESELECTALL                 1103
-#define IDC_SESSION_SOURCE_LABEL        1104
 
 // Dialog label string IDs for runtime localization via LNG loader
 #define IDS_DLG_CAPTION                 284
@@ -373,7 +356,6 @@
 #define IDS_DLG_USE_JUMPHOST            305
 #define IDS_DLG_PROXY_SETTINGS          306
 #define IDS_DLG_DELETELAST              307
-#define IDS_DLG_IMPORT                  308
 #define IDS_PROXY_DLG_CAPTION           309
 #define IDS_PROXY_DLG_GROUP             310
 #define IDS_PROXY_DLG_HOST              311
@@ -492,24 +474,12 @@
 #define IDS_LOG_TAR_UPLOAD_FAIL         416
 #define IDS_DLG_SELECT_PUBKEY           417
 #define IDS_DLG_SELECT_PRIVKEY          418
-#define IDS_IMP_BROWSE_PUTTY_FOLDER     419
-#define IDS_IMP_MENU_PUTTY              420
-#define IDS_IMP_MENU_WINSCP             421
-#define IDS_IMP_MSG_IMPORTED            422
-#define IDS_IMP_MSG_IMPORTED_SKIPPED    423
-#define IDS_IMP_MSG_SKIP_UNSUPPORTED    424
-#define IDS_IMP_MSG_SKIP_WINSCP         425
 #define IDS_PROXY_LABEL_SOCKS4A         426
 #define IDS_PROXY_LABEL_SOCKS5          427
 #define IDS_DLG_CODEPAGE_TITLE          428
 #define IDS_DLG_CODEPAGE_PROMPT         429
 
 #define IDC_PHP_TAR                     1105
-#define IDS_IMP_MENU_ALL                12067
-#define IDS_IMP_MENU_FROM_PUTTY_PORT    12068
-#define IDS_IMP_MENU_FROM_WINSCP        12069
-#define IDS_IMP_TITLE_KITTY_PORT        12070
-#define IDS_IMP_MENU_FROM_KITTY_PORT    12071
 #define IDS_SCP_PROTOCOL_ERROR          12072
 #define IDS_SCP_EXEC_FAILED             12073
 #define IDS_LAN_ERR_NO_PEER             12074
@@ -522,10 +492,6 @@
 #define IDS_ERR_LOAD_PROXY_PASS         12081
 #define IDS_ERR_INVALID_SERVER          12082
 #define IDS_ERR_OOM_CONN_SETTINGS       12083
-#define IDS_IMP_MSG_UNSUPPORTED_PROTO   12084
-#define IDS_IMP_ERR_NO_PUTTY_REG        12085
-#define IDS_IMP_ERR_PARSE_PUTTY_REG     12086
-#define IDS_IMP_ERR_NO_KITTY_SESSIONS   12087
 #define IDS_ERR_SESSION_EXISTS          12088
 #define IDS_TITLE_SFTP                  12089
 
@@ -548,18 +514,11 @@
 #define IDS_LAN_TI_ERR                  12094
 #define IDS_LAN_CONNECTING              12095
 #define IDS_LAN_ERR_CONN_FAILED         12096
-#define IDS_IMP_MENU_PUTTY_HDR          12097
-#define IDS_IMP_MENU_WINSCP_HDR         12098
-#define IDS_IMP_MENU_OTHER_HDR          12099
-#define IDS_IMP_BROWSE_WINSCP_FOLDER    12100
-#define IDS_IMP_ERR_NO_WINSCP_INI       12101
-#define IDS_IMP_BROWSE_KITTY_FOLDER     12102
 #define IDS_LAN_ERR_DONOR_NO_CONNECT    12103
 #define IDS_JUMP_SESSION_NONE           12104   // "(none)" entry in jump-session dropdown
 #define IDS_JUMP_SESSION_MISSING_SUFFIX 12105   // " (missing)" appended to deleted ref'd session name
 #define IDS_JUMP_SESSION_NOT_FOUND      12106   // error: ref'd session not in INI
 #define IDS_JUMP_SESSION_CHAINED        12107   // error: ref'd session has its own jump host
-#define IDS_IMP_LIST_HEADER             12108   // Import dialog ListView column header
 #define IDS_SIMPORT_TITLE               12109   // MessageBox title for session-INI import errors
 #define IDS_SIMPORT_ERR_OPEN            12110   // Cannot open source file
 #define IDS_SIMPORT_ERR_EMPTY           12111   // Source file empty

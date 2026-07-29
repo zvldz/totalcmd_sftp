@@ -85,9 +85,6 @@
     <ClCompile Include="..\src\core\KittyDecrypt.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\core\SessionImport.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="..\src\core\VanDykeIniParser.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -239,9 +236,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\src\include\KittyDecrypt.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="..\src\include\SessionImport.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\src\include\IExternalSessionSource.h">
