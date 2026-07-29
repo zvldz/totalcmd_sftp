@@ -221,9 +221,16 @@ static LANGID LangNameToId(const wchar_t* name) noexcept
 
 void ApplyTcLanguageToPluginResources(const char* tcIniPath) noexcept
 {
-    const LANGID langId = DetectTcUiLangIdFromIni(tcIniPath);
+    LANGID langId = DetectTcUiLangIdFromIni(tcIniPath);
+
+    // No match means TC runs a language this plugin ships no .lng for.
+    // Fall back to English rather than leaving an earlier translation in
+    // place: ApplyLangId -> LngLoadForLanguage -> LangIdToTcCode returns
+    // nullptr for English, which clears the translation map so strings
+    // come from the compiled resources.
     if (langId == 0)
-        return;
+        langId = MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US);
+
     ApplyLangId(langId);
 }
 

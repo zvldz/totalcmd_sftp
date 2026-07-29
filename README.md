@@ -462,23 +462,25 @@ Implemented in `ProxyNegotiator.cpp`, isolated from the main connection path.
 
 ### Session Import
 
-`SessionImport.cpp` reads from Windows Registry and portable installations:
+Sessions from other programs appear in an `[Imports]` folder in the plugin root, one subfolder per source. One adapter per source implements `IExternalSessionSource`; the enumerated lists are cached next to `sftpplug.ini` so they are available immediately at startup.
 
-| Source | Location |
-|--------|---------|
-| PuTTY (registry) | `HKCU\Software\SimonTatham\PuTTY\Sessions` |
-| WinSCP (registry) | `HKCU\Software\Martin Prikryl\WinSCP 2\Sessions` |
-| PuTTY Portable | Browse to portable folder — finds `putty.reg` recursively (up to 4 levels) |
-| WinSCP Portable | Browse to `WinSCP.ini` directly |
-| KiTTY Portable | Browse to KiTTYPortable root — finds `Sessions` folder recursively (up to 4 levels); individual session files per session; only SSH sessions imported; stored passwords decrypted and saved as DPAPI |
+| Source | Auto-detected location | Custom location accepts |
+|--------|------------------------|-------------------------|
+| SecureCRT | `%APPDATA%\VanDyke\Config\Sessions\` | Any SecureCRT session tree |
+| PuTTY | `HKCU\Software\SimonTatham\PuTTY\Sessions` | A `putty.reg` export |
+| WinSCP | `HKCU\Software\Martin Prikryl\WinSCP 2\Sessions` | A portable `WinSCP.ini` |
+| FileZilla | `%APPDATA%\FileZilla\sitemanager.xml` | Any `sitemanager.xml` |
+| KiTTY | `%APPDATA%`, `%LOCALAPPDATA%`, `%USERPROFILE%` under `KiTTY\Sessions\`, or the path behind the `.kitty` file association | The `Sessions\` folder or the install root |
 
-**Import Features:**
-- Non-conflicting conversion to plugin INI format
-- Preserves connectivity fields (host, port, user, keys)
-- **KiTTY passwords**: automatically decrypted via embedded `dp.exe` (extracted on first use from a CAB resource inside the DLL; Windows Defender path and process exclusion added before extraction via WMI/COM)
-- **Checkbox picker dialog** — select any combination of sessions and import in one step
-- **4-path memory** — the last 4 used folder/file paths are remembered and pre-selected on next open
-- **No auto-connect** side effects during import
+**Behaviour:**
+- `Enter` connects using the settings read from the source; nothing is written to the plugin's own configuration
+- `F5` materialises the session into `sftpplug.ini` as a regular saved entry — `Ctrl+A` first to take a whole source at once
+- `[Refresh]` re-reads one source; `[Add custom location...]` and `[Manage custom locations]` handle portable installs
+- Only sessions the plugin can serve are listed — non-SSH protocols, WinSCP workspaces and `Default Settings` templates are filtered out
+- Folder hierarchies from the source are preserved as nested panel folders
+- Passwords: imported for KiTTY and for FileZilla sites using base64 storage; PuTTY keeps none on disk; WinSCP and SecureCRT are left for the interactive prompt. Imported values are re-protected with DPAPI
+- Key files carry over with environment variables resolved; `.ppk` v2/v3/ed25519 are converted natively
+- Proxy, firewall and tunnel definitions are **not** carried over yet
 
 ### Host Key Verification
 
@@ -822,12 +824,15 @@ Remote `locale` command output is parsed to determine the server's character enc
 | `SftpShell.cpp` | Shell channel execution, EAGAIN guards | |
 | `TransferUtils.cpp` | Progress, rate, shared transfer helpers | |
 | `PhpAgentClient.cpp` | PHP Agent HTTP operations (WinHTTP); TAR batch upload session (`TarUploadSession`, `PhpAgentUploadDirAsTar`); TAR batch download session (`TarDownloadSession`, `PhpAgentDownloadFilesAsTar`, `TAR_PACK`) | |
-| `KittyDecryptDeploy.cpp` | Embeds `dp.exe` as CAB RCDATA resource; deploys on first use via FDI; adds Defender path+process exclusion via WMI/COM before extraction | `KittyDecryptDeploy.h` |
 | `PhpShellConsole.cpp` | PHP Shell pseudo-terminal; keyboard input, Tab completion, Up/Down history navigation | |
 | `ShellHistory.cpp` | Persistent command history — ring buffer (128 entries), atomic NTFS write, `%APPDATA%\GHISLER\shell_history.txt` | `ShellHistory.h` |
 | `PpkConverter.cpp` | PPK v2/v3 → PEM conversion | BCrypt + Argon2; no tools |
 | `PasswordCrypto.cpp` | DPAPI encrypt/decrypt, legacy XOR read | `DataBlob` RAII |
-| `SessionImport.cpp` | PuTTY / WinSCP registry + Portable + KiTTY Portable → INI | Non-destructive merge |
+| `ImportSourceRegistry.cpp` | Registry of the `IExternalSessionSource` adapters | One entry per source program |
+| `SecureCrtAdapter.cpp`, `PuttyAdapter.cpp`, `WinScpAdapter.cpp`, `FileZillaAdapter.cpp`, `KittyAdapter.cpp` | Per-source session enumeration and settings mapping | Registry / INI / XML / per-session files |
+| `ImportCache.cpp` | Persisted enumeration results per source and channel | Survives restarts; per-channel prune |
+| `ImportIoUtil.cpp` | Shared adapter primitives — percent codec, registry readers, env expansion, key-file routing | |
+| `VirtualSessionRegistry.cpp` | Alias map for connected virtual sessions | TC-safe alias names |
 | `ServerRegistry.cpp` | In-memory server profile registry | |
 | `ProfileSettings.cpp` | INI read/write for connection profiles | |
 | `LanPair.cpp` | PAIR1 auth protocol, UDP discovery, PBKDF2 | `namespace smb` |
@@ -906,7 +911,6 @@ src/
     sftpplug.rc                # String tables: EN / PL / DE / FR / ES
     resource.h
     icon*.ico
-    kitty-decrypt.cab          # dp.exe packed as LZX CAB (RCDATA resource IDR_KITTY_DECRYPT_CAB)
 third_party/
   build.ps1                    # Builds all dependency libs (argon2 + libssh2, x64 + x86, /MT)
   argon/
@@ -1095,16 +1099,15 @@ To add a new language: create `language\XYZ.lng` (UTF-8) following the existing 
 - `UpdateCertSectionState` — unified cert section control for all transport modes
 - x64 and x86 packaging — single ZIP with both architectures, TC auto-install via `pluginst.inf`
 - PHP Shell persistent command history — ring buffer (128 entries), atomic NTFS write, `%APPDATA%\GHISLER\shell_history.txt`, `history -c` / `clear history` commands
-- **PuTTY Portable folder import** — auto-finds `putty.reg` recursively; WinSCP.ini portable import
-- **KiTTY Portable import** — auto-finds `Sessions` folder recursively; individual session files (`KeyName\value\` format); only SSH sessions imported; stored passwords decrypted via embedded `dp.exe` (CAB resource, FDI extraction, WMI/COM Defender exclusion) and saved as DPAPI
-- **Checkbox session picker** — replaces flat submenus; SysListView32 with LVS_EX_CHECKBOXES; Select All / Deselect All; imports any combination in one step
-- **4-path import memory** — last 4 folder/file paths persisted in `[ImportPaths]` of sftpplug.ini; browse dialog pre-selects last used location
+- **`[Imports]` magic folder** — sessions from SecureCRT, PuTTY, WinSCP, FileZilla and KiTTY listed as live entries, one subfolder per source; `Enter` connects, `F5` materialises into `sftpplug.ini`; per-source `[Refresh]` and custom portable locations; enumeration cached next to the INI so entries are present at startup
+- **KiTTY password import** — obfuscated session passwords decoded natively (`KittyDecrypt.cpp`, no external helper binary) and re-stored as DPAPI
+- **FileZilla password import** — base64-stored site passwords carried over; master-password sites left to the interactive prompt
 - **15-language localization** — added CS/HU/NL/PT-BR/RO/SK/UK/JA/ZH-CN; all auto-detected from TC `wincmd.ini` `LanguageIni` setting
 - **Language override** — `Language=` key in `[Configuration]` of `sftpplug.ini`; supports all 15 built-in languages by name/ISO code, plus custom `.lng` stems for unsupported languages; `sftpplug.tpl` template shipped with the plugin
 - **LAN Pair strict roles** — Donor/Receiver/Auto with unidirectional enforcement; Donor starts file server and refuses outgoing connections; Receiver connects as client without starting a local server
 - **LAN Pair TrustedInstaller** — per-connection TI impersonation on the Donor server; per-transfer TI impersonation on the Receiver client; `CRYPTPROTECT_LOCAL_MACHINE` for DPAPI trust keys; auto-delete stale keys + auto-retry on first connect failure
 - **Session delete fix** — single-character session names (e.g. `1`, `2`) can now be deleted via F8/Del
-- **KiTTY password import** — stored KiTTY session passwords decrypted automatically via `dp.exe` (Blowfish/nbcrypt); exe embedded as LZX CAB RCDATA resource, extracted on first use via Windows FDI API; Windows Defender path and process exclusion added before extraction via WMI/COM (`MSFT_MpPreference::Add`, no PowerShell); decrypted password saved as DPAPI
+- **KiTTY password decoding** — the obfuscation KiTTY applies to stored session passwords is reversed in-process (`KittyDecrypt.cpp`); no external binary, no CAB resource, no antivirus exclusions involved. Decoded value is immediately re-protected with DPAPI
 - **PHP Agent TAR upload** — opt-in `php_tar` checkbox; directory F5 copy streams a single POSIX ustar TAR POST to `op=TAR_EXTRACT`; PHP extracts on-the-fly; GNU LongLink for long paths; two-pass Content-Length; works in foreground (`PUT_MULTI`) and background thread (`PUT_MULTI_THREAD`) modes; plain `.tar` file uploads unaffected
 - **PHP Agent TAR batch download** — opt-in `php_tar` checkbox; multi-file F5 copy sends a single POST to `op=TAR_PACK` with all remote paths; server streams ustar TAR directly without buffering (`php://output`); plugin parses TAR on-the-fly and writes local files; works in foreground (`GET_MULTI`) and background thread (`GET_MULTI_THREAD`) modes; GNU LongLink supported; files >8 GiB skipped cleanly
 - **PHP Agent TAR fixes** — DWORD overflow (TAR upload >4 GB now uses 64-bit `Content-Length` header); TAR pack no longer buffers in `php://temp` on server (eliminates HTTP 504 on OVH); per-file zero-pad allocation removed from upload loop; >8.5 GiB file guard in both C++ and PHP prevents TAR header corruption
@@ -1144,7 +1147,7 @@ User-facing summary; see `CHANGELOG.md` for per-version detail.
 
 ---
 
-**Highlights:** DllExceptionBarrier (ABI protection), ConnectionGuard RAII, LAN Pair TOFU/timeout, PHP Shell persistent history, 15-language localization (CS/HU/NL/PT-BR/RO/SK/UK/JA/ZH-CN added), checkbox session picker with 4-path memory, PuTTY Portable + WinSCP.ini + KiTTY Portable import, **KiTTY password import** (embedded dp.exe CAB + WMI/COM Defender exclusion + DPAPI), **PHP Agent TAR upload+download** (streaming ustar POST/GET, on-the-fly server extraction, batch download via TAR_PACK, no 4 GB limit), no VC++ Redistributable required
+**Highlights:** DllExceptionBarrier (ABI protection), ConnectionGuard RAII, LAN Pair TOFU/timeout, PHP Shell persistent history, 15-language localization (CS/HU/NL/PT-BR/RO/SK/UK/JA/ZH-CN added), **`[Imports]` magic folder** covering SecureCRT / PuTTY / WinSCP / FileZilla / KiTTY with native KiTTY and FileZilla password decoding, **PHP Agent TAR upload+download** (streaming ustar POST/GET, on-the-fly server extraction, batch download via TAR_PACK, no 4 GB limit), no VC++ Redistributable required
 
 *Secure FTP Plugin v1.0.0.x — Modern C++20 implementation.*
 *Based on the original SFTP plugin by Christian Ghisler; core modules re-engineered from scratch.*
