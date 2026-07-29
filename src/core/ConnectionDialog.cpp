@@ -55,7 +55,6 @@ struct ProxyDialogContext {
 // Context for the Jump Host settings dialog.
 struct JumpDialogContext {
     pConnectSettings cs    = nullptr;   // main connection settings (in/out)
-    LPCSTR iniFileName     = nullptr;
     bool   hasCryptProc    = false;
 };
 
@@ -279,28 +278,12 @@ static INT_PTR CALLBACK JumpHostDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
 
             cs->jump_useagent = IsDlgButtonChecked(hWnd, IDC_JUMP_USEAGENT) == BST_CHECKED;
 
-            // Persist jump host settings to INI.
-            if (ctx->iniFileName && cs->DisplayName[0]) {
-                LPCSTR sec = cs->DisplayName.c_str();
-                LPCSTR ini = ctx->iniFileName;
-                WritePrivateProfileString(sec, "usejumphost",  cs->use_jump_host ? "1" : "0", ini);
-                WritePrivateProfileString(sec, "jumphost",     cs->jump_host.c_str(), ini);
-                std::array<char, 16> portBuf{};
-                _itoa_s(cs->jump_port, portBuf.data(), portBuf.size(), 10);
-                WritePrivateProfileString(sec, "jumpport",     portBuf.data(), ini);
-                WritePrivateProfileString(sec, "jumpuser",     cs->jump_user.c_str(), ini);
-                WritePrivateProfileString(sec, "jumppubkeyfile",  cs->jump_pubkeyfile.c_str(), ini);
-                WritePrivateProfileString(sec, "jumpprivkeyfile", cs->jump_privkeyfile.c_str(), ini);
-                WritePrivateProfileString(sec, "jumpuseagent", cs->jump_useagent ? "1" : "0", ini);
-                // Password: encrypt like main password.
-                if (!cs->jump_password.empty()) {
-                    std::array<char, 1024> enc{};
-                    EncryptString(cs->jump_password.c_str(), enc.data(), static_cast<UINT>(enc.size()));
-                    WritePrivateProfileString(sec, "jumppassword", enc.data(), ini);
-                } else {
-                    WritePrivateProfileString(sec, "jumppassword", "", ini);
-                }
-            }
+            // Only the model is updated here; the connection dialog's OK is
+            // what persists it. Writing to the INI directly from this dialog
+            // meant settings survived a Cancel in the parent, and — because
+            // the section came from whichever session was open when the parent
+            // dialog was created — they could land in a different session
+            // than the one on screen.
 
             EndDialog(hWnd, IDOK);
             return 1;
@@ -2131,20 +2114,41 @@ static void OnProxyButtonCommand(HWND hWnd, pConnectSettings dlgConnectResults, 
     }
 }
 
-static void OnJumpButtonCommand(HWND hWnd, pConnectSettings dlgConnectResults, LPCSTR dlgDisplayName, LPCSTR dlgIniFileName)
+// Name of the session the dialog is currently showing. The context's
+// displayName is fixed when the dialog opens and does not follow the session
+// combo, so anything that writes to the INI must ask the combo instead —
+// otherwise it edits whichever session happened to be open first.
+static std::string CurrentSessionNameFromDialog(HWND hWnd, LPCSTR fallback)
+{
+    std::string name(wdirtypemax, '\0');
+    const UINT len = GetDlgItemTextA(hWnd, IDC_SESSIONCOMBO, name.data(),
+                                     static_cast<int>(name.size()));
+    name.resize(len);
+    TrimSessionName(name.data());
+    name.resize(strlen(name.c_str()));
+    if (name.empty() && fallback)
+        name = fallback;
+    return name;
+}
+
+static void OnJumpButtonCommand(HWND hWnd, pConnectSettings dlgConnectResults, LPCSTR dlgDisplayName)
 {
     if (!dlgConnectResults) return;
-    
+
     JumpDialogContext jumpCtx;
     jumpCtx.cs = dlgConnectResults;
-    jumpCtx.iniFileName = dlgIniFileName;
     jumpCtx.hasCryptProc = (CryptProc != nullptr);
-    
-    if (dlgDisplayName)
-        dlgConnectResults->DisplayName = dlgDisplayName;
-    
+
+    // JumpHostDlgProc persists straight to cs->DisplayName's INI section, so
+    // point it at the session actually on screen. Taking the name the dialog
+    // was opened with sent those writes into the previously selected session,
+    // which then silently connected through a jump host of its own.
+    const std::string target = CurrentSessionNameFromDialog(hWnd, dlgDisplayName);
+    if (!target.empty())
+        dlgConnectResults->DisplayName = target;
+
     ShowLocalizedDialogBoxParam(IDD_JUMPHOST, hWnd, JumpHostDlgProc, (LPARAM)&jumpCtx);
-    
+
     CheckDlgButton(hWnd, IDC_JUMP_ENABLE,
         dlgConnectResults->use_jump_host ? BST_CHECKED : BST_UNCHECKED);
 }
@@ -2762,24 +2766,34 @@ void ConnectionDialog::OnOk()
         // below (which are still preserved for switching back to manual mode).
         WritePrivateProfileString(targetProfile.data(), "jumpsessionref",
             m_settings->jump_session_ref.empty() ? nullptr : m_settings->jump_session_ref.c_str(), dlgIniFileName);
-        if (!m_settings->jump_host.empty())
-            WritePrivateProfileString(targetProfile.data(), "jumphost", m_settings->jump_host.c_str(), dlgIniFileName);
+        // Every jump field is written unconditionally, an empty value removing
+        // the key. Writing only non-empty values meant a field cleared in the
+        // dialog kept its old content in the INI, so a session could still be
+        // routed through a jump host the user believed they had removed.
+        WritePrivateProfileString(targetProfile.data(), "jumphost",
+            m_settings->jump_host.empty() ? nullptr : m_settings->jump_host.c_str(), dlgIniFileName);
         if (m_settings->jump_port && m_settings->jump_port != 22) {
             std::array<char, 16> portBuf{};
             _itoa_s(m_settings->jump_port, portBuf.data(), portBuf.size(), 10);
             WritePrivateProfileString(targetProfile.data(), "jumpport", portBuf.data(), dlgIniFileName);
+        } else {
+            // 22 is the default the loader assumes, so drop the key instead of
+            // leaving a stale port behind.
+            WritePrivateProfileString(targetProfile.data(), "jumpport", nullptr, dlgIniFileName);
         }
-        if (!m_settings->jump_user.empty())
-            WritePrivateProfileString(targetProfile.data(), "jumpuser", m_settings->jump_user.c_str(), dlgIniFileName);
-        if (!m_settings->jump_pubkeyfile.empty())
-            WritePrivateProfileString(targetProfile.data(), "jumppubkeyfile", m_settings->jump_pubkeyfile.c_str(), dlgIniFileName);
-        if (!m_settings->jump_privkeyfile.empty())
-            WritePrivateProfileString(targetProfile.data(), "jumpprivkeyfile", m_settings->jump_privkeyfile.c_str(), dlgIniFileName);
+        WritePrivateProfileString(targetProfile.data(), "jumpuser",
+            m_settings->jump_user.empty() ? nullptr : m_settings->jump_user.c_str(), dlgIniFileName);
+        WritePrivateProfileString(targetProfile.data(), "jumppubkeyfile",
+            m_settings->jump_pubkeyfile.empty() ? nullptr : m_settings->jump_pubkeyfile.c_str(), dlgIniFileName);
+        WritePrivateProfileString(targetProfile.data(), "jumpprivkeyfile",
+            m_settings->jump_privkeyfile.empty() ? nullptr : m_settings->jump_privkeyfile.c_str(), dlgIniFileName);
         WritePrivateProfileString(targetProfile.data(), "jumpuseagent", m_settings->jump_useagent ? "1" : nullptr, dlgIniFileName);
         if (!m_settings->jump_password.empty()) {
             std::array<char, 1024> jumpEnc{};
             EncryptString(m_settings->jump_password.c_str(), jumpEnc.data(), static_cast<UINT>(jumpEnc.size()));
             WritePrivateProfileString(targetProfile.data(), "jumppassword", jumpEnc.data(), dlgIniFileName);
+        } else {
+            WritePrivateProfileString(targetProfile.data(), "jumppassword", nullptr, dlgIniFileName);
         }
         _itoa_s(m_settings->filemod, modbuf.data(), modbuf.size(), 8);
         WritePrivateProfileString(targetProfile.data(), "filemod", m_settings->filemod == 0644 ? nullptr : modbuf.data(), dlgIniFileName);
@@ -2931,7 +2945,7 @@ void ConnectionDialog::OnJumpEnableChanged()
 
 void ConnectionDialog::OnJumpButton()
 {
-    OnJumpButtonCommand(m_hWnd, m_settings, m_ctx->displayName, m_ctx->iniFileName);
+    OnJumpButtonCommand(m_hWnd, m_settings, m_ctx->displayName);
     CheckDlgButton(m_hWnd, IDC_JUMP_ENABLE,
         m_settings->use_jump_host ? BST_CHECKED : BST_UNCHECKED);
 }
