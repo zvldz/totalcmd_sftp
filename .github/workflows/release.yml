@@ -1,9 +1,9 @@
 name: Release
 
-# Tag naming convention (see TODO.md "GitHub Actions build + releases"):
+# Tag naming convention:
 #   v10.0.2.0-beta1 → prerelease
-#   v10.0.2.0-beta2 → prerelease
-#   v10.0.2.0       → stable release
+#   v10.0.2.0-rc1   → prerelease
+#   v10.0.2.0       → stable release, marked latest
 #
 # Push a matching tag to trigger a fresh build + GitHub Release. The bin/
 # folder is intentionally NOT committed once this workflow is in use — the
@@ -45,7 +45,9 @@ jobs:
           $tag = "${{ github.ref_name }}"
           $sha = "${{ github.sha }}".Substring(0, 7)
           $date = (Get-Date -Format "yyyy-MM-dd").ToString()
-          $isBeta = if ($tag -match '-beta\d+$') { "true" } else { "false" }
+          # Anything carrying a pre-release suffix stays off the "latest"
+          # download; only a bare version tag is published as stable.
+          $isPre = if ($tag -match '-(beta|rc)\d*$') { "true" } else { "false" }
 
           # BuildInfo.h picks this file up via __has_include; no /D flag
           # required. Everything the plugin surfaces about itself (startup
@@ -62,8 +64,8 @@ jobs:
           "tag=$tag"              >> $env:GITHUB_OUTPUT
           "sha=$sha"              >> $env:GITHUB_OUTPUT
           "date=$date"            >> $env:GITHUB_OUTPUT
-          "prerelease=$isBeta"    >> $env:GITHUB_OUTPUT
-          Write-Host "Build metadata: tag=$tag sha=$sha date=$date prerelease=$isBeta"
+          "prerelease=$isPre"     >> $env:GITHUB_OUTPUT
+          Write-Host "Build metadata: tag=$tag sha=$sha date=$date prerelease=$isPre"
 
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
@@ -116,15 +118,15 @@ jobs:
 
           $content = Get-Content -Raw CHANGELOG.md
 
-          # Prefer an exact-match section (`## 10.0.2.0-beta1 - date`).
+          # Prefer an exact-match section (`## 10.0.2.0-rc1 - date`).
           $pattern = "(?ms)^## \s*$([regex]::Escape($version))\b.*?(?=^## |\z)"
           $match = [regex]::Match($content, $pattern)
 
-          # Fall back to the base version section when the exact beta
-          # header does not exist yet — the CHANGELOG appends beta-level
-          # detail under the same `## 10.0.2.0` heading until final.
+          # Fall back to the base version section when no section exists for
+          # this specific pre-release — the CHANGELOG accumulates detail
+          # under the plain `## 10.0.2.0` heading until the stable release.
           if (-not $match.Success) {
-            $stripped = $version -replace '-beta\d+$', ''
+            $stripped = $version -replace '-(beta|rc)\d*$', ''
             $pattern = "(?ms)^## \s*$([regex]::Escape($stripped))\b.*?(?=^## |\z)"
             $match = [regex]::Match($content, $pattern)
           }
