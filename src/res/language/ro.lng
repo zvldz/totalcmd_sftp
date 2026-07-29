@@ -378,3 +378,4 @@
 12114=Nu se poate importa sesiunea: calea de destinație este goală.
 12115=Nu se poate importa sesiunea: scrierea în sftpplug.ini a eșuat.
 12116=Salt...
+12117=Gazda de salt este activată pentru această sesiune, dar niciuna nu este configurată. Alegeți o sesiune de salt sau completați datele gazdei.

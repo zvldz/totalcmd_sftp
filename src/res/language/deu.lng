@@ -379,3 +379,4 @@
 12114=Sitzung kann nicht importiert werden: der Zielpfad ist leer.
 12115=Sitzung kann nicht importiert werden: Schreiben in sftpplug.ini fehlgeschlagen.
 12116=Sprung...
+12117=Für diese Sitzung ist ein Sprunghost aktiviert, aber keiner konfiguriert. Wählen Sie eine Sprungsitzung oder füllen Sie die Sprunghost-Daten aus.

@@ -795,6 +795,7 @@ BEGIN
     IDS_JUMP_DLG_PORT       "Port:"
     IDS_JUMP_DLG_USER       "User name:"
     IDS_DLG_JUMP_BUTTON     "Jump..."
+    IDS_JUMP_NOT_CONFIGURED "Jump host is enabled for this session but none is configured. Pick a jump session or fill in the jump host details."
 END
 
 STRINGTABLE

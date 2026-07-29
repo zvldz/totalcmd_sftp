@@ -522,6 +522,7 @@
 #define IDS_SIMPORT_ERR_EMPTY_DEST      12114   // Empty destination path
 #define IDS_SIMPORT_ERR_WRITE           12115   // Failed to write to sftpplug.ini
 #define IDS_DLG_JUMP_BUTTON             12116   // "Jump..." button in the connection dialog
+#define IDS_JUMP_NOT_CONFIGURED         12117   // error: jump host enabled but not configured
 
 // Next default values for new objects
 //

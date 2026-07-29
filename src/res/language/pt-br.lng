@@ -378,3 +378,4 @@
 12114=Não é possível importar a sessão: o caminho de destino está vazio.
 12115=Não é possível importar a sessão: falha ao gravar em sftpplug.ini.
 12116=Salto...
+12117=O host de salto está habilitado para esta sessão, mas nenhum foi configurado. Escolha uma sessão de salto ou preencha os dados do host.

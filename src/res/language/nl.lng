@@ -378,3 +378,4 @@
 12114=Kan sessie niet importeren: het doelpad is leeg.
 12115=Kan sessie niet importeren: schrijven naar sftpplug.ini is mislukt.
 12116=Sprong...
+12117=Sprongbastion is ingeschakeld voor deze sessie maar er is geen ingesteld. Kies een sprongsessie of vul de gegevens van het bastion in.

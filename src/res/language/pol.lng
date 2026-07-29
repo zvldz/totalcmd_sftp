@@ -377,3 +377,4 @@
 12114=Nie można zaimportować sesji: ścieżka docelowa jest pusta.
 12115=Nie można zaimportować sesji: zapis do sftpplug.ini nie powiódł się.
 12116=Pośredni...
+12117=Host pośredni jest włączony dla tej sesji, ale żaden nie został skonfigurowany. Wybierz sesję pośredniczącą lub wypełnij dane hosta.

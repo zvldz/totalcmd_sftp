@@ -18,6 +18,7 @@
 #include "SftpInternal.h"
 #include "PluginEntryPoints.h"
 #include "CoreUtils.h"
+#include "ProfileSettings.h"   // LoadServerSettings, for the session-reference case
 #include "res/resource.h"
 
 #include <libssh2/libssh2.h>
@@ -26,6 +27,94 @@
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
+
+JumpConfig ResolveJumpConfig(pConnectSettings cs, LPCSTR iniFileName)
+{
+    JumpConfig out;
+    if (!cs || !cs->use_jump_host)
+        return out;                      // Disabled
+
+    const bool hasRef    = !cs->jump_session_ref.empty();
+    const bool hasManual = !cs->jump_host.empty();
+
+    if (!hasRef && !hasManual) {
+        // The profile asks to go through a jump host but names none. This is
+        // reachable: picking a session that was later deleted clears the
+        // reference and leaves the checkbox on. Refusing is the only safe
+        // answer — connecting straight to the target would quietly bypass
+        // the bastion the user asked for.
+        out.status = JumpConfigStatus::NotConfigured;
+        out.error  = LngStrU8(IDS_JUMP_NOT_CONFIGURED,
+            "Jump host is enabled for this session but none is configured. "
+            "Pick a jump session or fill in the jump host details.");
+        return out;
+    }
+
+    if (hasRef) {
+        tConnectSettings ref{};
+        if (!LoadServerSettings(cs->jump_session_ref.c_str(), &ref, iniFileName)) {
+            out.status = JumpConfigStatus::RefNotFound;
+            out.error  = LngStrU8(IDS_JUMP_SESSION_NOT_FOUND,
+                "Jump session '{}' not found in saved sessions");
+            const auto p = out.error.find("{}");
+            if (p != std::string::npos)
+                out.error.replace(p, 2, cs->jump_session_ref);
+            return out;
+        }
+
+        // Only one hop is supported. Catching this here also covers the
+        // A -> B -> A loop.
+        if (!ref.jump_session_ref.empty() ||
+            (ref.use_jump_host && !ref.jump_host.empty())) {
+            out.status = JumpConfigStatus::RefChained;
+            out.error  = LngStrU8(IDS_JUMP_SESSION_CHAINED,
+                "Jump session '{}' has its own jump-host configuration "
+                "— chained or cyclic jump hosts are not supported. "
+                "Pick a session that connects directly to the bastion.");
+            const auto p = out.error.find("{}");
+            if (p != std::string::npos)
+                out.error.replace(p, 2, cs->jump_session_ref);
+            return out;
+        }
+
+        // `server` may carry a ":port" suffix — it is stored raw and split at
+        // connect time, so split it the same way here.
+        std::array<char, MAX_PATH> hostBuf{};
+        strncpy_s(hostBuf.data(), hostBuf.size(), ref.server.c_str(), _TRUNCATE);
+        WORD parsedPort = 22;
+        ParseAddress(hostBuf.data(), hostBuf.data(), &parsedPort, 22);
+
+        out.endpoint.host        = hostBuf.data();
+        out.endpoint.port        = ref.customport ? ref.customport : parsedPort;
+        out.endpoint.user        = ref.user;
+        out.endpoint.password    = ref.password;
+        out.endpoint.pubkeyfile  = ref.pubkeyfile;
+        out.endpoint.privkeyfile = ref.privkeyfile;
+        out.endpoint.useagent    = ref.useagent;
+        // The fingerprint belongs to the host, which the referenced session
+        // describes — so it lives in that session's own key, shared with a
+        // direct connection to the same machine.
+        out.endpoint.fingerprint        = ref.savedfingerprint;
+        out.endpoint.fingerprintSection = cs->jump_session_ref;
+        out.endpoint.fingerprintKey     = "fingerprint";
+    } else {
+        out.endpoint.host        = cs->jump_host;
+        out.endpoint.port        = cs->jump_port;
+        out.endpoint.user        = cs->jump_user;
+        out.endpoint.password    = cs->jump_password;
+        out.endpoint.pubkeyfile  = cs->jump_pubkeyfile;
+        out.endpoint.privkeyfile = cs->jump_privkeyfile;
+        out.endpoint.useagent    = cs->jump_useagent;
+        // Nothing but this session describes that host.
+        out.endpoint.fingerprint        = cs->jump_fingerprint;
+        out.endpoint.fingerprintSection = cs->DisplayName;
+        out.endpoint.fingerprintKey     = "jumpfingerprint";
+    }
+
+    out.status = JumpConfigStatus::Ready;
+    return out;
+}
+
 
 // Minimal alloc/free callbacks for the jump session (same as main session).
 static LPVOID jmp_alloc(size_t n, LPVOID* /*ab*/)   { return malloc(n); }
@@ -238,10 +327,16 @@ static bool VerifyJumpFingerprint(
     if (!accepted)
         return false;
 
-    // Persist to INI.
-    WritePrivateProfileString(
-        cs->DisplayName.c_str(), "jumpfingerprint",
-        fp.c_str(), cs->IniFileName.c_str());
+    // Write it back where the resolver read it from. For a referenced session
+    // that is the session's own `fingerprint`, shared with a direct
+    // connection to the same machine; for a manual jump host it is this
+    // session's `jumpfingerprint`. Writing anywhere else means the value is
+    // never found again and the prompt returns on every connect.
+    if (!jump.fingerprintSection.empty() && !jump.fingerprintKey.empty()) {
+        WritePrivateProfileString(
+            jump.fingerprintSection.c_str(), jump.fingerprintKey.c_str(),
+            fp.c_str(), cs->IniFileName.c_str());
+    }
     jump.fingerprint = fp;
     return true;
 }

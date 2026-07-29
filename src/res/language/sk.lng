@@ -378,3 +378,4 @@
 12114=Reláciu nie je možné importovať: cieľová cesta je prázdna.
 12115=Reláciu nie je možné importovať: zápis do sftpplug.ini zlyhal.
 12116=Prechod...
+12117=Prechodový hostiteľ je pre túto reláciu zapnutý, ale žiadny nie je nastavený. Vyberte prechodovú reláciu alebo vyplňte údaje o hostiteľovi.

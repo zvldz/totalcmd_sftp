@@ -378,3 +378,4 @@
 12114=A munkamenet nem importálható: a célútvonal üres.
 12115=A munkamenet nem importálható: az sftpplug.ini írása sikertelen.
 12116=Ugrás...
+12117=Az ugróállomás engedélyezve van ehhez a munkamenethez, de nincs beállítva. Válasszon ugrómenetet, vagy adja meg az ugróállomás adatait.

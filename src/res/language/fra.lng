@@ -379,3 +379,4 @@
 12114=Import impossible : le chemin de destination est vide.
 12115=Import impossible : échec de l'écriture dans sftpplug.ini.
 12116=Rebond...
+12117=L'hôte de rebond est activé pour cette session mais aucun n'est configuré. Choisissez une session de rebond ou renseignez les détails de l'hôte.

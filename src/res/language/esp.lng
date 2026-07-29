@@ -379,3 +379,4 @@
 12114=No se puede importar la sesión: la ruta de destino está vacía.
 12115=No se puede importar la sesión: error al escribir en sftpplug.ini.
 12116=Salto...
+12117=El host de salto está habilitado para esta sesión pero no se ha configurado ninguno. Elija una sesión de salto o rellene los datos del host.

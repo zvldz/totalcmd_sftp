@@ -629,8 +629,21 @@ int SftpConnect(pConnectSettings ConnectSettings)
 
     progress = PROG_SOCKET_CONNECT;
 
-    if (ConnectSettings->use_jump_host &&
-        (!ConnectSettings->jump_host.empty() || !ConnectSettings->jump_session_ref.empty())) {
+    // One resolver decides what this profile's jump host actually is, so the
+    // connect path cannot disagree with what the dialog shows. It refuses
+    // rather than returning an empty endpoint, which is what keeps a session
+    // with a dangling reference from quietly connecting past the bastion.
+    const JumpConfig jumpCfg = ResolveJumpConfig(ConnectSettings, inifilename);
+
+    if (jumpCfg.status != JumpConfigStatus::Disabled &&
+        jumpCfg.status != JumpConfigStatus::Ready) {
+        ShowStatus(jumpCfg.error.c_str());
+        if (ConnectSettings->feedback)
+            ConnectSettings->feedback->ShowError(jumpCfg.error, "ProxyJump");
+        return fail(-25);
+    }
+
+    if (jumpCfg.status == JumpConfigStatus::Ready) {
         // -----------------------------------------------------------------
         // ProxyJump path:
         // 1. TCP + SSH to jump host
@@ -644,68 +657,8 @@ int SftpConnect(pConnectSettings ConnectSettings)
         // jump session creation dereferences nullptr.
         if (!g_sshBackend)
             g_sshBackend = CreateSshBackend();
-        JumpHostSettings jump;
 
-        // Resolve jump host: from referenced session if jump_session_ref is set,
-        // otherwise from manual jump_* fields. Ref takes priority — see TODO.
-        if (!ConnectSettings->jump_session_ref.empty()) {
-            tConnectSettings refSettings{};
-            if (!LoadServerSettings(ConnectSettings->jump_session_ref.c_str(),
-                                    &refSettings, inifilename)) {
-                std::string msg = LngStrU8(IDS_JUMP_SESSION_NOT_FOUND,
-                    "Jump session '{}' not found in saved sessions");
-                const auto p = msg.find("{}");
-                if (p != std::string::npos) msg.replace(p, 2, ConnectSettings->jump_session_ref);
-                ShowStatus(msg.c_str());
-                if (ConnectSettings->feedback)
-                    ConnectSettings->feedback->ShowError(msg, "ProxyJump");
-                return fail(-25);
-            }
-            // Chain / cycle prevention: referenced session must not itself use a
-            // jump host (manual or ref). We support a single hop, not chains.
-            // A chain A->B->C would also catch the A->B->A loop case here.
-            const bool refHasOwnJump =
-                !refSettings.jump_session_ref.empty()
-                || (refSettings.use_jump_host && !refSettings.jump_host.empty());
-            if (refHasOwnJump) {
-                std::string msg = LngStrU8(IDS_JUMP_SESSION_CHAINED,
-                    "Jump session '{}' has its own jump-host configuration "
-                    "— chained or cyclic jump hosts are not supported. "
-                    "Pick a session that connects directly to the bastion.");
-                const auto p = msg.find("{}");
-                if (p != std::string::npos) msg.replace(p, 2, ConnectSettings->jump_session_ref);
-                ShowStatus(msg.c_str());
-                if (ConnectSettings->feedback)
-                    ConnectSettings->feedback->ShowError(msg, "ProxyJump");
-                return fail(-25);
-            }
-            // The referenced session's connection params become our jump host.
-            // `server` may include ":port" suffix (UI accepts "host:port" form
-            // and stores it raw at save time; ParseAddress splits at connect time).
-            // We must parse it the same way before passing to getaddrinfo.
-            std::array<char, MAX_PATH> jumpHostBuf{};
-            strncpy_s(jumpHostBuf.data(), jumpHostBuf.size(),
-                      refSettings.server.c_str(), _TRUNCATE);
-            WORD parsedPort = 22;
-            ParseAddress(jumpHostBuf.data(), jumpHostBuf.data(), &parsedPort, 22);
-            jump.host        = jumpHostBuf.data();
-            jump.port        = refSettings.customport ? refSettings.customport : parsedPort;
-            jump.user        = refSettings.user;
-            jump.password    = refSettings.password;
-            jump.pubkeyfile  = refSettings.pubkeyfile;
-            jump.privkeyfile = refSettings.privkeyfile;
-            jump.useagent    = refSettings.useagent;
-            jump.fingerprint = refSettings.savedfingerprint;
-        } else {
-            jump.host        = ConnectSettings->jump_host;
-            jump.port        = ConnectSettings->jump_port;
-            jump.user        = ConnectSettings->jump_user;
-            jump.password    = ConnectSettings->jump_password;
-            jump.pubkeyfile  = ConnectSettings->jump_pubkeyfile;
-            jump.privkeyfile = ConnectSettings->jump_privkeyfile;
-            jump.useagent    = ConnectSettings->jump_useagent;
-            jump.fingerprint = ConnectSettings->jump_fingerprint;
-        }
+        JumpHostSettings jump = jumpCfg.endpoint;
 
         // Target is the server configured in the profile (resolved already
         // in connecttoserver/connecttoport above).
