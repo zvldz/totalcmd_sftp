@@ -216,21 +216,22 @@ static bool DetectPrivateKeyEncrypted(LPCSTR privkeyfile, bool* outEncrypted)
     return true;
 }
 
-static void BuildUserAtServerTitle(char* out, size_t outLen, int prefixResId, pConnectSettings cs)
+static void BuildUserAtServerTitle(char* out, size_t outLen, int prefixResId,
+                                   LPCSTR user, LPCSTR host)
 {
     if (!out || outLen == 0)
         return;
     out[0] = 0;
     LoadStr(out, outLen, prefixResId);
-    if (!cs)
-        return;
-    strlcat(out, cs->user.c_str(), outLen - 1);
+    strlcat(out, user ? user : "", outLen - 1);
     strlcat(out, "@", outLen - 1);
-    strlcat(out, cs->server.c_str(), outLen - 1);
+    strlcat(out, host ? host : "", outLen - 1);
 }
 
 static bool PreparePrivateKeyForAuth(
-    pConnectSettings cs,
+    LPCSTR user,
+    LPCSTR host,
+    std::string* ioPassword,
     char* ioPrivKeyFile,
     size_t privKeyLen,
     char** ioPubKeyPtr,
@@ -240,12 +241,12 @@ static bool PreparePrivateKeyForAuth(
     char* ioPromptBuf,
     size_t ioPromptBufLen)
 {
-    if (!cs || !ioPrivKeyFile || !ioPubKeyPtr || !outRemoveConvertedPrivateKey || !outConvertedPrivateKey || !ioPromptBuf)
+    if (!ioPassword || !ioPrivKeyFile || !ioPubKeyPtr || !outRemoveConvertedPrivateKey || !outConvertedPrivateKey || !ioPromptBuf)
         return false;
     if (!EndsWithNoCase(ioPrivKeyFile, ".ppk"))
         return true;
 
-    const char* ppkPass = cs->password.empty() ? "" : cs->password.c_str();
+    const char* ppkPass = ioPassword->empty() ? "" : ioPassword->c_str();
     PpkConvertError convErr = PpkConvertError::internal_error;
     ShowStatusId(IDS_LOG_PPK_CONVERTING, nullptr, true);
     bool converted = ConvertPpkToOpenSsh(ioPrivKeyFile, ppkPass, outConvertedPrivateKey, convertedLen - 1, &convErr);
@@ -260,11 +261,11 @@ static bool PreparePrivateKeyForAuth(
         title[0] = 0;
         ppkPassBuf[0] = 0;
         LoadStr(ioPromptBuf, ioPromptBufLen, IDS_KEYPASSPHRASE);
-        BuildUserAtServerTitle(title.data(), title.size(), IDS_PASSPHRASE, cs);
+        BuildUserAtServerTitle(title.data(), title.size(), IDS_PASSPHRASE, user, host);
         if (RequestProc(PluginNumber, RT_Password, title.data(), ioPromptBuf, ppkPassBuf.data(), ppkPassBuf.size() - 1)) {
             converted = ConvertPpkToOpenSsh(ioPrivKeyFile, ppkPassBuf.data(), outConvertedPrivateKey, convertedLen - 1, &convErr);
-            if (converted && cs->password.empty())
-                cs->password = ppkPassBuf.data();
+            if (converted && ioPassword->empty())
+                *ioPassword = ppkPassBuf.data();
         }
         SecureZeroMemory(ppkPassBuf.data(), ppkPassBuf.size());
     }
@@ -318,13 +319,13 @@ static bool ValidatePublicKeyFileIfPresent(
 }
 
 
-int SftpAuthPageant(pConnectSettings ConnectSettings, LPCSTR progressbuf, int progress, int * ploop, SYSTICKS * plasttime, int * auth_pw)
+int SftpAuthPageantOn(const SshAuthTarget& target, LPCSTR progressbuf, int progress, int * ploop, SYSTICKS * plasttime, int * auth_pw)
 {
     std::array<char, 1024> buf{};
     struct libssh2_agent_publickey * identity = nullptr;
     struct libssh2_agent_publickey * prev_identity = nullptr;
 
-    std::unique_ptr<ISshAgent> agent = ConnectSettings->session->agentInit();
+    std::unique_ptr<ISshAgent> agent = target.session->agentInit();
     auto finish = [&](int code) -> int {
         if (code < 0) {
             ShowStatusId(-code, nullptr, true);
@@ -363,7 +364,7 @@ int SftpAuthPageant(pConnectSettings ConnectSettings, LPCSTR progressbuf, int pr
             if (ProgressLoop(progressbuf, progress, progress + 5, ploop, plasttime))
                 break;
         }
-        agent = ConnectSettings->session->agentInit();
+        agent = target.session->agentInit();
         if (!agent)
             return finish(-IDS_AGENT_CONNECTERROR);
         int rc = agent->connect();
@@ -384,16 +385,16 @@ int SftpAuthPageant(pConnectSettings ConnectSettings, LPCSTR progressbuf, int pr
         LoadStr(str1, IDS_AGENT_TRYING1);
         LoadStr(str2, IDS_AGENT_TRYING2);
         LoadStr(str3, IDS_AGENT_TRYING3);
-        ShowStatus((std::string(str1.data()) + ConnectSettings->user + str2.data() + identity->comment + str3.data()).c_str());
+        ShowStatus((std::string(str1.data()) + target.user + str2.data() + identity->comment + str3.data()).c_str());
         const SYSTICKS authStart = get_sys_ticks();
-        while ((auth = agent->userauth(ConnectSettings->user.c_str(), identity)) == LIBSSH2_ERROR_EAGAIN) {
+        while ((auth = agent->userauth(target.user.c_str(), identity)) == LIBSSH2_ERROR_EAGAIN) {
             if (ProgressLoop(progressbuf, progress, progress + 5, ploop, plasttime))
                 return finish(-IDS_AGENT_AUTHFAILED);
             if (get_ticks_between(authStart) > SSH_AUTH_STAGE_TIMEOUT_MS) {
                 ShowStatusId(IDS_LOG_PAGEANT_TIMEOUT, nullptr, true);
                 return finish(-IDS_AGENT_AUTHFAILED);
             }
-            WaitForSshIo(ConnectSettings);
+            if (target.waitIo) target.waitIo();
         }
 #ifndef SFTP_ALLINONE
         // NOTE: LIBSSH2_ERROR_REQUIRE_KEYBOARD / REQUIRE_PASSWORD are non-standard error codes
@@ -413,7 +414,19 @@ int SftpAuthPageant(pConnectSettings ConnectSettings, LPCSTR progressbuf, int pr
     }
 }
 
-int SftpAuthPubKey(pConnectSettings ConnectSettings, LPCSTR progressbuf, int progress, int * ploop, SYSTICKS * plasttime, int * auth_pw)
+// Bind the agent flow to the target server.
+int SftpAuthPageant(pConnectSettings ConnectSettings, LPCSTR progressbuf, int progress, int * ploop, SYSTICKS * plasttime, int * auth_pw)
+{
+    SshAuthTarget target;
+    target.session  = ConnectSettings->session.get();
+    target.host     = ConnectSettings->server;
+    target.user     = ConnectSettings->user;
+    target.password = &ConnectSettings->password;
+    target.waitIo   = [ConnectSettings]() { WaitForSshIo(ConnectSettings); };
+    return SftpAuthPageantOn(target, progressbuf, progress, ploop, plasttime, auth_pw);
+}
+
+int SftpAuthPubKeyOn(const SshAuthTarget& target, LPCSTR progressbuf, int progress, int * ploop, SYSTICKS * plasttime, int * auth_pw, AuthFailureUi onFailure)
 {
     std::array<char, 1024> buf{};
     std::array<char, 256> passphrase{};
@@ -430,20 +443,20 @@ int SftpAuthPubKey(pConnectSettings ConnectSettings, LPCSTR progressbuf, int pro
         SecureZeroMemory(passphrase.data(), passphrase.size());
     };
 
-    AUTH_LOG("=== SftpAuthPubKey START ===");
+    AUTH_LOG("=== SftpAuthPubKey START (host=%s) ===", target.host.c_str());
     // Check if LogProc is available
     extern tLogProc LogProc;
-    if (LogProc) LogProc(PluginNumber, MSGTYPE_DETAILS, "=== SftpAuthPubKey called from SftpConnection ===");
-    AUTH_LOG("privkeyfile=%s", ConnectSettings->privkeyfile.c_str());
-    AUTH_LOG("pubkeyfile=%s", ConnectSettings->pubkeyfile.c_str());
-    AUTH_LOG("password_empty=%d", ConnectSettings->password.empty() ? 1 : 0);
-    AUTH_LOG("server=%s", ConnectSettings->server.c_str());
-    AUTH_LOG("user=%s", ConnectSettings->user.c_str());
+    if (LogProc) LogProc(PluginNumber, MSGTYPE_DETAILS, "=== SftpAuthPubKey ===");
+    AUTH_LOG("privkeyfile=%s", target.privkeyfile.c_str());
+    AUTH_LOG("pubkeyfile=%s", target.pubkeyfile.c_str());
+    AUTH_LOG("password_empty=%d", target.password->empty() ? 1 : 0);
+    AUTH_LOG("host=%s", target.host.c_str());
+    AUTH_LOG("user=%s", target.user.c_str());
 
-    strlcpy(pubkeyfile.data(), ConnectSettings->pubkeyfile.c_str(), pubkeyfile.size()-1);
-    ExpandAuthPath(pubkeyfile.data(), pubkeyfile.size(), ConnectSettings->user.c_str());
-    strlcpy(privkeyfile.data(), ConnectSettings->privkeyfile.c_str(), privkeyfile.size()-1);
-    ExpandAuthPath(privkeyfile.data(), privkeyfile.size(), ConnectSettings->user.c_str());
+    strlcpy(pubkeyfile.data(), target.pubkeyfile.c_str(), pubkeyfile.size()-1);
+    ExpandAuthPath(pubkeyfile.data(), pubkeyfile.size(), target.user.c_str());
+    strlcpy(privkeyfile.data(), target.privkeyfile.c_str(), privkeyfile.size()-1);
+    ExpandAuthPath(privkeyfile.data(), privkeyfile.size(), target.user.c_str());
     convertedPrivateKey[0] = 0;
 
     AUTH_LOG("After expand: privkeyfile=%s", privkeyfile.data());
@@ -462,7 +475,8 @@ int SftpAuthPubKey(pConnectSettings ConnectSettings, LPCSTR progressbuf, int pro
         return -LIBSSH2_ERROR_FILE;
     }
 
-    if (!PreparePrivateKeyForAuth(ConnectSettings, privkeyfile.data(), privkeyfile.size(), &pubkeyfileptr,
+    if (!PreparePrivateKeyForAuth(target.user.c_str(), target.host.c_str(), target.password,
+                                  privkeyfile.data(), privkeyfile.size(), &pubkeyfileptr,
                                   &removeConvertedPrivateKey, convertedPrivateKey.data(), convertedPrivateKey.size(),
                                   buf.data(), buf.size())) {
         clearPassphrase();
@@ -502,15 +516,15 @@ int SftpAuthPubKey(pConnectSettings ConnectSettings, LPCSTR progressbuf, int pro
     if (isencrypted) {
         AUTH_LOG("Key is encrypted, requesting passphrase");
         std::array<char, 250> title{};
-        BuildUserAtServerTitle(title.data(), title.size(), IDS_PASSPHRASE, ConnectSettings);
+        BuildUserAtServerTitle(title.data(), title.size(), IDS_PASSPHRASE, target.user.c_str(), target.host.c_str());
         LoadStr(buf, IDS_KEYPASSPHRASE);
-        if (!ConnectSettings->password.empty()) {
+        if (!target.password->empty()) {
             AUTH_LOG("Using stored password");
             std::string secondPassword;
-            if (TryGetSecondQuotedPassword(ConnectSettings->password.c_str(), secondPassword)) {
+            if (TryGetSecondQuotedPassword(target.password->c_str(), secondPassword)) {
                 strlcpy(passphrase.data(), secondPassword.c_str(), passphrase.size()-1);
             } else {
-                strlcpy(passphrase.data(), ConnectSettings->password.c_str(), passphrase.size()-1);
+                strlcpy(passphrase.data(), target.password->c_str(), passphrase.size()-1);
             }
         } else {
             AUTH_LOG("No stored password, requesting from user");
@@ -520,7 +534,7 @@ int SftpAuthPubKey(pConnectSettings ConnectSettings, LPCSTR progressbuf, int pro
         AUTH_LOG("Key is NOT encrypted, no passphrase needed");
     }
 
-    ShowStatusId(IDS_AUTH_PUBKEY_FOR, ConnectSettings->user.c_str(), true);
+    ShowStatusId(IDS_AUTH_PUBKEY_FOR, target.user.c_str(), true);
 
     // libssh2's userauth_publickey_fromfile treats a non-NULL publickey arg as
     // a path to read; an empty string makes it call fopen("") and bail with
@@ -532,7 +546,6 @@ int SftpAuthPubKey(pConnectSettings ConnectSettings, LPCSTR progressbuf, int pro
         pubkeyfileptr = nullptr;
 
     LoadStr(buf, IDS_AUTH_PUBKEY);
-    pConnectSettings cs = ConnectSettings;
     int auth;
     const char* passphrasePtr = isencrypted ? passphrase.data() : nullptr;
     AUTH_LOG("Calling userauthPubkeyFromFile: priv=%s pub=%s passphrase=%s",
@@ -540,7 +553,7 @@ int SftpAuthPubKey(pConnectSettings ConnectSettings, LPCSTR progressbuf, int pro
              pubkeyfileptr ? pubkeyfileptr : "(null)",
              passphrasePtr ? "(set)" : "(null)");
     SYSTICKS authStart = get_sys_ticks();
-    while ((auth = cs->session->userauthPubkeyFromFile(cs->user.c_str(), (unsigned)cs->user.size(), pubkeyfileptr, privkeyfile.data(), passphrasePtr)) == LIBSSH2_ERROR_EAGAIN) {
+    while ((auth = target.session->userauthPubkeyFromFile(target.user.c_str(), (unsigned)target.user.size(), pubkeyfileptr, privkeyfile.data(), passphrasePtr)) == LIBSSH2_ERROR_EAGAIN) {
         if (ProgressLoop(buf.data(), progress, progress + 10, ploop, plasttime))
             break;
         if (get_ticks_between(authStart) > SSH_AUTH_STAGE_TIMEOUT_MS) {
@@ -548,18 +561,18 @@ int SftpAuthPubKey(pConnectSettings ConnectSettings, LPCSTR progressbuf, int pro
             auth = LIBSSH2_ERROR_TIMEOUT;
             break;
         }
-        WaitForSshIo(ConnectSettings);
+        if (target.waitIo) target.waitIo();
     }
     AUTH_LOG("userauthPubkeyFromFile result=%d", auth);
 #ifndef SFTP_ALLINONE
         // NOTE: LIBSSH2_ERROR_REQUIRE_KEYBOARD / REQUIRE_PASSWORD are non-standard error codes
         // provided by the local libssh2 fork to signal mid-auth method switching.
         if (auth == LIBSSH2_ERROR_REQUIRE_KEYBOARD) {
-            *auth_pw = SSH_AUTH_KEYBOARD;
+            if (auth_pw) *auth_pw = SSH_AUTH_KEYBOARD;
             return SSH_AUTH_KEYBOARD;
         }
         if (auth == LIBSSH2_ERROR_REQUIRE_PASSWORD) {
-            *auth_pw = SSH_AUTH_PASSWORD;
+            if (auth_pw) *auth_pw = SSH_AUTH_PASSWORD;
             return SSH_AUTH_PASSWORD;
         }
 #endif
@@ -567,7 +580,7 @@ int SftpAuthPubKey(pConnectSettings ConnectSettings, LPCSTR progressbuf, int pro
         cleanupConvertedIfNeeded();
         char* errMsg = nullptr;
         int errLen = 0;
-        ConnectSettings->session->lastError(&errMsg, &errLen, false);
+        target.session->lastError(&errMsg, &errLen, false);
         SftpLogLastError("libssh2_userauth_publickey_fromfile: ", auth);
         std::array<char, 1024> loadedMsg{};
         LoadStr(loadedMsg, IDS_ERR_AUTH_PUBKEY);
@@ -578,10 +591,11 @@ int SftpAuthPubKey(pConnectSettings ConnectSettings, LPCSTR progressbuf, int pro
             uiMsg = loadedMsg.data();
         if (errMsg && errMsg[0])
             uiMsg += "\n" + std::string(errMsg);
+        // Stay quiet when the caller still has methods to try, or when it
+        // asked to report failures without a dialog.
         const bool hasFallbackAuth =
             auth_pw && ((*auth_pw & SSH_AUTH_PASSWORD) != 0 || (*auth_pw & SSH_AUTH_KEYBOARD) != 0);
-        if (hasFallbackAuth) {
-            // Avoid modal noise when we can continue with password/keyboard.
+        if (onFailure == AuthFailureUi::StatusOnly || hasFallbackAuth) {
             ShowStatus(uiMsg.c_str());
         } else {
             ShowError(uiMsg.c_str());
@@ -593,10 +607,27 @@ int SftpAuthPubKey(pConnectSettings ConnectSettings, LPCSTR progressbuf, int pro
     cleanupConvertedIfNeeded();
 
     // Only store password if it was actually entered by the user and we didn't have one
-    if (auth == 0 && isencrypted && passphrase[0] && ConnectSettings->password.empty())
-        ConnectSettings->password = passphrase.data();
+    if (auth == 0 && isencrypted && passphrase[0] && target.password->empty())
+        *target.password = passphrase.data();
 
     clearPassphrase();
     AUTH_LOG("SftpAuthPubKey returning 0 (SUCCESS)");
     return 0;
+}
+
+// Bind the public-key flow to the target server. A failure here is a dead
+// end for key auth, so it may raise a dialog — unlike a jump host, which
+// still has password and keyboard-interactive left to try.
+int SftpAuthPubKey(pConnectSettings ConnectSettings, LPCSTR progressbuf, int progress, int * ploop, SYSTICKS * plasttime, int * auth_pw)
+{
+    SshAuthTarget target;
+    target.session     = ConnectSettings->session.get();
+    target.host        = ConnectSettings->server;
+    target.user        = ConnectSettings->user;
+    target.password    = &ConnectSettings->password;
+    target.pubkeyfile  = ConnectSettings->pubkeyfile;
+    target.privkeyfile = ConnectSettings->privkeyfile;
+    target.waitIo      = [ConnectSettings]() { WaitForSshIo(ConnectSettings); };
+    return SftpAuthPubKeyOn(target, progressbuf, progress, ploop, plasttime,
+                            auth_pw, AuthFailureUi::Modal);
 }

@@ -252,7 +252,7 @@ static bool VerifyJumpFingerprint(
 static bool AuthJumpHost(
     pConnectSettings    cs,
     ISshSession*        jmpSession,
-    const JumpHostSettings& jump,
+    JumpHostSettings&   jump,   // non-const: an entered passphrase is kept here
     SOCKET              jmpSock,
     int&                progress,
     int&                loop,
@@ -299,31 +299,27 @@ static bool AuthJumpHost(
              authList ? authList : "(none)", canPassword, canPubkey, canKbd);
     ShowStatus(("Jump host auth methods: " + (authList ? std::string(authList) : "(none)")).c_str());
 
+    // The jump host authenticates through the same code as the target
+    // server, so PPK conversion, passphrase prompting, path expansion and
+    // the missing-key check apply here too. Failures report through the
+    // status line only: this function still has password and
+    // keyboard-interactive to fall back on.
+    SshAuthTarget authTarget;
+    authTarget.session     = jmpSession;
+    authTarget.host        = jump.host;
+    authTarget.user        = jump.user;
+    authTarget.password    = &jump.password;
+    authTarget.pubkeyfile  = jump.pubkeyfile;
+    authTarget.privkeyfile = jump.privkeyfile;
+    authTarget.waitIo      = [jmpSock]() { IsSocketReadable(jmpSock); };
+
     // --- 1. Agent auth ---
     if (jump.useagent && loadAgent) {
         ShowStatusId(IDS_LOG_JUMP_AGENT_TRY, nullptr, true);
-        auto agent = jmpSession->agentInit();
-        if (agent && agent->connect() == LIBSSH2_ERROR_NONE) {
-            agent->listIdentities();
-            struct libssh2_agent_publickey* prev = nullptr;
-            struct libssh2_agent_publickey* id   = nullptr;
-            // getIdentity returns 0 when it stored an identity, 1 at the end
-            // of the list, negative on error — so 0 is the "keep going" case.
-            while (agent->getIdentity(&id, prev) == 0) {
-                int r = LIBSSH2_ERROR_EAGAIN;
-                while (r == LIBSSH2_ERROR_EAGAIN) {
-                    r = agent->userauth(jump.user.c_str(), id);
-                    if (r == LIBSSH2_ERROR_EAGAIN)
-                        IsSocketReadable(jmpSock);
-                }
-                if (r == LIBSSH2_ERROR_NONE) {
-                    ShowStatusId(IDS_LOG_JUMP_AGENT_OK, nullptr, true);
-                    agent->disconnect();
-                    return true;
-                }
-                prev = id;
-            }
-            agent->disconnect();
+        if (SftpAuthPageantOn(authTarget, "Jump host: agent auth...",
+                              progress, &loop, &lasttime, nullptr) == 0) {
+            ShowStatusId(IDS_LOG_JUMP_AGENT_OK, nullptr, true);
+            return true;
         }
         ShowStatusId(IDS_LOG_JUMP_AGENT_FAIL, nullptr, true);
     }
@@ -331,20 +327,9 @@ static bool AuthJumpHost(
     // --- 2. Public key auth ---
     if (canPubkey && !jump.privkeyfile.empty()) {
         ShowStatusId(IDS_LOG_JUMP_PUBKEY_TRY, nullptr, true);
-        int r = LIBSSH2_ERROR_EAGAIN;
-        while (r == LIBSSH2_ERROR_EAGAIN) {
-            r = jmpSession->userauthPubkeyFromFile(
-                jump.user.c_str(),
-                static_cast<unsigned>(jump.user.size()),
-                jump.pubkeyfile.empty() ? nullptr : jump.pubkeyfile.c_str(),
-                jump.privkeyfile.c_str(),
-                jump.password.empty() ? nullptr : jump.password.c_str());
-            if (r == LIBSSH2_ERROR_EAGAIN)
-                IsSocketReadable(jmpSock);
-            if (ProgressLoop("Jump host: public key auth...", progress, progress + 5, &loop, &lasttime))
-                break;
-        }
-        if (r == LIBSSH2_ERROR_NONE) {
+        if (SftpAuthPubKeyOn(authTarget, "Jump host: public key auth...",
+                             progress, &loop, &lasttime, nullptr,
+                             AuthFailureUi::StatusOnly) == 0) {
             ShowStatusId(IDS_LOG_JUMP_PUBKEY_OK, nullptr, true);
             return true;
         }

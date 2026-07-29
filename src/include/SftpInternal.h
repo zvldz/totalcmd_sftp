@@ -10,6 +10,7 @@
 #include <string>
 #include <chrono>
 #include <cstdint>  // for int8_t
+#include <functional>
 
 inline bool IsPhpAgentTransport(const pConnectSettings cs) noexcept
 {
@@ -174,6 +175,40 @@ extern "C" void kbd_callback(LPCSTR name, int name_len,
                              LIBSSH2_USERAUTH_KBDINT_RESPONSE* responses,
                              LPVOID* abstract);
 
+// One SSH host to authenticate against. Both the target server and a jump
+// host are described by this, so the authentication logic exists once
+// instead of being reimplemented per host kind — the jump variants used to
+// be stripped-down copies that silently lacked PPK conversion, passphrase
+// prompting, path expansion and the missing-file check.
+//
+// `password` is a pointer because an entered passphrase is stored back into
+// whichever settings object owns it. `waitIo` differs per host: the target
+// waits through its transport stream, a jump host on its own raw socket,
+// and during the jump handshake the target's stream does not exist yet.
+struct SshAuthTarget {
+    ISshSession*          session   = nullptr;
+    std::string           host;              // display only: prompts and logs
+    std::string           user;
+    std::string*          password  = nullptr;
+    std::string           pubkeyfile;
+    std::string           privkeyfile;
+    std::function<void()> waitIo;
+};
+
+// What a failed attempt should look like to the user. A host with further
+// methods left to try reports quietly; a dead end says so with a dialog.
+enum class AuthFailureUi { Modal, StatusOnly };
+
+int SftpAuthPageantOn(const SshAuthTarget& target,
+                      LPCSTR progressbuf, int progress,
+                      int* ploop, SYSTICKS* plasttime, int* auth_pw);
+
+int SftpAuthPubKeyOn(const SshAuthTarget& target,
+                     LPCSTR progressbuf, int progress,
+                     int* ploop, SYSTICKS* plasttime, int* auth_pw,
+                     AuthFailureUi onFailure);
+
+// Wrappers binding the above to the target server's settings.
 int SftpAuthPageant(pConnectSettings ConnectSettings,
                     LPCSTR progressbuf, int progress,
                     int* ploop, SYSTICKS* plasttime, int* auth_pw);
