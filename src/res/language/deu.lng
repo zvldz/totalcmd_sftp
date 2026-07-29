@@ -367,4 +367,15 @@
 12083=Nicht genügend Arbeitsspeicher beim Erstellen der Verbindungseinstellungen.
 12088=Eine Verbindung mit diesem Namen existiert bereits.\nBitte einen anderen Namen wählen.
 12089=SFTP
-
+12104=(keine)
+12105= (fehlt)
+12106=Sprungsitzung '{}' wurde in den gespeicherten Sitzungen nicht gefunden
+12107=Sprungsitzung '{}' hat eine eigene Sprunghost-Konfiguration — verkettete oder zyklische Sprunghosts werden nicht unterstützt. Wählen Sie eine Sitzung, die sich direkt mit dem Bastion-Host verbindet.
+12109=SFTP-Plugin - Sitzungsimport
+12110=Die Quelldatei kann nicht zum Lesen geöffnet werden.
+12111=Sitzung kann nicht importiert werden: die Quelldatei ist leer.
+12112=Sitzung kann nicht importiert werden: die Quelldatei enthält keine INI-Abschnitte.\r\nErwartet wird eine Datei mit mindestens einem [Abschnitt] und einem `server=`-Schlüssel.
+12113=Sitzung kann nicht importiert werden: kein INI-Abschnitt mit einem nicht leeren `server=`-Schlüssel gefunden.
+12114=Sitzung kann nicht importiert werden: der Zielpfad ist leer.
+12115=Sitzung kann nicht importiert werden: Schreiben in sftpplug.ini fehlgeschlagen.
+12116=Sprung...

@@ -366,4 +366,15 @@
 12083=Nedostatek paměti při vytváření nastavení připojení.
 12088=Spojení s tímto názvem již existuje.\nZvolte jiný název spojení.
 12089=SFTP
-
+12104=(žádný)
+12105= (chybí)
+12106=Průchozí relace '{}' nebyla nalezena v uložených relacích
+12107=Průchozí relace '{}' má vlastní konfiguraci průchozího hostitele — řetězení ani cyklické průchozí hostitele nejsou podporovány. Vyberte relaci, která se připojuje přímo k bastionu.
+12109=SFTP modul - import relace
+12110=Nelze otevřít zdrojový soubor pro čtení.
+12111=Nelze importovat relaci: zdrojový soubor je prázdný.
+12112=Nelze importovat relaci: zdrojový soubor neobsahuje žádné INI sekce.\r\nOčekáván soubor s alespoň jednou [sekcí] a klíčem `server=`.
+12113=Nelze importovat relaci: nebyla nalezena žádná INI sekce s neprázdným klíčem `server=`.
+12114=Nelze importovat relaci: cílová cesta je prázdná.
+12115=Nelze importovat relaci: zápis do sftpplug.ini selhal.
+12116=Průchozí...

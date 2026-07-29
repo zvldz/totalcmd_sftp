@@ -11,8 +11,9 @@ namespace DlgLayout {
     void Move       (HWND hDlg, int  ctrlId, int x, int y, int w, int h);
 }
 
-// label(text-sized) → checkbox(fill) → button(after checkbox text, clamped right)
-void ArrangeInlineRow(HWND hDlg, int labelId, int checkId, int btnId);
+// label(text-sized) → checkbox(text-sized) → optional combo(fill) → button(right-anchored)
+// Pass 0 for comboId when the row has no dropdown between checkbox and button.
+void ArrangeInlineRow(HWND hDlg, int labelId, int checkId, int btnId, int comboId = 0);
 
 // label(text-sized) → helpBtn(fixed) → checkbox(fill to right edge)
 void ArrangePasswordRow(HWND hDlg, int labelId, int helpBtnId, int checkId);

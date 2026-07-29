@@ -367,4 +367,15 @@
 12083=Memoria insuficiente al crear la configuración de conexión.
 12088=Ya existe una sesión con este nombre.\nElija un nombre de sesión diferente.
 12089=SFTP
-
+12104=(ninguna)
+12105= (no encontrada)
+12106=La sesión de salto '{}' no se encuentra entre las sesiones guardadas
+12107=La sesión de salto '{}' tiene su propia configuración de host de salto — no se admiten hosts de salto encadenados ni cíclicos. Elija una sesión que conecte directamente con el bastión.
+12109=Complemento SFTP - importación de sesión
+12110=No se puede abrir el archivo de origen para lectura.
+12111=No se puede importar la sesión: el archivo de origen está vacío.
+12112=No se puede importar la sesión: el archivo de origen no tiene secciones INI.\r\nSe esperaba un archivo con al menos una [sección] y una clave `server=`.
+12113=No se puede importar la sesión: no se encontró ninguna sección INI con una clave `server=` no vacía.
+12114=No se puede importar la sesión: la ruta de destino está vacía.
+12115=No se puede importar la sesión: error al escribir en sftpplug.ini.
+12116=Salto...

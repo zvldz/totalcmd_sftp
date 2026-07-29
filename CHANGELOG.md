@@ -8,9 +8,20 @@ detail.
 This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 `10.x` line to make divergence visible in TC's plugin manager.
 
-## 10.0.1.5 — unreleased
+## 10.0.2.0 — unreleased
 
 ### Features
+
+- **The old Import... button is gone; importing lives in `[Imports]`.**
+  The button in the connection dialog, the checkbox picker it opened
+  and the whole flow behind it have been removed now that the
+  `[Imports]` folder covers all five sources. Everything the button
+  did is available there: `Enter` on a session connects using the
+  source program's settings, `F5` copies it into your own session
+  list, and `Ctrl+A` followed by `F5` takes a whole source at once.
+  The freed space went back into the dialog's bottom row — `OK` and
+  `Help` had been squeezed narrow to fit the button and were tight
+  for the longer translations.
 
 - **Virtual sessions now show TC's connect-progress bar on Enter.**
   Before this pass, entering a session inside `[Imports]\...` did the
@@ -25,7 +36,7 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   via a bookmark or a hand-typed path (previously broken) works
   correctly.
 
-### Prior features (already shipped in earlier 10.0.1.5 beta tags)
+### Features from the beta cycle
 
 - **`[Active Sessions]` magic folder.** A virtual folder appears in the
   plugin root whenever at least one saved session is connected.
@@ -159,6 +170,51 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 
 ### Fixes
 
+- **The jump-host session dropdown showed garbled text in translated
+  builds, and its "(none)" entry did not work.** The list was filled
+  through the ANSI window messages while the translations themselves
+  are UTF-8, so any non-Latin caption came out as mojibake. The same
+  mismatch broke the read-back: selecting the placeholder entry was
+  interpreted as choosing a session literally named "(none)", so the
+  plugin went looking for a jump host by that name instead of
+  understanding that no jump host was wanted. Affected every language
+  whose translation of "(none)" is not plain ASCII — Russian,
+  Ukrainian, Japanese, Chinese and others.
+
+- **Everything in the connection dialog is translated now.** The
+  `Jump...` button had no string ID at all and stayed English in all
+  15 languages. Twelve further strings — the jump-session dropdown
+  entries, two jump-host error messages and the seven messages shown
+  when a session INI is dropped onto the plugin — existed only in
+  English. All are translated in every shipped language.
+
+- **The jump-host row no longer overlaps itself in translated builds.**
+  The row holds four controls — label, checkbox, session dropdown and
+  button — but the code that arranges it only knew about three, and
+  positioned the button directly after the checkbox text as if the
+  dropdown were not there. English happened to land close enough to the
+  designed position that it looked correct; any other caption length
+  broke the row, either by stretching the checkbox across the dropdown
+  or by pulling the button on top of it. The button is now anchored to
+  the right edge and the dropdown gets the space between it and the
+  checkbox. The Russian and Ukrainian checkbox captions were also
+  shortened to just "Использовать" / "Використовувати", since the label
+  immediately to their left already says which host is meant.
+
+- **Unsupported Total Commander languages fall back to English.**
+  Switching TC to a language the plugin ships no translation for left
+  the plugin showing whichever language was selected before the
+  switch, instead of reverting to English. Noticed with a Swedish TC,
+  but it applied to every unsupported language. Note the plugin still
+  reads the language once when it loads, so changing it in TC takes
+  effect after restarting Total Commander.
+
+- **The bundled help was months out of date.** The compiled `.chm` had
+  not been regenerated since March because the build machine lacked
+  the tool that produces it, so the build quietly shipped the old
+  file. It now matches the current documentation — including the
+  `[Imports]` folder, which had never been documented at all.
+
 - **Imported sessions no longer lose encoding / line-ending
   auto-detection.** Every session materialised from an `[Imports]`
   folder was written with `utf8=0`, `unixlinebreaks=0` and
@@ -189,15 +245,6 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   were listed in the folder and only rejected once you tried to open
   them. They are now filtered during the folder listing, matching how
   the WinSCP and KiTTY sources already behave.
-- **Import dialog (KiTTY Portable): `Default Settings` phantom row
-  removed.** KiTTY's per-session file `Default%20Settings` stores
-  defaults, not a real session, but with `Protocol=ssh` it passed the
-  filter and showed up in the picker. Filtered out alongside the
-  existing PuTTY/WinSCP handling.
-- **Import dialog: session list now shows a column header.** The
-  `SysListView32` column was inserted without `LVCF_TEXT`, so the
-  header bar was visible but empty. Now reads `Session` (localisable
-  via `IDS_IMP_LIST_HEADER`).
 - **Shift+F5 (same-panel copy) on a session or folder no longer
   throws you out of the plugin.** After a successful copy the
   plugin was posting `cm_RereadSource` unconditionally; for
@@ -209,6 +256,12 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 
 ### Internal
 
+- Deleted the legacy import subsystem: `SessionImport.cpp` and its
+  header, the session-picker dialog template, 41 resource IDs and 510
+  lines of translation across the 15 shipped `.lng` files. Roughly
+  2400 lines gone. Nothing shared was stranded — the folder picker,
+  INI helpers, KiTTY decoder, DPAPI wrappers and PPK converter all
+  keep independent callers in the adapter code.
 - Session-import adapters share one set of primitives instead of
   carrying private copies: percent-encode / decode, registry string
   and DWORD readers, environment-variable expansion, key-file slot

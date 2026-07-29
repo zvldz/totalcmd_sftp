@@ -44,13 +44,15 @@ void DlgLayout::Move(HWND hDlg, int ctrlId, int x, int y, int w, int h)
 // Arrangements
 // ---------------------------------------------------------------------------
 
-void ArrangeInlineRow(HWND hDlg, int labelId, int checkId, int btnId)
+void ArrangeInlineRow(HWND hDlg, int labelId, int checkId, int btnId, int comboId)
 {
     HWND hLabel = GetDlgItem(hDlg, labelId);
     HWND hCheck = GetDlgItem(hDlg, checkId);
     HWND hBtn   = GetDlgItem(hDlg, btnId);
     if (!hLabel || !hCheck || !hBtn)
         return;
+
+    HWND hCombo = comboId ? GetDlgItem(hDlg, comboId) : nullptr;
 
     const int  szLabel = DlgLayout::MeasureText(hDlg, hLabel);
     const int  szCheck = DlgLayout::MeasureText(hDlg, hCheck);
@@ -62,18 +64,35 @@ void ArrangeInlineRow(HWND hDlg, int labelId, int checkId, int btnId)
 
     const int scaledBoxW = rCheck.bottom - rCheck.top;
 
-    const int labelX    = rLabel.left;
-    const int labelW    = szLabel + DlgLayout::kGap;
-    const int checkX    = labelX + labelW + DlgLayout::kGap;
-    const int btnW      = rBtn.right  - rBtn.left;
-    const int btnH      = rBtn.bottom - rBtn.top;
-    const int rawBtnX   = checkX + scaledBoxW + szCheck + DlgLayout::kGap * 2;
-    const int finalBtnX = (std::min)(rawBtnX, (int)rDlg.right - btnW - DlgLayout::kGap);
-    const int checkW    = (std::max)(finalBtnX - DlgLayout::kGap - checkX, scaledBoxW + 4);
+    const int labelX = rLabel.left;
+    const int labelW = szLabel + DlgLayout::kGap;
+    const int checkX = labelX + labelW + DlgLayout::kGap;
+    const int checkW = scaledBoxW + szCheck + DlgLayout::kGap;
+    const int btnW   = rBtn.right  - rBtn.left;
+    const int btnH   = rBtn.bottom - rBtn.top;
 
-    DlgLayout::Move(hDlg, labelId, labelX,    rLabel.top, labelW, rLabel.bottom - rLabel.top);
-    DlgLayout::Move(hDlg, checkId, checkX,    rCheck.top, checkW, rCheck.bottom - rCheck.top);
-    DlgLayout::Move(hDlg, btnId,   finalBtnX, rBtn.top,   btnW,   btnH);
+    // The button is anchored to the right edge; the checkbox takes exactly
+    // the room its text needs. Whatever is left in between belongs to the
+    // dropdown, when the row has one.
+    const int btnX = (int)rDlg.right - btnW - DlgLayout::kGap;
+
+    DlgLayout::Move(hDlg, labelId, labelX, rLabel.top, labelW, rLabel.bottom - rLabel.top);
+    DlgLayout::Move(hDlg, checkId, checkX, rCheck.top, checkW, rCheck.bottom - rCheck.top);
+    DlgLayout::Move(hDlg, btnId,   btnX,   rBtn.top,   btnW,   btnH);
+
+    if (hCombo) {
+        const RECT rCombo = DlgLayout::GetRect(hDlg, comboId);
+        const int comboX = checkX + checkW + DlgLayout::kGap;
+        const int comboW = btnX - DlgLayout::kGap - comboX;
+        // A dropdown narrower than this is unusable; leave it where the
+        // template put it rather than collapsing it to nothing.
+        if (comboW >= scaledBoxW * 2) {
+            // GetRect returns the closed height for a combobox, but MoveWindow
+            // wants the full drop-down extent, so keep the template's height.
+            DlgLayout::Move(hDlg, comboId, comboX, rCombo.top, comboW,
+                            rCombo.bottom - rCombo.top);
+        }
+    }
 }
 
 void ArrangePasswordRow(HWND hDlg, int labelId, int helpBtnId, int checkId)

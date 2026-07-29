@@ -2,9 +2,9 @@
 
 // Build metadata surfaced to the user and the log so that a beta
 // installation is unambiguously identifiable — the version bump in
-// `version.h` happens once per patch release (`10.0.1.5` → `10.0.1.6`),
+// `version.h` happens once per release (`10.0.2.0` → `10.0.2.1`),
 // but between-beta iterations only carry different git tags. Without
-// these constants the beta cycle would present as "the same 10.0.1.5"
+// these constants the beta cycle would present as "the same 10.0.2.0"
 // to anyone inspecting the plugin from Total Commander.
 //
 // The three defines below are the *fallback* used by a plain local

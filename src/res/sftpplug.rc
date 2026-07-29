@@ -794,6 +794,7 @@ BEGIN
     IDS_JUMP_DLG_HOST       "Jump host:"
     IDS_JUMP_DLG_PORT       "Port:"
     IDS_JUMP_DLG_USER       "User name:"
+    IDS_DLG_JUMP_BUTTON     "Jump..."
 END
 
 STRINGTABLE

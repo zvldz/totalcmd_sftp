@@ -366,4 +366,15 @@
 12083=Memoria insufficiente durante la creazione delle impostazioni di connessione.
 12088=Esiste già una sessione con questo nome.\nScegli un nome di sessione diverso.
 12089=SFTP
-
+12104=(nessuna)
+12105= (mancante)
+12106=Sessione di salto '{}' non trovata tra le sessioni salvate
+12107=La sessione di salto '{}' ha una propria configurazione di host di salto — host di salto concatenati o ciclici non sono supportati. Scegliere una sessione che si connette direttamente al bastion.
+12109=Plugin SFTP - importazione sessione
+12110=Impossibile aprire il file di origine in lettura.
+12111=Impossibile importare la sessione: il file di origine è vuoto.
+12112=Impossibile importare la sessione: il file di origine non contiene sezioni INI.\r\nAtteso un file con almeno una [sezione] e una chiave `server=`.
+12113=Impossibile importare la sessione: nessuna sezione INI con una chiave `server=` non vuota.
+12114=Impossibile importare la sessione: il percorso di destinazione è vuoto.
+12115=Impossibile importare la sessione: scrittura su sftpplug.ini non riuscita.
+12116=Salto...

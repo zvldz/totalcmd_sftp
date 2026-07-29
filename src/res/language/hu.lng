@@ -366,4 +366,15 @@
 12083=Nincs elég memória a kapcsolat beállításainak létrehozásakor.
 12088=Már létezik ilyen nevű munkamenet.\nKérjük, válasszon másik nevet.
 12089=SFTP
-
+12104=(nincs)
+12105= (hiányzik)
+12106=A(z) '{}' ugrómenet nem található a mentett munkamenetek között
+12107=A(z) '{}' ugrómenetnek saját ugróállomás-beállítása van — a láncolt vagy körkörös ugróállomások nem támogatottak. Válasszon olyan munkamenetet, amely közvetlenül csatlakozik a bástyagéphez.
+12109=SFTP bővítmény - munkamenet importálása
+12110=A forrásfájl nem nyitható meg olvasásra.
+12111=A munkamenet nem importálható: a forrásfájl üres.
+12112=A munkamenet nem importálható: a forrásfájl nem tartalmaz INI szakaszokat.\r\nLegalább egy [szakasz] és egy `server=` kulcs szükséges.
+12113=A munkamenet nem importálható: nem található INI szakasz nem üres `server=` kulccsal.
+12114=A munkamenet nem importálható: a célútvonal üres.
+12115=A munkamenet nem importálható: az sftpplug.ini írása sikertelen.
+12116=Ugrás...

@@ -365,3 +365,15 @@
 12103=LAN Pair: ten komputer jest skonfigurowany jako Dawca. Zdalny Biorca musi się tutaj połączyć.
 450=Windows (CR/LF)
 451=Unix (LF)
+12104=(brak)
+12105= (brakuje)
+12106=Nie znaleziono sesji pośredniczącej '{}' wśród zapisanych sesji
+12107=Sesja pośrednicząca '{}' ma własną konfigurację hosta pośredniczącego — łańcuchowe ani cykliczne hosty pośredniczące nie są obsługiwane. Wybierz sesję łączącą się bezpośrednio z bastionem.
+12109=Wtyczka SFTP - import sesji
+12110=Nie można otworzyć pliku źródłowego do odczytu.
+12111=Nie można zaimportować sesji: plik źródłowy jest pusty.
+12112=Nie można zaimportować sesji: plik źródłowy nie zawiera sekcji INI.\r\nOczekiwano pliku z co najmniej jedną [sekcją] i kluczem `server=`.
+12113=Nie można zaimportować sesji: nie znaleziono sekcji INI z niepustym kluczem `server=`.
+12114=Nie można zaimportować sesji: ścieżka docelowa jest pusta.
+12115=Nie można zaimportować sesji: zapis do sftpplug.ini nie powiódł się.
+12116=Pośredni...

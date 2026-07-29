@@ -1,9 +1,9 @@
 name: Release
 
 # Tag naming convention (see TODO.md "GitHub Actions build + releases"):
-#   v10.0.1.5-beta1 → prerelease
-#   v10.0.1.5-beta2 → prerelease
-#   v10.0.1.5       → stable release
+#   v10.0.2.0-beta1 → prerelease
+#   v10.0.2.0-beta2 → prerelease
+#   v10.0.2.0       → stable release
 #
 # Push a matching tag to trigger a fresh build + GitHub Release. The bin/
 # folder is intentionally NOT committed once this workflow is in use — the
@@ -116,13 +116,13 @@ jobs:
 
           $content = Get-Content -Raw CHANGELOG.md
 
-          # Prefer an exact-match section (`## 10.0.1.5-beta1 - date`).
+          # Prefer an exact-match section (`## 10.0.2.0-beta1 - date`).
           $pattern = "(?ms)^## \s*$([regex]::Escape($version))\b.*?(?=^## |\z)"
           $match = [regex]::Match($content, $pattern)
 
           # Fall back to the base version section when the exact beta
           # header does not exist yet — the CHANGELOG appends beta-level
-          # detail under the same `## 10.0.1.5` heading until final.
+          # detail under the same `## 10.0.2.0` heading until final.
           if (-not $match.Success) {
             $stripped = $version -replace '-beta\d+$', ''
             $pattern = "(?ms)^## \s*$([regex]::Escape($stripped))\b.*?(?=^## |\z)"

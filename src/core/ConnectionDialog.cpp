@@ -1606,27 +1606,45 @@ static constexpr const char* kJumpMissingMarkerPrefix = "[!] ";
 // this dropdown.
 static std::string ReadJumpSessionRefFromDialog(HWND hWnd)
 {
-    std::array<char, wdirtypemax> sel{};
-    GetDlgItemTextA(hWnd, IDC_JUMP_SESSION_PICK, sel.data(), static_cast<int>(sel.size()) - 1);
-    const std::string s = sel.data();
-    if (s.empty())
+    // Read wide to match how the combobox was filled, then compare against
+    // the wide translations. Reading ANSI and comparing with the UTF-8
+    // .lng text never matches for a non-ASCII "(none)" caption, which
+    // would turn the placeholder entry into a session name.
+    std::array<wchar_t, wdirtypemax> selW{};
+    GetDlgItemTextW(hWnd, IDC_JUMP_SESSION_PICK, selW.data(),
+                    static_cast<int>(selW.size()) - 1);
+    const std::wstring sW = selW.data();
+    if (sW.empty())
         return {};
-    const std::string noneText      = LngStrU8(IDS_JUMP_SESSION_NONE, "(none)");
-    if (_stricmp(s.c_str(), noneText.c_str()) == 0)
+
+    std::wstring noneW = LoadResStringW(IDS_JUMP_SESSION_NONE);
+    if (noneW.empty()) noneW = L"(none)";
+    if (_wcsicmp(sW.c_str(), noneW.c_str()) == 0)
         return {};
-    const std::string missingSuffix = LngStrU8(IDS_JUMP_SESSION_MISSING_SUFFIX, " (missing)");
+
+    std::wstring suffixW = LoadResStringW(IDS_JUMP_SESSION_MISSING_SUFFIX);
+    if (suffixW.empty()) suffixW = L" (missing)";
+    const std::wstring prefixW = unicode_util::narrow_to_wide(kJumpMissingMarkerPrefix);
     const bool isMissingMarker =
-        s.rfind(kJumpMissingMarkerPrefix, 0) == 0 &&
-        s.size() >= missingSuffix.size() &&
-        s.compare(s.size() - missingSuffix.size(), missingSuffix.size(), missingSuffix) == 0;
-    return isMissingMarker ? std::string() : s;
+        sW.rfind(prefixW, 0) == 0 &&
+        sW.size() >= suffixW.size() &&
+        sW.compare(sW.size() - suffixW.size(), suffixW.size(), suffixW) == 0;
+    if (isMissingMarker)
+        return {};
+
+    return unicode_util::wide_to_narrow(sW);
 }
 
 static void FillJumpSessionCombo(HWND hWnd, LPCSTR currentSessionName, LPCSTR currentRef)
 {
-    SendDlgItemMessage(hWnd, IDC_JUMP_SESSION_PICK, CB_RESETCONTENT, 0, 0);
-    const std::string noneText = LngStrU8(IDS_JUMP_SESSION_NONE, "(none)");
-    SendDlgItemMessage(hWnd, IDC_JUMP_SESSION_PICK, CB_ADDSTRING, 0, (LPARAM)noneText.c_str());
+    // Wide throughout: translations arrive as UTF-8 from the .lng files,
+    // and the ANSI combobox messages would render those bytes through the
+    // system codepage. Session names come from the INI as ANSI, so they
+    // convert with CP_ACP while the translated entries convert as UTF-8.
+    SendDlgItemMessageW(hWnd, IDC_JUMP_SESSION_PICK, CB_RESETCONTENT, 0, 0);
+    const std::wstring noneTextW = LoadResStringW(IDS_JUMP_SESSION_NONE);
+    SendDlgItemMessageW(hWnd, IDC_JUMP_SESSION_PICK, CB_ADDSTRING, 0,
+                        (LPARAM)(noneTextW.empty() ? L"(none)" : noneTextW.c_str()));
 
     bool foundRef = false;
     std::array<char, wdirtypemax> name{};
@@ -1636,7 +1654,9 @@ static void FillJumpSessionCombo(HWND hWnd, LPCSTR currentSessionName, LPCSTR cu
         const bool isSelf  = currentSessionName && currentSessionName[0] &&
                              _stricmp(name.data(), currentSessionName) == 0;
         if (!isQuick && !isSelf) {
-            SendDlgItemMessage(hWnd, IDC_JUMP_SESSION_PICK, CB_ADDSTRING, 0, (LPARAM)name.data());
+            const std::wstring nameW = unicode_util::narrow_to_wide(name.data());
+            SendDlgItemMessageW(hWnd, IDC_JUMP_SESSION_PICK, CB_ADDSTRING, 0,
+                                (LPARAM)nameW.c_str());
             if (currentRef && currentRef[0] &&
                 _stricmp(name.data(), currentRef) == 0)
                 foundRef = true;
@@ -1649,15 +1669,22 @@ static void FillJumpSessionCombo(HWND hWnd, LPCSTR currentSessionName, LPCSTR cu
     if (currentRef && currentRef[0] && !foundRef) {
         // Referenced session disappeared — keep the marker visible so the
         // user notices and can re-pick / clear it.
-        const std::string missingSuffix = LngStrU8(IDS_JUMP_SESSION_MISSING_SUFFIX, " (missing)");
-        std::string marker = kJumpMissingMarkerPrefix + std::string(currentRef) + missingSuffix;
-        SendDlgItemMessage(hWnd, IDC_JUMP_SESSION_PICK, CB_ADDSTRING, 0, (LPARAM)marker.c_str());
-        SendDlgItemMessage(hWnd, IDC_JUMP_SESSION_PICK, CB_SELECTSTRING, (WPARAM)-1, (LPARAM)marker.c_str());
+        std::wstring suffixW = LoadResStringW(IDS_JUMP_SESSION_MISSING_SUFFIX);
+        if (suffixW.empty()) suffixW = L" (missing)";
+        const std::wstring markerW =
+            unicode_util::narrow_to_wide(kJumpMissingMarkerPrefix) +
+            unicode_util::narrow_to_wide(currentRef) + suffixW;
+        SendDlgItemMessageW(hWnd, IDC_JUMP_SESSION_PICK, CB_ADDSTRING, 0,
+                            (LPARAM)markerW.c_str());
+        SendDlgItemMessageW(hWnd, IDC_JUMP_SESSION_PICK, CB_SELECTSTRING, (WPARAM)-1,
+                            (LPARAM)markerW.c_str());
     } else if (currentRef && currentRef[0]) {
-        SendDlgItemMessage(hWnd, IDC_JUMP_SESSION_PICK, CB_SELECTSTRING, (WPARAM)-1, (LPARAM)currentRef);
+        const std::wstring refW = unicode_util::narrow_to_wide(currentRef);
+        SendDlgItemMessageW(hWnd, IDC_JUMP_SESSION_PICK, CB_SELECTSTRING, (WPARAM)-1,
+                            (LPARAM)refW.c_str());
     } else {
         // Default: localized "(none)" — first entry, index 0
-        SendDlgItemMessage(hWnd, IDC_JUMP_SESSION_PICK, CB_SETCURSEL, 0, 0);
+        SendDlgItemMessageW(hWnd, IDC_JUMP_SESSION_PICK, CB_SETCURSEL, 0, 0);
     }
 }
 
@@ -2208,6 +2235,7 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
         { IDC_LABEL_SESSION,      IDS_DLG_SESSION           },
         { IDC_LABEL_JUMPHOST_GRP, IDS_DLG_JUMPHOST_GRP      },
         { IDC_JUMP_ENABLE,        IDS_DLG_USE_JUMPHOST      },
+        { IDC_JUMP_BUTTON,        IDS_DLG_JUMP_BUTTON       },
         { IDC_LABEL_PROXY_SETTINGS, IDS_DLG_PROXY_SETTINGS  },
         { IDC_PHP_TAR,              IDS_DLG_PHP_TAR         },
         { IDC_LAN_TI,               IDS_LAN_TI              },
@@ -2227,7 +2255,8 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
         }
     }
 
-    ArrangeInlineRow(m_hWnd, IDC_LABEL_JUMPHOST_GRP, IDC_JUMP_ENABLE, IDC_JUMP_BUTTON);
+    ArrangeInlineRow(m_hWnd, IDC_LABEL_JUMPHOST_GRP, IDC_JUMP_ENABLE, IDC_JUMP_BUTTON,
+                     IDC_JUMP_SESSION_PICK);
     ArrangePasswordRow(m_hWnd, IDC_PASSLABEL, IDC_PASSWORDHELP, IDC_USEAGENT);
     ArrangePermissionsRow(m_hWnd, IDC_FILEMOD_LABEL, IDC_FILEMOD, IDC_DIRMOD_LABEL, IDC_DIRMOD, IDC_PERMISSIONS_GROUP);
     ArrangePhpTarCheckbox(m_hWnd);

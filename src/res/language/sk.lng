@@ -366,4 +366,15 @@
 12083=Nedostatok pamäte pri vytváraní nastavení pripojenia.
 12088=Spojenie s týmto názvom už existuje.\nZvoľte iný názov spojenia.
 12089=SFTP
-
+12104=(žiadna)
+12105= (chýba)
+12106=Prechodová relácia '{}' sa nenašla medzi uloženými reláciami
+12107=Prechodová relácia '{}' má vlastnú konfiguráciu prechodového hostiteľa — reťazené ani cyklické prechodové hostitele nie sú podporované. Vyberte reláciu, ktorá sa pripája priamo k bastionu.
+12109=SFTP modul - import relácie
+12110=Zdrojový súbor sa nedá otvoriť na čítanie.
+12111=Reláciu nie je možné importovať: zdrojový súbor je prázdny.
+12112=Reláciu nie je možné importovať: zdrojový súbor neobsahuje žiadne INI sekcie.\r\nOčakáva sa súbor aspoň s jednou [sekciou] a kľúčom `server=`.
+12113=Reláciu nie je možné importovať: nenašla sa INI sekcia s neprázdnym kľúčom `server=`.
+12114=Reláciu nie je možné importovať: cieľová cesta je prázdna.
+12115=Reláciu nie je možné importovať: zápis do sftpplug.ini zlyhal.
+12116=Prechod...

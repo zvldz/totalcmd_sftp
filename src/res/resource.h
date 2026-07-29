@@ -10,15 +10,11 @@
 #define IDI_ICON1SMALL                  105
 #define IDI_ICON2SMALL                  106
 #define IDD_PROXY                       110
-#define IDS_SERVERLIST_DEFOK            128
-#define IDS_SERVERLIST_DEFBAD           129
 #define IDS_F7NEW                       130
 #define IDS_HELPTEXT                    131
 #define IDS_QUICKCONNECT                132
 #define IDS_HELP_CAPTION                144
-#define IDS_HELP_THREESTEPUPLOAD        145
 #define IDS_HELP_UTF8                   146
-#define IDS_HELP_DELETEBEFOREUPLOAD     147
 #define IDS_HELP_PROXY                  148
 #define IDS_HELP_CERT                   149
 #define IDS_CONNECT_TO                  150
@@ -151,7 +147,6 @@
 #define IDS_LAN_ERR_PEER_UNAVAILABLE    276
 #define IDS_LAN_ERR_PAIR_FAILED         277
 #define IDS_LAN_MSG_PAIR_OK             278
-#define IDS_LAN_PREVIEW_ONLY            279
 #define IDC_CONNECTTO                   1000
 #define IDC_USERNAME                    1001
 #define IDC_PASSWORD                    1002
@@ -526,6 +521,7 @@
 #define IDS_SIMPORT_ERR_NO_SERVER       12113   // No section with server= key
 #define IDS_SIMPORT_ERR_EMPTY_DEST      12114   // Empty destination path
 #define IDS_SIMPORT_ERR_WRITE           12115   // Failed to write to sftpplug.ini
+#define IDS_DLG_JUMP_BUTTON             12116   // "Jump..." button in the connection dialog
 
 // Next default values for new objects
 //

@@ -366,4 +366,15 @@
 12083=Memorie insuficientă la crearea setărilor conexiunii.
 12088=Există deja o sesiune cu acest nume.\nAlegeți un alt nume de sesiune.
 12089=SFTP
-
+12104=(niciuna)
+12105= (lipsește)
+12106=Sesiunea de salt '{}' nu a fost găsită printre sesiunile salvate
+12107=Sesiunea de salt '{}' are propria configurație de gazdă de salt — gazdele de salt înlănțuite sau ciclice nu sunt acceptate. Alegeți o sesiune care se conectează direct la bastion.
+12109=Plugin SFTP - import sesiune
+12110=Nu se poate deschide fișierul sursă pentru citire.
+12111=Nu se poate importa sesiunea: fișierul sursă este gol.
+12112=Nu se poate importa sesiunea: fișierul sursă nu conține secțiuni INI.\r\nSe aștepta un fișier cu cel puțin o [secțiune] și o cheie `server=`.
+12113=Nu se poate importa sesiunea: nu s-a găsit nicio secțiune INI cu o cheie `server=` necompletată.
+12114=Nu se poate importa sesiunea: calea de destinație este goală.
+12115=Nu se poate importa sesiunea: scrierea în sftpplug.ini a eșuat.
+12116=Salt...

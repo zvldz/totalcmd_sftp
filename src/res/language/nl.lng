@@ -366,4 +366,15 @@
 12083=Onvoldoende geheugen bij het maken van verbindingsinstellingen.
 12088=Er bestaat al een sessie met deze naam.\nKies een andere sessienaam.
 12089=SFTP
-
+12104=(geen)
+12105= (ontbreekt)
+12106=Sprongsessie '{}' niet gevonden in de opgeslagen sessies
+12107=Sprongsessie '{}' heeft een eigen sprongbastion-configuratie — geketende of cyclische sprongbastions worden niet ondersteund. Kies een sessie die rechtstreeks verbinding maakt met het bastion.
+12109=SFTP-plug-in - sessie-import
+12110=Kan het bronbestand niet openen om te lezen.
+12111=Kan sessie niet importeren: het bronbestand is leeg.
+12112=Kan sessie niet importeren: het bronbestand bevat geen INI-secties.\r\nEen bestand met ten minste één [sectie] en een `server=`-sleutel wordt verwacht.
+12113=Kan sessie niet importeren: geen INI-sectie met een niet-lege `server=`-sleutel gevonden.
+12114=Kan sessie niet importeren: het doelpad is leeg.
+12115=Kan sessie niet importeren: schrijven naar sftpplug.ini is mislukt.
+12116=Sprong...
