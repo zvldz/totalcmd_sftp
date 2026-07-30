@@ -163,10 +163,9 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   which libssh2 with the mbedTLS backend consumes directly. Fix
   applies plugin-wide, not just to Import-related paths: hand-
   configured sessions with `privkeyfile=<...>.ppk` benefit too.
-  RSA / ECDSA PPKs are unchanged. Encrypted-ed25519 PPKs are not
-  covered — the maintainer's use case does not need them yet;
-  extend if a report shows up. Same for the Ed448 curve (PuTTY
-  0.75+ can write it), tracked in TODO.
+  RSA / ECDSA PPKs are unchanged. Encrypted-ed25519 PPKs and the
+  Ed448 curve (PuTTY 0.75+ can write it) are not covered yet — open
+  an issue if you need either.
 
 ### Fixes
 
