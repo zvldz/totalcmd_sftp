@@ -104,4 +104,18 @@ uint32_t Fnv1aHash(std::string_view s) noexcept;
 void SecureWipe(std::string& s) noexcept;
 void SecureWipe(std::vector<char>& v) noexcept;
 
+// Wipes on the way out, whichever way out that is. Declare it after the
+// string it guards, so it runs while that string is still alive. Functions
+// holding a secret usually grow an early return sooner or later, and this
+// keeps the next one from quietly skipping the wipe.
+class ScopedWipe {
+public:
+    explicit ScopedWipe(std::string& s) noexcept : s_(&s) {}
+    ~ScopedWipe() noexcept { if (s_) SecureWipe(*s_); }
+    ScopedWipe(const ScopedWipe&)            = delete;
+    ScopedWipe& operator=(const ScopedWipe&) = delete;
+private:
+    std::string* s_;
+};
+
 }  // namespace sftp

@@ -326,9 +326,10 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 ### Internal
 
 - Decrypted passwords from FileZilla and KiTTY imports are overwritten
-  in memory once they have been re-wrapped, rather than left in freed
-  buffers for a crash dump or the hibernation file to pick up. Best
-  effort by nature — it covers the copy the adapter owns.
+  in memory rather than left in freed buffers for a crash dump or the
+  hibernation file to pick up — on the failure paths as well, where a
+  half-decrypted buffer would otherwise survive. Best effort by nature:
+  it covers the copy the adapter owns.
 
 - Message boxes the plugin raises now go through one helper, which asks
   Total Commander to draw them (`RequestProcW`) and falls back to a bare

@@ -284,6 +284,7 @@ void ImportKittyPassword(const std::string& filePath,
                           pConnectSettings out)
 {
     std::string encPass;
+    sftp::ScopedWipe wipeEnc(encPass);
     if (!ReadKittyString(filePath, "Password", encPass) || encPass.empty())
         return;
 
@@ -292,6 +293,7 @@ void ImportKittyPassword(const std::string& filePath,
         term = "xterm";
 
     std::string plain;
+    sftp::ScopedWipe wipePlain(plain);
     if (!DecryptKittyPassword(encPass, host, term, plain) || plain.empty()) {
         SFTP_LOG("KITTY", "  password present but decrypt failed for host='%s'",
                  host.c_str());
@@ -302,8 +304,6 @@ void ImportKittyPassword(const std::string& filePath,
     EncryptString(plain.c_str(), encBuf.data(),
                   static_cast<UINT>(encBuf.size()));
     out->password = encBuf.data();
-    sftp::SecureWipe(plain);
-    sftp::SecureWipe(encPass);
 }
 
 }  // namespace
