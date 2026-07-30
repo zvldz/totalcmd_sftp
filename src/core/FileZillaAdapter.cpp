@@ -625,7 +625,9 @@ bool FileZillaAdapter::LoadSettings(const ExternalSessionEntry& entry,
                 EncryptString(plain.c_str(), encBuf.data(),
                               static_cast<UINT>(encBuf.size()));
                 out->password = encBuf.data();
+                sftp::SecureWipe(plain);
             }
+            sftp::SecureWipe(decoded);
         }
     }
 

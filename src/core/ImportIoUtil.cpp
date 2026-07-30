@@ -455,6 +455,20 @@ std::string ExpandEnvA(const std::string& raw)
     return expanded;
 }
 
+void SecureWipe(std::string& s) noexcept
+{
+    if (!s.empty())
+        SecureZeroMemory(s.data(), s.size());
+    s.clear();
+}
+
+void SecureWipe(std::vector<char>& v) noexcept
+{
+    if (!v.empty())
+        SecureZeroMemory(v.data(), v.size());
+    v.clear();
+}
+
 uint32_t Fnv1aHash(std::string_view s) noexcept
 {
     uint32_t h = 0x811C9DC5u;

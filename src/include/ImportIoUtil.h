@@ -6,6 +6,7 @@
 #include <functional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace sftp {
 
@@ -95,5 +96,12 @@ std::string ExpandEnvA(const std::string& raw);
 // FNV-1a 32-bit hash. Used for channel-tag hashing in the import cache and
 // for the virtual-session alias suffix.
 uint32_t Fnv1aHash(std::string_view s) noexcept;
+
+// Overwrite a buffer that held a decrypted password before it returns to the
+// allocator, so the plaintext does not linger in freed memory, a crash dump or
+// the hibernation file. Best effort by nature: it reaches the copy we own, not
+// whatever the decoder kept inside itself.
+void SecureWipe(std::string& s) noexcept;
+void SecureWipe(std::vector<char>& v) noexcept;
 
 }  // namespace sftp

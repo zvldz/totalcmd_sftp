@@ -302,6 +302,8 @@ void ImportKittyPassword(const std::string& filePath,
     EncryptString(plain.c_str(), encBuf.data(),
                   static_cast<UINT>(encBuf.size()));
     out->password = encBuf.data();
+    sftp::SecureWipe(plain);
+    sftp::SecureWipe(encPass);
 }
 
 }  // namespace
