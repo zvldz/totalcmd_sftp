@@ -308,6 +308,17 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 
 ### Internal
 
+- OpenSSL updated to 3.5.7, which carries seven CVE fixes including a
+  high-severity use-after-free in `PKCS7_verify`. SSH does not reach
+  the PKCS#7, CMS or QUIC code those mostly live in, but the ASN.1
+  string-conversion overflow is on a path key and certificate parsing
+  can take. libssh2 stays at 1.11.1 and argon2 at 20190702, both
+  current.
+
+- Built with the VS 2026 / MSVC v145 toolset, replacing VS 2022 and
+  v143. OpenSSL, libssh2 and argon2 are rebuilt from source for every
+  release, so they come from the new compiler too.
+
 - Deleted the legacy import subsystem: `SessionImport.cpp` and its
   header, the session-picker dialog template, 41 resource IDs and 510
   lines of translation across the 15 shipped `.lng` files. Roughly
