@@ -7,6 +7,21 @@
 bool LoadProxySettingsFromNr(int proxynr, pConnectSettings ConnectResults, LPCSTR iniFileName);
 bool LoadServerSettings(LPCSTR DisplayName, pConnectSettings ConnectResults, LPCSTR iniFileName);
 
+// Copy every profile field LoadServerSettings reads, leaving identity
+// (DisplayName / IniFileName), live connection state and runtime flags alone.
+//
+// The connection dialog needs this when the user picks a different session:
+// its controls are refilled from the newly loaded profile, but OK saves from
+// the settings object, and the settings object still describes the session
+// selected before. Fields with no control of their own — the jump host, PHP
+// and LAN-pair options, the auto-detect tri-states — would otherwise be
+// written over the newly selected session, silently replacing its
+// configuration with the previous one's.
+//
+// Keep this in step with LoadServerSettings: a profile field added there and
+// missed here reintroduces exactly that data loss.
+void AssignProfileFields(pConnectSettings dst, const tConnectSettings& src);
+
 // Read / write the per-source list of user-added custom scan paths. Storage
 // lives in the plugin's own sftpplug.ini under the [Imports] section, with
 // one key per source: "<sourceId>.custom_paths=path1;path2;...". Semicolons

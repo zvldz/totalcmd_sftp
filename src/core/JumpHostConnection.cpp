@@ -122,8 +122,10 @@ static LPVOID jmp_realloc(LPVOID p, size_t n, LPVOID* /*ab*/) { return realloc(p
 static void   jmp_free(LPVOID p, LPVOID* /*ab*/)    { free(p); }
 
 // Context threaded through the jump session abstract pointer for kbd-interactive.
+// Referencing the settings string keeps the callback correct for the session's
+// whole lifetime, whatever the owner does to that string in between.
 struct JmpKbdCtx {
-    const char* password = nullptr;
+    const std::string* password = nullptr;
 };
 
 // Keyboard-interactive callback for jump host: echo the stored password only for
@@ -139,7 +141,7 @@ extern "C" static void jmp_kbd_callback(
     auto* ctx = static_cast<JmpKbdCtx*>(*abstract);
     for (int i = 0; i < num_prompts; i++) {
         const char* pw = "";
-        if (ctx && ctx->password) {
+        if (ctx && ctx->password && !ctx->password->empty()) {
             // Copy and lowercase the prompt text to check if it looks like a password prompt.
             std::array<char, 256> lower{};
             const size_t copyLen = min(
@@ -153,7 +155,7 @@ extern "C" static void jmp_kbd_callback(
                              && !strstr(lower.data(), "one time")
                              && !strstr(lower.data(), "one-time");
             if (isPass || copyLen == 0)
-                pw = ctx->password;
+                pw = ctx->password->c_str();
         }
         responses[i].text   = _strdup(pw);
         responses[i].length = static_cast<unsigned int>(strlen(pw));
@@ -546,7 +548,7 @@ std::unique_ptr<ITransportStream> ConnectViaJumpHost(
     // 2. Create jump SSH session
     // -----------------------------------------------------------------------
     // We store a JmpKbdCtx in the jump session's abstract so kbd-int works.
-    JmpKbdCtx kbdCtx{ jump.password.c_str() };
+    JmpKbdCtx kbdCtx{ &jump.password };
 
     auto jmpSession = backend->createSession(jmp_alloc, jmp_free, jmp_realloc, &kbdCtx);
     if (!jmpSession) {

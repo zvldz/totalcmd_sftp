@@ -171,6 +171,74 @@ bool LoadServerSettings(LPCSTR DisplayName, pConnectSettings ConnectResults, LPC
     return !ConnectResults->server.empty();
 }
 
+void AssignProfileFields(pConnectSettings dst, const tConnectSettings& src)
+{
+    if (!dst)
+        return;
+
+    // Connection
+    dst->server             = src.server;
+    dst->user               = src.user;
+    dst->password           = src.password;
+    dst->protocoltype       = src.protocoltype;
+    dst->customport         = src.customport;
+    dst->transfermode       = src.transfermode;
+    dst->compressed         = src.compressed;
+    dst->detailedlog        = src.detailedlog;
+    dst->connectsendcommand = src.connectsendcommand;
+    dst->sendcommandmode    = src.sendcommandmode;
+
+    // Authentication
+    dst->useagent           = src.useagent;
+    dst->pubkeyfile         = src.pubkeyfile;
+    dst->privkeyfile        = src.privkeyfile;
+    dst->savedfingerprint   = src.savedfingerprint;
+
+    // Remote file handling
+    dst->filemod            = src.filemod;
+    dst->dirmod             = src.dirmod;
+    dst->utf8names          = src.utf8names;
+    dst->codepage           = src.codepage;
+    dst->unixlinebreaks     = src.unixlinebreaks;
+
+    // SCP / shell transfer
+    dst->scponly              = src.scponly;
+    dst->scpfordata           = src.scpfordata;
+    dst->scpserver64bit       = src.scpserver64bit;
+    dst->shell_transfer_dd    = src.shell_transfer_dd;
+    dst->shell_transfer_force = src.shell_transfer_force;
+
+    // PHP agent
+    dst->php_http_mode      = src.php_http_mode;
+    dst->php_chunk_mib      = src.php_chunk_mib;
+    dst->php_tar            = src.php_tar;
+
+    // LAN pair
+    dst->lan_pair_role              = src.lan_pair_role;
+    dst->lan_pair_peer              = src.lan_pair_peer;
+    dst->lan_pair_timeout_min       = src.lan_pair_timeout_min;
+    dst->lan_pair_trusted_installer = src.lan_pair_trusted_installer;
+
+    // Proxy
+    dst->proxynr            = src.proxynr;
+    dst->proxytype          = src.proxytype;
+    dst->proxyserver        = src.proxyserver;
+    dst->proxyuser          = src.proxyuser;
+    dst->proxypassword      = src.proxypassword;
+
+    // Jump host
+    dst->use_jump_host      = src.use_jump_host;
+    dst->jump_session_ref   = src.jump_session_ref;
+    dst->jump_host          = src.jump_host;
+    dst->jump_port          = src.jump_port;
+    dst->jump_user          = src.jump_user;
+    dst->jump_password      = src.jump_password;
+    dst->jump_pubkeyfile    = src.jump_pubkeyfile;
+    dst->jump_privkeyfile   = src.jump_privkeyfile;
+    dst->jump_useagent      = src.jump_useagent;
+    dst->jump_fingerprint   = src.jump_fingerprint;
+}
+
 void UpdateJumpRefsOnSessionRename(LPCSTR oldName, LPCSTR newName, LPCSTR iniFileName)
 {
     if (!oldName || !oldName[0] || !iniFileName || !iniFileName[0])

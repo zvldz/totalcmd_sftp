@@ -68,9 +68,9 @@ static constexpr DWORD SOCKET_POLL_MS           = 50;
 static constexpr DWORD SOCKET_READ_POLL_MS      = 1000;
 static constexpr DWORD PROGRESS_UPDATE_MS       = 100;
 
-// Reconnect timeout (used by ReconnectSFTPChannelIfNeeded). Disconnect itself
-// no longer needs a multi-second timeout — SSH_MSG_DISCONNECT is fire-and-forget
-// per RFC 4253 §11.1, so SftpCloseConnection only briefly retries on EAGAIN.
+// Reconnect timeout, used by ReconnectSFTPChannelIfNeeded. Disconnect needs no
+// such budget: SSH_MSG_DISCONNECT is fire-and-forget per RFC 4253 §11.1, so
+// SftpCloseConnection only briefly retries on EAGAIN.
 static constexpr DWORD RECONNECT_SFTP_TIMEOUT_MS = 2000;
 
 // Tri-state flags for auto-detection fields (utf8names, unixlinebreaks, scpserver64bit).
@@ -176,20 +176,20 @@ extern "C" void kbd_callback(LPCSTR name, int name_len,
                              LPVOID* abstract);
 
 // One SSH host to authenticate against. Both the target server and a jump
-// host are described by this, so the authentication logic exists once
-// instead of being reimplemented per host kind — the jump variants used to
-// be stripped-down copies that silently lacked PPK conversion, passphrase
-// prompting, path expansion and the missing-file check.
+// host are described by this, so the authentication logic — PPK conversion,
+// passphrase prompting, path expansion, missing-file checks — exists once
+// instead of once per host kind.
 //
-// `password` is a pointer because an entered passphrase is stored back into
-// whichever settings object owns it. `waitIo` differs per host: the target
-// waits through its transport stream, a jump host on its own raw socket,
-// and during the jump handshake the target's stream does not exist yet.
+// `password` points at the settings object that owns it and is only read;
+// a passphrase entered for a key stays local to the attempt. `waitIo`
+// differs per host: the target waits through its transport stream, a jump
+// host on its own raw socket, since during the jump handshake the target's
+// stream does not exist yet.
 struct SshAuthTarget {
     ISshSession*          session   = nullptr;
     std::string           host;              // display only: prompts and logs
     std::string           user;
-    std::string*          password  = nullptr;
+    const std::string*    password  = nullptr;
     std::string           pubkeyfile;
     std::string           privkeyfile;
     std::function<void()> waitIo;

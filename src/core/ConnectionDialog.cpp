@@ -279,11 +279,8 @@ static INT_PTR CALLBACK JumpHostDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
             cs->jump_useagent = IsDlgButtonChecked(hWnd, IDC_JUMP_USEAGENT) == BST_CHECKED;
 
             // Only the model is updated here; the connection dialog's OK is
-            // what persists it. Writing to the INI directly from this dialog
-            // meant settings survived a Cancel in the parent, and — because
-            // the section came from whichever session was open when the parent
-            // dialog was created — they could land in a different session
-            // than the one on screen.
+            // what persists it, against the session selected there. That keeps
+            // a Cancel in the parent from leaving these settings behind.
 
             EndDialog(hWnd, IDOK);
             return 1;
@@ -2071,21 +2068,6 @@ static void OnDeleteLastProxyCommand(HWND hWnd, pConnectSettings dlgConnectResul
     }
 }
 
-static void OnSessionChangedCommand(HWND hWnd, ConnectDialogContext* dlgCtx, LPCSTR dlgIniFileName)
-{
-    std::string sessionName(wdirtypemax, '\0');
-    const UINT len = GetDlgItemTextA(hWnd, IDC_SESSIONCOMBO, sessionName.data(), static_cast<int>(sessionName.size()));
-    sessionName.resize(len);
-    
-    TrimSessionName(sessionName.data());
-    
-    if (sessionName[0] && _stricmp(sessionName.data(), s_quickconnect) != 0) {
-        tConnectSettings loaded{};
-        if (LoadServerSettings(sessionName.data(), &loaded, dlgIniFileName))
-            ApplyLoadedSessionToDialog(hWnd, &loaded, dlgIniFileName);
-    }
-}
-
 static void OnProxyButtonCommand(HWND hWnd, pConnectSettings dlgConnectResults, ConnectDialogContext* dlgCtx)
 {
     const int idx = (int)SendDlgItemMessage(hWnd, IDC_PROXYCOMBO, CB_GETCURSEL, 0, 0);
@@ -2114,38 +2096,13 @@ static void OnProxyButtonCommand(HWND hWnd, pConnectSettings dlgConnectResults, 
     }
 }
 
-// Name of the session the dialog is currently showing. The context's
-// displayName is fixed when the dialog opens and does not follow the session
-// combo, so anything that writes to the INI must ask the combo instead —
-// otherwise it edits whichever session happened to be open first.
-static std::string CurrentSessionNameFromDialog(HWND hWnd, LPCSTR fallback)
-{
-    std::string name(wdirtypemax, '\0');
-    const UINT len = GetDlgItemTextA(hWnd, IDC_SESSIONCOMBO, name.data(),
-                                     static_cast<int>(name.size()));
-    name.resize(len);
-    TrimSessionName(name.data());
-    name.resize(strlen(name.c_str()));
-    if (name.empty() && fallback)
-        name = fallback;
-    return name;
-}
-
-static void OnJumpButtonCommand(HWND hWnd, pConnectSettings dlgConnectResults, LPCSTR dlgDisplayName)
+static void OnJumpButtonCommand(HWND hWnd, pConnectSettings dlgConnectResults)
 {
     if (!dlgConnectResults) return;
 
     JumpDialogContext jumpCtx;
     jumpCtx.cs = dlgConnectResults;
     jumpCtx.hasCryptProc = (CryptProc != nullptr);
-
-    // JumpHostDlgProc persists straight to cs->DisplayName's INI section, so
-    // point it at the session actually on screen. Taking the name the dialog
-    // was opened with sent those writes into the previously selected session,
-    // which then silently connected through a jump host of its own.
-    const std::string target = CurrentSessionNameFromDialog(hWnd, dlgDisplayName);
-    if (!target.empty())
-        dlgConnectResults->DisplayName = target;
 
     ShowLocalizedDialogBoxParam(IDD_JUMPHOST, hWnd, JumpHostDlgProc, (LPARAM)&jumpCtx);
 
@@ -2766,10 +2723,10 @@ void ConnectionDialog::OnOk()
         // below (which are still preserved for switching back to manual mode).
         WritePrivateProfileString(targetProfile.data(), "jumpsessionref",
             m_settings->jump_session_ref.empty() ? nullptr : m_settings->jump_session_ref.c_str(), dlgIniFileName);
-        // Every jump field is written unconditionally, an empty value removing
-        // the key. Writing only non-empty values meant a field cleared in the
-        // dialog kept its old content in the INI, so a session could still be
-        // routed through a jump host the user believed they had removed.
+        // Each jump field below is written unconditionally, an empty value
+        // removing the key, so that clearing a field in the dialog also clears
+        // it in the INI rather than leaving the session routed through a jump
+        // host the user believes they removed.
         WritePrivateProfileString(targetProfile.data(), "jumphost",
             m_settings->jump_host.empty() ? nullptr : m_settings->jump_host.c_str(), dlgIniFileName);
         if (m_settings->jump_port && m_settings->jump_port != 22) {
@@ -2856,6 +2813,12 @@ void ConnectionDialog::OnSessionChanged()
         tConnectSettings loaded{};
         if (LoadServerSettings(sessionName.data(), &loaded, m_ctx->iniFileName)) {
             ApplyLoadedSessionToDialog(m_hWnd, &loaded, m_ctx->iniFileName);
+
+            // The controls now show the new session; the model has to follow,
+            // because OK saves from the model and would otherwise write the
+            // previously selected session's settings over this one.
+            AssignProfileFields(m_settings, loaded);
+
             // Refresh jump-host picker: "self" is now the newly-loaded session
             // (so the exclusion list shifts), and the dropdown should reflect
             // the loaded session's own jumpsessionref. Jump button state needs
@@ -2945,7 +2908,7 @@ void ConnectionDialog::OnJumpEnableChanged()
 
 void ConnectionDialog::OnJumpButton()
 {
-    OnJumpButtonCommand(m_hWnd, m_settings, m_ctx->displayName);
+    OnJumpButtonCommand(m_hWnd, m_settings);
     CheckDlgButton(m_hWnd, IDC_JUMP_ENABLE,
         m_settings->use_jump_host ? BST_CHECKED : BST_UNCHECKED);
 }

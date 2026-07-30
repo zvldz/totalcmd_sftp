@@ -231,7 +231,7 @@ static void BuildUserAtServerTitle(char* out, size_t outLen, int prefixResId,
 static bool PreparePrivateKeyForAuth(
     LPCSTR user,
     LPCSTR host,
-    std::string* ioPassword,
+    const std::string& password,
     char* ioPrivKeyFile,
     size_t privKeyLen,
     char** ioPubKeyPtr,
@@ -241,12 +241,12 @@ static bool PreparePrivateKeyForAuth(
     char* ioPromptBuf,
     size_t ioPromptBufLen)
 {
-    if (!ioPassword || !ioPrivKeyFile || !ioPubKeyPtr || !outRemoveConvertedPrivateKey || !outConvertedPrivateKey || !ioPromptBuf)
+    if (!ioPrivKeyFile || !ioPubKeyPtr || !outRemoveConvertedPrivateKey || !outConvertedPrivateKey || !ioPromptBuf)
         return false;
     if (!EndsWithNoCase(ioPrivKeyFile, ".ppk"))
         return true;
 
-    const char* ppkPass = ioPassword->empty() ? "" : ioPassword->c_str();
+    const char* ppkPass = password.c_str();
     PpkConvertError convErr = PpkConvertError::internal_error;
     ShowStatusId(IDS_LOG_PPK_CONVERTING, nullptr, true);
     bool converted = ConvertPpkToOpenSsh(ioPrivKeyFile, ppkPass, outConvertedPrivateKey, convertedLen - 1, &convErr);
@@ -263,9 +263,9 @@ static bool PreparePrivateKeyForAuth(
         LoadStr(ioPromptBuf, ioPromptBufLen, IDS_KEYPASSPHRASE);
         BuildUserAtServerTitle(title.data(), title.size(), IDS_PASSPHRASE, user, host);
         if (RequestProc(PluginNumber, RT_Password, title.data(), ioPromptBuf, ppkPassBuf.data(), ppkPassBuf.size() - 1)) {
+            // The passphrase decrypts the key and is not an account credential:
+            // it stays local to this attempt.
             converted = ConvertPpkToOpenSsh(ioPrivKeyFile, ppkPassBuf.data(), outConvertedPrivateKey, convertedLen - 1, &convErr);
-            if (converted && ioPassword->empty())
-                *ioPassword = ppkPassBuf.data();
         }
         SecureZeroMemory(ppkPassBuf.data(), ppkPassBuf.size());
     }
@@ -399,12 +399,13 @@ int SftpAuthPageantOn(const SshAuthTarget& target, LPCSTR progressbuf, int progr
 #ifndef SFTP_ALLINONE
         // NOTE: LIBSSH2_ERROR_REQUIRE_KEYBOARD / REQUIRE_PASSWORD are non-standard error codes
         // provided by the local libssh2 fork to signal mid-auth method switching.
+        // A caller with no interest in the remaining methods passes null.
         if (auth == LIBSSH2_ERROR_REQUIRE_KEYBOARD) {
-            *auth_pw = SSH_AUTH_KEYBOARD;
+            if (auth_pw) *auth_pw = SSH_AUTH_KEYBOARD;
             return finish(SSH_AUTH_KEYBOARD);
         }
         if (auth == LIBSSH2_ERROR_REQUIRE_PASSWORD) {
-            *auth_pw = SSH_AUTH_PASSWORD;
+            if (auth_pw) *auth_pw = SSH_AUTH_PASSWORD;
             return finish(SSH_AUTH_PASSWORD);
         }
 #endif
@@ -475,7 +476,7 @@ int SftpAuthPubKeyOn(const SshAuthTarget& target, LPCSTR progressbuf, int progre
         return -LIBSSH2_ERROR_FILE;
     }
 
-    if (!PreparePrivateKeyForAuth(target.user.c_str(), target.host.c_str(), target.password,
+    if (!PreparePrivateKeyForAuth(target.user.c_str(), target.host.c_str(), *target.password,
                                   privkeyfile.data(), privkeyfile.size(), &pubkeyfileptr,
                                   &removeConvertedPrivateKey, convertedPrivateKey.data(), convertedPrivateKey.size(),
                                   buf.data(), buf.size())) {
@@ -605,11 +606,6 @@ int SftpAuthPubKeyOn(const SshAuthTarget& target, LPCSTR progressbuf, int progre
         return -IDS_ERR_AUTH_PUBKEY;
     }
     cleanupConvertedIfNeeded();
-
-    // Only store password if it was actually entered by the user and we didn't have one
-    if (auth == 0 && isencrypted && passphrase[0] && target.password->empty())
-        *target.password = passphrase.data();
-
     clearPassphrase();
     AUTH_LOG("SftpAuthPubKey returning 0 (SUCCESS)");
     return 0;
