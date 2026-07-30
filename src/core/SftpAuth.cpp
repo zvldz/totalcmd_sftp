@@ -271,7 +271,10 @@ static bool PreparePrivateKeyForAuth(
         BuildUserAtServerTitle(title.data(), title.size(), IDS_PASSPHRASE, user, host);
         if (RequestProc(PluginNumber, RT_Password, title.data(), ioPromptBuf, ppkPassBuf.data(), ppkPassBuf.size() - 1)) {
             converted = ConvertPpkToOpenSsh(ioPrivKeyFile, ppkPassBuf.data(), outConvertedPrivateKey, convertedLen - 1, &convErr);
-            if (converted && keyPassphrase.empty())
+            // This prompt is only reached once the passphrase already held
+            // failed to open the key, so a conversion that succeeds here
+            // replaces it: what opened the key outranks what was assumed.
+            if (converted)
                 keyPassphrase = ppkPassBuf.data();
         }
         SecureZeroMemory(ppkPassBuf.data(), ppkPassBuf.size());
@@ -614,7 +617,10 @@ int SftpAuthPubKeyOn(const SshAuthTarget& target, LPCSTR progressbuf, int progre
         return -IDS_ERR_AUTH_PUBKEY;
     }
     cleanupConvertedIfNeeded();
-    if (auth == 0 && isencrypted && passphrase[0] && target.keyPassphrase->empty())
+    // The key opened with this passphrase, so keep it whatever was there
+    // before — a guess drawn from an unlabelled password field would
+    // otherwise be re-tried, and fail, on every reconnect.
+    if (auth == 0 && isencrypted && passphrase[0])
         *target.keyPassphrase = passphrase.data();
     clearPassphrase();
     AUTH_LOG("SftpAuthPubKey returning 0 (SUCCESS)");
