@@ -1682,47 +1682,6 @@ static void FillJumpSessionCombo(HWND hWnd, LPCSTR currentSessionName, LPCSTR cu
     }
 }
 
-static void ApplyLoadedSessionToDialog(HWND hWnd, pConnectSettings s, LPCSTR iniFileName)
-{
-    if (!s || !iniFileName)
-        return;
-    ConnectDialogContext* dlgCtx = GetConnectDialogContext(hWnd);
-    SetDlgItemText(hWnd, IDC_CONNECTTO, s->server);
-    SetDlgItemText(hWnd, IDC_USERNAME, s->user);
-    SetDlgItemText(hWnd, IDC_PUBKEY, s->pubkeyfile);
-    SetDlgItemText(hWnd, IDC_PRIVKEY, s->privkeyfile);
-    SetDlgItemText(hWnd, IDC_PASSWORD, s->password);
-
-    switch (s->protocoltype) {
-    case 1:  CheckRadioButton(hWnd, IDC_PROTOAUTO, IDC_PROTOV6, IDC_PROTOV4); break;
-    case 2:  CheckRadioButton(hWnd, IDC_PROTOAUTO, IDC_PROTOV6, IDC_PROTOV6); break;
-    default: CheckRadioButton(hWnd, IDC_PROTOAUTO, IDC_PROTOV6, IDC_PROTOAUTO); break;
-    }
-
-    CheckDlgButton(hWnd, IDC_USEAGENT, s->useagent ? BST_CHECKED : BST_UNCHECKED);
-    CheckDlgButton(hWnd, IDC_DETAILED_LOG, s->detailedlog ? BST_CHECKED : BST_UNCHECKED);
-    CheckDlgButton(hWnd, IDC_COMPRESS, s->compressed ? BST_CHECKED : BST_UNCHECKED);
-    CheckDlgButton(hWnd, IDC_SCP_DATA, s->scpfordata ? BST_CHECKED : BST_UNCHECKED);
-    CheckDlgButton(hWnd, IDC_SCP_ALL, s->scponly ? BST_CHECKED : BST_UNCHECKED);
-    CheckDlgButton(hWnd, IDC_SHELLTRANSFER, (s->shell_transfer_dd && s->shell_transfer_force) ? BST_CHECKED : BST_UNCHECKED);
-    CheckDlgButton(hWnd, IDC_JUMP_ENABLE, s->use_jump_host ? BST_CHECKED : BST_UNCHECKED);
-    CheckDlgButton(hWnd, IDC_PHP_TAR, s->php_tar ? BST_CHECKED : BST_UNCHECKED);
-    CheckDlgButton(hWnd, IDC_LAN_TI, s->lan_pair_trusted_installer ? BST_CHECKED : BST_UNCHECKED);
-    SendDlgItemMessage(hWnd, IDC_TRANSFERMODE, CB_SETCURSEL, max(0, min(3, s->transfermode)), 0);
-    RebuildSystemAndEncodingCombos(hWnd, dlgCtx, s);
-    if (dlgCtx)
-        dlgCtx->lastTransferMode = max(0, min(3, s->transfermode));
-    UpdateScpOnlyDependentControls(hWnd);
-    SetLanTimeoutMinutes(hWnd, s->lan_pair_timeout_min);
-
-    std::array<char, 32> modbuf{};
-    _itoa_s(s->filemod, modbuf.data(), modbuf.size(), 8);
-    SetDlgItemText(hWnd, IDC_FILEMOD, modbuf.data());
-    _itoa_s(s->dirmod, modbuf.data(), modbuf.size(), 8);
-    SetDlgItemText(hWnd, IDC_DIRMOD, modbuf.data());
-
-    fillProxyCombobox(hWnd, s->proxynr, iniFileName);
-}
 
 INT_PTR WINAPI ProxyDlgProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lParam)
 {
