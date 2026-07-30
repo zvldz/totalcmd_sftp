@@ -170,15 +170,22 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 
 ### Fixes
 
-- **Switching sessions in the connection dialog no longer overwrites the
-  session you switch to.** The dialog refilled its fields from the newly
-  selected session but kept describing the previous one internally, and
-  `OK` saves from that internal copy. Everything without a field of its
-  own in the dialog was written over the session you had just picked:
-  its jump host, its PHP and LAN-pair options, and its UTF-8 and
-  large-file settings. A jump host configured on one session could
-  silently replace another's, or vanish while the session still tried to
-  use one.
+- **The `Session:` field is now just the session's name.** It used to be a
+  dropdown of every saved session, and picking one loaded that session
+  into the dialog — a session manager inside the window for editing one
+  particular session. It had stopped working some releases ago, and while
+  it worked it was a way to lose settings: choosing another session meant
+  editing it under the name the dialog had opened with, so `OK` either
+  refused with "session already exists" or saved one session's jump host,
+  PHP, LAN-pair and encoding settings over another's. Sessions are chosen
+  in the panel; the field names the session, and typing a different name
+  renames it.
+
+- **Saving a session under a name that already exists warns instead of
+  replacing it.** Creating a session with a name already in use quietly
+  overwrote that session from the connection dialog, and did nothing at
+  all — no message, no session — when the name was typed at `F7`.
+  Renaming onto a taken name already warned; all three paths now agree.
 
 - **A passphrase you type to unlock a key is not offered to the server as
   a password.** A passphrase entered for a `.ppk` key was kept as the
