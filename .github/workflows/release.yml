@@ -20,13 +20,7 @@ permissions:
 
 jobs:
   build:
-    # Pinned to windows-2022 because the vcxproj targets the v143 Platform
-    # Toolset (VS 2022, MSVC 14.3x). `windows-latest` now maps to VS 2026
-    # runners with MSVC 14.5x, which triggers MSB8052 "Toolset Version is
-    # not compatible with v143". Move to `windows-latest` only after we
-    # bump PlatformToolset in the vcxproj — likely never, since v143 is
-    # LTS and every dev has VS 2022 installed locally.
-    runs-on: windows-2022
+    runs-on: windows-latest
 
     steps:
       - name: Checkout with submodules
@@ -91,8 +85,9 @@ jobs:
 
       - name: Build plugin (Release x64 + x86)
         shell: pwsh
-        # -nochm skips HTML Help Workshop step; the runner does not have it
-        # and the CHM is not part of the release ZIP anyway.
+        # -nochm skips the HTML Help Workshop step, which the runner does not
+        # have. The ZIP still ships a CHM: the one committed under src/help,
+        # so a help edit needs a full local build before the tag.
         run: ./build.ps1 -nochm
 
       - name: Rename release artifact
