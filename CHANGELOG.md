@@ -199,6 +199,15 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   time, and it now works for jump hosts as well. If you had relied on the
   previous order, swap the two values.
 
+- **Changing a session's jump host no longer warns that the host key
+  changed.** The fingerprint of the previous jump host stayed with the
+  session, so pointing it at a different machine made the next connect
+  compare the new host against the old one's key and report it as a
+  change. Repointing the jump host now clears the stored fingerprint, and
+  the machine is treated as first seen. A jump host taken from another
+  saved session also no longer leaves its fingerprint behind in the
+  session that referenced it.
+
 - **Pageant authentication to a jump host works now.** If an SSH agent
   key was the only credential for the jump host, connecting failed
   immediately — the plugin never actually offered the key to the server.

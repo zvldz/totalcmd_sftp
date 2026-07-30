@@ -255,6 +255,9 @@ static INT_PTR CALLBACK JumpHostDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
             pConnectSettings cs = ctx->cs;
             cs->use_jump_host   = IsDlgButtonChecked(hWnd, IDC_JUMP_ENABLE) == BST_CHECKED;
 
+            const std::string    previousHost = cs->jump_host;
+            const unsigned short previousPort = cs->jump_port;
+
             std::array<char, MAX_PATH> buf{};
             GetDlgItemTextA(hWnd, IDC_JUMP_HOST, buf.data(), static_cast<int>(buf.size()) - 1);
             cs->jump_host = buf.data();
@@ -263,6 +266,16 @@ static INT_PTR CALLBACK JumpHostDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
             UINT port = GetDlgItemInt(hWnd, IDC_JUMP_PORT, &portOk, FALSE);
             cs->jump_port = (portOk && port > 0 && port < 65536)
                 ? static_cast<unsigned short>(port) : 22;
+
+            // The stored fingerprint identifies one machine. Pointing the
+            // session at a different one makes it describe a host that is no
+            // longer involved, and the next connect would report the mismatch
+            // as the host key having changed — training the user to click
+            // through a warning that is meant to be rare.
+            if (_stricmp(cs->jump_host.c_str(), previousHost.c_str()) != 0 ||
+                cs->jump_port != previousPort) {
+                cs->jump_fingerprint.clear();
+            }
 
             GetDlgItemTextA(hWnd, IDC_JUMP_USER, buf.data(), static_cast<int>(buf.size()) - 1);
             cs->jump_user = buf.data();
@@ -2752,6 +2765,11 @@ void ConnectionDialog::OnOk()
         } else {
             WritePrivateProfileString(targetProfile.data(), "jumppassword", nullptr, dlgIniFileName);
         }
+        // Cleared above when the jump host is repointed at another machine, so
+        // the next connect treats that machine as first seen instead of
+        // comparing it against the previous host's key.
+        WritePrivateProfileString(targetProfile.data(), "jumpfingerprint",
+            m_settings->jump_fingerprint.empty() ? nullptr : m_settings->jump_fingerprint.c_str(), dlgIniFileName);
         _itoa_s(m_settings->filemod, modbuf.data(), modbuf.size(), 8);
         WritePrivateProfileString(targetProfile.data(), "filemod", m_settings->filemod == 0644 ? nullptr : modbuf.data(), dlgIniFileName);
         _itoa_s(m_settings->dirmod, modbuf.data(), modbuf.size(), 8);

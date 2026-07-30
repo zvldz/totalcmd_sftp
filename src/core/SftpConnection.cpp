@@ -670,8 +670,11 @@ int SftpConnect(pConnectSettings ConnectSettings)
         if (!stream)
             return fail(-25);
 
-        // Update the in-memory fingerprint copy (may have been set on first connect).
-        ConnectSettings->jump_fingerprint = jump.fingerprint;
+        // Mirror a fingerprint accepted on first connect. Only for a manually
+        // configured jump host: this field describes that host, whereas a
+        // referenced session keeps its own key under its own section.
+        if (ConnectSettings->jump_session_ref.empty())
+            ConnectSettings->jump_fingerprint = jump.fingerprint;
         ConnectSettings->transport_stream = std::move(stream);
         // cs->sock has been set to the jump socket by ConnectViaJumpHost.
 

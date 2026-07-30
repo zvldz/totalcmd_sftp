@@ -616,6 +616,13 @@ std::unique_ptr<ITransportStream> ConnectViaJumpHost(
         return nullptr;
     }
 
+    // kbdCtx and the settings it points at live on this frame, while the
+    // session outlives it inside the returned stream. Nothing may reach the
+    // context once authentication is over, so detach it here rather than
+    // leave the session holding an address that is about to expire.
+    if (void** abstractSlot = jmpSession->abstractPtr())
+        *abstractSlot = nullptr;
+
     // -----------------------------------------------------------------------
     // 5. Open direct-tcpip channel to target
     // -----------------------------------------------------------------------
