@@ -207,7 +207,7 @@
 #define IDC_PROXYCOMBO                  1048
 #define IDC_PROXYBUTTON                 1049
 #define IDC_DELETELAST                  1050
-#define IDC_SESSIONCOMBO                1052
+#define IDC_SESSIONNAME                 1052
 #define IDC_SHELLTRANSFER               1053
 #define IDC_TRANSFERMODE                1054
 #define IDC_PHPSHELL                    1055

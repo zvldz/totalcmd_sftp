@@ -368,7 +368,6 @@ private:
     INT_PTR OnLanPeerMessage(WPARAM wParam, LPARAM lParam);
     void    OnOk();
     void    OnCancel();
-    void    OnSessionChanged();
     void    OnTransferModeChanged();
     void    OnPhpShellBtn();
     void    OnBrowseKeyFile(bool isPublicKey);
@@ -507,7 +506,7 @@ static std::wstring FormatBracesW(std::wstring templ, std::initializer_list<std:
 static std::wstring GetSessionDisplayNameW(HWND hWnd)
 {
     std::array<wchar_t, MAX_PATH> sessionW{};
-    GetDlgItemTextW(hWnd, IDC_SESSIONCOMBO, sessionW.data(), static_cast<int>(sessionW.size() - 1));
+    GetDlgItemTextW(hWnd, IDC_SESSIONNAME, sessionW.data(), static_cast<int>(sessionW.size() - 1));
     std::wstring value = sessionW.data();
     while (!value.empty() && (value.back() == L' ' || value.back() == L'\t')) {
         value.pop_back();
@@ -1571,20 +1570,13 @@ static void TrimSessionName(char* s) noexcept
     s[end - start] = 0;
 }
 
-static void FillSessionCombo(HWND hWnd, LPCSTR currentSession)
+// The field holds the name this session is saved under. Typing a different
+// name renames it on OK; there is no list to pick from, because the panel is
+// where sessions are chosen and offering another one here only ever meant
+// editing a session under someone else's name.
+static void SetSessionNameField(HWND hWnd, LPCSTR currentSession)
 {
-    SendDlgItemMessage(hWnd, IDC_SESSIONCOMBO, CB_RESETCONTENT, 0, 0);
-    std::array<char, wdirtypemax> name{};
-    SERVERHANDLE hdl = FindFirstServer(name.data(), name.size() - 1);
-    while (hdl) {
-        if (_stricmp(name.data(), s_quickconnect) != 0)
-            SendDlgItemMessage(hWnd, IDC_SESSIONCOMBO, CB_ADDSTRING, 0, (LPARAM)name.data());
-        hdl = FindNextServer(hdl, name.data(), name.size() - 1);
-    }
-    if (currentSession && currentSession[0])
-        SetDlgItemText(hWnd, IDC_SESSIONCOMBO, currentSession);
-    else
-        SetDlgItemText(hWnd, IDC_SESSIONCOMBO, "");
+    SetDlgItemText(hWnd, IDC_SESSIONNAME, currentSession ? currentSession : "");
 }
 
 // Populate the jump-host session-picker dropdown. First entry is "(none)"
@@ -1604,9 +1596,8 @@ static constexpr const char* kJumpMissingMarkerPrefix = "[!] ";
 // session name. Returns empty string for "(none)" or for the "[!] ... (missing)"
 // marker entry — both mean "no reference, use manual jump_* fields or none".
 // Used by both the immediate selection handler (OnJumpSessionPicked) and the
-// save-time read in OnConnectDlgOk so the model stays consistent with the UI
-// after the user changes sessions in the main IDC_SESSIONCOMBO without touching
-// this dropdown.
+// save-time read in OnConnectDlgOk, so the model matches the dropdown even
+// when the dialog filled it without the user touching it.
 static std::string ReadJumpSessionRefFromDialog(HWND hWnd)
 {
     // Read wide to match how the combobox was filled, then compare against
@@ -2250,7 +2241,7 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
     ArrangeExpandLabel(m_hWnd, IDC_CODEPAGELABEL,   IDC_UTF8HELP);
     ArrangeExpandLabel(m_hWnd, IDC_LABEL_TRANSFER,  IDC_TRANSFERMODE);
     ArrangeExpandLabel(m_hWnd, IDC_SYSTEMLABEL,     IDC_SYSTEM);
-    ArrangeLabelFillButton(m_hWnd, IDC_LABEL_SESSION, IDC_SESSIONCOMBO, IDC_PHPSHELL);
+    ArrangeLabelFillButton(m_hWnd, IDC_LABEL_SESSION, IDC_SESSIONNAME, IDC_PHPSHELL);
 
     if (m_ctx->lanPeerId.empty())
         m_ctx->lanPeerId = MakeLanPeerId();
@@ -2269,7 +2260,7 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
 
     SendDlgItemMessage(m_hWnd, IDC_DEFAULTCOMBO, CB_SETCURSEL, 0, 0);
     LoadServersFromIni(dlgIniFileName, s_quickconnect);
-    FillSessionCombo(m_hWnd, strcmp(dlgDisplayName, s_quickconnect) != 0 ? dlgDisplayName : "");
+    SetSessionNameField(m_hWnd, strcmp(dlgDisplayName, s_quickconnect) != 0 ? dlgDisplayName : "");
     // Populate jump-host session-picker. Skip self (the session being edited)
     // and the quickconnect pseudo-session.
     FillJumpSessionCombo(
@@ -2440,10 +2431,6 @@ INT_PTR ConnectionDialog::OnCommand(WPARAM wParam, LPARAM /*lParam*/)
     case IDCANCEL:
         OnCancel();
         return 1;
-    case IDC_SESSIONCOMBO:
-        if (HIWORD(wParam) == CBN_SELCHANGE)
-            OnSessionChanged();
-        break;
     case IDC_TRANSFERMODE:
         if (HIWORD(wParam) == CBN_SELCHANGE)
             OnTransferModeChanged();
@@ -2611,11 +2598,9 @@ void ConnectionDialog::OnOk()
     GetDlgItemText(m_hWnd, IDC_PRIVKEY, m_settings->privkeyfile);
     m_settings->useagent      = IsDlgButtonChecked(m_hWnd, IDC_USEAGENT)     == BST_CHECKED;
     m_settings->use_jump_host = IsDlgButtonChecked(m_hWnd, IDC_JUMP_ENABLE)  == BST_CHECKED;
-    // Read jump_session_ref from the picker. Needed in addition to the
-    // CBN_SELCHANGE-driven update in OnJumpSessionPicked because the user
-    // may have switched sessions in IDC_SESSIONCOMBO (which loads a different
-    // ref into the UI) without ever touching this dropdown, so the model
-    // would otherwise carry the previous ref into save.
+    // Read jump_session_ref from the picker rather than trusting the
+    // CBN_SELCHANGE-driven update in OnJumpSessionPicked: the dialog also
+    // fills this dropdown itself, and the model has to match what is shown.
     m_settings->jump_session_ref = ReadJumpSessionRefFromDialog(m_hWnd);
     m_settings->php_tar                  = IsDlgButtonChecked(m_hWnd, IDC_PHP_TAR) == BST_CHECKED;
     m_settings->lan_pair_trusted_installer = IsDlgButtonChecked(m_hWnd, IDC_LAN_TI)  == BST_CHECKED;
@@ -2670,7 +2655,7 @@ void ConnectionDialog::OnOk()
     targetProfile[0] = 0;
     enteredProfile[0] = 0;
 
-    GetDlgItemText(m_hWnd, IDC_SESSIONCOMBO, enteredProfile.data(), enteredProfile.size() - 1);
+    GetDlgItemText(m_hWnd, IDC_SESSIONNAME, enteredProfile.data(), enteredProfile.size() - 1);
     TrimSessionName(enteredProfile.data());
     if (enteredProfile[0] && _stricmp(enteredProfile.data(), s_quickconnect) != 0) {
         strlcpy(targetProfile.data(), enteredProfile.data(), targetProfile.size() - 1);
@@ -2686,16 +2671,32 @@ void ConnectionDialog::OnOk()
                 m_settings->server = "lanpair://local";
         }
 
-        if (strcmp(dlgDisplayName, s_quickconnect) != 0 &&
-            _stricmp(targetProfile.data(), dlgDisplayName) != 0) {
+        const auto warnNameTaken = [this]() {
+            const std::wstring sessionExists = LoadResStringW(IDS_ERR_SESSION_EXISTS);
+            const std::wstring sftpTitle     = LoadResStringW(IDS_TITLE_SFTP);
+            MessageBoxW(m_hWnd,
+                        sessionExists.empty() ? L"Session with this name already exists.\nChoose a different session name." : sessionExists.c_str(),
+                        sftpTitle.empty() ? L"SFTP" : sftpTitle.c_str(),
+                        MB_OK | MB_ICONWARNING);
+        };
+
+        const bool isNewSession = strcmp(dlgDisplayName, s_quickconnect) == 0;
+        if (isNewSession) {
+            // Saving under a name that is taken would replace that session's
+            // settings with these, so refuse it the same way renaming onto an
+            // existing name does. A section with any key present means it
+            // exists.
+            std::array<char, 100> existing{};
+            GetPrivateProfileString(targetProfile.data(), nullptr, "",
+                                    existing.data(), existing.size() - 1, dlgIniFileName);
+            if (existing[0]) {
+                warnNameTaken();
+                return;
+            }
+        } else if (_stricmp(targetProfile.data(), dlgDisplayName) != 0) {
             int moveRc = CopyMoveServerInIni(dlgDisplayName, targetProfile.data(), true, false, dlgIniFileName);
             if (moveRc == FS_FILE_EXISTS) {
-                const std::wstring sessionExists = LoadResStringW(IDS_ERR_SESSION_EXISTS);
-                const std::wstring sftpTitle     = LoadResStringW(IDS_TITLE_SFTP);
-                MessageBoxW(m_hWnd, 
-                            sessionExists.empty() ? L"Session with this name already exists.\nChoose a different session name." : sessionExists.c_str(),
-                            sftpTitle.empty() ? L"SFTP" : sftpTitle.c_str(), 
-                            MB_OK | MB_ICONWARNING);
+                warnNameTaken();
                 return;
             }
         }
@@ -2804,7 +2805,6 @@ void ConnectionDialog::OnOk()
         }
 
         // Refresh TC panel when a new session is created or an existing one is renamed
-        const bool isNewSession = (strcmp(dlgDisplayName, s_quickconnect) == 0);
         const bool wasRenamed   = !isNewSession &&
                                   (_stricmp(targetProfile.data(), dlgDisplayName) != 0);
         if (isNewSession || wasRenamed) {
@@ -2829,48 +2829,6 @@ void ConnectionDialog::OnCancel()
 {
     StopLanPairing(m_ctx);
     EndDialog(m_hWnd, IDCANCEL);
-}
-
-void ConnectionDialog::OnSessionChanged()
-{
-    std::array<char, wdirtypemax> sessionName{};
-    GetDlgItemText(m_hWnd, IDC_SESSIONCOMBO, sessionName.data(), sessionName.size() - 1);
-    TrimSessionName(sessionName.data());
-    if (!sessionName[0])
-        return;
-
-    // The "new session" entry names no profile, so there is nothing to load —
-    // it stands for the defaults. Handing those through the same two calls as
-    // a real session keeps the dialog and the model in agreement; leaving them
-    // untouched would show, and on OK save, the session selected before.
-    tConnectSettings selected{};
-    const bool isNewSession = _stricmp(sessionName.data(), s_quickconnect) == 0;
-    if (isNewSession)
-        ResetProfileFields(&selected);
-    else if (!LoadServerSettings(sessionName.data(), &selected, m_ctx->iniFileName))
-        return;
-
-    ApplyLoadedSessionToDialog(m_hWnd, &selected, m_ctx->iniFileName);
-
-    // The controls now show the new session; the model has to follow,
-    // because OK saves from the model and would otherwise write the
-    // settings of the session selected before over this one.
-    AssignProfileFields(m_settings, selected);
-
-    // Edits made in the jump dialog are gone with the rest of the
-    // previous session, so the pending fingerprint deletion goes too:
-    // it belongs to a host this session was never pointed at.
-    m_jumpFingerprintCleared = false;
-
-    // Refresh jump-host picker: "self" is now the newly-selected session
-    // (so the exclusion list shifts), and the dropdown should reflect
-    // that session's own jumpsessionref. Jump button state needs to
-    // follow its mode (manual vs ref).
-    FillJumpSessionCombo(m_hWnd, isNewSession ? "" : sessionName.data(),
-                         selected.jump_session_ref.c_str());
-    const bool buttonEnabled =
-        selected.use_jump_host && selected.jump_session_ref.empty();
-    EnableWindow(GetDlgItem(m_hWnd, IDC_JUMP_BUTTON), buttonEnabled ? TRUE : FALSE);
 }
 
 void ConnectionDialog::OnTransferModeChanged()
