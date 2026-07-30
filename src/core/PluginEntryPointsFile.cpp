@@ -685,6 +685,19 @@ int WINAPI FsExecuteFileW(HWND MainWin, LPWSTR RemoteName, LPCWSTR Verb)
             return FS_EXEC_YOURSELF;
         }
         if (_wcsicmp(Verb, L"properties") == 0) {
+            // A session under [Imports] is not in the registry, so the
+            // resolver below cannot classify it and the handler would return
+            // in silence. Say why instead, and point at what does work.
+            if (IsImportsPath(RemoteName)) {
+                const unicode_util::utf8_to_utf16 message(
+                    LngStrU8(IDS_IMPORTS_NO_EDIT,
+                             "This session belongs to another program and cannot be edited here.\n"
+                             "Press F3 to see its settings, or F5 to copy it into your own session list.").c_str());
+                const unicode_util::utf8_to_utf16 title(LngStrU8(IDS_TITLE_SFTP, "SFTP").c_str());
+                MessageBoxW(GetActiveWindow(), message.c_str(), title.c_str(), MB_OK | MB_ICONINFORMATION);
+                return FS_EXEC_OK;
+            }
+
             const PathResolution r = ResolvePathKindW(RemoteName);
 
             // SessionLeaf (root-level OR nested in a folder) → open the Edit

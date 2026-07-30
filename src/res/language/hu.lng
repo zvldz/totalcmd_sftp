@@ -365,6 +365,7 @@
 12082=Érvénytelen szerver cím.
 12083=Nincs elég memória a kapcsolat beállításainak létrehozásakor.
 12088=Már létezik ilyen nevű munkamenet.\nKérjük, válasszon másik nevet.
+12118=Ez a munkamenet egy másik programhoz tartozik, itt nem szerkeszthető.\nAz F3 megmutatja a beállításait, az F5 a saját listájába másolja.
 12089=SFTP
 12104=(nincs)
 12105= (hiányzik)

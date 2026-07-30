@@ -415,6 +415,8 @@ BEGIN
     IDS_ERR_OOM_CONN_SETTINGS
                             "Out of memory while creating connection settings."
     IDS_ERR_SESSION_EXISTS  "Session with this name already exists.\nChoose a different session name."
+    IDS_IMPORTS_NO_EDIT     "This session belongs to another program and cannot be edited here.
+Press F3 to see its settings, or F5 to copy it into your own session list."
     IDS_TITLE_SFTP          "SFTP"
     IDS_PAIRING_SEARCH      "Searching for LAN Pair peer on local network..."
     IDS_PAIRING_SECS        "{} s"

@@ -523,6 +523,7 @@
 #define IDS_SIMPORT_ERR_WRITE           12115   // Failed to write to sftpplug.ini
 #define IDS_DLG_JUMP_BUTTON             12116   // "Jump..." button in the connection dialog
 #define IDS_JUMP_NOT_CONFIGURED         12117   // error: jump host enabled but not configured
+#define IDS_IMPORTS_NO_EDIT             12118   // hint: imported sessions are read-only
 
 // Next default values for new objects
 //

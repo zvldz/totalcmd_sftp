@@ -366,6 +366,7 @@
 12082=Adresse de serveur non valide.
 12083=Mémoire insuffisante lors de la création des paramètres de connexion.
 12088=Une session avec ce nom existe déjà.\nChoisissez un nom de session différent.
+12118=Cette session appartient à un autre programme et ne peut pas être modifiée ici.\nF3 affiche ses paramètres, F5 la copie dans votre propre liste.
 12089=SFTP
 12104=(aucune)
 12105= (introuvable)

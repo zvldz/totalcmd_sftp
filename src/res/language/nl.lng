@@ -365,6 +365,7 @@
 12082=Ongeldig serveradres.
 12083=Onvoldoende geheugen bij het maken van verbindingsinstellingen.
 12088=Er bestaat al een sessie met deze naam.\nKies een andere sessienaam.
+12118=Deze sessie hoort bij een ander programma en kan hier niet worden bewerkt.\nDruk op F3 om de instellingen te zien of F5 om ze naar uw eigen lijst te kopiëren.
 12089=SFTP
 12104=(geen)
 12105= (ontbreekt)

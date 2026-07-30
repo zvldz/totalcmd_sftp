@@ -365,6 +365,7 @@
 12082=Neplatná adresa serveru.
 12083=Nedostatek paměti při vytváření nastavení připojení.
 12088=Spojení s tímto názvem již existuje.\nZvolte jiný název spojení.
+12118=Tato relace patří jinému programu a nelze ji zde upravit.\nStiskněte F3 pro zobrazení nastavení nebo F5 pro zkopírování do vlastního seznamu.
 12089=SFTP
 12104=(žádný)
 12105= (chybí)

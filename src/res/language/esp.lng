@@ -366,6 +366,7 @@
 12082=Dirección del servidor no válida.
 12083=Memoria insuficiente al crear la configuración de conexión.
 12088=Ya existe una sesión con este nombre.\nElija un nombre de sesión diferente.
+12118=Esta sesión pertenece a otro programa y no se puede editar aquí.\nPulse F3 para ver sus ajustes o F5 para copiarla a su propia lista.
 12089=SFTP
 12104=(ninguna)
 12105= (no encontrada)

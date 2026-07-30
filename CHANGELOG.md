@@ -169,6 +169,12 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 
 ### Fixes
 
+- **Alt+Enter on a session inside `[Imports]` explains itself instead of
+  doing nothing.** Imported sessions belong to the source program and
+  are not editable here, but the key press was silently ignored. It now
+  says so and points at `F3`, which shows the settings, and `F5`, which
+  copies the session into your own list.
+
 - **SecureCRT sessions pick up their key file the way the other sources
   do.** The path was taken from `Identity Filename V2` verbatim, so a
   `%USERPROFILE%`-style path stayed unexpanded and a `.pub` file landed

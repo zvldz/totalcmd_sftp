@@ -365,6 +365,7 @@
 12082=Endereço de servidor inválido.
 12083=Memória insuficiente ao criar configurações de conexão.
 12088=Já existe uma sessão com este nome.\nEscolha um nome de sessão diferente.
+12118=Esta sessão pertence a outro programa e não pode ser editada aqui.\nPressione F3 para ver suas configurações ou F5 para copiá-la para a sua lista.
 12089=SFTP
 12104=(nenhuma)
 12105= (ausente)

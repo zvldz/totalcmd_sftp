@@ -354,6 +354,7 @@
 12082=Nieprawidłowy adres serwera.
 12083=Brak pamięci podczas tworzenia ustawień połączenia.
 12088=Sesja o tej nazwie już istnieje.\nWybierz inną nazwę sesji.
+12118=Ta sesja należy do innego programu i nie można jej tutaj edytować.\nNaciśnij F3, aby zobaczyć jej ustawienia, lub F5, aby skopiować ją do własnej listy.
 12089=SFTP
 12090=Szukam peera LAN Pair w sieci lokalnej...
 12091={} s

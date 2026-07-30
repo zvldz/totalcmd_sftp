@@ -366,6 +366,7 @@
 12082=Ungültige Serveradresse.
 12083=Nicht genügend Arbeitsspeicher beim Erstellen der Verbindungseinstellungen.
 12088=Eine Verbindung mit diesem Namen existiert bereits.\nBitte einen anderen Namen wählen.
+12118=Diese Sitzung gehört einem anderen Programm und kann hier nicht bearbeitet werden.\nF3 zeigt ihre Einstellungen, F5 kopiert sie in Ihre eigene Sitzungsliste.
 12089=SFTP
 12104=(keine)
 12105= (fehlt)

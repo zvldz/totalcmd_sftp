@@ -365,6 +365,7 @@
 12082=Adresă server nevalidă.
 12083=Memorie insuficientă la crearea setărilor conexiunii.
 12088=Există deja o sesiune cu acest nume.\nAlegeți un alt nume de sesiune.
+12118=Această sesiune aparține altui program și nu poate fi editată aici.\nApăsați F3 pentru a-i vedea setările sau F5 pentru a o copia în lista proprie.
 12089=SFTP
 12104=(niciuna)
 12105= (lipsește)
