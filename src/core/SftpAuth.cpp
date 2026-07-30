@@ -31,18 +31,20 @@ static bool PromptLooksLikePasswordRequest(char* promptTextLower) noexcept
     return true;
 }
 
-static bool TryGetSecondQuotedPassword(const char* storedPassword, std::string& outSecondPassword)
+StoredSecret SplitStoredSecret(const std::string& stored)
 {
-    if (!storedPassword)
-        return false;
-    size_t len = strlen(storedPassword);
-    if (len < 5 || storedPassword[0] != '"' || storedPassword[len - 1] != '"')
-        return false;
-    const char* p = strstr(storedPassword, "\",\"");
-    if (!p || p[3] == 0)
-        return false;
-    outSecondPassword.assign(p + 3);
-    return !outSecondPassword.empty();
+    StoredSecret out;
+    if (stored.size() >= 2 && stored.front() == '"' && stored.back() == '"') {
+        const size_t sep = stored.find("\",\"");
+        // The passphrase runs from after the separator up to the closing quote.
+        if (sep != std::string::npos && sep + 3 <= stored.size() - 1) {
+            out.accountPassword = stored.substr(1, sep - 1);
+            out.keyPassphrase   = stored.substr(sep + 3, stored.size() - sep - 4);
+            return out;
+        }
+    }
+    out.accountPassword = stored;
+    return out;
 }
 
 extern "C"
@@ -63,19 +65,14 @@ void kbd_callback(LPCSTR name, int name_len,
         memcpy(retbuf.data(), prompts[i].text, copyLen);
         retbuf[copyLen] = '\0';
         ShowStatus(retbuf.data());
-        bool autoSendPassword = (ConnectSettings && !ConnectSettings->password.empty() && !ConnectSettings->InteractivePasswordSent);
+        bool autoSendPassword = (ConnectSettings && !ConnectSettings->account_password.empty() && !ConnectSettings->InteractivePasswordSent);
         if (autoSendPassword) {
             _strlwr_s(retbuf.data(), retbuf.size());
             autoSendPassword = PromptLooksLikePasswordRequest(retbuf.data());
         }
         if (autoSendPassword) {
             ConnectSettings->InteractivePasswordSent = true;
-            std::string secondPassword;
-            if (TryGetSecondQuotedPassword(ConnectSettings->password.c_str(), secondPassword)) {
-                responses[i].text = _strdup(secondPassword.c_str());
-            } else {
-                responses[i].text = _strdup(ConnectSettings->password.c_str());
-            }
+            responses[i].text = _strdup(ConnectSettings->account_password.c_str());
             if (responses[i].text) {
                 responses[i].length = (unsigned int)strlen(responses[i].text);
                 ShowStatusId(IDS_LOG_SEND_STORED_PASS, nullptr, true);
@@ -106,8 +103,10 @@ void kbd_callback(LPCSTR name, int name_len,
                 responses[i].text = _strdup(retbuf.data());
                 responses[i].length = (unsigned int)strlen(retbuf.data());
                 // Remember password for background transfers
-                if (ConnectSettings && ConnectSettings->password.empty())
-                    ConnectSettings->password = retbuf.data();
+                if (ConnectSettings && ConnectSettings->password.empty()) {
+                    ConnectSettings->password         = retbuf.data();
+                    ConnectSettings->account_password = retbuf.data();
+                }
                 ShowStatusId(IDS_LOG_SEND_USER_PASS, nullptr, true);
             } else {
                 responses[i].text = nullptr;
@@ -231,7 +230,7 @@ static void BuildUserAtServerTitle(char* out, size_t outLen, int prefixResId,
 static bool PreparePrivateKeyForAuth(
     LPCSTR user,
     LPCSTR host,
-    const std::string& password,
+    std::string& keyPassphrase,
     char* ioPrivKeyFile,
     size_t privKeyLen,
     char** ioPubKeyPtr,
@@ -246,7 +245,7 @@ static bool PreparePrivateKeyForAuth(
     if (!EndsWithNoCase(ioPrivKeyFile, ".ppk"))
         return true;
 
-    const char* ppkPass = password.c_str();
+    const char* ppkPass = keyPassphrase.c_str();
     PpkConvertError convErr = PpkConvertError::internal_error;
     ShowStatusId(IDS_LOG_PPK_CONVERTING, nullptr, true);
     bool converted = ConvertPpkToOpenSsh(ioPrivKeyFile, ppkPass, outConvertedPrivateKey, convertedLen - 1, &convErr);
@@ -263,9 +262,9 @@ static bool PreparePrivateKeyForAuth(
         LoadStr(ioPromptBuf, ioPromptBufLen, IDS_KEYPASSPHRASE);
         BuildUserAtServerTitle(title.data(), title.size(), IDS_PASSPHRASE, user, host);
         if (RequestProc(PluginNumber, RT_Password, title.data(), ioPromptBuf, ppkPassBuf.data(), ppkPassBuf.size() - 1)) {
-            // The passphrase decrypts the key and is not an account credential:
-            // it stays local to this attempt.
             converted = ConvertPpkToOpenSsh(ioPrivKeyFile, ppkPassBuf.data(), outConvertedPrivateKey, convertedLen - 1, &convErr);
+            if (converted && keyPassphrase.empty())
+                keyPassphrase = ppkPassBuf.data();
         }
         SecureZeroMemory(ppkPassBuf.data(), ppkPassBuf.size());
     }
@@ -422,7 +421,8 @@ int SftpAuthPageant(pConnectSettings ConnectSettings, LPCSTR progressbuf, int pr
     target.session  = ConnectSettings->session.get();
     target.host     = ConnectSettings->server;
     target.user     = ConnectSettings->user;
-    target.password = &ConnectSettings->password;
+    target.password = &ConnectSettings->account_password;
+    target.keyPassphrase = &ConnectSettings->key_passphrase;
     target.waitIo   = [ConnectSettings]() { WaitForSshIo(ConnectSettings); };
     return SftpAuthPageantOn(target, progressbuf, progress, ploop, plasttime, auth_pw);
 }
@@ -476,7 +476,7 @@ int SftpAuthPubKeyOn(const SshAuthTarget& target, LPCSTR progressbuf, int progre
         return -LIBSSH2_ERROR_FILE;
     }
 
-    if (!PreparePrivateKeyForAuth(target.user.c_str(), target.host.c_str(), *target.password,
+    if (!PreparePrivateKeyForAuth(target.user.c_str(), target.host.c_str(), *target.keyPassphrase,
                                   privkeyfile.data(), privkeyfile.size(), &pubkeyfileptr,
                                   &removeConvertedPrivateKey, convertedPrivateKey.data(), convertedPrivateKey.size(),
                                   buf.data(), buf.size())) {
@@ -519,16 +519,11 @@ int SftpAuthPubKeyOn(const SshAuthTarget& target, LPCSTR progressbuf, int progre
         std::array<char, 250> title{};
         BuildUserAtServerTitle(title.data(), title.size(), IDS_PASSPHRASE, target.user.c_str(), target.host.c_str());
         LoadStr(buf, IDS_KEYPASSPHRASE);
-        if (!target.password->empty()) {
-            AUTH_LOG("Using stored password");
-            std::string secondPassword;
-            if (TryGetSecondQuotedPassword(target.password->c_str(), secondPassword)) {
-                strlcpy(passphrase.data(), secondPassword.c_str(), passphrase.size()-1);
-            } else {
-                strlcpy(passphrase.data(), target.password->c_str(), passphrase.size()-1);
-            }
+        if (!target.keyPassphrase->empty()) {
+            AUTH_LOG("Using stored passphrase");
+            strlcpy(passphrase.data(), target.keyPassphrase->c_str(), passphrase.size()-1);
         } else {
-            AUTH_LOG("No stored password, requesting from user");
+            AUTH_LOG("No stored passphrase, requesting from user");
             RequestProc(PluginNumber, RT_Password, title.data(), buf.data(), passphrase.data(), passphrase.size()-1);
         }
     } else {
@@ -606,6 +601,8 @@ int SftpAuthPubKeyOn(const SshAuthTarget& target, LPCSTR progressbuf, int progre
         return -IDS_ERR_AUTH_PUBKEY;
     }
     cleanupConvertedIfNeeded();
+    if (auth == 0 && isencrypted && passphrase[0] && target.keyPassphrase->empty())
+        *target.keyPassphrase = passphrase.data();
     clearPassphrase();
     AUTH_LOG("SftpAuthPubKey returning 0 (SUCCESS)");
     return 0;
@@ -620,7 +617,8 @@ int SftpAuthPubKey(pConnectSettings ConnectSettings, LPCSTR progressbuf, int pro
     target.session     = ConnectSettings->session.get();
     target.host        = ConnectSettings->server;
     target.user        = ConnectSettings->user;
-    target.password    = &ConnectSettings->password;
+    target.password    = &ConnectSettings->account_password;
+    target.keyPassphrase = &ConnectSettings->key_passphrase;
     target.pubkeyfile  = ConnectSettings->pubkeyfile;
     target.privkeyfile = ConnectSettings->privkeyfile;
     target.waitIo      = [ConnectSettings]() { WaitForSshIo(ConnectSettings); };

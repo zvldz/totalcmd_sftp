@@ -68,7 +68,14 @@ struct tConnectSettings {
     std::string IniFileName;
     std::string server;
     std::string user;
-    std::string password;
+    std::string password;   // as the profile stores it; may pack both secrets
+
+    // The two secrets `password` resolves to, filled once authentication
+    // starts. Runtime only: neither is written to the INI, and the passphrase
+    // is never offered to the server. It survives here so an automatic
+    // reconnect can reuse the key without prompting again.
+    std::string account_password;
+    std::string key_passphrase;
     std::string connectsendcommand;
     WCHAR lastactivepath[1024];
     std::string savedfingerprint;

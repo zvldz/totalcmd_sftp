@@ -34,7 +34,10 @@ void newpassfunc(LIBSSH2_SESSION* /*session*/, LPSTR* newpw, int* newpw_len, LPV
         strlcpy(*newpw, newpass.data(), bufsize);
         *newpw_len = (int)strlen(newpass.data());
         if (PassConnectSettings) {
-            PassConnectSettings->password = newpass.data();
+            // A server-mandated password change replaces the whole stored
+            // secret, so both forms become the new plain password.
+            PassConnectSettings->password         = newpass.data();
+            PassConnectSettings->account_password = newpass.data();
             switch (PassConnectSettings->passSaveMode) {
             case sftp::PassSaveMode::crypt:
                 CryptProc(PluginNumber, CryptoNumber, FS_CRYPT_SAVE_PASSWORD, PassConnectSettings->DisplayName.c_str(), newpass.data(), 0);
@@ -100,6 +103,18 @@ int PerformAuthentication(
     std::array<char, 1024> buf{};
     char* userauthlist = nullptr;
     int auth_pw = 0;
+
+    // Split the stored secret once, here, before any method runs. Everything
+    // downstream reads account_password or key_passphrase by name. A
+    // passphrase already remembered from an earlier attempt on this
+    // connection survives, so reconnects do not prompt again.
+    {
+        const StoredSecret secret = SplitStoredSecret(ConnectSettings->password);
+        ConnectSettings->account_password = secret.accountPassword;
+        if (!secret.keyPassphrase.empty())
+            ConnectSettings->key_passphrase = secret.keyPassphrase;
+    }
+
     const bool skipProbe = ConnectSettings->scponly
         || !ConnectSettings->password.empty()
         || !ConnectSettings->privkeyfile.empty();
@@ -178,7 +193,7 @@ int PerformAuthentication(
         // When probe was skipped we don't know the server's supported methods,
         // so keyboard-interactive goes first; kbd_callback will auto-send the
         // stored password for password-like prompts (e.g. OVH).
-        const bool preferPasswordFirst = !skipProbe && canPasswordAuth && ConnectSettings->password[0] != 0;
+        const bool preferPasswordFirst = !skipProbe && canPasswordAuth && !ConnectSettings->account_password.empty();
         bool skippedKeyboardFirst = false;
 
         if (canKeyboardAuth && !preferPasswordFirst) {
@@ -211,15 +226,7 @@ int PerformAuthentication(
             skippedKeyboardFirst = canKeyboardAuth;
         }
         if (auth != 0 && canPasswordAuth) {
-            std::string passphrase;
-            const char* passwordCStr = ConnectSettings->password.c_str();
-            const char* p = strstr(passwordCStr, "\",\"");
-            size_t len = ConnectSettings->password.size();
-            if (p && !ConnectSettings->password.empty() && ConnectSettings->password.front() == '"' && ConnectSettings->password.back() == '"') {
-                passphrase = std::string(p + 3, (passwordCStr + len - 1) - (p + 3));
-            } else {
-                passphrase = ConnectSettings->password;
-            }
+            std::string passphrase = ConnectSettings->account_password;
             if (passphrase.empty()) {
                 std::string title = std::format("SFTP password for {}@{}", ConnectSettings->user, ConnectSettings->server);
                 if (ConnectSettings->feedback) {
@@ -260,7 +267,8 @@ int PerformAuthentication(
                 else
                     ShowStatusId(IDS_ERR_AUTH_PASSWORD, nullptr, true);
             } else if (ConnectSettings->password.empty()) {
-                ConnectSettings->password = passphrase;
+                ConnectSettings->password         = passphrase;
+                ConnectSettings->account_password = passphrase;
             }
         }
 

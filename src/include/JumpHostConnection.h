@@ -28,7 +28,10 @@ struct JumpHostSettings {
     std::string host;
     unsigned short port     = 22;
     std::string user;
+    // Resolved out of the stored secret: the password is offered to the jump
+    // host, the passphrase only unlocks privkeyfile.
     std::string password;
+    std::string keyPassphrase;
     std::string pubkeyfile;
     std::string privkeyfile;
     bool        useagent    = false;

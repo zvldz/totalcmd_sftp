@@ -87,7 +87,11 @@ JumpConfig ResolveJumpConfig(pConnectSettings cs, LPCSTR iniFileName)
         out.endpoint.host        = hostBuf.data();
         out.endpoint.port        = ref.customport ? ref.customport : parsedPort;
         out.endpoint.user        = ref.user;
-        out.endpoint.password    = ref.password;
+        {
+            const StoredSecret secret = SplitStoredSecret(ref.password);
+            out.endpoint.password      = secret.accountPassword;
+            out.endpoint.keyPassphrase = secret.keyPassphrase;
+        }
         out.endpoint.pubkeyfile  = ref.pubkeyfile;
         out.endpoint.privkeyfile = ref.privkeyfile;
         out.endpoint.useagent    = ref.useagent;
@@ -101,7 +105,11 @@ JumpConfig ResolveJumpConfig(pConnectSettings cs, LPCSTR iniFileName)
         out.endpoint.host        = cs->jump_host;
         out.endpoint.port        = cs->jump_port;
         out.endpoint.user        = cs->jump_user;
-        out.endpoint.password    = cs->jump_password;
+        {
+            const StoredSecret secret = SplitStoredSecret(cs->jump_password);
+            out.endpoint.password      = secret.accountPassword;
+            out.endpoint.keyPassphrase = secret.keyPassphrase;
+        }
         out.endpoint.pubkeyfile  = cs->jump_pubkeyfile;
         out.endpoint.privkeyfile = cs->jump_privkeyfile;
         out.endpoint.useagent    = cs->jump_useagent;
@@ -405,7 +413,8 @@ static bool AuthJumpHost(
     authTarget.session     = jmpSession;
     authTarget.host        = jump.host;
     authTarget.user        = jump.user;
-    authTarget.password    = &jump.password;
+    authTarget.password      = &jump.password;
+    authTarget.keyPassphrase = &jump.keyPassphrase;
     authTarget.pubkeyfile  = jump.pubkeyfile;
     authTarget.privkeyfile = jump.privkeyfile;
     authTarget.waitIo      = [jmpSock]() { IsSocketReadable(jmpSock); };

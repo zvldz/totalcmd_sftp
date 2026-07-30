@@ -175,21 +175,39 @@ extern "C" void kbd_callback(LPCSTR name, int name_len,
                              LIBSSH2_USERAUTH_KBDINT_RESPONSE* responses,
                              LPVOID* abstract);
 
+// A profile stores one secret string, which may pack two:
+//     "<account password>","<key passphrase>"
+// Both parts quoted, a comma between them; anything else is a plain account
+// password. The two are not interchangeable — the account password is offered
+// to the server, while the passphrase only ever decrypts a local key file — so
+// the split lives here alone and every caller reads the part it names rather
+// than deciding for itself what a bare string means.
+struct StoredSecret {
+    std::string accountPassword;
+    std::string keyPassphrase;
+};
+StoredSecret SplitStoredSecret(const std::string& stored);
+
 // One SSH host to authenticate against. Both the target server and a jump
 // host are described by this, so the authentication logic — PPK conversion,
 // passphrase prompting, path expansion, missing-file checks — exists once
 // instead of once per host kind.
 //
-// `password` points at the settings object that owns it and is only read;
-// a passphrase entered for a key stays local to the attempt. `waitIo`
-// differs per host: the target waits through its transport stream, a jump
-// host on its own raw socket, since during the jump handshake the target's
-// stream does not exist yet.
+// Both secrets point at the settings object that owns them. The password is
+// read-only here: writing a key passphrase into it would offer that
+// passphrase to the server on a password-auth fallback. The passphrase is
+// writable, so one entered at a prompt is remembered for the automatic
+// reconnects that run mid-transfer.
+//
+// `waitIo` differs per host: the target waits through its transport stream, a
+// jump host on its own raw socket, since during the jump handshake the
+// target's stream does not exist yet.
 struct SshAuthTarget {
-    ISshSession*          session   = nullptr;
+    ISshSession*          session       = nullptr;
     std::string           host;              // display only: prompts and logs
     std::string           user;
-    const std::string*    password  = nullptr;
+    const std::string*    password      = nullptr;   // offered to the server
+    std::string*          keyPassphrase = nullptr;   // decrypts privkeyfile only
     std::string           pubkeyfile;
     std::string           privkeyfile;
     std::function<void()> waitIo;

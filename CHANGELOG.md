@@ -170,6 +170,35 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 
 ### Fixes
 
+- **Switching sessions in the connection dialog no longer overwrites the
+  session you switch to.** The dialog refilled its fields from the newly
+  selected session but kept describing the previous one internally, and
+  `OK` saves from that internal copy. Everything without a field of its
+  own in the dialog was written over the session you had just picked:
+  its jump host, its PHP and LAN-pair options, and its UTF-8 and
+  large-file settings. A jump host configured on one session could
+  silently replace another's, or vanish while the session still tried to
+  use one.
+
+- **A private key passphrase is no longer offered to the server as a
+  password.** A passphrase entered to unlock a `.ppk` key was kept as the
+  account password, so when key authentication then failed, the fallback
+  sent that passphrase to the server as a login attempt. Password and
+  passphrase are now separate throughout: the passphrase only ever
+  decrypts a local key file.
+
+- **A password and a key passphrase stored together are read correctly.**
+  The `"password","passphrase"` form was understood differently depending
+  on which authentication method ran — one path used the second value as
+  the account password, another as the passphrase, and the `.ppk` path
+  ignored the split entirely and tried the whole field as a passphrase.
+  The second value also came back with a stray trailing quote, so a
+  passphrase stored this way never matched. One reading now applies
+  everywhere: the first value is the account password, the second the key
+  passphrase. This is also documented in the help file for the first
+  time, and it now works for jump hosts as well. If you had relied on the
+  previous order, swap the two values.
+
 - **Pageant authentication to a jump host works now.** If an SSH agent
   key was the only credential for the jump host, connecting failed
   immediately — the plugin never actually offered the key to the server.
