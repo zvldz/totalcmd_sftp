@@ -56,7 +56,7 @@
 12052=Redirección de envío de HTTPS a HTTP
 12053=Insertar CD-ROM
 130=F7 - ayuda.txt
-131=Ayuda del plugin:\r\nF7:\tCrear nueva conexión (TC muestra Nueva Carpeta – introducir nombre de conexión)\r\nF8/Supr:\tEliminar conexión\r\nIntro:\tConectar\r\nAlt+Intro:\tCambiar opciones\r\n\r\nModos de transferencia:\r\nSSH (SFTP/SCP):\tPredeterminado, más rápido cuando SSH está disponible\r\nUsar SCP para datos:\tUsar cuando SFTP está bloqueado/inestable\r\nUsar solo SCP:\tDesactivar SFTP completamente (hosts heredados)\r\nForzar transferencia shell:\tForzar transferencia basada en shell (dd/base64)\r\nAgente PHP (HTTP):\tNo se necesita cuenta SSH; usar sftp.php subido\r\nShell PHP (HTTP):\tPseudoterminal sobre HTTP via sftp.php
+131=Ayuda del plugin:\r\nF7:\tCrear nueva conexión (TC muestra Nueva Carpeta – introducir nombre de conexión)\r\nF8/Supr:\tEliminar conexión\r\nIntro:\tConectar\r\nAlt+Intro:\tCambiar opciones\r\nF3/F4:\tMostrar ajustes como INI (editar con Alt+Intro)\r\n\r\nSesiones en carpetas:\r\nF7 dentro de una carpeta:\tCrea la sesión en esa carpeta\r\nF7 con nombre folder/x:\tCrea la sesión en la carpeta indicada\r\nF6 a \\carpeta\\nombre:\tMueve una sesión a una carpeta\r\nF6 en una carpeta:\tRenombra todas las sesiones; las referencias de salto se actualizan\r\nF5 o arrastrar:\tCopia la sesión o la carpeta (duplicado)\r\nF8 en una carpeta:\tElimina la carpeta y todas sus sesiones\r\n\r\nModos de transferencia:\r\nSSH (SFTP/SCP):\tPredeterminado, más rápido cuando SSH está disponible\r\nUsar SCP para datos:\tUsar cuando SFTP está bloqueado/inestable\r\nUsar solo SCP:\tDesactivar SFTP completamente (hosts heredados)\r\nForzar transferencia shell:\tForzar transferencia basada en shell (dd/base64)\r\nAgente PHP (HTTP):\tNo se necesita cuenta SSH; usar sftp.php subido\r\nShell PHP (HTTP):\tPseudoterminal sobre HTTP via sftp.php
 132=Conexión rápida
 144=Ayuda
 146=Aquí puede configurar cómo el servidor envía nombres de archivo con acentos. Al elegir 'detección automática', el plugin obtendrá variables de entorno (como LANG) y enviará el comando 'locale' para determinar la codificación de caracteres del servidor. Esto puede no funcionar con todos los servidores, por lo que si sabe que su servidor usa UTF-8, o los nombres de archivo aparecen con caracteres extraños en lugar de acentos, seleccione 'sí' manualmente.
@@ -258,7 +258,7 @@
 335=Endpoint del Agente PHP no encontrado (HTTP 404).\nVerifique la URL, el nombre del archivo y suba sftp.php al servidor.
 336=PHP Agent no está configurado en el servidor (HTTP 503).\nEstablezca AGENT_PSK / AGENT_PSK_SHA256 en sftp.php y vuelva a subir.
 337=Credenciales incorrectas para PHP Agent (HTTP {}).
-338=Error de solicitud HTTP {} para PHP Agent.
+338=La solicitud del Agente PHP falló para {} (HTTP {}).
 339=PHP Agent rechazó la conexión: {}
 340=La validación de PHP Agent falló: {}
 341=Credenciales incorrectas para PHP Agent.

@@ -56,7 +56,7 @@
 12052=Přesměrování odesílání HTTPS na HTTP
 12053=Vložte CD-ROM
 130=F7 - help.txt
-131=Nápověda zásuvného modulu:\r\nF7:\tVytvořit nové připojení (TC zobrazí Nový adresář – zadejte název připojení)\r\nF8/Del:\tOdstranit připojení\r\nEnter:\tPřipojit\r\nAlt+Enter:\tZměnit možnosti\r\n\r\nRežimy přenosu:\r\nSSH (SFTP/SCP):\tVýchozí a nejrychlejší, pokud funguje přístup SSH\r\nPoužít SCP pro data:\tKdyž je SFTP blokováno nebo nestabilní\r\nPouze SCP:\tÚplně zakáže SFTP (staré hostitele)\r\nVynutit přenos shellem:\tVynutí přenos přes shell (dd/base64)\r\nPHP Agent (HTTP):\tBez účtu SSH; používá nahraný sftp.php\r\nPHP Shell (HTTP):\tPseudo-terminál HTTP přes sftp.php
+131=Nápověda zásuvného modulu:\r\nF7:\tVytvořit nové připojení (TC zobrazí Nový adresář – zadejte název připojení)\r\nF8/Del:\tOdstranit připojení\r\nEnter:\tPřipojit\r\nAlt+Enter:\tZměnit možnosti\r\nF3/F4:\tZobrazit nastavení jako INI (upravit přes Alt+Enter)\r\n\r\nRelace ve složkách:\r\nF7 ve složce:\tVytvoří relaci v této složce\r\nF7 se jménem folder/x:\tVytvoří relaci v uvedené složce\r\nF6 na \\složka\\jméno:\tPřesune relaci do složky\r\nF6 na složce:\tPřejmenuje všechny relace uvnitř; odkazy na jump-hosta se aktualizují\r\nF5 nebo přetažení:\tZkopíruje relaci nebo složku (duplikát)\r\nF8 na složce:\tOdstraní složku a všechny relace v ní\r\n\r\nRežimy přenosu:\r\nSSH (SFTP/SCP):\tVýchozí a nejrychlejší, pokud funguje přístup SSH\r\nPoužít SCP pro data:\tKdyž je SFTP blokováno nebo nestabilní\r\nPouze SCP:\tÚplně zakáže SFTP (staré hostitele)\r\nVynutit přenos shellem:\tVynutí přenos přes shell (dd/base64)\r\nPHP Agent (HTTP):\tBez účtu SSH; používá nahraný sftp.php\r\nPHP Shell (HTTP):\tPseudo-terminál HTTP přes sftp.php
 132=Rychlé připojení
 144=Nápověda
 146=Zde můžete nastavit způsob, jakým server odesílá názvy souborů s diakritikou. Pokud zvolíte 'automaticky zjistit', zásuvný modul načte proměnné prostředí (např. LANG) a odešle příkaz 'locale', aby zjistil kódování znaků používané serverem. Toto nemusí fungovat u všech serverů, takže pokud víte, že server používá UTF-8, nebo se názvy souborů zobrazují se špatnými znaky místo diakritiky, vyberte 'ano' ručně.
@@ -257,7 +257,7 @@
 335=Koncový bod PHP agenta nebyl nalezen (HTTP 404).\nZkontrolujte URL, název souboru a nahrajte sftp.php na server.
 336=PHP agent není nakonfigurován na serveru (HTTP 503).\nNastavte AGENT_PSK / AGENT_PSK_SHA256 v sftp.php a nahrajte znovu.
 337=Nesprávné přihlašovací údaje pro PHP Agent (HTTP {}).
-338=Chyba HTTP požadavku {} pro PHP Agent.
+338=Požadavek PHP Agenta selhal pro {} (HTTP {}).
 339=PHP Agent odmítl připojení: {}
 340=Ověření PHP Agenta selhalo: {}
 341=Nesprávné přihlašovací údaje pro PHP Agent.

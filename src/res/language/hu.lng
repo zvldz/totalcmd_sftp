@@ -56,7 +56,7 @@
 12052=HTTPS küldés átirányítása HTTP-re
 12053=Helyezze be a CD-ROM-ot
 130=F7 - help.txt
-131=Beépülő modul súgója:\r\nF7:\tÚj kapcsolat létrehozása (a TC megjeleníti az Új mappát – adja meg a kapcsolat nevét)\r\nF8/Del:\tKapcsolat törlése\r\nEnter:\tCsatlakozás\r\nAlt+Enter:\tBeállítások módosítása\r\n\r\nÁtviteli módok:\r\nSSH (SFTP/SCP):\tAlapértelmezett és leggyorsabb, ha az SSH-hozzáférés működik\r\nSCP használata adatokhoz:\tHa az SFTP blokkolva vagy instabil\r\nCsak SCP:\tTeljesen letiltja az SFTP-t (régi kiszolgálók)\r\nShell-átvitel kényszerítése:\tShellen keresztüli átvitelt kényszerít (dd/base64)\r\nPHP ügynök (HTTP):\tSSH-fiók nélkül; feltöltött sftp.php-t használ\r\nPHP Shell (HTTP):\tHTTP pszeudo-terminál sftp.php-n keresztül
+131=Beépülő modul súgója:\r\nF7:\tÚj kapcsolat létrehozása (a TC megjeleníti az Új mappát – adja meg a kapcsolat nevét)\r\nF8/Del:\tKapcsolat törlése\r\nEnter:\tCsatlakozás\r\nAlt+Enter:\tBeállítások módosítása\r\nF3/F4:\tBeállítások megjelenítése INI-ként (szerkesztés: Alt+Enter)\r\n\r\nMunkamenetek mappákban:\r\nF7 mappán belül:\tA munkamenetet abban a mappában hozza létre\r\nF7 folder/x névvel:\tA munkamenetet a megadott mappában hozza létre\r\nF6 \\mappa\\név alakra:\tMappába helyezi a munkamenetet\r\nF6 mappán:\tAz összes munkamenetet átnevezi; a jump-host hivatkozások követik\r\nF5 vagy húzás:\tMásolja a munkamenetet vagy mappát\r\nF8 mappán:\tTörli a mappát és a benne lévő munkameneteket\r\n\r\nÁtviteli módok:\r\nSSH (SFTP/SCP):\tAlapértelmezett és leggyorsabb, ha az SSH-hozzáférés működik\r\nSCP használata adatokhoz:\tHa az SFTP blokkolva vagy instabil\r\nCsak SCP:\tTeljesen letiltja az SFTP-t (régi kiszolgálók)\r\nShell-átvitel kényszerítése:\tShellen keresztüli átvitelt kényszerít (dd/base64)\r\nPHP ügynök (HTTP):\tSSH-fiók nélkül; feltöltött sftp.php-t használ\r\nPHP Shell (HTTP):\tHTTP pszeudo-terminál sftp.php-n keresztül
 132=Gyors csatlakozás
 144=Súgó
 146=Itt állíthatja be, hogyan küldje a kiszolgáló az ékezetes karaktereket tartalmazó fájlneveket. Ha az 'automatikus észlelés' lehetőséget választja, a beépülő modul beolvassa a környezeti változókat (pl. LANG) és kiadja a 'locale' parancsot, hogy meghatározza a kiszolgáló által használt karakterkódolást. Ez nem feltétlenül működik minden kiszolgálón, ezért ha tudja, hogy a kiszolgáló UTF-8-at használ, vagy a fájlnevek ékezetek helyett rossz karakterekkel jelennek meg, manuálisan válassza az 'igen' lehetőséget.
@@ -257,7 +257,7 @@
 335=A PHP Agent végpont nem található (HTTP 404).\nEllenőrizze az URL-t, a fájlnevet és töltse fel a sftp.php-t a szerverre.
 336=A PHP Agent nincs konfigurálva a szerveren (HTTP 503).\nÁllítsa be az AGENT_PSK / AGENT_PSK_SHA256 értékeket a sftp.php-ban és töltse fel újra.
 337=Helytelen hitelesítő adatok a PHP Agentnek (HTTP {}).
-338=HTTP {} kérési hiba a PHP Agentnél.
+338=A PHP Agent kérése sikertelen: {} (HTTP {}).
 339=A PHP Agent elutasította a kapcsolatot: {}
 340=A PHP Agent érvényesítése sikertelen: {}
 341=Helytelen hitelesítő adatok a PHP Agentnek.

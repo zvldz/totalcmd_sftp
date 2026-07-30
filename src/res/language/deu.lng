@@ -56,7 +56,7 @@
 12052=HTTPS-zu-HTTP-Formularumleitung
 12053=CD-ROM einlegen
 130=F7 - hilfe.txt
-131=Plugin-Hilfe:\r\nF7:\tNeue Verbindung erstellen (TC zeigt Neuer Ordner – Verbindungsname eingeben)\r\nF8/Entf:\tVerbindung löschen\r\nEingabe:\tVerbinden\r\nAlt+Eingabe:\tOptionen ändern\r\n\r\nÜbertragungsmodi:\r\nSSH (SFTP/SCP):\tStandard, am schnellsten wenn SSH verfügbar\r\nSCP für Daten:\tVerwenden wenn SFTP blockiert/instabil\r\nNur SCP:\tSFTP vollständig deaktivieren (ältere Hosts)\r\nShell-Transfer erzwingen:\tShell-basierte Übertragung erzwingen (dd/base64)\r\nPHP-Agent (HTTP):\tKein SSH-Konto nötig; sftp.php hochladen\r\nPHP-Shell (HTTP):\tPseudo-Terminal über HTTP via sftp.php
+131=Plugin-Hilfe:\r\nF7:\tNeue Verbindung erstellen (TC zeigt Neuer Ordner – Verbindungsname eingeben)\r\nF8/Entf:\tVerbindung löschen\r\nEingabe:\tVerbinden\r\nAlt+Eingabe:\tOptionen ändern\r\nF3/F4:\tEinstellungen als INI anzeigen (ändern mit Alt+Eingabe)\r\n\r\nSitzungen in Ordnern:\r\nF7 in einem Ordner:\tErstellt die Sitzung in diesem Ordner\r\nF7 mit Name folder/x:\tErstellt die Sitzung im angegebenen Ordner\r\nF6 zu \\Ordner\\Name:\tVerschiebt eine Sitzung in einen Ordner\r\nF6 auf einem Ordner:\tBenennt alle Sitzungen darin um; Jump-Host-Verweise folgen\r\nF5 oder Ziehen:\tKopiert Sitzung oder Ordner (Duplikat)\r\nF8 auf einem Ordner:\tLöscht den Ordner und alle Sitzungen darin\r\n\r\nÜbertragungsmodi:\r\nSSH (SFTP/SCP):\tStandard, am schnellsten wenn SSH verfügbar\r\nSCP für Daten:\tVerwenden wenn SFTP blockiert/instabil\r\nNur SCP:\tSFTP vollständig deaktivieren (ältere Hosts)\r\nShell-Transfer erzwingen:\tShell-basierte Übertragung erzwingen (dd/base64)\r\nPHP-Agent (HTTP):\tKein SSH-Konto nötig; sftp.php hochladen\r\nPHP-Shell (HTTP):\tPseudo-Terminal über HTTP via sftp.php
 132=Schnellverbindung
 144=Hilfe
 146=Hier können Sie konfigurieren, wie der Server Dateinamen mit Sonderzeichen sendet. Wenn Sie 'Automatisch erkennen' wählen, liest das Plugin Umgebungsvariablen (wie LANG) und sendet den Befehl 'locale', um die Zeichenkodierung des Servers zu ermitteln. Dies funktioniert möglicherweise nicht mit allen Servern. Wenn Sie wissen, dass Ihr Server UTF-8 verwendet, oder Dateinamen mit seltsamen Zeichen statt Umlauten erscheinen, wählen Sie bitte manuell 'Ja'.
@@ -258,7 +258,7 @@
 335=PHP-Agent-Endpunkt nicht gefunden (HTTP 404).\nURL und Dateiname prüfen und sftp.php hochladen.
 336=PHP-Agent ist auf dem Server nicht konfiguriert (HTTP 503).\nAGENT_PSK / AGENT_PSK_SHA256 in sftp.php setzen und erneut hochladen.
 337=Falsche Anmeldedaten für PHP Agent (HTTP {}).
-338=HTTP-Anfehler {} für PHP Agent.
+338=PHP-Agent-Anfrage für {} fehlgeschlagen (HTTP {}).
 339=PHP Agent hat die Verbindung abgelehnt: {}
 340=PHP Agent Validierung fehlgeschlagen: {}
 341=Falsche Anmeldedaten für PHP Agent.

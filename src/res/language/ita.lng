@@ -56,7 +56,7 @@
 12052=Reindirizzamento invio HTTPS a HTTP
 12053=Inserire il CD-ROM
 130=F7 - aiuto.txt
-131=Guida plugin:\r\nF7:\tCrea nuova connessione (TC mostra Nuova cartella - inserisci il nome)\r\nF8/Canc:\tElimina connessione\r\nInvio:\tConnetti\r\nAlt+Invio:\tModifica opzioni\r\n\r\nModalità trasferimento:\r\nSSH (SFTP/SCP):\tPredefinita, più veloce con accesso SSH\r\nUsa SCP per dati:\tUsare quando SFTP è bloccato/instabile\r\nSolo SCP:\tDisabilita SFTP (host legacy)\r\nForza shell transfer:\tTrasferimento via shell (dd/base64)\r\nPHP Agent (HTTP):\tSenza account SSH; usa sftp.php caricato\r\nPHP Shell (HTTP):\tPseudo-terminale HTTP via sftp.php
+131=Guida plugin:\r\nF7:\tCrea nuova connessione (TC mostra Nuova cartella - inserisci il nome)\r\nF8/Canc:\tElimina connessione\r\nInvio:\tConnetti\r\nAlt+Invio:\tModifica opzioni\r\nF3/F4:\tMostra le impostazioni come INI (modifica con Alt+Invio)\r\n\r\nSessioni nelle cartelle:\r\nF7 dentro una cartella:\tCrea la sessione in quella cartella\r\nF7 con nome folder/x:\tCrea la sessione nella cartella indicata\r\nF6 in \\cartella\\nome:\tSposta una sessione in una cartella\r\nF6 su una cartella:\tRinomina tutte le sessioni; i riferimenti al jump host seguono\r\nF5 o trascinamento:\tCopia la sessione o la cartella (duplicato)\r\nF8 su una cartella:\tElimina la cartella e tutte le sessioni in essa\r\n\r\nModalità trasferimento:\r\nSSH (SFTP/SCP):\tPredefinita, più veloce con accesso SSH\r\nUsa SCP per dati:\tUsare quando SFTP è bloccato/instabile\r\nSolo SCP:\tDisabilita SFTP (host legacy)\r\nForza shell transfer:\tTrasferimento via shell (dd/base64)\r\nPHP Agent (HTTP):\tSenza account SSH; usa sftp.php caricato\r\nPHP Shell (HTTP):\tPseudo-terminale HTTP via sftp.php
 132=Connessione rapida
 144=Aiuto
 146=Qui puoi configurare il modo in cui il server invia i nomi dei file con caratteri accentati. Scegliendo 'rilevamento automatico', il plugin leggerà alcune variabili d'ambiente (come LANG) ed eseguirà il comando 'locale' per determinare la codifica usata dal server. Se l'auto-rilevamento non funziona o i nomi dei file vengono visualizzati con caratteri errati, seleziona 'sì' manualmente.
@@ -257,7 +257,7 @@
 335=Endpoint PHP Agent non trovato (HTTP 404).\nVerifica URL, nome file e carica sftp.php sul server.
 336=PHP Agent non configurato sul server (HTTP 503).\nImposta AGENT_PSK / AGENT_PSK_SHA256 in sftp.php e ricarica.
 337=Credenziali errate per PHP Agent (HTTP {}).
-338=Errore di richiesta HTTP {} per PHP Agent.
+338=Richiesta PHP Agent non riuscita per {} (HTTP {}).
 339=PHP Agent ha rifiutato la connessione: {}
 340=Validazione PHP Agent fallita: {}
 341=Credenziali errate per PHP Agent.

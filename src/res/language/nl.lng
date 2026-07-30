@@ -56,7 +56,7 @@
 12052=HTTPS-verzending omleiden naar HTTP
 12053=Plaats de cd-rom
 130=F7 - help.txt
-131=Help plug-in:\r\nF7:\tNieuwe verbinding maken (TC toont Nieuwe map – typ de naam van de verbinding)\r\nF8/Del:\tVerbinding verwijderen\r\nEnter:\tVerbinden\r\nAlt+Enter:\tOpties wijzigen\r\n\r\nOverdrachtswijzen:\r\nSSH (SFTP/SCP):\tStandaard en snelst wanneer SSH-toegang werkt\r\nSCP gebruiken voor gegevens:\tWanneer SFTP geblokkeerd of instabiel is\r\nAlleen SCP:\tSFTP volledig uitschakelen (oude hosts)\r\nShell-overdracht forceren:\tOverdracht via shell forceren (dd/base64)\r\nPHP-agent (HTTP):\tZonder SSH-account; gebruikt geüploade sftp.php\r\nPHP Shell (HTTP):\tHTTP-pseudoterminal via sftp.php
+131=Help plug-in:\r\nF7:\tNieuwe verbinding maken (TC toont Nieuwe map – typ de naam van de verbinding)\r\nF8/Del:\tVerbinding verwijderen\r\nEnter:\tVerbinden\r\nAlt+Enter:\tOpties wijzigen\r\nF3/F4:\tInstellingen als INI tonen (bewerken met Alt+Enter)\r\n\r\nSessies in mappen:\r\nF7 in een map:\tMaakt de sessie in die map\r\nF7 met naam folder/x:\tMaakt de sessie in de opgegeven map\r\nF6 naar \\map\\naam:\tVerplaatst een sessie naar een map\r\nF6 op een map:\tHernoemt alle sessies erin; jump-hostverwijzingen volgen\r\nF5 of slepen:\tKopieert sessie of map (duplicaat)\r\nF8 op een map:\tVerwijdert de map en alle sessies erin\r\n\r\nOverdrachtswijzen:\r\nSSH (SFTP/SCP):\tStandaard en snelst wanneer SSH-toegang werkt\r\nSCP gebruiken voor gegevens:\tWanneer SFTP geblokkeerd of instabiel is\r\nAlleen SCP:\tSFTP volledig uitschakelen (oude hosts)\r\nShell-overdracht forceren:\tOverdracht via shell forceren (dd/base64)\r\nPHP-agent (HTTP):\tZonder SSH-account; gebruikt geüploade sftp.php\r\nPHP Shell (HTTP):\tHTTP-pseudoterminal via sftp.php
 132=Snelle verbinding
 144=Help
 146=Hier kunt u instellen hoe de server bestandsnamen met accenttekens verzendt. Als u 'automatisch detecteren' kiest, leest de plug-in omgevingsvariabelen (bijv. LANG) en stuurt het commando 'locale' om de tekencodering van de server te bepalen. Dit werkt mogelijk niet bij alle servers. Als u weet dat de server UTF-8 gebruikt, of als bestandsnamen verkeerde tekens tonen in plaats van accenten, selecteer dan handmatig 'ja'.
@@ -257,7 +257,7 @@
 335=PHP Agent-eindpunt niet gevonden (HTTP 404).\nControleer URL, bestandsnaam en upload sftp.php naar de server.
 336=PHP Agent is niet geconfigureerd op de server (HTTP 503).\nStel AGENT_PSK / AGENT_PSK_SHA256 in sftp.php in en upload opnieuw.
 337=Onjuiste inloggegevens voor PHP Agent (HTTP {}).
-338=HTTP-verzoekfout {} voor PHP Agent.
+338=PHP Agent-verzoek mislukt voor {} (HTTP {}).
 339=PHP Agent heeft de verbinding geweigerd: {}
 340=PHP Agent validatie mislukt: {}
 341=Onjuiste inloggegevens voor PHP Agent.

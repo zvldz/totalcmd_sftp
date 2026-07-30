@@ -56,7 +56,7 @@
 12052=Redirecționare trimitere HTTPS la HTTP
 12053=Introduceți CD-ROM-ul
 130=F7 - help.txt
-131=Ajutor modul plugin:\r\nF7:\tCreați o nouă conexiune (TC afișează Director nou – introduceți numele conexiunii)\r\nF8/Del:\tȘtergeți conexiunea\r\nEnter:\tConectați\r\nAlt+Enter:\tModificați opțiunile\r\n\r\nModuri de transfer:\r\nSSH (SFTP/SCP):\tImplicit și cel mai rapid când accesul SSH funcționează\r\nFolosire SCP pentru date:\tCând SFTP este blocat sau instabil\r\nNumai SCP:\tDezactivează complet SFTP (gazde vechi)\r\nForțare transfer shell:\tForțează transferul prin shell (dd/base64)\r\nPHP Agent (HTTP):\tFără cont SSH; folosește sftp.php încărcat\r\nPHP Shell (HTTP):\tPseudo-terminal HTTP prin sftp.php
+131=Ajutor modul plugin:\r\nF7:\tCreați o nouă conexiune (TC afișează Director nou – introduceți numele conexiunii)\r\nF8/Del:\tȘtergeți conexiunea\r\nEnter:\tConectați\r\nAlt+Enter:\tModificați opțiunile\r\nF3/F4:\tAfișează setările ca INI (modificare cu Alt+Enter)\r\n\r\nSesiuni în foldere:\r\nF7 într-un folder:\tCreează sesiunea în acel folder\r\nF7 cu numele folder/x:\tCreează sesiunea în folderul indicat\r\nF6 în \\folder\\nume:\tMută o sesiune într-un folder\r\nF6 pe un folder:\tRedenumește toate sesiunile; referințele jump host se actualizează\r\nF5 sau tragere:\tCopiază sesiunea sau folderul (duplicat)\r\nF8 pe un folder:\tȘterge folderul și toate sesiunile din el\r\n\r\nModuri de transfer:\r\nSSH (SFTP/SCP):\tImplicit și cel mai rapid când accesul SSH funcționează\r\nFolosire SCP pentru date:\tCând SFTP este blocat sau instabil\r\nNumai SCP:\tDezactivează complet SFTP (gazde vechi)\r\nForțare transfer shell:\tForțează transferul prin shell (dd/base64)\r\nPHP Agent (HTTP):\tFără cont SSH; folosește sftp.php încărcat\r\nPHP Shell (HTTP):\tPseudo-terminal HTTP prin sftp.php
 132=Conexiune rapidă
 144=Ajutor
 146=Aici puteți configura modul în care serverul trimite numele fișierelor cu caractere accentuate. Dacă alegeți 'detectare automată', pluginul va citi variabilele de mediu (de ex. LANG) și va trimite comanda 'locale' pentru a determina codificarea caracterelor folosită de server. Este posibil să nu funcționeze cu toate serverele, deci dacă știți că serverul folosește UTF-8 sau numele fișierelor se afișează cu caractere greșite în loc de accente, selectați 'da' manual.
@@ -257,7 +257,7 @@
 335=Punctul de acces al agentului PHP nu a fost găsit (HTTP 404).\nVerificați URL-ul, numele fișierului și încărcați sftp.php pe server.
 336=Agentul PHP nu este configurat pe server (HTTP 503).\nSetați AGENT_PSK / AGENT_PSK_SHA256 în sftp.php și reîncărcați.
 337=Date de autentificare incorecte pentru PHP Agent (HTTP {}).
-338=Eroare de cerere HTTP {} pentru PHP Agent.
+338=Cererea PHP Agent a eșuat pentru {} (HTTP {}).
 339=PHP Agent a respins conexiunea: {}
 340=Validarea PHP Agent a eșuat: {}
 341=Date de autentificare incorecte pentru PHP Agent.

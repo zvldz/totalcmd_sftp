@@ -56,7 +56,7 @@
 12052=Redirection de soumission HTTPS vers HTTP
 12053=Insérer le CD-ROM
 130=F7 - aide.txt
-131=Aide du plugin:\r\nF7:\tCréer une nouvelle connexion (TC affiche Nouveau Dossier – entrer le nom de la connexion)\r\nF8/Suppr:\tSupprimer la connexion\r\nEntrée:\tConnecter\r\nAlt+Entrée:\tModifier les options\r\n\r\nModes de transfert:\r\nSSH (SFTP/SCP):\tDéfaut, le plus rapide quand SSH est disponible\r\nUtiliser SCP pour les données:\tUtiliser quand SFTP est bloqué/instable\r\nUtiliser SCP uniquement:\tDésactiver SFTP complètement (hôtes anciens)\r\nForcer transfert shell:\tForcer le transfert par shell (dd/base64)\r\nAgent PHP (HTTP):\tPas de compte SSH nécessaire; utiliser sftp.php téléversé\r\nShell PHP (HTTP):\tPseudo-terminal via HTTP par sftp.php
+131=Aide du plugin:\r\nF7:\tCréer une nouvelle connexion (TC affiche Nouveau Dossier – entrer le nom de la connexion)\r\nF8/Suppr:\tSupprimer la connexion\r\nEntrée:\tConnecter\r\nAlt+Entrée:\tModifier les options\r\nF3/F4:\tAfficher les paramètres en INI (modifier via Alt+Entrée)\r\n\r\nSessions dans des dossiers:\r\nF7 dans un dossier:\tCrée la session dans ce dossier\r\nF7 avec le nom folder/x:\tCrée la session dans le dossier indiqué\r\nF6 vers \\dossier\\nom:\tDéplace une session dans un dossier\r\nF6 sur un dossier:\tRenomme toutes les sessions; les références de rebond suivent\r\nF5 ou glisser:\tCopie la session ou le dossier (duplicata)\r\nF8 sur un dossier:\tSupprime le dossier et toutes ses sessions\r\n\r\nModes de transfert:\r\nSSH (SFTP/SCP):\tDéfaut, le plus rapide quand SSH est disponible\r\nUtiliser SCP pour les données:\tUtiliser quand SFTP est bloqué/instable\r\nUtiliser SCP uniquement:\tDésactiver SFTP complètement (hôtes anciens)\r\nForcer transfert shell:\tForcer le transfert par shell (dd/base64)\r\nAgent PHP (HTTP):\tPas de compte SSH nécessaire; utiliser sftp.php téléversé\r\nShell PHP (HTTP):\tPseudo-terminal via HTTP par sftp.php
 132=Connexion rapide
 144=Aide
 146=Ici vous pouvez configurer comment le serveur envoie les noms de fichiers avec des accents. En choisissant 'détection auto', le plugin lira des variables d'environnement (comme LANG) et enverra la commande 'locale' pour déterminer l'encodage de caractères du serveur. Cela peut ne pas fonctionner avec tous les serveurs. Si vous savez que votre serveur utilise UTF-8, ou si les noms de fichiers apparaissent avec des caractères étranges à la place des accents, veuillez choisir 'oui' manuellement.
@@ -258,7 +258,7 @@
 335=Point de terminaison de l'agent PHP introuvable (HTTP 404).\nVérifiez l'URL, le nom du fichier et téléversez sftp.php sur le serveur.
 336=L'agent PHP n'est pas configuré sur le serveur (HTTP 503).\nDéfinissez AGENT_PSK / AGENT_PSK_SHA256 dans sftp.php et téléversez à nouveau.
 337=Identifiants incorrects pour PHP Agent (HTTP {}).
-338=Erreur de requête HTTP {} pour PHP Agent.
+338=Échec de la requête de l'Agent PHP pour {} (HTTP {}).
 339=PHP Agent a rejeté la connexion : {}
 340=La validation PHP Agent a échoué : {}
 341=Identifiants incorrects pour PHP Agent.

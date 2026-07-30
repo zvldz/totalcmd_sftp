@@ -56,7 +56,7 @@
 12052=Przekierowanie wysyłania HTTPS na HTTP
 12053=Włóż CD-ROM
 130=F7 - help.txt
-131=Pomoc wtyczki:\r\nF7:\tUtwórz nowe połączenie (TC pokazuje Nowy katalog - wpisz nazwę połączenia)\r\nF8/Del:\tUsuń połączenie\r\nEnter:\tPołącz\r\nAlt+Enter:\tZmień opcje\r\n\r\nTryby transferu:\r\nSSH (SFTP/SCP):\tDomyślny i najszybszy, gdy działa dostęp SSH\r\nUżyj SCP do danych:\tGdy SFTP jest blokowane lub niestabilne\r\nTylko SCP:\tCałkowicie wyłącza SFTP (stare hosty)\r\nWymuś transfer shell:\tWymusza transfer przez shell (dd/base64)\r\nPHP Agent (HTTP):\tBez konta SSH; używa wgranego sftp.php\r\nPHP Shell (HTTP):\tPseudo-terminal HTTP przez sftp.php
+131=Pomoc wtyczki:\r\nF7:\tUtwórz nowe połączenie (TC pokazuje Nowy katalog - wpisz nazwę połączenia)\r\nF8/Del:\tUsuń połączenie\r\nEnter:\tPołącz\r\nAlt+Enter:\tZmień opcje\r\nF3/F4:\tPokaż ustawienia jako INI (edycja przez Alt+Enter)\r\n\r\nSesje w folderach:\r\nF7 w folderze:\tTworzy sesję w tym folderze\r\nF7 z nazwą folder/x:\tTworzy sesję we wskazanym folderze\r\nF6 na \\folder\\nazwa:\tPrzenosi sesję do folderu\r\nF6 na folderze:\tZmienia nazwy wszystkich sesji; odwołania jump-host również\r\nF5 lub przeciągnięcie:\tKopiuje sesję lub folder (duplikat)\r\nF8 na folderze:\tUsuwa folder i wszystkie sesje w nim\r\n\r\nTryby transferu:\r\nSSH (SFTP/SCP):\tDomyślny i najszybszy, gdy działa dostęp SSH\r\nUżyj SCP do danych:\tGdy SFTP jest blokowane lub niestabilne\r\nTylko SCP:\tCałkowicie wyłącza SFTP (stare hosty)\r\nWymuś transfer shell:\tWymusza transfer przez shell (dd/base64)\r\nPHP Agent (HTTP):\tBez konta SSH; używa wgranego sftp.php\r\nPHP Shell (HTTP):\tPseudo-terminal HTTP przez sftp.php
 132=Szybkie połączenie
 144=Pomoc
 146=Tutaj możesz skonfigurować sposób, w jaki serwer wysyła nazwy plików z akcentami. Gdy wybierzesz 'wykryj automatycznie', wtyczka pobierze zmienne środowiskowe (np. LANG) i wyśle polecenie 'locale', aby określić kodowanie znaków używane przez serwer. Może to nie działać ze wszystkimi serwerami, więc jeśli wiesz, że serwer używa UTF-8, lub nazwy plików wyświetlają się ze złymi znakami zamiast akcentów, wybierz 'tak' ręcznie.
@@ -256,7 +256,7 @@
 335=Punkt końcowy PHP Agent nie został znaleziony (HTTP 404).\nSprawdź URL, nazwę pliku i wgraj sftp.php na serwer.
 336=PHP Agent nie jest skonfigurowany na serwerze (HTTP 503).\nUstaw AGENT_PSK / AGENT_PSK_SHA256 w sftp.php i wgraj ponownie.
 337=Błędne dane logowania dla PHP Agent (HTTP {}).
-338=Błąd żądania HTTP {} dla PHP Agent.
+338=Żądanie PHP Agent nie powiodło się dla {} (HTTP {}).
 339=PHP Agent odrzucił połączenie: {}
 340=Weryfikacja PHP Agent nie powiodła się: {}
 341=Błędne dane logowania dla PHP Agent.

@@ -563,7 +563,7 @@ static HANDLE BuildImportsSourceListing(const std::string& sourceId,
     //
     // Display trick: TC treats `\` in an entry name as a path separator and
     // only renders the trailing leaf, which for absolute Windows paths like
-    // `C:\Users\vladn\...\Sessions` shows just `Sessions` — useless. We
+    // `C:\Users\<name>\...\Sessions` shows just `Sessions` — useless. We
     // replace `\` with `/` for display (matching our internal path
     // normalisation everywhere else). The F8-remove handler in
     // FsDeleteFileW reverses the substitution before hitting the INI, so

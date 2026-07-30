@@ -56,7 +56,7 @@
 12052=HTTPS 发送重定向到 HTTP
 12053=请插入 CD-ROM
 130=F7 - help.txt
-131=插件帮助:\r\nF7:\t新建连接（TC 显示新建目录 – 输入连接名称）\r\nF8/Del:\t删除连接\r\nEnter:\t连接\r\nAlt+Enter:\t修改选项\r\n\r\n传输模式:\r\nSSH (SFTP/SCP):\tSSH 访问正常时的默认最快模式\r\n使用 SCP 传输数据:\tSFTP 被阻止或不稳定时使用\r\n仅 SCP:\t完全禁用 SFTP（旧式主机）\r\n强制 Shell 传输:\t通过 shell 强制传输（dd/base64）\r\nPHP 代理 (HTTP):\t无需 SSH 账户；使用已上传的 sftp.php\r\nPHP Shell (HTTP):\t通过 sftp.php 的 HTTP 伪终端
+131=插件帮助:\r\nF7:\t新建连接（TC 显示新建目录 – 输入连接名称）\r\nF8/Del:\t删除连接\r\nEnter:\t连接\r\nAlt+Enter:\t修改选项\r\nF3/F4:\t以 INI 形式查看设置（用 Alt+Enter 编辑）\r\n\r\n文件夹中的会话:\r\n在文件夹内按 F7:\t在该文件夹中创建会话\r\nF7 输入 folder/x:\t在指定文件夹中创建会话\r\nF6 改为 \\文件夹\\名称:\t将会话移入文件夹\r\n在文件夹上按 F6:\t批量重命名其中所有会话，跳板机引用同步更新\r\nF5 或拖动:\t复制会话或文件夹（副本）\r\n在文件夹上按 F8:\t删除该文件夹及其中所有会话\r\n\r\n传输模式:\r\nSSH (SFTP/SCP):\tSSH 访问正常时的默认最快模式\r\n使用 SCP 传输数据:\tSFTP 被阻止或不稳定时使用\r\n仅 SCP:\t完全禁用 SFTP（旧式主机）\r\n强制 Shell 传输:\t通过 shell 强制传输（dd/base64）\r\nPHP 代理 (HTTP):\t无需 SSH 账户；使用已上传的 sftp.php\r\nPHP Shell (HTTP):\t通过 sftp.php 的 HTTP 伪终端
 132=快速连接
 144=帮助
 146=在此处可以配置服务器发送带重音字符文件名的方式。选择"自动检测"时，插件将读取环境变量（如 LANG）并发送 'locale' 命令以确定服务器使用的字符编码。此方法可能不适用于所有服务器，因此如果您知道服务器使用 UTF-8，或文件名显示为错误字符而非重音符号，请手动选择"是"。
@@ -257,7 +257,7 @@
 335=未找到 PHP Agent 端点 (HTTP 404)。\n请检查 URL、文件名并将 sftp.php 上传到服务器。
 336=PHP Agent 在服务器上未配置 (HTTP 503)。\n请在 sftp.php 中设置 AGENT_PSK / AGENT_PSK_SHA256 并重新上传。
 337=PHP Agent 凭据错误 (HTTP {})。
-338=PHP Agent HTTP {} 请求错误。
+338=PHP Agent 请求失败：{}（HTTP {}）。
 339=PHP Agent 拒绝了连接: {}
 340=PHP Agent 验证失败: {}
 341=PHP Agent 凭据错误。
