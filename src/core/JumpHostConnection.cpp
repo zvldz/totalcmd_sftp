@@ -130,8 +130,9 @@ static LPVOID jmp_realloc(LPVOID p, size_t n, LPVOID* /*ab*/) { return realloc(p
 static void   jmp_free(LPVOID p, LPVOID* /*ab*/)    { free(p); }
 
 // Context threaded through the jump session abstract pointer for kbd-interactive.
-// Referencing the settings string keeps the callback correct for the session's
-// whole lifetime, whatever the owner does to that string in between.
+// It points at a string owned further up the stack, so it is only valid while
+// authentication runs; ConnectViaJumpHost clears the session's abstract slot
+// as soon as that is over.
 struct JmpKbdCtx {
     const std::string* password = nullptr;
 };
@@ -409,12 +410,18 @@ static bool AuthJumpHost(
     // the missing-key check apply here too. Failures report through the
     // status line only: this function still has password and
     // keyboard-interactive to fall back on.
+    // The passphrase lives on the connection settings, not on `jump`, which
+    // ResolveJumpConfig rebuilds for every connect: one entered at a prompt
+    // has to outlast this call for the reconnects that run mid-transfer.
+    if (cs->jump_key_passphrase.empty())
+        cs->jump_key_passphrase = jump.keyPassphrase;
+
     SshAuthTarget authTarget;
     authTarget.session     = jmpSession;
     authTarget.host        = jump.host;
     authTarget.user        = jump.user;
     authTarget.password      = &jump.password;
-    authTarget.keyPassphrase = &jump.keyPassphrase;
+    authTarget.keyPassphrase = &cs->jump_key_passphrase;
     authTarget.pubkeyfile  = jump.pubkeyfile;
     authTarget.privkeyfile = jump.privkeyfile;
     authTarget.waitIo      = [jmpSock]() { IsSocketReadable(jmpSock); };
@@ -616,9 +623,9 @@ std::unique_ptr<ITransportStream> ConnectViaJumpHost(
         return nullptr;
     }
 
-    // kbdCtx and the settings it points at live on this frame, while the
-    // session outlives it inside the returned stream. Nothing may reach the
-    // context once authentication is over, so detach it here rather than
+    // kbdCtx lives on this frame and the settings it points at one frame up,
+    // while the session travels on inside the returned stream. Nothing reads
+    // the context once authentication is over, so clear the slot rather than
     // leave the session holding an address that is about to expire.
     if (void** abstractSlot = jmpSession->abstractPtr())
         *abstractSlot = nullptr;

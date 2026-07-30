@@ -56,6 +56,9 @@ struct ProxyDialogContext {
 struct JumpDialogContext {
     pConnectSettings cs    = nullptr;   // main connection settings (in/out)
     bool   hasCryptProc    = false;
+    // Set when the user repoints the jump host at a different machine, so the
+    // parent dialog knows to drop the fingerprint of the old one.
+    bool   fingerprintCleared = false;
 };
 
 // Helper: open a file browser for key file selection in jump dialog.
@@ -268,13 +271,14 @@ static INT_PTR CALLBACK JumpHostDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
                 ? static_cast<unsigned short>(port) : 22;
 
             // The stored fingerprint identifies one machine. Pointing the
-            // session at a different one makes it describe a host that is no
-            // longer involved, and the next connect would report the mismatch
+            // session at a different one leaves it describing a host this
+            // session does not use, and the next connect reports the mismatch
             // as the host key having changed — training the user to click
             // through a warning that is meant to be rare.
             if (_stricmp(cs->jump_host.c_str(), previousHost.c_str()) != 0 ||
                 cs->jump_port != previousPort) {
                 cs->jump_fingerprint.clear();
+                ctx->fingerprintCleared = true;
             }
 
             GetDlgItemTextA(hWnd, IDC_JUMP_USER, buf.data(), static_cast<int>(buf.size()) - 1);
@@ -387,6 +391,12 @@ private:
     ConnectDialogContext*  m_ctx;
     pConnectSettings       m_settings;
     bool                   m_initialized;
+    // The jump host was repointed during this dialog, so OK must drop the
+    // stored fingerprint. Only a deliberate clear touches that key: it is
+    // written by the connect path, and a connection running while this dialog
+    // is open would otherwise have its accepted fingerprint overwritten by
+    // whatever the model held when the dialog opened.
+    bool                   m_jumpFingerprintCleared = false;
 };
 
 static BOOL SetDlgItemText(HWND hWnd, int nIDDlgItem, const std::string& text)
@@ -2109,9 +2119,9 @@ static void OnProxyButtonCommand(HWND hWnd, pConnectSettings dlgConnectResults, 
     }
 }
 
-static void OnJumpButtonCommand(HWND hWnd, pConnectSettings dlgConnectResults)
+static bool OnJumpButtonCommand(HWND hWnd, pConnectSettings dlgConnectResults)
 {
-    if (!dlgConnectResults) return;
+    if (!dlgConnectResults) return false;
 
     JumpDialogContext jumpCtx;
     jumpCtx.cs = dlgConnectResults;
@@ -2121,6 +2131,7 @@ static void OnJumpButtonCommand(HWND hWnd, pConnectSettings dlgConnectResults)
 
     CheckDlgButton(hWnd, IDC_JUMP_ENABLE,
         dlgConnectResults->use_jump_host ? BST_CHECKED : BST_UNCHECKED);
+    return jumpCtx.fingerprintCleared;
 }
 
 // ============================================================================
@@ -2765,11 +2776,9 @@ void ConnectionDialog::OnOk()
         } else {
             WritePrivateProfileString(targetProfile.data(), "jumppassword", nullptr, dlgIniFileName);
         }
-        // Cleared above when the jump host is repointed at another machine, so
-        // the next connect treats that machine as first seen instead of
-        // comparing it against the previous host's key.
-        WritePrivateProfileString(targetProfile.data(), "jumpfingerprint",
-            m_settings->jump_fingerprint.empty() ? nullptr : m_settings->jump_fingerprint.c_str(), dlgIniFileName);
+        if (m_jumpFingerprintCleared) {
+            WritePrivateProfileString(targetProfile.data(), "jumpfingerprint", nullptr, dlgIniFileName);
+        }
         _itoa_s(m_settings->filemod, modbuf.data(), modbuf.size(), 8);
         WritePrivateProfileString(targetProfile.data(), "filemod", m_settings->filemod == 0644 ? nullptr : modbuf.data(), dlgIniFileName);
         _itoa_s(m_settings->dirmod, modbuf.data(), modbuf.size(), 8);
@@ -2834,7 +2843,7 @@ void ConnectionDialog::OnSessionChanged()
 
             // The controls now show the new session; the model has to follow,
             // because OK saves from the model and would otherwise write the
-            // previously selected session's settings over this one.
+            // settings of the session selected before over this one.
             AssignProfileFields(m_settings, loaded);
 
             // Refresh jump-host picker: "self" is now the newly-loaded session
@@ -2926,7 +2935,8 @@ void ConnectionDialog::OnJumpEnableChanged()
 
 void ConnectionDialog::OnJumpButton()
 {
-    OnJumpButtonCommand(m_hWnd, m_settings);
+    if (OnJumpButtonCommand(m_hWnd, m_settings))
+        m_jumpFingerprintCleared = true;
     CheckDlgButton(m_hWnd, IDC_JUMP_ENABLE,
         m_settings->use_jump_host ? BST_CHECKED : BST_UNCHECKED);
 }

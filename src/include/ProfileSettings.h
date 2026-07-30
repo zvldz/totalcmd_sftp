@@ -19,7 +19,7 @@ bool LoadServerSettings(LPCSTR DisplayName, pConnectSettings ConnectResults, LPC
 // configuration with the previous one's.
 //
 // Keep this in step with LoadServerSettings: a profile field added there and
-// missed here reintroduces exactly that data loss.
+// missed here causes exactly that data loss.
 void AssignProfileFields(pConnectSettings dst, const tConnectSettings& src);
 
 // Read / write the per-source list of user-added custom scan paths. Storage

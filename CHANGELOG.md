@@ -180,12 +180,13 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   silently replace another's, or vanish while the session still tried to
   use one.
 
-- **A private key passphrase is no longer offered to the server as a
-  password.** A passphrase entered to unlock a `.ppk` key was kept as the
+- **A passphrase you type to unlock a key is not offered to the server as
+  a password.** A passphrase entered for a `.ppk` key was kept as the
   account password, so when key authentication then failed, the fallback
-  sent that passphrase to the server as a login attempt. Password and
-  passphrase are now separate throughout: the passphrase only ever
-  decrypts a local key file.
+  sent that passphrase to the server as a login attempt. It now stays with
+  the key. A password field holding a single unquoted value is still tried
+  as both, since nothing says which it is — use the two-value form below
+  to state it.
 
 - **A password and a key passphrase stored together are read correctly.**
   The `"password","passphrase"` form was understood differently depending

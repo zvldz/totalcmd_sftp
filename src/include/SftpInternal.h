@@ -199,9 +199,9 @@ StoredSecret SplitStoredSecret(const std::string& stored);
 // writable, so one entered at a prompt is remembered for the automatic
 // reconnects that run mid-transfer.
 //
-// `waitIo` differs per host: the target waits through its transport stream, a
-// jump host on its own raw socket, since during the jump handshake the
-// target's stream does not exist yet.
+// `waitIo` differs per host: the target waits through its transport stream
+// and a jump host on its own raw socket, because during the jump handshake
+// the target's stream does not exist yet.
 struct SshAuthTarget {
     ISshSession*          session       = nullptr;
     std::string           host;              // display only: prompts and logs

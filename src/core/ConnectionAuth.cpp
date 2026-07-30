@@ -266,9 +266,13 @@ int PerformAuthentication(
                     ShowErrorId(IDS_ERR_AUTH_PASSWORD);
                 else
                     ShowStatusId(IDS_ERR_AUTH_PASSWORD, nullptr, true);
-            } else if (ConnectSettings->password.empty()) {
-                ConnectSettings->password         = passphrase;
+            } else if (ConnectSettings->account_password.empty()) {
+                // Remember it for the reconnects that run mid-transfer. The
+                // stored form only takes it over when it holds nothing at
+                // all, so a profile that packs a passphrase keeps it.
                 ConnectSettings->account_password = passphrase;
+                if (ConnectSettings->password.empty())
+                    ConnectSettings->password = passphrase;
             }
         }
 

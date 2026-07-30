@@ -155,6 +155,10 @@ struct tConnectSettings {
     std::string    jump_privkeyfile;
     bool           jump_useagent   = false;
     std::string    jump_fingerprint;   // saved MD5 hex fingerprint
+    // Resolved passphrase for the jump host's key. Runtime only, and kept
+    // here rather than in JumpHostSettings because that struct is rebuilt on
+    // every connect, which would make each reconnect prompt again.
+    std::string    jump_key_passphrase;
     // When non-empty, jump host params (host/port/user/password/keys/useagent)
     // are taken from the referenced saved session at connect time, ignoring
     // the manual jump_* fields above. Stored in INI as `jumpsessionref=<name>`.

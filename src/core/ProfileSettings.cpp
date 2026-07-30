@@ -181,7 +181,6 @@ void AssignProfileFields(pConnectSettings dst, const tConnectSettings& src)
     dst->user               = src.user;
     dst->password           = src.password;
     dst->protocoltype       = src.protocoltype;
-    dst->customport         = src.customport;
     dst->transfermode       = src.transfermode;
     dst->compressed         = src.compressed;
     dst->detailedlog        = src.detailedlog;

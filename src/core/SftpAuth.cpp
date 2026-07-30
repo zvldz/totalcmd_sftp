@@ -37,13 +37,19 @@ StoredSecret SplitStoredSecret(const std::string& stored)
     if (stored.size() >= 2 && stored.front() == '"' && stored.back() == '"') {
         const size_t sep = stored.find("\",\"");
         // The passphrase runs from after the separator up to the closing quote.
-        if (sep != std::string::npos && sep + 3 <= stored.size() - 1) {
+        if (sep >= 1 && sep != std::string::npos && sep + 3 <= stored.size() - 1) {
             out.accountPassword = stored.substr(1, sep - 1);
             out.keyPassphrase   = stored.substr(sep + 3, stored.size() - sep - 4);
             return out;
         }
     }
+    // Nothing labels the two halves of a plain string, so it stands for
+    // whichever secret is asked for: a profile carrying only a passphrase is
+    // as common as one carrying only a password. Trying it as a passphrase
+    // costs nothing — that use never leaves the machine — while the quoted
+    // form above is what states which secret is which.
     out.accountPassword = stored;
+    out.keyPassphrase   = stored;
     return out;
 }
 
@@ -103,9 +109,10 @@ void kbd_callback(LPCSTR name, int name_len,
                 responses[i].text = _strdup(retbuf.data());
                 responses[i].length = (unsigned int)strlen(retbuf.data());
                 // Remember password for background transfers
-                if (ConnectSettings && ConnectSettings->password.empty()) {
-                    ConnectSettings->password         = retbuf.data();
+                if (ConnectSettings && ConnectSettings->account_password.empty()) {
                     ConnectSettings->account_password = retbuf.data();
+                    if (ConnectSettings->password.empty())
+                        ConnectSettings->password = retbuf.data();
                 }
                 ShowStatusId(IDS_LOG_SEND_USER_PASS, nullptr, true);
             } else {
@@ -429,6 +436,11 @@ int SftpAuthPageant(pConnectSettings ConnectSettings, LPCSTR progressbuf, int pr
 
 int SftpAuthPubKeyOn(const SshAuthTarget& target, LPCSTR progressbuf, int progress, int * ploop, SYSTICKS * plasttime, int * auth_pw, AuthFailureUi onFailure)
 {
+    // Both secrets are dereferenced throughout; a caller that leaves either
+    // unset fails here instead of faulting further in.
+    if (!target.password || !target.keyPassphrase)
+        return -LIBSSH2_ERROR_INVAL;
+
     std::array<char, 1024> buf{};
     std::array<char, 256> passphrase{};
     std::array<char, MAX_PATH> pubkeyfile{};
