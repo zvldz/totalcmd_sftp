@@ -234,6 +234,26 @@ void ApplyTcLanguageToPluginResources(const char* tcIniPath) noexcept
     ApplyLangId(langId);
 }
 
+void ShowPluginMessage(UINT messageId, const char* messageFallback,
+                       UINT titleId,   const char* titleFallback,
+                       UINT icon)
+{
+    const std::wstring message = unicode_util::utf8_to_wstring(
+        LngStrU8(messageId, messageFallback ? messageFallback : ""));
+    const std::wstring title = unicode_util::utf8_to_wstring(
+        LngStrU8(titleId, titleFallback ? titleFallback : "SFTP"));
+
+    if (RequestProcW) {
+        RequestProcW(PluginNumber, RT_MsgOK,
+                     const_cast<WCHAR*>(title.c_str()),
+                     const_cast<WCHAR*>(message.c_str()),
+                     nullptr, 0);
+        return;
+    }
+    MessageBoxW(FindWindowA("TTOTAL_CMD", nullptr),
+                message.c_str(), title.c_str(), MB_OK | icon);
+}
+
 void ApplyConfiguredUiLanguageForCurrentThread() noexcept
 {
     if (g_configuredUiLangId == 0) {

@@ -32,6 +32,14 @@ pConnectSettings GetServerIdAndRelativePathFromPathW(LPCWSTR Path, LPWSTR Relati
 void  ResetLastPercent(pConnectSettings ConnectSettings);
 void  ApplyTcLanguageToPluginResources(const char* tcIniPath) noexcept;
 
+// Show a message the way Total Commander shows its own: through RequestProcW,
+// falling back to MessageBoxW only where that callback is missing. Both ids
+// carry a fallback string for the case where no .lng is loaded. `icon` reaches
+// the fallback path only — TC picks its own for RT_MsgOK.
+void  ShowPluginMessage(UINT messageId, const char* messageFallback,
+                        UINT titleId,   const char* titleFallback,
+                        UINT icon = MB_ICONWARNING);
+
 // LAN path conversion — defined in PluginEntryPointsFind.cpp, also used by PluginEntryPointsFile.cpp.
 std::string LanRemotePathToUtf8(LPCWSTR remotedir);
 

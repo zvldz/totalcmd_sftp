@@ -325,6 +325,11 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 
 ### Internal
 
+- Message boxes the plugin raises now go through one helper, which asks
+  Total Commander to draw them (`RequestProcW`) and falls back to a bare
+  `MessageBoxW` only where that callback is missing. Two of the three
+  call sites were drawing their own.
+
 - OpenSSL updated to 3.5.7, which carries seven CVE fixes including a
   high-severity use-after-free in `PKCS7_verify`. SSH does not reach
   the PKCS#7, CMS or QUIC code those mostly live in, but the ASN.1

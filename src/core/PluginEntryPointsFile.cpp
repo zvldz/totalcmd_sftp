@@ -116,27 +116,13 @@ static std::optional<int> TryImportSessionFromUpload(
         return FS_FILE_WRITEERROR;
     }
 
-    // Any validation failure surfaces through TC's themed request dialog
-    // (RequestProcW; falls back to a bare MessageBoxW if the callback is
-    // unavailable) so TC does not stack its generic "Error uploading file"
-    // popup on top. Returned as FS_FILE_USERABORT so TC treats it as a
-    // user-driven cancel — no additional error dialog.
+    // Any validation failure surfaces through ShowPluginMessage, so TC does
+    // not stack its generic "Error uploading file" popup on top. Returned as
+    // FS_FILE_USERABORT so TC treats it as a user-driven cancel — no
+    // additional error dialog.
     auto abortWithMessage = [&](UINT msgId) -> int {
-        const std::string msgU8 = LngStrU8(msgId, "");
-        const std::string ttlU8 = LngStrU8(IDS_SIMPORT_TITLE,
-            "SFTP plugin - session import");
-        const std::wstring wmsg   = unicode_util::utf8_to_wstring(msgU8);
-        const std::wstring wtitle = unicode_util::utf8_to_wstring(ttlU8);
-        if (RequestProcW) {
-            RequestProcW(PluginNumber, RT_MsgOK,
-                const_cast<WCHAR*>(wtitle.c_str()),
-                const_cast<WCHAR*>(wmsg.c_str()),
-                nullptr, 0);
-        } else {
-            MessageBoxW(FindWindowA("TTOTAL_CMD", nullptr),
-                wmsg.c_str(), wtitle.c_str(),
-                MB_OK | MB_ICONWARNING);
-        }
+        ShowPluginMessage(msgId, "", IDS_SIMPORT_TITLE,
+                          "SFTP plugin - session import");
         return FS_FILE_USERABORT;
     };
 
@@ -689,12 +675,10 @@ int WINAPI FsExecuteFileW(HWND MainWin, LPWSTR RemoteName, LPCWSTR Verb)
             // resolver below cannot classify it and the handler would return
             // in silence. Say why instead, and point at what does work.
             if (IsImportsPath(RemoteName)) {
-                const unicode_util::utf8_to_utf16 message(
-                    LngStrU8(IDS_IMPORTS_NO_EDIT,
-                             "This session belongs to another program and cannot be edited here.\n"
-                             "Press F3 to see its settings, or F5 to copy it into your own session list.").c_str());
-                const unicode_util::utf8_to_utf16 title(LngStrU8(IDS_TITLE_SFTP, "SFTP").c_str());
-                MessageBoxW(GetActiveWindow(), message.c_str(), title.c_str(), MB_OK | MB_ICONINFORMATION);
+                ShowPluginMessage(IDS_IMPORTS_NO_EDIT,
+                                  "This session belongs to another program and cannot be edited here.\n"
+                                  "Press F3 to see its settings, or F5 to copy it into your own session list.",
+                                  IDS_TITLE_SFTP, "SFTP", MB_ICONINFORMATION);
                 return FS_EXEC_OK;
             }
 

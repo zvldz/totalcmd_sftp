@@ -1205,11 +1205,9 @@ BOOL WINAPI FsMkDirW(LPCWSTR Path)
             // A saved session or a folder grouping already occupies that name.
             // Say so: TC reports nothing of its own when this returns false,
             // and silence reads as the key having been missed.
-            const unicode_util::utf8_to_utf16 message(
-                LngStrU8(IDS_ERR_SESSION_EXISTS,
-                         "Session with this name already exists.\nChoose a different session name.").c_str());
-            const unicode_util::utf8_to_utf16 title(LngStrU8(IDS_TITLE_SFTP, "SFTP").c_str());
-            MessageBoxW(GetActiveWindow(), message.c_str(), title.c_str(), MB_OK | MB_ICONWARNING);
+            ShowPluginMessage(IDS_ERR_SESSION_EXISTS,
+                              "Session with this name already exists.\nChoose a different session name.",
+                              IDS_TITLE_SFTP, "SFTP");
             return false;
         }
 
