@@ -160,7 +160,7 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   file error"). The converter now parses ed25519 PPK v3 blobs and
   emits a proper OpenSSH key container (`-----BEGIN OPENSSH PRIVATE
   KEY-----` — the same file format `ssh-keygen -t ed25519` writes),
-  which libssh2 with the mbedTLS backend consumes directly. Fix
+  which libssh2 consumes directly through OpenSSL. Fix
   applies plugin-wide, not just to Import-related paths: hand-
   configured sessions with `privkeyfile=<...>.ppk` benefit too.
   RSA / ECDSA PPKs are unchanged. Encrypted-ed25519 PPKs and the
