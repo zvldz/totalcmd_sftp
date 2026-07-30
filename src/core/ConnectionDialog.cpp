@@ -2836,31 +2836,41 @@ void ConnectionDialog::OnSessionChanged()
     std::array<char, wdirtypemax> sessionName{};
     GetDlgItemText(m_hWnd, IDC_SESSIONCOMBO, sessionName.data(), sessionName.size() - 1);
     TrimSessionName(sessionName.data());
-    if (sessionName[0] && _stricmp(sessionName.data(), s_quickconnect) != 0) {
-        tConnectSettings loaded{};
-        if (LoadServerSettings(sessionName.data(), &loaded, m_ctx->iniFileName)) {
-            ApplyLoadedSessionToDialog(m_hWnd, &loaded, m_ctx->iniFileName);
+    if (!sessionName[0])
+        return;
 
-            // The controls now show the new session; the model has to follow,
-            // because OK saves from the model and would otherwise write the
-            // settings of the session selected before over this one.
-            AssignProfileFields(m_settings, loaded);
+    // The "new session" entry names no profile, so there is nothing to load —
+    // it stands for the defaults. Handing those through the same two calls as
+    // a real session keeps the dialog and the model in agreement; leaving them
+    // untouched would show, and on OK save, the session selected before.
+    tConnectSettings selected{};
+    const bool isNewSession = _stricmp(sessionName.data(), s_quickconnect) == 0;
+    if (isNewSession)
+        ResetProfileFields(&selected);
+    else if (!LoadServerSettings(sessionName.data(), &selected, m_ctx->iniFileName))
+        return;
 
-            // Edits made in the jump dialog are gone with the rest of the
-            // previous session, so the pending fingerprint deletion goes too:
-            // it belongs to a host this session was never pointed at.
-            m_jumpFingerprintCleared = false;
+    ApplyLoadedSessionToDialog(m_hWnd, &selected, m_ctx->iniFileName);
 
-            // Refresh jump-host picker: "self" is now the newly-loaded session
-            // (so the exclusion list shifts), and the dropdown should reflect
-            // the loaded session's own jumpsessionref. Jump button state needs
-            // to follow the loaded session's mode (manual vs ref).
-            FillJumpSessionCombo(m_hWnd, sessionName.data(), loaded.jump_session_ref.c_str());
-            const bool buttonEnabled =
-                loaded.use_jump_host && loaded.jump_session_ref.empty();
-            EnableWindow(GetDlgItem(m_hWnd, IDC_JUMP_BUTTON), buttonEnabled ? TRUE : FALSE);
-        }
-    }
+    // The controls now show the new session; the model has to follow,
+    // because OK saves from the model and would otherwise write the
+    // settings of the session selected before over this one.
+    AssignProfileFields(m_settings, selected);
+
+    // Edits made in the jump dialog are gone with the rest of the
+    // previous session, so the pending fingerprint deletion goes too:
+    // it belongs to a host this session was never pointed at.
+    m_jumpFingerprintCleared = false;
+
+    // Refresh jump-host picker: "self" is now the newly-selected session
+    // (so the exclusion list shifts), and the dropdown should reflect
+    // that session's own jumpsessionref. Jump button state needs to
+    // follow its mode (manual vs ref).
+    FillJumpSessionCombo(m_hWnd, isNewSession ? "" : sessionName.data(),
+                         selected.jump_session_ref.c_str());
+    const bool buttonEnabled =
+        selected.use_jump_host && selected.jump_session_ref.empty();
+    EnableWindow(GetDlgItem(m_hWnd, IDC_JUMP_BUTTON), buttonEnabled ? TRUE : FALSE);
 }
 
 void ConnectionDialog::OnTransferModeChanged()

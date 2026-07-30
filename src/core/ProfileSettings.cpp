@@ -171,6 +171,76 @@ bool LoadServerSettings(LPCSTR DisplayName, pConnectSettings ConnectResults, LPC
     return !ConnectResults->server.empty();
 }
 
+void ResetProfileFields(pConnectSettings dst)
+{
+    if (!dst)
+        return;
+
+    // Connection
+    dst->server.clear();
+    dst->user.clear();
+    dst->password.clear();
+    dst->protocoltype       = 0;
+    dst->transfermode       = 0;
+    dst->compressed         = false;
+    dst->detailedlog        = false;
+    dst->connectsendcommand.clear();
+    dst->sendcommandmode    = 0;
+
+    // Authentication
+    dst->useagent           = false;
+    dst->pubkeyfile.clear();
+    dst->privkeyfile.clear();
+    dst->savedfingerprint.clear();
+    dst->account_password.clear();
+    dst->key_passphrase.clear();
+
+    // Remote file handling
+    dst->filemod            = 0644;
+    dst->dirmod             = 0755;
+    dst->utf8names          = AUTODETECT_PENDING;
+    dst->codepage           = 0;
+    dst->unixlinebreaks     = AUTODETECT_PENDING;
+
+    // SCP / shell transfer
+    dst->scponly              = false;
+    dst->scpfordata           = false;
+    dst->scpserver64bit       = AUTODETECT_PENDING;
+    dst->shell_transfer_dd    = false;
+    dst->shell_transfer_force = false;
+
+    // PHP agent
+    dst->php_http_mode      = 0;
+    dst->php_chunk_mib      = 0;
+    dst->php_tar            = false;
+
+    // LAN pair
+    dst->lan_pair_role              = 0;
+    dst->lan_pair_peer.clear();
+    dst->lan_pair_timeout_min       = 0;
+    dst->lan_pair_trusted_installer = false;
+
+    // Proxy
+    dst->proxynr            = 0;
+    dst->proxytype          = sftp::Proxy::notused;
+    dst->proxyserver.clear();
+    dst->proxyuser.clear();
+    dst->proxypassword.clear();
+
+    // Jump host
+    dst->use_jump_host      = false;
+    dst->jump_session_ref.clear();
+    dst->jump_host.clear();
+    dst->jump_port          = 22;
+    dst->jump_user.clear();
+    dst->jump_password.clear();
+    dst->jump_pubkeyfile.clear();
+    dst->jump_privkeyfile.clear();
+    dst->jump_useagent      = false;
+    dst->jump_fingerprint.clear();
+    dst->jump_key_passphrase.clear();
+}
+
 void AssignProfileFields(pConnectSettings dst, const tConnectSettings& src)
 {
     if (!dst)

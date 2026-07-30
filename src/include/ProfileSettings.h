@@ -22,6 +22,15 @@ bool LoadServerSettings(LPCSTR DisplayName, pConnectSettings ConnectResults, LPC
 // missed here causes exactly that data loss.
 void AssignProfileFields(pConnectSettings dst, const tConnectSettings& src);
 
+// Put the profile fields back to what a session that the INI says nothing
+// about would have. The connection dialog needs this for its "new session"
+// entry, which names no profile to load: without it the dialog keeps showing,
+// and OK keeps saving, the session selected before it.
+//
+// The values here are the defaults LoadServerSettings passes to
+// GetPrivateProfile*, and have to stay in step with them.
+void ResetProfileFields(pConnectSettings dst);
+
 // Read / write the per-source list of user-added custom scan paths. Storage
 // lives in the plugin's own sftpplug.ini under the [Imports] section, with
 // one key per source: "<sourceId>.custom_paths=path1;path2;...". Semicolons
