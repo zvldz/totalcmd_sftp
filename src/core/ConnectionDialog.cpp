@@ -2846,6 +2846,11 @@ void ConnectionDialog::OnSessionChanged()
             // settings of the session selected before over this one.
             AssignProfileFields(m_settings, loaded);
 
+            // Edits made in the jump dialog are gone with the rest of the
+            // previous session, so the pending fingerprint deletion goes too:
+            // it belongs to a host this session was never pointed at.
+            m_jumpFingerprintCleared = false;
+
             // Refresh jump-host picker: "self" is now the newly-loaded session
             // (so the exclusion list shifts), and the dropdown should reflect
             // the loaded session's own jumpsessionref. Jump button state needs
@@ -3064,7 +3069,8 @@ bool ShowConnectDialog(pConnectSettings ConnectSettings, LPCSTR DisplayName, LPC
 #endif
 
 pConnectSettings SftpConnectToServer(LPCSTR DisplayName, LPCSTR inifilename,
-                                     LPCSTR overridepass, LPCSTR loggingAliasName)
+                                     LPCSTR overridepass, LPCSTR loggingAliasName,
+                                     const RuntimeSecrets* inherited)
 {
     tConnectSettings ConnectSettings{};
     ConnectSettings.sock = INVALID_SOCKET; // Zabezpieczenie przed zamykaniem gniazda 0 przez PHP Agent
@@ -3085,6 +3091,13 @@ pConnectSettings SftpConnectToServer(LPCSTR DisplayName, LPCSTR inifilename,
         }
         if (overridepass)
             ConnectSettings.password = overridepass;
+        // Carried from the connection that already answered these prompts.
+        // Authentication keeps whatever the stored profile does not supply.
+        if (inherited) {
+            ConnectSettings.account_password    = inherited->accountPassword;
+            ConnectSettings.key_passphrase      = inherited->keyPassphrase;
+            ConnectSettings.jump_key_passphrase = inherited->jumpKeyPassphrase;
+        }
         if (ConnectSettings.useagent || ConnectSettings.password.empty()) {
             ConnectSettings.passSaveMode = sftp::PassSaveMode::empty;
         } else {

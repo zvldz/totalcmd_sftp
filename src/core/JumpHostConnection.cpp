@@ -85,7 +85,7 @@ JumpConfig ResolveJumpConfig(pConnectSettings cs, LPCSTR iniFileName)
         ParseAddress(hostBuf.data(), hostBuf.data(), &parsedPort, 22);
 
         out.endpoint.host        = hostBuf.data();
-        out.endpoint.port        = ref.customport ? ref.customport : parsedPort;
+        out.endpoint.port        = parsedPort;
         out.endpoint.user        = ref.user;
         {
             const StoredSecret secret = SplitStoredSecret(ref.password);

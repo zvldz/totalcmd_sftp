@@ -40,6 +40,7 @@ StoredSecret SplitStoredSecret(const std::string& stored)
         if (sep >= 1 && sep != std::string::npos && sep + 3 <= stored.size() - 1) {
             out.accountPassword = stored.substr(1, sep - 1);
             out.keyPassphrase   = stored.substr(sep + 3, stored.size() - sep - 4);
+            out.labelled        = true;
             return out;
         }
     }
@@ -439,7 +440,7 @@ int SftpAuthPubKeyOn(const SshAuthTarget& target, LPCSTR progressbuf, int progre
     // Both secrets are dereferenced throughout; a caller that leaves either
     // unset fails here instead of faulting further in.
     if (!target.password || !target.keyPassphrase)
-        return -LIBSSH2_ERROR_INVAL;
+        return -IDS_ERR_AUTH_PUBKEY;
 
     std::array<char, 1024> buf{};
     std::array<char, 256> passphrase{};

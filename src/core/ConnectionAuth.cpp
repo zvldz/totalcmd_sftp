@@ -110,9 +110,17 @@ int PerformAuthentication(
     // connection survives, so reconnects do not prompt again.
     {
         const StoredSecret secret = SplitStoredSecret(ConnectSettings->password);
-        ConnectSettings->account_password = secret.accountPassword;
-        if (!secret.keyPassphrase.empty())
+        // Reconnects run this again on the same settings, so a secret entered
+        // at a prompt during an earlier attempt must not be wiped by a stored
+        // form that does not carry one.
+        if (!secret.accountPassword.empty())
+            ConnectSettings->account_password = secret.accountPassword;
+        if (secret.labelled) {
+            if (!secret.keyPassphrase.empty())
+                ConnectSettings->key_passphrase = secret.keyPassphrase;
+        } else if (ConnectSettings->key_passphrase.empty()) {
             ConnectSettings->key_passphrase = secret.keyPassphrase;
+        }
     }
 
     const bool skipProbe = ConnectSettings->scponly

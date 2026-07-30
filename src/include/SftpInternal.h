@@ -185,6 +185,10 @@ extern "C" void kbd_callback(LPCSTR name, int name_len,
 struct StoredSecret {
     std::string accountPassword;
     std::string keyPassphrase;
+    // True when the two-value form stated which secret is which. A plain
+    // string is only a guess at the passphrase, so callers can let one
+    // entered at a prompt outrank it.
+    bool        labelled = false;
 };
 StoredSecret SplitStoredSecret(const std::string& stored);
 

@@ -708,6 +708,7 @@ void WINAPI FsStatusInfo(LPCSTR RemoteDir, int InfoStartEnd, int InfoOperation)
             }
             std::array<char, MAX_PATH> displayName{};
             const char* oldpass = nullptr;
+            RuntimeSecrets inherited;
             GetDisplayNameFromPath(RemoteDir, displayName.data(), displayName.size() - 1);
             // get password from main thread
             pConnectSettings oldserverid = static_cast<pConnectSettings>(GetServerIdFromName(displayName.data(), mainthreadid));
@@ -721,8 +722,12 @@ void WINAPI FsStatusInfo(LPCSTR RemoteDir, int InfoStartEnd, int InfoOperation)
                 oldpass = oldserverid->password.c_str();
                 if (!oldpass[0])
                     oldpass = nullptr;
+                inherited.accountPassword   = oldserverid->account_password;
+                inherited.keyPassphrase     = oldserverid->key_passphrase;
+                inherited.jumpKeyPassphrase = oldserverid->jump_key_passphrase;
             }
-            pConnectSettings serverid = SftpConnectToServer(displayName.data(), inifilename, oldpass);
+            pConnectSettings serverid = SftpConnectToServer(displayName.data(), inifilename, oldpass,
+                                                           nullptr, &inherited);
             if (serverid)
                 SetServerIdForName(displayName.data(), static_cast<SERVERID>(serverid));
         }

@@ -176,15 +176,28 @@ struct tConnectSettings {
 
 using pConnectSettings = tConnectSettings*;
 
+// Secrets that live only in memory: entered at a prompt on an earlier connect
+// and absent from the stored profile. A background transfer opens its own
+// connection to the same session, and without these it prompts for each one.
+struct RuntimeSecrets {
+    std::string accountPassword;
+    std::string keyPassphrase;
+    std::string jumpKeyPassphrase;
+};
+
 // `loggingAliasName`, when non-null, overrides the name reported to TC via
 // LogProc(MSGTYPE_CONNECT). Used for virtual (Imports-cache-backed)
 // sessions whose real DisplayName is the internal "__import.<...>" cache
 // section — TC needs a clean single-segment path in its toolbar so the
-// standard Disconnect button works normally. All non-Import callers pass
-// nullptr and get the historical behaviour.
+// standard Disconnect button works normally. Non-Import callers pass
+// nullptr, which reports the session's own name.
+//
+// `inherited` carries the runtime secrets above from a connection that
+// already prompted for them.
 pConnectSettings SftpConnectToServer(LPCSTR DisplayName, LPCSTR inifilename,
                                      LPCSTR overridepass,
-                                     LPCSTR loggingAliasName = nullptr);
+                                     LPCSTR loggingAliasName = nullptr,
+                                     const RuntimeSecrets* inherited = nullptr);
 void SftpGetServerBasePathW(LPCWSTR DisplayName, LPWSTR RelativePath, size_t maxlen, LPCSTR inifilename);
 bool SftpConfigureServer(LPCSTR DisplayName, LPCSTR inifilename);
 int  SftpCloseConnection(pConnectSettings ConnectSettings);
