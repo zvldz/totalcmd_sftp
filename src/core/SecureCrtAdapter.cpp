@@ -124,7 +124,10 @@ void FillConnectSettings(const VanDykeFile& file, tConnectSettings* out)
     }
 
     out->user        = GetString(file, "Username");
-    out->privkeyfile = GetString(file, "Identity Filename V2");
+    // Same route as the other adapters: expand any %VARS% first, then let
+    // the shared helper decide public vs private by extension.
+    AssignImportedKeyFile(ExpandEnvA(GetString(file, "Identity Filename V2")),
+                          out->privkeyfile, out->pubkeyfile);
 
     // "Output Transformer Name" = "UTF-8" is the common modern encoding.
     // Anything else we leave as auto-detect (-1, which is the default).

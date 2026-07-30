@@ -442,6 +442,14 @@ std::string ExpandEnvA(const std::string& raw)
     std::string expanded(MAX_PATH, '\0');
     DWORD len = ExpandEnvironmentStringsA(raw.c_str(), expanded.data(),
                                            static_cast<DWORD>(expanded.size()));
+    // Too small a buffer comes back with the size it wants, so one retry
+    // always fits. Without it a long path is returned with its %VARS%
+    // intact and fails later, where the cause is no longer visible.
+    if (len > expanded.size()) {
+        expanded.assign(len, '\0');
+        len = ExpandEnvironmentStringsA(raw.c_str(), expanded.data(),
+                                        static_cast<DWORD>(expanded.size()));
+    }
     if (len == 0 || len > expanded.size()) return raw;
     expanded.resize(len - 1);
     return expanded;

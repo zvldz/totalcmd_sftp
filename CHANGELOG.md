@@ -169,6 +169,17 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 
 ### Fixes
 
+- **SecureCRT sessions pick up their key file the way the other sources
+  do.** The path was taken from `Identity Filename V2` verbatim, so a
+  `%USERPROFILE%`-style path stayed unexpanded and a `.pub` file landed
+  in the private-key field. It now goes through the same expansion and
+  public/private routing as PuTTY, WinSCP, FileZilla and KiTTY.
+
+- **A long imported key path no longer arrives with its variables
+  unexpanded.** Expansion used a fixed buffer and, when the result did
+  not fit, silently handed back the original `%VAR%` text — which then
+  failed at connect time with nothing pointing at the cause.
+
 - **The `Session:` field is now just the session's name.** It used to be a
   dropdown of every saved session, and picking one loaded that session
   into the dialog — a session manager inside the window for editing one
