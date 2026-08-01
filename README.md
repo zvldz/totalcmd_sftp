@@ -23,7 +23,7 @@
 
 ![SFTP Plugin](images/sftp01.jpg)
 
-**Version 1.0.0.x** — Modern C++20 SFTP/SCP/PHP/LAN plugin for Total Commander x64 and x86.
+**Version 10.0.2.x** — Modern C++20 SFTP/SCP/PHP/LAN plugin for Total Commander x64 and x86.
 
 Complete C-to-C++ rewrite of the original SFTP plugin by Christian Ghisler. Core transport, authentication, and session modules were re-engineered from scratch with a compatibility-first execution model, interface-driven backend abstraction, and hardened security primitives. The plugin selects the optimal transfer path at runtime — native SFTP, native SCP, shell chunk transfer via `cat`/`dd`/`base64`, PHP Agent over HTTP, or direct LAN Pair — depending on server constraints and deployment topology.
 
@@ -991,8 +991,9 @@ Output libs are placed in `src\lib\` (suffixed: `argon2_a_x64.lib`, `argon2_a_x8
 | Total Commander | Version 9.0 or later (x64 or x86) |
 | Architecture | x64 (`SFTPplug.wfx64`) and x86 (`SFTPplug.wfx`) |
 | Compiler (build) | Visual Studio 2026, MSVC v145 toolset, C++20 |
-| libssh2 | Statically linked (≥ 1.11.1), built with WinCNG backend |
-| **Dependencies** | None — libssh2 and argon2 statically linked with `/MT` (no VC++ Redistributable required) |
+| libssh2 | Statically linked (1.11.1), built against OpenSSL |
+| OpenSSL | Statically linked (3.5.7) — the crypto backend libssh2 runs on |
+| **Dependencies** | None — OpenSSL, libssh2 and argon2 are statically linked with `/MT`, so no VC++ Redistributable is required |
 | Windows APIs | BCrypt, DPAPI (CryptProtectData), WinHTTP, DbgHelp, Winsock2 |
 
 ---
@@ -1112,7 +1113,7 @@ To add a new language: create `language\XYZ.lng` (UTF-8) following the existing 
 - **PHP Agent TAR batch download** — opt-in `php_tar` checkbox; multi-file F5 copy sends a single POST to `op=TAR_PACK` with all remote paths; server streams ustar TAR directly without buffering (`php://output`); plugin parses TAR on-the-fly and writes local files; works in foreground (`GET_MULTI`) and background thread (`GET_MULTI_THREAD`) modes; GNU LongLink supported; files >8 GiB skipped cleanly
 - **PHP Agent TAR fixes** — DWORD overflow (TAR upload >4 GB now uses 64-bit `Content-Length` header); TAR pack no longer buffers in `php://temp` on server (eliminates HTTP 504 on OVH); per-file zero-pad allocation removed from upload loop; >8.5 GiB file guard in both C++ and PHP prevents TAR header corruption
 
-### Fork additions (10.0.1.x)
+### Fork additions (10.x)
 
 User-facing summary; see `CHANGELOG.md` for per-version detail.
 
