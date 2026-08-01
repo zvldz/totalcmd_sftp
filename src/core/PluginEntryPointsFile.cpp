@@ -1028,12 +1028,14 @@ static int CreateHelpFileLocalW(LPCWSTR localName, bool overwrite)
         return FS_FILE_WRITEERROR;
     }
 
-    // IDS_HELPTEXT holds the full user-facing help block; the historical
-    // 256-byte buffer truncated it. Size to comfortably fit the string
-    // plus the build-info trailer appended below.
-    std::array<char, 4096> helpText{};
-    LoadString(hinst, IDS_HELPTEXT, helpText.data(), static_cast<int>(helpText.size()));
-    std::string body(helpText.data());
+    // Through LngStrU8, so the block is written in the plugin's current
+    // language: LoadString would always hand back the compiled English
+    // resource and the translations in the .lng files would never show.
+    // That makes the file UTF-8, hence the BOM below — without it a viewer
+    // reads the bytes as the system codepage and non-Latin text arrives as
+    // mojibake.
+    std::string body("\xEF\xBB\xBF");
+    body += LngStrU8(IDS_HELPTEXT, "Plugin help:");
 
     // Trailer with the exact build so a user reporting an issue can copy
     // it verbatim. Values fall back to `local` when no CI-generated
@@ -1168,7 +1170,12 @@ int WINAPI FsGetFileW(LPCWSTR RemoteName, LPWSTR LocalName, int CopyFlags, Remot
             }
         }
 
-        if (remoteView.substr(1) == std::wstring_view(s_f7newconnectionW.data())) {
+        // Both pseudo rows in the plugin root stand for "open a new
+        // connection", so F3 on either shows the plugin help. Without the
+        // second one TC tries to download the row from the server and
+        // reports "Error downloading file!".
+        if (remoteView.substr(1) == std::wstring_view(s_f7newconnectionW.data()) ||
+            remoteView.substr(1) == std::wstring_view(s_quickconnectW.data())) {
             return CreateHelpFileLocalW(LocalName, OverWrite);
         }
 

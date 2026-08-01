@@ -169,6 +169,16 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 
 ### Fixes
 
+- **The `F7 - help.txt` text follows the plugin's language.** It was
+  read straight from the compiled English resource, so the translations
+  shipped in the `.lng` files never reached it. The file is UTF-8 now,
+  with a byte-order mark so viewers read non-Latin text correctly.
+
+- **F3 on the Quick Connection row no longer reports a download error.**
+  It had no handler, so Total Commander tried to fetch the row from the
+  server and failed. Both pseudo rows in the plugin root now show the
+  plugin help, which is what they stand for.
+
 - **Alt+Enter on a session inside `[Imports]` explains itself instead of
   doing nothing.** Imported sessions belong to the source program and
   are not editable here, but the key press was silently ignored. It now
