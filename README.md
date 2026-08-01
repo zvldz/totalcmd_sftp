@@ -21,8 +21,6 @@
 > All three are now fixed. **Upload the updated `sftp.php`** from the plugin directory to your server
 > before using TAR batch download. See [PHP Agent Deployment](#php-agent-deployment) for instructions.
 
-![SFTP Plugin](images/sftp01.jpg)
-
 **Version 10.0.2.x** — Modern C++20 SFTP/SCP/PHP/LAN plugin for Total Commander x64 and x86.
 
 Complete C-to-C++ rewrite of the original SFTP plugin by Christian Ghisler. Core transport, authentication, and session modules were re-engineered from scratch with a compatibility-first execution model, interface-driven backend abstraction, and hardened security primitives. The plugin selects the optimal transfer path at runtime — native SFTP, native SCP, shell chunk transfer via `cat`/`dd`/`base64`, PHP Agent over HTTP, or direct LAN Pair — depending on server constraints and deployment topology.
@@ -32,7 +30,6 @@ Complete C-to-C++ rewrite of the original SFTP plugin by Christian Ghisler. Core
 ## Table of Contents
 
 - [Feature Overview](#feature-overview)
-- [Architecture](#architecture)
 - [Transfer Protocols](#transfer-protocols)
 - [Authentication System](#authentication-system)
 - [Security and Password Storage](#security-and-password-storage)
@@ -41,9 +38,6 @@ Complete C-to-C++ rewrite of the original SFTP plugin by Christian Ghisler. Core
 - [PHP Agent and PHP Shell](#php-agent-and-php-shell)
   - [Command History](#command-history)
 - [Remote File Operations](#remote-file-operations)
-- [Shell Engineering Details](#shell-engineering-details)
-- [Module Map](#module-map)
-- [Source Tree](#source-tree)
 - [Build System](#build-system)
 - [System Requirements](#system-requirements)
 - [Packaging and Installation](#packaging-and-installation)
@@ -105,110 +99,6 @@ Complete C-to-C++ rewrite of the original SFTP plugin by Christian Ghisler. Core
 - Dual-architecture distribution: x64 (`SFTPplug.wfx64`) and x86 (`SFTPplug.wfx`) in a single ZIP.
 - Built-in CHM help (`sftpplug.chm`) opened from the plugin dialog Help button.
 - Background transfer support (TC `BG_DOWNLOAD` / `BG_UPLOAD` flags).
-
----
-
-## Architecture
-
-### Layered Structure
-
-```mermaid
-flowchart TD
-    A[TC WFX API] --> B[Entry Points]
-    B --> C[SSH Layer]
-    B --> D[Transfer Layer]
-    B --> L[LAN Pair]
-    C --> C1[Network/Proxy/Jump]
-    C --> C2[Auth/Session]
-    C --> C3[Dialog/Settings]
-    D --> D1[SFTP/SCP/Shell]
-    D --> D2[RemoteOps/Utils]
-    D --> D3[PHP Agent/Shell]
-    L --> L1[LanPair Session]
-    C1 --> E[ISshBackend]
-    C2 --> E
-    D1 --> E
-    D2 --> E
-    E --> F[Libssh2]
-    B --> G[IUserFeedback]
-    G --> H[Win32 UI]
-```
-
-### ABI Exception Barrier
-
-Total Commander is not built with the same compiler or exception-handling model as the plugin. Any C++ exception escaping an exported `Fs*` function crosses the ABI boundary and crashes the host process immediately.
-
-`DllExceptionBarrier` (`DllExceptionBarrier.cpp`) is an RAII firewall applied at **every** exported entry point:
-
-```cpp
-int WINAPI FsGetFileW(LPCWSTR RemoteName, LPWSTR LocalName, ...) {
-    sftp::DllExceptionBarrier barrier;
-    return sftp::dll_invoke(barrier, FS_FILE_READERROR, [&]() -> int {
-        // implementation — may throw freely
-    });
-}
-```
-
-When an exception is caught, the barrier:
-
-1. Captures the call stack immediately via `CaptureStackBackTrace` + `SymFromAddr` / `SymGetLineFromAddr64` (Windows DbgHelp; SRWLOCK-serialised; lazy-initialized — zero overhead when no exception occurs).
-2. Stores the live exception as `std::exception_ptr` (type preserved without RTTI; project builds with `/GR-`).
-3. Re-throws locally to classify and extract `what()` text across `std::system_error` / `std::bad_alloc` / `std::exception` hierarchy.
-4. Logs diagnostic + stack trace via `SFTP_LOG`.
-5. Shows a `MessageBoxW` to the user (once per incident) with the full exception message and call stack.
-
-Symbol names and file:line numbers resolve when the PDB sits next to `sftpplug.wfx`. Both Debug and Release configurations emit PDBs. Without a PDB, hex addresses are printed — still sufficient to identify the failing `Fs*` call chain.
-
-`ShutdownSymbols()` is called from `DllMain DLL_PROCESS_DETACH` to release DbgHelp resources correctly, allowing re-initialization if TC reloads the DLL within the same process.
-
-### ISshBackend Interface
-
-All libssh2 calls are routed through pure-virtual interfaces: `ISshSession`, `ISshChannel`, `ISftpHandle`, `ISftpSession`, `ISshAgent`. This fully decouples business logic from the underlying SSH library.
-
-```cpp
-// ISftpHandle — wraps LIBSSH2_SFTP_HANDLE*
-struct ISftpHandle {
-    virtual ssize_t read(char* buf, size_t len) = 0;
-    virtual ssize_t write(const char* buf, size_t len) = 0;
-    virtual int readdir(char* buf, size_t blen,
-                        char* longentry, size_t llen,
-                        LIBSSH2_SFTP_ATTRIBUTES* attrs) = 0;
-    virtual int fstat(LIBSSH2_SFTP_ATTRIBUTES* attrs, int setstat) = 0;
-    virtual void seek(size_t offset) = 0;
-    // ...
-};
-```
-
-Consequences:
-- Future backend migration (e.g., libssh) requires no changes to transfer or auth logic.
-- Mock implementations allow unit-testing transfer paths without a real server.
-
-### RAII and Memory Safety
-
-- `std::unique_ptr<ISshSession>`, `std::unique_ptr<ISftpHandle>` throughout.
-- `handle_util::AutoHandle<HANDLE>` for Windows file handles.
-- `DataBlob` RAII wrapper for `CryptProtectData` / `CryptUnprotectData` output, calling `SecureZeroMemory` then `LocalFree` in destructor.
-- `ConnectionGuard` RAII in `PluginEntryPoints.cpp` — ensures new connections are always closed and removed from the registry on any error path in `FsFindFirstW`, preventing resource leaks even when exceptions or early returns occur.
-- No manual `new` / `delete` in any module written after the rewrite.
-
-### IUserFeedback Pattern
-
-`WindowsUserFeedback` implements a `IUserFeedback` interface that separates all `MessageBox` / progress-window calls from connection and transfer logic. This prevents UI calls on non-UI threads and makes background transfer mode stable.
-
-### C++20 Feature Usage
-
-| Feature | Used in |
-|---------|---------|
-| `std::span<const uint8_t>` | LanPair HMAC/PBKDF2, ShellFallbackTransfer |
-| `std::string_view` | CoreUtils, LanPair, ProxyNegotiator, UnicodeHelpers |
-| `std::optional<T>` | PasswordCrypto, LanPair, PpkConverter |
-| `std::format` | PhpAgentClient |
-| `constexpr` throughout | All modules |
-| `noexcept` | LanPairSession public API, DllExceptionBarrier |
-| `std::filesystem` | LanPair, build utilities |
-| `std::thread`, `std::mutex`, `std::atomic` | LanPair discovery service |
-| Designated initializers | Config structs |
-| `int8_t` for tri-state flags | SftpTransfer autodetect |
 
 ---
 
@@ -321,13 +211,15 @@ File integrity verification directly on the server:
 
 ```mermaid
 flowchart TD
-    Start[Start Auth] --> P1{Pageant?}
+    Start[Start Auth] --> P1{Use agent?}
     P1 -->|Yes| P2[Pageant]
-    P1 -->|No| K1[Key File]
+    P1 -->|No| K0{Key file set?}
+    K0 -->|Yes| K1[Key File]
+    K0 -->|No| K2{Kbd-Int?}
     P2 -->|OK| Done[Auth OK]
-    P2 -->|Fail| K1
+    P2 -->|Fail| K2
     K1 -->|OK| Done
-    K1 -->|Fail| K2{Kbd-Int?}
+    K1 -->|Fail| K2
     K2 -->|Yes| K3[Kbd-Int]
     K2 -->|No| PW[Password]
     K3 -->|OK| Done
@@ -411,9 +303,11 @@ class DataBlob {
 
 After decryption, the plaintext buffer is `SecureZeroMemory`-zeroed before `LocalFree`. Base64 encoding/decoding uses Windows `CryptBinaryToStringA` / `CryptStringToBinaryA`.
 
-### ABI Boundary Protection
+### A failure in the plugin does not take Total Commander with it
 
-`DllExceptionBarrier` guards all exported `Fs*` functions. Any C++ exception — including `std::bad_alloc`, `std::system_error`, or third-party exceptions — is caught before it reaches Total Commander's call frame. The diagnostic (exception type, `what()` text, and resolved call stack) is logged and shown to the user in a `MessageBoxW`. TC continues running. See [ABI Exception Barrier](#abi-exception-barrier) in the Architecture section.
+Every call Total Commander makes into the plugin is wrapped, so a fault
+inside it cannot reach TC's own code. You get a message describing what
+went wrong, and Total Commander keeps running.
 
 ### Legacy XOR
 
@@ -747,162 +641,6 @@ All operations are available over SFTP, SCP, and PHP Agent modes (where applicab
 ### Symlink and Tilde Handling
 
 Symlinks are parsed from `ls -la` long-entry format and followed recursively. Special protection against downloading the literal string `~` as a file: the plugin detects this case, reconnects, and retries with the resolved home path.
-
----
-
-## Shell Engineering Details
-
-### Marker-Aware Directory Listing (SCP Mode)
-
-Real SSH servers vary in shell behavior (prompts, echo, MOTD). The plugin injects unique markers to delimit directory output reliably:
-
-| Marker | Purpose |
-|--------|---------|
-| `__WFX_LIST_BEGIN__` | Start of `ls -la` output |
-| `__WFX_LIST_END__` | End of `ls -la` output |
-| `echo $?` | Exit code detection after command |
-
-Defensive buffer filtering discards echoed commands, prompts, and MOTD lines before parsing.
-
-### Restricted Server Handling
-
-| Scenario | Mitigation |
-|----------|-----------|
-| SFTP subsystem blocked | Fall through to SCP, then shell fallback |
-| `scp` not available | Shell chunk transfer via `cat` / `dd` / base64 |
-| Noisy shell prompts | Buffer filtering with marker anchoring |
-| Delayed output (slow server) | Staggered read timeouts per stage |
-| No 64-bit `scp` (>2 GB) | Automatic detection, fallback to shell transfer |
-
-### UTF-8 Detection
-
-Remote `locale` command output is parsed to determine the server's character encoding. If UTF-8 is detected, filename conversion uses the Unicode helpers in `UnicodeHelpers.cpp` / `UtfConversion.cpp`. Otherwise, system code page conversion is applied.
-
----
-
-## Module Map
-
-| Module | Responsibility | Notes |
-|--------|---------------|-------|
-| `PluginEntryPoints.cpp` | TC WFX API entry points (`FsFindFirst`, `FsGetFile`, `FsPutFile`, `FsExecuteFile`, ...) | Legacy C ABI surface; `ConnectionGuard` RAII |
-| `DllExceptionBarrier.cpp` | C++ exception firewall at ABI boundary; DbgHelp stack trace | Every `Fs*` wrapped via `dll_invoke` |
-| `ConnectionNetwork.cpp` | Socket creation, IPv4/IPv6 resolution, raw connect | Isolated network stage |
-| `ProxyNegotiator.cpp` | HTTP CONNECT, SOCKS4/4a/5 negotiation | Dedicated proxy module |
-| `JumpHostConnection.cpp` | Bastion host auth + `direct-tcpip` tunnel | No external `ssh.exe` |
-| `SshSessionInit.cpp` | SSH session bootstrap (handshake, banner) | Modular session init |
-| `ConnectionAuth.cpp` | Auth method dispatch | Triggers fallback chain |
-| `SessionPostAuth.cpp` | Post-auth session steps (shell, SFTP init) | Separated from auth |
-| `ConnectionDialog.cpp` | Connection dialog and UI handlers | `UpdateCertSectionState` consolidates cert section enable/disable for all transport modes |
-| `SftpAuth.cpp` | Auth helpers, key-mode selection | Native PPK-aware |
-| `SftpConnection.cpp` | High-level connection orchestration | Split from legacy monolith |
-| `SftpTransfer.cpp` | Native SFTP transfer path, resume | Streaming buffers; ATTR_SIZE fix |
-| `ScpTransfer.cpp` | Native SCP transfer path | Dedicated SCP engine |
-| `ShellFallbackTransfer.cpp` | `cat`/`dd`/base64 chunk pipeline | Compatibility-first fallback |
-| `SftpRemoteOps.cpp` | Listing, remote file operations | Marker-aware parsing; `SftpSetAttr` |
-| `SftpShell.cpp` | Shell channel execution, EAGAIN guards | |
-| `TransferUtils.cpp` | Progress, rate, shared transfer helpers | |
-| `PhpAgentClient.cpp` | PHP Agent HTTP operations (WinHTTP); TAR batch upload session (`TarUploadSession`, `PhpAgentUploadDirAsTar`); TAR batch download session (`TarDownloadSession`, `PhpAgentDownloadFilesAsTar`, `TAR_PACK`) | |
-| `PhpShellConsole.cpp` | PHP Shell pseudo-terminal; keyboard input, Tab completion, Up/Down history navigation | |
-| `ShellHistory.cpp` | Persistent command history — ring buffer (128 entries), atomic NTFS write, `%APPDATA%\GHISLER\shell_history.txt` | `ShellHistory.h` |
-| `PpkConverter.cpp` | PPK v2/v3 → PEM conversion | BCrypt + Argon2; no tools |
-| `PasswordCrypto.cpp` | DPAPI encrypt/decrypt, legacy XOR read | `DataBlob` RAII |
-| `ImportSourceRegistry.cpp` | Registry of the `IExternalSessionSource` adapters | One entry per source program |
-| `SecureCrtAdapter.cpp`, `PuttyAdapter.cpp`, `WinScpAdapter.cpp`, `FileZillaAdapter.cpp`, `KittyAdapter.cpp` | Per-source session enumeration and settings mapping | Registry / INI / XML / per-session files |
-| `ImportCache.cpp` | Persisted enumeration results per source and channel | Survives restarts; per-channel prune |
-| `ImportIoUtil.cpp` | Shared adapter primitives — percent codec, registry readers, env expansion, key-file routing | |
-| `VirtualSessionRegistry.cpp` | Alias map for connected virtual sessions | TC-safe alias names |
-| `ServerRegistry.cpp` | In-memory server profile registry | |
-| `ProfileSettings.cpp` | INI read/write for connection profiles | |
-| `LanPair.cpp` | PAIR1 auth protocol, UDP discovery, PBKDF2 | `namespace smb` |
-| `LanPairSession.cpp` | LAN2 command protocol, file transfer session | `noexcept` public API; session timeout enforcement |
-| `Libssh2Backend.cpp` | `ISshBackend` implementation over libssh2 | |
-| `AuthMethodParser.cpp` | Parses server-advertised auth method list | |
-| `FtpDirectoryParser.cpp` | `ls -la` output parser | Unicode-aware |
-| `CoreUtils.cpp` | Base64, time conversion, string utilities | Self-contained |
-| `UnicodeHelpers.cpp` / `UtfConversion.cpp` | UTF-8 ↔ wide string conversion | |
-| `WindowsUserFeedback.cpp` | `IUserFeedback` implementation | Decouples UI from logic |
-| `PluginHelp.cpp` | Opens `sftpplug.chm` from plugin directory | |
-
----
-
-## Source Tree
-
-```
-build.ps1                      # PowerShell build script (multi-language or single-language; x64 + x86)
-bin/
-  SFTPplug.zip                 # Release archive (TC auto-install) — only file produced here
-build/
-  SFTPplug.vcxproj             # MSVC project (C++20 / C17, x64 Release + x86 Release)
-  SFTPplug.sln
-  SFTPplug.vsprops
-src/
-  agent/
-    sftp.php                   # PHP Agent (maintained source)
-    sftp_php74.php             # PHP 7.4 compatibility variant
-  core/
-    *.cpp                      # All plugin modules (see Module Map)
-    ShellHistory.cpp           # Persistent command history manager
-  help/
-    index.html
-    authentication.html
-    jump-host.html
-    lan-pair.html
-    php-agent.html
-    php-agent-operations.html
-    php-shell.html
-    proxy-configuration.html
-    sessions.html
-    shell-commands.html
-    shell-fallback.html
-    transfer-modes.html
-    security.html
-    troubleshooting.html
-    troubleshooting-advanced.html
-    settings-reference.html
-    encoding.html
-    quickstart.html
-    import-migration.html
-    sftpplug.hhp               # HTML Help Workshop project
-    sftpplug.hhc               # Table of contents
-    sftpplug.hhk               # Index
-    readme.txt                 # readme.txt distributed inside SFTPplug.zip
-  include/
-    global.h                   # Master header, debug config, C++20 guards
-    ISshBackend.h              # Pure-virtual SSH backend interface
-    SftpInternal.h             # Connection state structs
-    DllExceptionBarrier.h      # ABI exception firewall
-    ShellHistory.h             # Persistent command history interface
-    CoreUtils.h
-    LanPair.h                  # smb:: namespace, PAIR1/LAN2 types
-    LanPairSession.h
-    *.h
-    libssh2/
-      libssh2.h
-      libssh2_sftp.h
-      libssh2_publickey.h
-  lib/
-    argon2_a_x64.lib           # Argon2 static lib — x64, /MT (rebuilt from source)
-    argon2_a_x86.lib           # Argon2 static lib — x86, /MT (rebuilt from source)
-    libssh2_x64.lib            # libssh2 static lib — x64, WinCNG, /MT (rebuilt from source)
-    libssh2_x86.lib            # libssh2 static lib — x86, WinCNG, /MT (rebuilt from source)
-  res/
-    sftpplug.rc                # String tables: EN / PL / DE / FR / ES
-    resource.h
-    icon*.ico
-third_party/
-  build.ps1                    # Builds all dependency libs (argon2 + libssh2, x64 + x86, /MT)
-  argon/
-    vs2026/
-      Argon2Static/
-        Argon2Static.vcxproj   # MSVC project: argon2_a_x64.lib / argon2_a_x86.lib, /MT
-    build/
-      x64/argon2_a_x64.lib    # (build artifact — excluded from git)
-      x86/argon2_a_x86.lib    # (build artifact — excluded from git)
-  libssh2/
-    ...                        # libssh2 source (excluded from git via .gitignore)
-    bld_x64/                   # (build artifact — excluded from git)
-    bld_x86/                   # (build artifact — excluded from git)
-```
 
 ---
 
