@@ -134,27 +134,6 @@ flowchart TD
     G --> H[Win32 UI]
 ```
 
-```
-WFX API Layer
-  ↓
-DllExceptionBarrier (every exported Fs* function)
-  ↓
-Plugin Entry Points (FsFindFirst / FsGetFile / FsPutFile / FsExecuteFile / ...)
-  ↓
-┌───────────────────────────────────────────┐
-│  Business Logic Layer                     │
-│  ├─ ConnectionNetwork / ProxyNegotiator   │
-│  ├─ ConnectionAuth / SessionPostAuth      │
-│  ├─ SFTP / SCP / Shell fallback           │
-│  ├─ PHP Agent (HTTP) / PHP Shell          │
-│  └─ UI separation (IUserFeedback)         │
-└───────────────────────────────────────────┘
-  ↓
-ISshBackend Interface (ISshSession / ISshChannel / ISftpHandle)
-  ↓
-Libssh2Backend Implementation (libssh2 statically linked)
-```
-
 ### ABI Exception Barrier
 
 Total Commander is not built with the same compiler or exception-handling model as the plugin. Any C++ exception escaping an exported `Fs*` function crosses the ABI boundary and crashes the host process immediately.
@@ -814,7 +793,6 @@ Remote `locale` command output is parsed to determine the server's character enc
 | `ConnectionAuth.cpp` | Auth method dispatch | Triggers fallback chain |
 | `SessionPostAuth.cpp` | Post-auth session steps (shell, SFTP init) | Separated from auth |
 | `ConnectionDialog.cpp` | Connection dialog and UI handlers | `UpdateCertSectionState` consolidates cert section enable/disable for all transport modes |
-| `ConnectionDialogClass.cpp` | Dialog class and submode handling | |
 | `SftpAuth.cpp` | Auth helpers, key-mode selection | Native PPK-aware |
 | `SftpConnection.cpp` | High-level connection orchestration | Split from legacy monolith |
 | `SftpTransfer.cpp` | Native SFTP transfer path, resume | Streaming buffers; ATTR_SIZE fix |
@@ -1128,6 +1106,17 @@ User-facing summary; see `CHANGELOG.md` for per-version detail.
 - **Diagnostic status lines are prefixed with the session name** — `[session] Upload file: …`, useful when multiple sessions are open in different TC tabs
 - **Saved-session folders** — group sessions hierarchically via `/` in the DisplayName (`[home/raspi]`). F7 inside a folder creates a session there; F6 covers rename / move / cross-folder / bulk folder rename; F8 covers session and bulk folder delete; jump-host references stay valid across every rename. Padlock icon shown for folder-nested sessions. Backwards compatible with flat session profiles.
 - **`[Active Sessions]` magic folder** — when at least one session is connected, a virtual folder appears in the plugin root. Entering it lists every active session in a flat view with a `[Disconnect All]` row at the top: F8 on a row disconnects that session; F8 on `[Disconnect All]` closes every connection at once; Enter on `[Disconnect All]` does the same and drops you back to the plugin root. The folder auto-hides when nothing is connected. No setup required.
+- **Session import lives in the `[Imports]` folder** — the connection
+  dialog's `Import...` button and the checkbox picker behind it are
+  gone. Sessions from SecureCRT, PuTTY, WinSCP, FileZilla and KiTTY
+  appear as live entries in the plugin root: `Enter` connects using the
+  source program's settings, `F5` copies one into your own list, and
+  `Ctrl+A` then `F5` takes a whole source at once.
+- **The `Session:` field names the session** — it used to be a dropdown
+  of every saved session, and picking one there loaded it into the
+  dialog. Sessions are chosen in the panel; typing a different name in
+  the field renames the session, and a name already in use is refused
+  rather than overwritten.
 - **Transparency** — argon2 (used internally for PuTTY PPK v3 key files) is now built from public source instead of a pre-compiled blob
 
 ### In Progress
@@ -1150,6 +1139,9 @@ User-facing summary; see `CHANGELOG.md` for per-version detail.
 
 **Highlights:** DllExceptionBarrier (ABI protection), ConnectionGuard RAII, LAN Pair TOFU/timeout, PHP Shell persistent history, 15-language localization (CS/HU/NL/PT-BR/RO/SK/UK/JA/ZH-CN added), **`[Imports]` magic folder** covering SecureCRT / PuTTY / WinSCP / FileZilla / KiTTY with native KiTTY and FileZilla password decoding, **PHP Agent TAR upload+download** (streaming ustar POST/GET, on-the-fly server extraction, batch download via TAR_PACK, no 4 GB limit), no VC++ Redistributable required
 
-*Secure FTP Plugin v1.0.0.x — Modern C++20 implementation.*
-*Based on the original SFTP plugin by Christian Ghisler; core modules re-engineered from scratch.*
-[kvc.pl](https://kvc.pl) | [marek@kvc.pl](mailto:marek@kvc.pl)
+*SFTP Plugin v10.0.2.x — Modern C++20 implementation.*
+*Based on the original SFTP plugin by Christian Ghisler, and on the C++
+rewrite by Marek Wesolowski ([kvc.pl](https://kvc.pl)) that this fork
+continues.*
+*Issues and pull requests for this fork:
+[github.com/zvldz/totalcmd_sftp](https://github.com/zvldz/totalcmd_sftp)*
