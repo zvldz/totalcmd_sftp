@@ -102,44 +102,6 @@ Complete C-to-C++ rewrite of the original SFTP plugin by Christian Ghisler. Core
 
 ---
 
-## Connection Lifecycle
-
-```mermaid
-flowchart LR
-    Start[Read TC Lang] --> UI[UI Language]
-    Profile[Resolve Profile] --> T{Transport}
-    T -->|LAN Pair| LP[Discovery]
-    LP --> LS[Connect]
-    LS --> Ops[Operations]
-    T -->|PHP| PH[HTTP Auth]
-    PH --> Ops
-    T -->|SSH| S[Socket]
-    S --> P{Proxy?}
-    P -->|Yes| PN[Negotiate]
-    P -->|No| J{Jump?}
-    PN --> J
-    J -->|Yes| JH[Auth]
-    JH --> JT[Tunnel]
-    JT --> I[Init SSH]
-    J -->|No| I
-    I --> F[Fingerprint]
-    F --> A[Auth]
-    A --> M{Submode}
-    M -->|SFTP| SI[SFTP Init]
-    M -->|SCP| SC[SCP Path]
-    M -->|Shell| SH[Shell Path]
-    SI --> Ops
-    SC --> Ops
-    SH --> Ops
-```
-
-Operational constraints enforced in every network loop:
-- No unbounded EAGAIN spin.
-- Per-phase timeout for connect, auth, and read.
-- Deterministic cleanup on every failure path.
-
----
-
 ## Transfer Protocols
 
 ### SFTP (Primary)
@@ -148,7 +110,7 @@ Full SFTP subsystem support via libssh2. Streaming reads and writes with configu
 
 ### SCP (Native)
 
-Dedicated `ScpTransfer.cpp` engine. Handles the SCP wire protocol without the SFTP subsystem. Faster than SFTP on many servers due to lower protocol overhead.
+Handles the SCP wire protocol without the SFTP subsystem. Faster than SFTP on many servers due to lower protocol overhead.
 
 **>2 GB file support:**
 
@@ -164,31 +126,17 @@ Requires libssh2 ≥ 1.7.0 for 64-bit size field support.
 
 For servers where the SFTP subsystem is blocked and `scp` is unavailable. Uses a hidden interactive SSH shell channel.
 
-```mermaid
-sequenceDiagram
-    participant L as Local
-    participant P as Plugin
-    participant C as SSH Channel
-    participant S as Server
-    L->>P: Read chunk
-    P->>P: Base64 encode
-    P->>C: Send payload
-    C->>S: printf '%s' | base64 -d
-    S-->>C: Output
-    C-->>P: Parse
-```
-
 **Upload:** Split data into 1024-byte chunks → base64-encode → send via `printf '%s' | base64 -d` → server appends decoded bytes.
 
 **Download:** Fast path via `cat`. Fallback to `base64 -w 0` when binary pipe is unreliable. Incremental decode (streaming, no full-file buffering).
 
 Chunk size kept below 1024 bytes (1368 base64 characters) to stay within shell line-length limits on restricted hosts.
 
-Base64 encoder is self-contained (`ShellB64Encode` / `ShellB64Decode` in `ShellFallbackTransfer.cpp`), with no external dependency.
+The base64 encoder is built in, with no external dependency.
 
 ### Jump Host (ProxyJump)
 
-Handled in `JumpHostConnection.cpp`. Connects and authenticates to the bastion host, then opens a `direct-tcpip` channel to the final target. The full auth sequence (including PPK, Pageant, keyboard-interactive) runs on the jump host before the tunnel is established. No external `ssh.exe` binary involved.
+Connects and authenticates to the bastion host, then opens a `direct-tcpip` channel to the final target. The full auth sequence (including PPK, Pageant, keyboard-interactive) runs on the jump host before the tunnel is established. No external `ssh.exe` binary involved.
 
 **Pick existing session as jump host.** Next to the "Jump..." button on the F7 connection dialog there is a session-picker dropdown. Selecting an already-saved session uses its connection parameters (host, port, user, password, keys, agent) as the jump host — no need to retype them. The reference is stored as `jumpsessionref=<name>` in `sftpplug.ini` and resolved at connect time, so editing the referenced session propagates to every session that points at it (OpenSSH `ProxyJump` style). The "Jump..." button is disabled while a reference is active; pick `(none)` to switch back to manual configuration. Self-reference (picking the session being edited) is blocked at the UI level; chained or cyclic jump configurations are refused at connect time with a clear error.
 
@@ -209,25 +157,6 @@ File integrity verification directly on the server:
 
 ### Method Selection and Fallback
 
-```mermaid
-flowchart TD
-    Start[Start Auth] --> P1{Use agent?}
-    P1 -->|Yes| P2[Pageant]
-    P1 -->|No| K0{Key file set?}
-    K0 -->|Yes| K1[Key File]
-    K0 -->|No| K2{Kbd-Int?}
-    P2 -->|OK| Done[Auth OK]
-    P2 -->|Fail| K2
-    K1 -->|OK| Done
-    K1 -->|Fail| K2
-    K2 -->|Yes| K3[Kbd-Int]
-    K2 -->|No| PW[Password]
-    K3 -->|OK| Done
-    K3 -->|Fail| PW
-    PW -->|OK| Done
-    PW -->|Fail| Err[Auth Failed]
-```
-
 Fail-fast local validation before any network auth attempt:
 
 | Condition | Behavior |
@@ -240,7 +169,7 @@ This eliminates the minute-long UI freeze caused by impossible auth attempts in 
 
 ### Native PPK v2 / v3 Decoder
 
-Implemented in `PpkConverter.cpp`. Converts PuTTY Private Key files to traditional PEM format for libssh2 — no external tools, no `puttygen.exe`.
+Converts PuTTY Private Key files to traditional PEM format for libssh2 — no external tools, no `puttygen.exe`.
 
 **PPK v3 specification coverage:**
 
@@ -267,16 +196,6 @@ Connects via named pipe to the running Pageant agent. If Pageant is not running 
 
 ### Storage Modes
 
-```mermaid
-graph LR
-    A[Password] --> B{TC Master?}
-    B -->|Yes| C[CryptProc]
-    B -->|No| D[DPAPI]
-    D --> E[CryptProtectData]
-    C --> F[Encrypted INI]
-    E --> F
-```
-
 | Mode | INI format | Description |
 |------|-----------|-------------|
 | TC Master Password | `password=!` | Delegated to TC `CryptProc` API |
@@ -285,21 +204,6 @@ graph LR
 | Legacy XOR | `<decimal triplets>` | Read-only; written in 2000s versions |
 
 ### DPAPI Implementation
-
-`DataBlob` RAII class in `PasswordCrypto.cpp`:
-
-```cpp
-class DataBlob {
-    ~DataBlob() {
-        if (blob_.pbData) {
-            SecureZeroMemory(blob_.pbData, blob_.cbData);
-            LocalFree(blob_.pbData);
-        }
-    }
-    bool encrypt(const std::string& plain);       // CryptProtectData
-    std::optional<std::string> decrypt() const;   // CryptUnprotectData
-};
-```
 
 After decryption, the plaintext buffer is `SecureZeroMemory`-zeroed before `LocalFree`. Base64 encoding/decoding uses Windows `CryptBinaryToStringA` / `CryptStringToBinaryA`.
 
@@ -331,7 +235,7 @@ Documented explicitly in source to prevent well-meaning refactors that would bre
 | SOCKS4a | None |
 | SOCKS5 | None / username-password |
 
-Implemented in `ProxyNegotiator.cpp`, isolated from the main connection path.
+
 
 ### Session Import
 
@@ -367,7 +271,7 @@ Direct Windows-to-Windows file transfer without SSH. Uses a custom application-l
 
 ### Discovery (UDP Broadcast)
 
-`DiscoveryService` (in `LanPair.cpp`) runs a background thread broadcasting peer announcements and collecting incoming ones.
+A background thread broadcasts peer announcements and collects incoming ones.
 
 | Parameter | Default |
 |-----------|---------|
@@ -420,7 +324,7 @@ Impersonation is per-connection (server) or per-transfer (client) and is always 
 
 ### DPAPI Trust Key Storage
 
-`DpapiSecretStore` in `LanPair.h` persists trust keys in DPAPI-protected storage keyed by `"lanpair_trust_srv_<serverPeerId>__<clientPeerId>"`. Trust is per peer-pair, per Windows user account. Trust keys are saved with `CRYPTPROTECT_LOCAL_MACHINE` flag for compatibility with TrustedInstaller context. If an old key cannot be decrypted (e.g. after enabling TI), it is deleted automatically and re-pairing is triggered.
+Trust keys are held in DPAPI-protected storage, keyed by `"lanpair_trust_srv_<serverPeerId>__<clientPeerId>"`. Trust is per peer-pair, per Windows user account. Trust keys are saved with `CRYPTPROTECT_LOCAL_MACHINE` flag for compatibility with TrustedInstaller context. If an old key cannot be decrypted (e.g. after enabling TI), it is deleted automatically and re-pairing is triggered.
 
 ### LAN2 Command Protocol
 
@@ -433,18 +337,6 @@ Frame header: magic=0x4B564350 ("KVCP"), version=1, PairCommandType, reserved, p
 `PairCommandType` values: `Handshake`, `ListRoots`, `ListDirectory`, `StartSend`, `StartReceive`, `DataChunk`, `Ack`, `Error`.
 
 `LanPairSession` public API:
-
-```cpp
-static std::unique_ptr<LanPairSession> connect(...) noexcept;
-bool listRoots(std::vector<std::string>& roots) noexcept;
-bool listDirectory(const std::string& path, std::vector<DirEntry>& entries) noexcept;
-bool getFile(const std::string& remotePath, LPCWSTR localPath, ...) noexcept;
-bool putFile(LPCWSTR localPath, const std::string& remotePath, ...) noexcept;
-bool mkdir(const std::string& path) noexcept;
-bool remove(const std::string& path) noexcept;
-bool rename(const std::string& oldPath, const std::string& newPath) noexcept;
-void setTimeoutMin(int minutes) noexcept;
-```
 
 Session timeout configurable via `setTimeoutMin(int minutes)`. When a non-zero timeout is set, every `cmd()` call checks elapsed time via `std::chrono::steady_clock` and closes the session automatically when the limit is reached. All methods are `noexcept`.
 
@@ -471,39 +363,6 @@ TC's `FsStatusInfo` `PUT_MULTI` / `PUT_MULTI_THREAD` session is used to collect 
 When TC signals a multi-file download (`FsStatusInfo GET_MULTI` / `GET_MULTI_THREAD`), each `FsGetFileW` call is intercepted and the remote path queued into `TarDownloadSession`. When the batch ends, a single POST to `?op=TAR_PACK` is sent with all remote paths (newline-separated). The server streams the ustar TAR directly to `php://output` with no buffering — no 504 Gateway Timeout even for large archives. The plugin parses the TAR stream on the fly, writing files as each entry arrives.
 
 Both directions support **GNU LongLink** (`././@LongLink`, typeflag `L`) for paths longer than 99 characters. Files exceeding 8 589 934 591 bytes (POSIX ustar limit) are skipped cleanly without corrupting the rest of the archive.
-
-```mermaid
-sequenceDiagram
-    participant TC as Total Commander
-    participant P as Plugin
-    participant S as sftp.php
-    Note over TC,P: Batch download (GET_MULTI)
-    TC->>P: FsStatusInfo GET_MULTI START
-    P->>P: TarDownloadSessionBegin
-    TC->>P: FsGetFileW (file 1)
-    P->>P: TarDownloadSessionQueue
-    TC->>P: FsGetFileW (file N)
-    P->>P: TarDownloadSessionQueue
-    TC->>P: FsStatusInfo GET_MULTI END
-    P->>S: POST ?op=TAR_PACK
-    S-->>P: ustar TAR stream
-    P->>P: Parse TAR → write local files
-```
-
-```mermaid
-sequenceDiagram
-    participant TC as Total Commander
-    participant P as Plugin
-    participant S as sftp.php
-    Note over TC,P: Batch upload (PUT_MULTI)
-    TC->>P: FsStatusInfo PUT_MULTI START
-    P->>P: TarUploadSessionBegin
-    TC->>P: FsPutFileW (file 1..N)
-    P->>P: TarUploadSessionQueue
-    TC->>P: FsStatusInfo PUT_MULTI END
-    P->>S: POST ?op=TAR_EXTRACT (TAR stream)
-    S-->>P: { "extracted": N }
-```
 
 `AgentUrl` struct parsed from connection profile: `secure` (HTTPS), `host`, `port`, `object` path.
 
@@ -817,14 +676,14 @@ To add a new language: create `language\XYZ.lng` (UTF-8) following the existing 
 - x64 and x86 packaging — single ZIP with both architectures, TC auto-install via `pluginst.inf`
 - PHP Shell persistent command history — ring buffer (128 entries), atomic NTFS write, `%APPDATA%\GHISLER\shell_history.txt`, `history -c` / `clear history` commands
 - **`[Imports]` magic folder** — sessions from SecureCRT, PuTTY, WinSCP, FileZilla and KiTTY listed as live entries, one subfolder per source; `Enter` connects, `F5` materialises into `sftpplug.ini`; per-source `[Refresh]` and custom portable locations; enumeration cached next to the INI so entries are present at startup
-- **KiTTY password import** — obfuscated session passwords decoded natively (`KittyDecrypt.cpp`, no external helper binary) and re-stored as DPAPI
+- **KiTTY password import** — obfuscated session passwords decoded natively, with no external helper binary, and re-stored as DPAPI
 - **FileZilla password import** — base64-stored site passwords carried over; master-password sites left to the interactive prompt
 - **15-language localization** — added CS/HU/NL/PT-BR/RO/SK/UK/JA/ZH-CN; all auto-detected from TC `wincmd.ini` `LanguageIni` setting
 - **Language override** — `Language=` key in `[Configuration]` of `sftpplug.ini`; supports all 15 built-in languages by name/ISO code, plus custom `.lng` stems for unsupported languages; `sftpplug.tpl` template shipped with the plugin
 - **LAN Pair strict roles** — Donor/Receiver/Auto with unidirectional enforcement; Donor starts file server and refuses outgoing connections; Receiver connects as client without starting a local server
 - **LAN Pair TrustedInstaller** — per-connection TI impersonation on the Donor server; per-transfer TI impersonation on the Receiver client; `CRYPTPROTECT_LOCAL_MACHINE` for DPAPI trust keys; auto-delete stale keys + auto-retry on first connect failure
 - **Session delete fix** — single-character session names (e.g. `1`, `2`) can now be deleted via F8/Del
-- **KiTTY password decoding** — the obfuscation KiTTY applies to stored session passwords is reversed in-process (`KittyDecrypt.cpp`); no external binary, no CAB resource, no antivirus exclusions involved. Decoded value is immediately re-protected with DPAPI
+- **KiTTY password decoding** — the obfuscation KiTTY applies to stored session passwords is reversed in-process; no external binary, no CAB resource, no antivirus exclusions involved. Decoded value is immediately re-protected with DPAPI
 - **PHP Agent TAR upload** — opt-in `php_tar` checkbox; directory F5 copy streams a single POSIX ustar TAR POST to `op=TAR_EXTRACT`; PHP extracts on-the-fly; GNU LongLink for long paths; two-pass Content-Length; works in foreground (`PUT_MULTI`) and background thread (`PUT_MULTI_THREAD`) modes; plain `.tar` file uploads unaffected
 - **PHP Agent TAR batch download** — opt-in `php_tar` checkbox; multi-file F5 copy sends a single POST to `op=TAR_PACK` with all remote paths; server streams ustar TAR directly without buffering (`php://output`); plugin parses TAR on-the-fly and writes local files; works in foreground (`GET_MULTI`) and background thread (`GET_MULTI_THREAD`) modes; GNU LongLink supported; files >8 GiB skipped cleanly
 - **PHP Agent TAR fixes** — DWORD overflow (TAR upload >4 GB now uses 64-bit `Content-Length` header); TAR pack no longer buffers in `php://temp` on server (eliminates HTTP 504 on OVH); per-file zero-pad allocation removed from upload loop; >8.5 GiB file guard in both C++ and PHP prevents TAR header corruption
