@@ -1,26 +1,5 @@
 # Secure FTP Plugin for Total Commander
 
-> [!CAUTION]
-> **2026-03-13 — Visual C++ Redistributable dependency removed**
->
-> Previous builds reported *"Error loading plugin file! The plugin probably needs some DLLs missing"*
-> on clean systems without Visual C++ Redistributable installed (`MSVCRT.dll` / `vcruntime140.dll`).
->
-> Root cause: `argon2_a.lib` and `libssh2.lib` were compiled with `/MD` (dynamic CRT).
-> Fixed: both libraries rebuilt from source with `/MT` — fully static C runtime.
-> **The plugin requires no external DLLs or VC++ Redistributable.**
-
-> [!IMPORTANT]
-> **2026-03-21 — PHP Agent TAR batch download + sftp.php update required**
->
-> Users running recent builds with the **TAR stream** option enabled may have experienced:
-> - Silent batch download failures (0 files received) when downloading multiple files
-> - HTTP 504 Gateway Timeout on OVH / home.pl when downloading large file sets
-> - TAR upload failures for directory archives exceeding 4 GB
->
-> All three are now fixed. **Upload the updated `sftp.php`** from the plugin directory to your server
-> before using TAR batch download. See [PHP Agent Deployment](#php-agent-deployment) for instructions.
-
 **Version 10.0.2.x** — Modern C++20 SFTP/SCP/PHP/LAN plugin for Total Commander x64 and x86.
 
 Complete C-to-C++ rewrite of the original SFTP plugin by Christian Ghisler. Core transport, authentication, and session modules were re-engineered from scratch with a compatibility-first execution model, interface-driven backend abstraction, and hardened security primitives. The plugin selects the optimal transfer path at runtime — native SFTP, native SCP, shell chunk transfer via `cat`/`dd`/`base64`, PHP Agent over HTTP, or direct LAN Pair — depending on server constraints and deployment topology.
@@ -426,7 +405,11 @@ On NTFS, a rename within the same volume is a single metadata operation. If powe
 
 ### PHP Agent Deployment
 
-> **Critical:** The `sftp.php` in the release package ships with **no password configured**. Uploading it before saving a session in the plugin will result in HTTP 503 on every connection attempt. Always follow the order below.
+> **Critical:** `sftp.php` and the plugin are a matched pair — after
+> updating the plugin, upload the `sftp.php` that came with it, or
+> transfers relying on newer operations will fail against the old script.
+>
+> **Also:** the `sftp.php` in the release package ships with **no password configured**. Uploading it before saving a session in the plugin will result in HTTP 503 on every connection attempt. Always follow the order below.
 
 **Step 1 — Configure and save the session in Total Commander**
 
