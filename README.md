@@ -1106,17 +1106,24 @@ User-facing summary; see `CHANGELOG.md` for per-version detail.
 - **Diagnostic status lines are prefixed with the session name** — `[session] Upload file: …`, useful when multiple sessions are open in different TC tabs
 - **Saved-session folders** — group sessions hierarchically via `/` in the DisplayName (`[home/raspi]`). F7 inside a folder creates a session there; F6 covers rename / move / cross-folder / bulk folder rename; F8 covers session and bulk folder delete; jump-host references stay valid across every rename. Padlock icon shown for folder-nested sessions. Backwards compatible with flat session profiles.
 - **`[Active Sessions]` magic folder** — when at least one session is connected, a virtual folder appears in the plugin root. Entering it lists every active session in a flat view with a `[Disconnect All]` row at the top: F8 on a row disconnects that session; F8 on `[Disconnect All]` closes every connection at once; Enter on `[Disconnect All]` does the same and drops you back to the plugin root. The folder auto-hides when nothing is connected. No setup required.
-- **Session import lives in the `[Imports]` folder** — the connection
-  dialog's `Import...` button and the checkbox picker behind it are
-  gone. Sessions from SecureCRT, PuTTY, WinSCP, FileZilla and KiTTY
-  appear as live entries in the plugin root: `Enter` connects using the
-  source program's settings, `F5` copies one into your own list, and
-  `Ctrl+A` then `F5` takes a whole source at once.
-- **The `Session:` field names the session** — it used to be a dropdown
-  of every saved session, and picking one there loaded it into the
-  dialog. Sessions are chosen in the panel; typing a different name in
-  the field renames the session, and a name already in use is refused
-  rather than overwritten.
+- **Session import moved into the `[Imports]` folder** — the old
+  `Import...` button is gone. Sessions from SecureCRT, PuTTY, WinSCP,
+  FileZilla and KiTTY show up as entries you can open: `Enter` connects
+  using the source program's settings, `F5` copies one into your own
+  list.
+- **The `Session:` field is the session's name** — it used to be a
+  dropdown that switched sessions. Sessions are picked in the panel;
+  typing another name here renames the session, and a name already
+  taken is refused instead of overwritten.
+- **15 languages** — every dialog follows Total Commander's own language
+  setting, with English as the fallback for languages the plugin does
+  not ship. `Language=` in `sftpplug.ini` overrides the choice.
+- **PuTTY ed25519 keys work** — a `.ppk` holding an ed25519 key used to
+  fail with a misleading file error; it now authenticates like any other
+  key.
+- **Password and key passphrase in one field** — write them as
+  `"password","passphrase"` and the plugin keeps them apart; the
+  passphrase unlocks the key and never goes to the server.
 - **Transparency** — argon2 (used internally for PuTTY PPK v3 key files) is now built from public source instead of a pre-compiled blob
 
 ### In Progress
