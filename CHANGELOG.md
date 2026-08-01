@@ -169,6 +169,10 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 
 ### Fixes
 
+- **The help row in the plugin root is named in your language.** Four
+  translations carried a translated name and eleven still showed
+  `F7 - help.txt`; all fifteen now match the interface language.
+
 - **The `F7 - help.txt` text follows the plugin's language.** It was
   read straight from the compiled English resource, so the translations
   shipped in the `.lng` files never reached it. The file is UTF-8 now,

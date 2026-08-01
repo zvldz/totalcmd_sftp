@@ -55,7 +55,7 @@
 12051=Neznámy
 12052=Presmerovanie odosielania HTTPS na HTTP
 12053=Vložte CD-ROM
-130=F7 - help.txt
+130=F7 - pomocník.txt
 131=Pomocník modulu plug-in:\r\nF7:\tVytvoriť nové pripojenie (TC zobrazí Nový adresár – zadajte názov pripojenia)\r\nF8/Del:\tOdstrániť pripojenie\r\nEnter:\tPripojiť\r\nAlt+Enter:\tZmeniť možnosti\r\nF3/F4:\tZobraziť nastavenia ako INI (upraviť cez Alt+Enter)\r\n\r\nRelácie v priečinkoch:\r\nF7 v priečinku:\tVytvorí reláciu v tomto priečinku\r\nF7 s menom folder/x:\tVytvorí reláciu v uvedenom priečinku\r\nF6 na \\priečinok\\meno:\tPresunie reláciu do priečinka\r\nF6 na priečinku:\tPremenuje všetky relácie vnútri; odkazy na jump-hosta tiež\r\nF5 alebo potiahnutie:\tSkopíruje reláciu alebo priečinok (duplikát)\r\nF8 na priečinku:\tOdstráni priečinok a všetky relácie v ňom\r\n\r\nRežimy prenosu:\r\nSSH (SFTP/SCP):\tVýchozí a najrýchlejší, ak funguje prístup SSH\r\nPoužiť SCP pre dáta:\tKeď je SFTP blokované alebo nestabilné\r\nLen SCP:\tÚplne zakáže SFTP (staré hostiteľe)\r\nVynútiť prenos shelom:\tVynúti prenos cez shell (dd/base64)\r\nPHP Agent (HTTP):\tBez účtu SSH; používa nahraný sftp.php\r\nPHP Shell (HTTP):\tPseudo-terminál HTTP cez sftp.php
 132=Rýchle pripojenie
 144=Pomocník

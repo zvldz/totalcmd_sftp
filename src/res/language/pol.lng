@@ -55,7 +55,7 @@
 12051=Nieznany
 12052=Przekierowanie wysyłania HTTPS na HTTP
 12053=Włóż CD-ROM
-130=F7 - help.txt
+130=F7 - pomoc.txt
 131=Pomoc wtyczki:\r\nF7:\tUtwórz nowe połączenie (TC pokazuje Nowy katalog - wpisz nazwę połączenia)\r\nF8/Del:\tUsuń połączenie\r\nEnter:\tPołącz\r\nAlt+Enter:\tZmień opcje\r\nF3/F4:\tPokaż ustawienia jako INI (edycja przez Alt+Enter)\r\n\r\nSesje w folderach:\r\nF7 w folderze:\tTworzy sesję w tym folderze\r\nF7 z nazwą folder/x:\tTworzy sesję we wskazanym folderze\r\nF6 na \\folder\\nazwa:\tPrzenosi sesję do folderu\r\nF6 na folderze:\tZmienia nazwy wszystkich sesji; odwołania jump-host również\r\nF5 lub przeciągnięcie:\tKopiuje sesję lub folder (duplikat)\r\nF8 na folderze:\tUsuwa folder i wszystkie sesje w nim\r\n\r\nTryby transferu:\r\nSSH (SFTP/SCP):\tDomyślny i najszybszy, gdy działa dostęp SSH\r\nUżyj SCP do danych:\tGdy SFTP jest blokowane lub niestabilne\r\nTylko SCP:\tCałkowicie wyłącza SFTP (stare hosty)\r\nWymuś transfer shell:\tWymusza transfer przez shell (dd/base64)\r\nPHP Agent (HTTP):\tBez konta SSH; używa wgranego sftp.php\r\nPHP Shell (HTTP):\tPseudo-terminal HTTP przez sftp.php
 132=Szybkie połączenie
 144=Pomoc

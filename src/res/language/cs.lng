@@ -55,7 +55,7 @@
 12051=Neznámý
 12052=Přesměrování odesílání HTTPS na HTTP
 12053=Vložte CD-ROM
-130=F7 - help.txt
+130=F7 - nápověda.txt
 131=Nápověda zásuvného modulu:\r\nF7:\tVytvořit nové připojení (TC zobrazí Nový adresář – zadejte název připojení)\r\nF8/Del:\tOdstranit připojení\r\nEnter:\tPřipojit\r\nAlt+Enter:\tZměnit možnosti\r\nF3/F4:\tZobrazit nastavení jako INI (upravit přes Alt+Enter)\r\n\r\nRelace ve složkách:\r\nF7 ve složce:\tVytvoří relaci v této složce\r\nF7 se jménem folder/x:\tVytvoří relaci v uvedené složce\r\nF6 na \\složka\\jméno:\tPřesune relaci do složky\r\nF6 na složce:\tPřejmenuje všechny relace uvnitř; odkazy na jump-hosta se aktualizují\r\nF5 nebo přetažení:\tZkopíruje relaci nebo složku (duplikát)\r\nF8 na složce:\tOdstraní složku a všechny relace v ní\r\n\r\nRežimy přenosu:\r\nSSH (SFTP/SCP):\tVýchozí a nejrychlejší, pokud funguje přístup SSH\r\nPoužít SCP pro data:\tKdyž je SFTP blokováno nebo nestabilní\r\nPouze SCP:\tÚplně zakáže SFTP (staré hostitele)\r\nVynutit přenos shellem:\tVynutí přenos přes shell (dd/base64)\r\nPHP Agent (HTTP):\tBez účtu SSH; používá nahraný sftp.php\r\nPHP Shell (HTTP):\tPseudo-terminál HTTP přes sftp.php
 132=Rychlé připojení
 144=Nápověda

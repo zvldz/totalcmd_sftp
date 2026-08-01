@@ -55,7 +55,7 @@
 12051=Ismeretlen
 12052=HTTPS küldés átirányítása HTTP-re
 12053=Helyezze be a CD-ROM-ot
-130=F7 - help.txt
+130=F7 - súgó.txt
 131=Beépülő modul súgója:\r\nF7:\tÚj kapcsolat létrehozása (a TC megjeleníti az Új mappát – adja meg a kapcsolat nevét)\r\nF8/Del:\tKapcsolat törlése\r\nEnter:\tCsatlakozás\r\nAlt+Enter:\tBeállítások módosítása\r\nF3/F4:\tBeállítások megjelenítése INI-ként (szerkesztés: Alt+Enter)\r\n\r\nMunkamenetek mappákban:\r\nF7 mappán belül:\tA munkamenetet abban a mappában hozza létre\r\nF7 folder/x névvel:\tA munkamenetet a megadott mappában hozza létre\r\nF6 \\mappa\\név alakra:\tMappába helyezi a munkamenetet\r\nF6 mappán:\tAz összes munkamenetet átnevezi; a jump-host hivatkozások követik\r\nF5 vagy húzás:\tMásolja a munkamenetet vagy mappát\r\nF8 mappán:\tTörli a mappát és a benne lévő munkameneteket\r\n\r\nÁtviteli módok:\r\nSSH (SFTP/SCP):\tAlapértelmezett és leggyorsabb, ha az SSH-hozzáférés működik\r\nSCP használata adatokhoz:\tHa az SFTP blokkolva vagy instabil\r\nCsak SCP:\tTeljesen letiltja az SFTP-t (régi kiszolgálók)\r\nShell-átvitel kényszerítése:\tShellen keresztüli átvitelt kényszerít (dd/base64)\r\nPHP ügynök (HTTP):\tSSH-fiók nélkül; feltöltött sftp.php-t használ\r\nPHP Shell (HTTP):\tHTTP pszeudo-terminál sftp.php-n keresztül
 132=Gyors csatlakozás
 144=Súgó

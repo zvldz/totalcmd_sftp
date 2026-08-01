@@ -55,7 +55,7 @@
 12051=Desconhecido
 12052=Redirecionamento de envio HTTPS para HTTP
 12053=Insira o CD-ROM
-130=F7 - help.txt
+130=F7 - ajuda.txt
 131=Ajuda do plug-in:\r\nF7:\tCriar nova conexão (o TC exibe Nova pasta – digite o nome da conexão)\r\nF8/Del:\tRemover conexão\r\nEnter:\tConectar\r\nAlt+Enter:\tAlterar opções\r\nF3/F4:\tMostrar configurações como INI (editar com Alt+Enter)\r\n\r\nSessões em pastas:\r\nF7 dentro de uma pasta:\tCria a sessão nessa pasta\r\nF7 com nome folder/x:\tCria a sessão na pasta indicada\r\nF6 para \\pasta\\nome:\tMove uma sessão para uma pasta\r\nF6 em uma pasta:\tRenomeia todas as sessões; as referências de jump host acompanham\r\nF5 ou arrastar:\tCopia a sessão ou a pasta (duplicata)\r\nF8 em uma pasta:\tRemove a pasta e todas as sessões nela\r\n\r\nModos de transferência:\r\nSSH (SFTP/SCP):\tPadrão e mais rápido quando o acesso SSH está funcionando\r\nUsar SCP para dados:\tQuando o SFTP está bloqueado ou instável\r\nSomente SCP:\tDesativa o SFTP completamente (hosts antigos)\r\nForçar transferência via shell:\tForça a transferência pelo shell (dd/base64)\r\nPHP Agent (HTTP):\tSem conta SSH; usa o sftp.php enviado\r\nPHP Shell (HTTP):\tPseudoterminal HTTP via sftp.php
 132=Conexão rápida
 144=Ajuda
