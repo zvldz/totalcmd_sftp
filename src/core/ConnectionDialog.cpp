@@ -2072,13 +2072,17 @@ bool DeleteProxy(int proxynrtodelete, LPCSTR ServerToSkip, LPCSTR iniFileName, L
     for (int n = proxynrtodelete + 1; n <= highest; ++n)
         MoveProxySection(n, n - 1, iniFileName);
 
-    // Sessions above the gap now point one slot too high.
+    // Sessions above the gap now point one slot too high. A session pointing at
+    // the deleted slot goes to "no proxy": only the session being edited can be
+    // in that state, since any other one would have blocked the delete, and
+    // leaving its number alone would silently hand it the proxy that moved down
+    // into the freed slot.
     hdl = FindFirstServer(name.data(), name.size() - 1);
     while (hdl) {
         const int proxynr = GetPrivateProfileInt(name.data(), "proxynr", 0, iniFileName);
-        if (proxynr > proxynrtodelete) {
+        if (proxynr >= proxynrtodelete) {
             std::array<char, 16> buf{};
-            _itoa_s(proxynr - 1, buf.data(), buf.size(), 10);
+            _itoa_s(proxynr > proxynrtodelete ? proxynr - 1 : 0, buf.data(), buf.size(), 10);
             WritePrivateProfileString(name.data(), "proxynr", buf.data(), iniFileName);
         }
         hdl = FindNextServer(hdl, name.data(), name.size() - 1);
