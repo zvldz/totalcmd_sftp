@@ -108,9 +108,10 @@ std::string ResolveSessionPath(const std::string& channelRoot,
     return PathExistsW(ToWide(direct)) ? direct : std::string{};
 }
 
-// Copy the connect fields SecureCRT exposes into `out`. Password / proxy /
-// jump-host details are intentionally not touched; the plugin surfaces the
-// standard interactive prompt for those when the session first connects.
+// Copy the connect fields SecureCRT exposes into `out`. Password, proxy and
+// jump-host details are left out: the password is prompted for on first
+// connect, but nothing prompts for the other two — a session that reached its
+// host through a firewall record imports without it and connects direct.
 void FillConnectSettings(const VanDykeFile& file, tConnectSettings* out)
 {
     if (!out) return;
