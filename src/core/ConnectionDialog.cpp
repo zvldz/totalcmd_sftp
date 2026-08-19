@@ -2270,14 +2270,42 @@ static int CALLBACK CountFontFace(const LOGFONTW*, const TEXTMETRICW*, DWORD, LP
     return 0;
 }
 
+// Controls born from the dialog template are ANSI windows, so any caption set
+// on them is converted to the local code page — and an icon font's glyph has
+// no place there. A button created here is a Unicode window and carries the
+// glyph intact. Position, styles and tab order are taken from the control it
+// replaces.
+static HWND RecreateAsUnicodeButton(HWND hDlg, int ctrlId)
+{
+    HWND hOld = GetDlgItem(hDlg, ctrlId);
+    if (!hOld || IsWindowUnicode(hOld))
+        return hOld;
+
+    RECT rc{};
+    GetWindowRect(hOld, &rc);
+    MapWindowPoints(nullptr, hDlg, reinterpret_cast<LPPOINT>(&rc), 2);
+
+    const DWORD style   = static_cast<DWORD>(GetWindowLongPtr(hOld, GWL_STYLE));
+    const DWORD exStyle = static_cast<DWORD>(GetWindowLongPtr(hOld, GWL_EXSTYLE));
+    HWND hPrev = GetWindow(hOld, GW_HWNDPREV);
+    DestroyWindow(hOld);
+
+    HWND hNew = CreateWindowExW(exStyle, L"BUTTON", L"", style,
+                                rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top,
+                                hDlg, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ctrlId)),
+                                hinst, nullptr);
+    if (hNew && hPrev)
+        SetWindowPos(hNew, hPrev, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    return hNew;
+}
+
 // Put a waste-bin glyph on the delete button. The glyph comes from the icon
 // font Windows ships with rather than from a bitmap, so it stays sharp at any
 // DPI and follows the system colours. Where the font is missing the button
 // keeps the plain caption the template gave it.
 static HFONT ApplyTrashGlyph(HWND hDlg, int ctrlId)
 {
-    HWND hCtrl = GetDlgItem(hDlg, ctrlId);
-    if (!hCtrl)
+    if (!GetDlgItem(hDlg, ctrlId))
         return nullptr;
 
     LOGFONTW query{};
@@ -2291,6 +2319,10 @@ static HFONT ApplyTrashGlyph(HWND hDlg, int ctrlId)
     if (!haveFont)
         return nullptr;
 
+    HWND hCtrl = RecreateAsUnicodeButton(hDlg, ctrlId);
+    if (!hCtrl)
+        return nullptr;
+
     // Size the glyph from the button itself so it scales with the layout.
     RECT rc{};
     GetWindowRect(hCtrl, &rc);
@@ -2301,11 +2333,14 @@ static HFONT ApplyTrashGlyph(HWND hDlg, int ctrlId)
     wcscpy_s(lf.lfFaceName, L"Segoe MDL2 Assets");
 
     HFONT hFont = CreateFontIndirectW(&lf);
-    if (!hFont)
+    if (!hFont) {
+        SendMessageW(hCtrl, WM_SETFONT, SendMessageW(hDlg, WM_GETFONT, 0, 0), TRUE);
+        SetWindowTextW(hCtrl, L"X");
         return nullptr;
+    }
 
-    SendMessageW(hCtrl, WM_SETFONT, (WPARAM)hFont, TRUE);
-    SetWindowTextW(hCtrl, L"");
+    SendMessageW(hCtrl, WM_SETFONT, reinterpret_cast<WPARAM>(hFont), TRUE);
+    SetWindowTextW(hCtrl, L"\xE74D");
     return hFont;
 }
 
