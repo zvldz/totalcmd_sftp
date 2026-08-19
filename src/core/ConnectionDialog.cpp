@@ -2103,6 +2103,27 @@ static void OnDeleteProxyCommand(HWND hWnd, pConnectSettings dlgConnectResults, 
     }
 }
 
+// The number a new proxy record may take. It has to clear two things, not one:
+// every record that exists, and every number a session still points at. Stale
+// references outlive their record — a session keeps `proxynr=1` long after
+// `[proxy]` is gone — and handing that number to a new record would quietly
+// route those sessions through it.
+static int NextFreeProxyNr(LPCSTR iniFileName)
+{
+    const std::vector<int> existing = EnumerateProxyNumbers(iniFileName);
+    int highest = existing.empty() ? 0 : existing.back();
+
+    std::array<char, wdirtypemax> name{};
+    SERVERHANDLE hdl = FindFirstServer(name.data(), name.size() - 1);
+    while (hdl) {
+        const int referenced = static_cast<int>(GetPrivateProfileInt(name.data(), "proxynr", 0, iniFileName));
+        if (referenced > highest)
+            highest = referenced;
+        hdl = FindNextServer(hdl, name.data(), name.size() - 1);
+    }
+    return highest + 1;
+}
+
 static void OnProxyButtonCommand(HWND hWnd, pConnectSettings dlgConnectResults, ConnectDialogContext* dlgCtx)
 {
     const int idx = (int)SendDlgItemMessage(hWnd, IDC_PROXYCOMBO, CB_GETCURSEL, 0, 0);
@@ -2110,13 +2131,11 @@ static void OnProxyButtonCommand(HWND hWnd, pConnectSettings dlgConnectResults, 
 
     int proxynr;
     if (selData == (LRESULT)-1) {
-        // "Add new proxy" selected — take the next number above every record
-        // that exists. Numbers are never reused, so sessions and imports that
-        // point at one keep pointing at the same record. The combo cannot
-        // answer this: it hides "notused" records, and a hidden record's slot
-        // would be handed out and overwritten.
-        const std::vector<int> existing = EnumerateProxyNumbers(dlgCtx->iniFileName);
-        proxynr = existing.empty() ? 1 : existing.back() + 1;
+        // "Add new proxy" selected. Numbers are never reused, so sessions,
+        // exports and imports that point at one keep meaning the same record.
+        // The combo cannot answer this: it hides "notused" records, and a
+        // hidden record's slot would be handed out and overwritten.
+        proxynr = NextFreeProxyNr(dlgCtx->iniFileName);
     } else {
         proxynr = GetProxyNrFromCombo(hWnd);
     }
