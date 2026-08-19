@@ -23,6 +23,17 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 
 ### Fixes
 
+- **The jump-host dialog shows where its settings come from.** When a
+  session supplies the jump host, the dialog used to be unreachable —
+  the button simply went grey — while anything typed into it on an
+  earlier visit was quietly ignored at connect time. That is what made
+  an agent problem there so hard to place. The button now opens, the
+  fields show the referenced session's host, user and key files, and a
+  line at the top names the session they belong to. They cannot be
+  edited, and pressing OK leaves this session's own jump settings alone.
+  Its duplicate "use jump host" checkbox is gone; the one on the main
+  dialog was always the one that counted.
+
 - **The help now says which way of disconnecting actually works.** Close
   a session from inside it, or press F8 on its row in `[Active
   Sessions]`. The toolbar button pressed from the plugin root or a magic

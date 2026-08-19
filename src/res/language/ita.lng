@@ -367,6 +367,7 @@
 12088=Esiste già una sessione con questo nome.\nScegli un nome di sessione diverso.
 12118=Questa sessione appartiene a un altro programma e non può essere modificata qui.\nPremere F3 per vederne le impostazioni o F5 per copiarla nel proprio elenco.
 12119= Sessione LAN Pair: 
+12120=Queste impostazioni provengono dalla sessione '{}' e sono di sola lettura. Scegliere (nessuna) nell'elenco dei jump host per configurarne uno qui.
 12089=SFTP
 12104=(nessuna)
 12105= (mancante)

@@ -79,8 +79,8 @@ BEGIN
     EDITTEXT        IDC_SESSIONNAME,38,240,227,12,ES_AUTOHSCROLL
     PUSHBUTTON      "Shell...",IDC_PHPSHELL,270,238,40,14
     LTEXT           "Jump host:",IDC_LABEL_JUMPHOST_GRP,5,257,42,8
-    CONTROL         "Use &jump host",IDC_JUMP_ENABLE,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,49,257,104,8
-    COMBOBOX        IDC_JUMP_SESSION_PICK,155,255,67,80,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    COMBOBOX        IDC_JUMP_SESSION_PICK,49,255,104,80,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    CONTROL         "Use &jump host",IDC_JUMP_ENABLE,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,158,257,64,8
     PUSHBUTTON      "Jump...",IDC_JUMP_BUTTON,224,255,40,14
     CONTROL         "TAR",IDC_PHP_TAR,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,242,224,60,8
     LTEXT           "Proxy settings:",IDC_LABEL_PROXY_SETTINGS,5,273,295,8
@@ -146,7 +146,7 @@ CAPTION "SSH Jump Host (ProxyJump) Settings"
 FONT 8, "MS Shell Dlg", 0, 0, 0x1
 BEGIN
     GROUPBOX        "Jump host connection",IDC_JUMP_GROUP,5,5,305,170
-    CONTROL         "&Use jump host (ProxyJump)",IDC_JUMP_ENABLE,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,17,180,10
+    LTEXT           "",IDC_JUMP_FROM_SESSION,12,17,290,8
     LTEXT           "Jump host:",IDC_JUMP_LABEL_HOST,12,33,50,8
     EDITTEXT        IDC_JUMP_HOST,65,31,165,12,ES_AUTOHSCROLL
     LTEXT           "Port:",IDC_JUMP_LABEL_PORT,235,33,18,8
@@ -774,6 +774,7 @@ BEGIN
     IDS_DLG_ENCODING        "Encoding (codepage) of file names:"
     IDS_DLG_PERMISSIONS_GROUP 
                             " User &rights of newly created files/directories: "
+    IDS_JUMP_FROM_SESSION   "These settings come from session '{}' and are shown read-only. Pick (none) in the jump-host list to configure a host here instead."
     IDS_DLG_LANPAIR_GROUP   " LAN Pair Session: "
     IDS_DLG_FILEMOD         "New files (Upload):"
     IDS_DLG_DIRMOD          "New folders:"

@@ -66,15 +66,18 @@ void ArrangeInlineRow(HWND hDlg, int labelId, int checkId, int btnId, int comboI
 
     const int labelX = rLabel.left;
     const int labelW = szLabel + DlgLayout::kGap;
-    const int checkX = labelX + labelW + DlgLayout::kGap;
     const int checkW = scaledBoxW + szCheck + DlgLayout::kGap;
     const int btnW   = rBtn.right  - rBtn.left;
     const int btnH   = rBtn.bottom - rBtn.top;
 
-    // The button is anchored to the right edge; the checkbox takes exactly
-    // the room its text needs. Whatever is left in between belongs to the
-    // dropdown, when the row has one.
-    const int btnX = (int)rDlg.right - btnW - DlgLayout::kGap;
+    // Reading order across the row is: what the jump host is taken from, then
+    // whether it is used, then how to inspect it. So the button stays anchored
+    // to the right edge, the checkbox sits immediately left of it taking only
+    // the room its own text needs, and the dropdown gets everything between
+    // the label and the checkbox — it holds session names, which are the part
+    // that actually varies in length.
+    const int btnX   = (int)rDlg.right - btnW - DlgLayout::kGap;
+    const int checkX = btnX - DlgLayout::kGap - checkW;
 
     DlgLayout::Move(hDlg, labelId, labelX, rLabel.top, labelW, rLabel.bottom - rLabel.top);
     DlgLayout::Move(hDlg, checkId, checkX, rCheck.top, checkW, rCheck.bottom - rCheck.top);
@@ -82,8 +85,8 @@ void ArrangeInlineRow(HWND hDlg, int labelId, int checkId, int btnId, int comboI
 
     if (hCombo) {
         const RECT rCombo = DlgLayout::GetRect(hDlg, comboId);
-        const int comboX = checkX + checkW + DlgLayout::kGap;
-        const int comboW = btnX - DlgLayout::kGap - comboX;
+        const int comboX = labelX + labelW + DlgLayout::kGap;
+        const int comboW = checkX - DlgLayout::kGap - comboX;
         // A dropdown narrower than this is unusable; leave it where the
         // template put it rather than collapsing it to nothing.
         if (comboW >= scaledBoxW * 2) {

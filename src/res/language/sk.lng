@@ -367,6 +367,7 @@
 12088=Spojenie s týmto názvom už existuje.\nZvoľte iný názov spojenia.
 12118=Táto relácia patrí inému programu a nedá sa tu upraviť.\nStlačte F3 pre zobrazenie nastavení alebo F5 pre skopírovanie do vlastného zoznamu.
 12119= Relácia LAN Pair: 
+12120=Tieto nastavenia pochádzajú z relácie '{}' a sú iba na čítanie. Vyberte (žiadna) v zozname jump-hostov, ak chcete hostiteľa zadať tu.
 12089=SFTP
 12104=(žiadna)
 12105= (chýba)

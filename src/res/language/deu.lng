@@ -368,6 +368,7 @@
 12088=Eine Verbindung mit diesem Namen existiert bereits.\nBitte einen anderen Namen wählen.
 12118=Diese Sitzung gehört einem anderen Programm und kann hier nicht bearbeitet werden.\nF3 zeigt ihre Einstellungen, F5 kopiert sie in Ihre eigene Sitzungsliste.
 12119= LAN-Pair-Sitzung: 
+12120=Diese Einstellungen stammen aus der Sitzung '{}' und werden nur angezeigt. Wählen Sie (keine) in der Jump-Host-Liste, um hier einen Host einzutragen.
 12089=SFTP
 12104=(keine)
 12105= (fehlt)

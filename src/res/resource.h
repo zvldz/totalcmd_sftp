@@ -525,6 +525,8 @@
 #define IDS_JUMP_NOT_CONFIGURED         12117   // error: jump host enabled but not configured
 #define IDS_IMPORTS_NO_EDIT             12118   // hint: imported sessions are read-only
 #define IDS_DLG_LANPAIR_GROUP           12119   // caption of the LAN Pair group box
+#define IDC_JUMP_FROM_SESSION           1088   // static: which session these settings come from
+#define IDS_JUMP_FROM_SESSION           12120  // static: settings taken from a session
 
 // Next default values for new objects
 //

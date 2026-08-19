@@ -78,14 +78,19 @@ static void BrowseJumpKeyFile(HWND hWnd, int editCtrl)
 }
 
 // Enable/disable jump host controls based on the checkbox state.
-static void UpdateJumpControlStates(HWND hWnd)
+// A referenced session owns these settings, so the fields show its values and
+// refuse edits: typing into them used to look like it worked and was then
+// discarded at connect time, which is what made an agent problem here hard to
+// pin down. Without a reference the dialog is the only place they exist, so
+// everything is editable.
+static void UpdateJumpControlStates(HWND hWnd, bool fromSession)
 {
-    const bool enabled = IsDlgButtonChecked(hWnd, IDC_JUMP_ENABLE) == BST_CHECKED;
+    const bool editable = !fromSession;
     for (int id : { IDC_JUMP_HOST, IDC_JUMP_PORT, IDC_JUMP_USER,
                     IDC_JUMP_PASSWORD, IDC_JUMP_PUBKEY, IDC_JUMP_PRIVKEY,
                     IDC_JUMP_USEAGENT, IDC_JUMP_LOADPUBKEY, IDC_JUMP_LOADPRIVKEY,
                     IDC_JUMP_CRYPTPASS }) {
-        EnableWindow(GetDlgItem(hWnd, id), enabled);
+        EnableWindow(GetDlgItem(hWnd, id), editable);
     }
 }
 
@@ -211,7 +216,6 @@ static INT_PTR CALLBACK JumpHostDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
 
         LocalizeDlgControls(hWnd, IDS_JUMP_DLG_CAPTION, {
             { IDC_JUMP_GROUP,        IDS_JUMP_DLG_GROUP    },
-            { IDC_JUMP_ENABLE,       IDS_JUMP_DLG_USE      },
             { IDC_JUMP_LABEL_HOST,   IDS_JUMP_DLG_HOST     },
             { IDC_JUMP_LABEL_PORT,   IDS_JUMP_DLG_PORT     },
             { IDC_JUMP_LABEL_USER,   IDS_JUMP_DLG_USER     },
@@ -225,19 +229,49 @@ static INT_PTR CALLBACK JumpHostDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
             { IDCANCEL,              IDS_BTN_CANCEL        },
         });
 
-        CheckDlgButton(hWnd, IDC_JUMP_ENABLE, cs->use_jump_host ? BST_CHECKED : BST_UNCHECKED);
-        SetDlgItemTextA(hWnd, IDC_JUMP_HOST, cs->jump_host.c_str());
-        SetDlgItemInt(hWnd, IDC_JUMP_PORT, cs->jump_port ? cs->jump_port : 22, FALSE);
-        SetDlgItemTextA(hWnd, IDC_JUMP_USER, cs->jump_user.c_str());
-        SetDlgItemTextA(hWnd, IDC_JUMP_PASSWORD, cs->jump_password.c_str());
-        SetDlgItemTextA(hWnd, IDC_JUMP_PUBKEY, cs->jump_pubkeyfile.c_str());
-        SetDlgItemTextA(hWnd, IDC_JUMP_PRIVKEY, cs->jump_privkeyfile.c_str());
-        CheckDlgButton(hWnd, IDC_JUMP_USEAGENT, cs->jump_useagent ? BST_CHECKED : BST_UNCHECKED);
+        // With a reference the resolver decides what the jump host is, so show
+        // exactly that rather than the session's own unused jump_* fields.
+        const bool fromSession = !cs->jump_session_ref.empty();
+        const JumpConfig shown = (fromSession && !cs->IniFileName.empty())
+            ? ResolveJumpConfig(cs, cs->IniFileName.c_str())
+            : JumpConfig{};
+
+        if (fromSession && shown.status == JumpConfigStatus::Ready) {
+            const JumpHostSettings& j = shown.endpoint;
+            SetDlgItemTextA(hWnd, IDC_JUMP_HOST, j.host.c_str());
+            SetDlgItemInt(hWnd, IDC_JUMP_PORT, j.port ? j.port : 22, FALSE);
+            SetDlgItemTextA(hWnd, IDC_JUMP_USER, j.user.c_str());
+            SetDlgItemTextA(hWnd, IDC_JUMP_PASSWORD, "");
+            SetDlgItemTextA(hWnd, IDC_JUMP_PUBKEY, j.pubkeyfile.c_str());
+            SetDlgItemTextA(hWnd, IDC_JUMP_PRIVKEY, j.privkeyfile.c_str());
+            CheckDlgButton(hWnd, IDC_JUMP_USEAGENT, j.useagent ? BST_CHECKED : BST_UNCHECKED);
+        } else {
+            SetDlgItemTextA(hWnd, IDC_JUMP_HOST, cs->jump_host.c_str());
+            SetDlgItemInt(hWnd, IDC_JUMP_PORT, cs->jump_port ? cs->jump_port : 22, FALSE);
+            SetDlgItemTextA(hWnd, IDC_JUMP_USER, cs->jump_user.c_str());
+            SetDlgItemTextA(hWnd, IDC_JUMP_PASSWORD, cs->jump_password.c_str());
+            SetDlgItemTextA(hWnd, IDC_JUMP_PUBKEY, cs->jump_pubkeyfile.c_str());
+            SetDlgItemTextA(hWnd, IDC_JUMP_PRIVKEY, cs->jump_privkeyfile.c_str());
+            CheckDlgButton(hWnd, IDC_JUMP_USEAGENT, cs->jump_useagent ? BST_CHECKED : BST_UNCHECKED);
+        }
+
+        // The row the removed duplicate checkbox used to occupy now carries
+        // the reason the fields are locked.
+        if (fromSession) {
+            std::string note = LngStrU8(IDS_JUMP_FROM_SESSION,
+                "These settings come from session '{}' and are shown read-only. "
+                "Pick (none) in the jump-host list to configure a host here instead.");
+            const auto slot = note.find("{}");
+            if (slot != std::string::npos)
+                note.replace(slot, 2, cs->jump_session_ref);
+            SetDlgItemTextW(hWnd, IDC_JUMP_FROM_SESSION,
+                            unicode_util::utf8_to_wstring(note).c_str());
+        }
 
         if (!ctx->hasCryptProc)
             EnableWindow(GetDlgItem(hWnd, IDC_JUMP_CRYPTPASS), FALSE);
 
-        UpdateJumpControlStates(hWnd);
+        UpdateJumpControlStates(hWnd, fromSession);
 
         // Center dialog over parent.
         RECT r1{}, r2{};
@@ -255,8 +289,18 @@ static INT_PTR CALLBACK JumpHostDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
         if (!ctx) break;
         switch (LOWORD(wParam)) {
         case IDOK: {
+            // Whether a jump host is used at all is the main dialog's
+            // question; this one only answers which host.
             pConnectSettings cs = ctx->cs;
-            cs->use_jump_host   = IsDlgButtonChecked(hWnd, IDC_JUMP_ENABLE) == BST_CHECKED;
+
+            // With a reference the fields hold the referenced session's
+            // values, shown for reading. Storing them here would copy that
+            // session's host into this one's own jump_* fields and leave a
+            // stale copy behind the moment the referenced session changes.
+            if (!cs->jump_session_ref.empty()) {
+                EndDialog(hWnd, IDOK);
+                return 1;
+            }
 
             const std::string    previousHost = cs->jump_host;
             const unsigned short previousPort = cs->jump_port;
@@ -305,9 +349,6 @@ static INT_PTR CALLBACK JumpHostDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
         case IDCANCEL:
             EndDialog(hWnd, IDCANCEL);
             return 1;
-        case IDC_JUMP_ENABLE:
-            UpdateJumpControlStates(hWnd);
-            break;
         case IDC_JUMP_LOADPUBKEY:
             BrowseJumpKeyFile(hWnd, IDC_JUMP_PUBKEY);
             break;
@@ -2230,9 +2271,7 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
     // Jump button is disabled while a session reference is set
     // (ref takes priority over manual configuration via the Jump dialog).
     {
-        const bool buttonEnabled = m_settings
-            && m_settings->use_jump_host
-            && m_settings->jump_session_ref.empty();
+        const bool buttonEnabled = m_settings && m_settings->use_jump_host;
         EnableWindow(GetDlgItem(m_hWnd, IDC_JUMP_BUTTON), buttonEnabled ? TRUE : FALSE);
     }
     serverfieldchangedbyuser = false;
@@ -2860,9 +2899,10 @@ void ConnectionDialog::OnJumpEnableChanged()
     const bool checked = IsDlgButtonChecked(m_hWnd, IDC_JUMP_ENABLE) == BST_CHECKED;
     if (m_settings)
         m_settings->use_jump_host = checked;
-    // Jump button is enabled only when the checkbox is on AND no session
-    // reference is set (ref takes priority over manual configuration).
-    const bool buttonEnabled = checked && (!m_settings || m_settings->jump_session_ref.empty());
+    // The button stays available with a session reference too: the dialog then
+    // shows that session's settings read-only, which is how the user finds out
+    // where they come from instead of meeting a dead button.
+    const bool buttonEnabled = checked;
     EnableWindow(GetDlgItem(m_hWnd, IDC_JUMP_BUTTON), buttonEnabled ? TRUE : FALSE);
 }
 
@@ -2884,8 +2924,7 @@ void ConnectionDialog::OnJumpSessionPicked()
         m_settings->use_jump_host = true;
         CheckDlgButton(m_hWnd, IDC_JUMP_ENABLE, BST_CHECKED);
     }
-    // Refresh Jump button state: enabled only when use_jump_host AND no ref.
-    const bool buttonEnabled = m_settings->use_jump_host && m_settings->jump_session_ref.empty();
+    const bool buttonEnabled = m_settings->use_jump_host;
     EnableWindow(GetDlgItem(m_hWnd, IDC_JUMP_BUTTON), buttonEnabled ? TRUE : FALSE);
 }
 
