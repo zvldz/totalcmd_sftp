@@ -418,7 +418,7 @@ private:
     void    OnJumpButton();
     void    OnProxyButton();
     void    OnProxyComboChanged();
-    void    OnDeleteLastProxy();
+    void    OnDeleteProxy();
     void    OnPluginHelp();
     void    OnCertHelp();
     void    OnPasswordHelp();
@@ -428,6 +428,7 @@ private:
     void    OnJumpSessionPicked();
 
     HWND                  m_hWnd;
+    HFONT                  m_iconFont;
     ConnectDialogContext*  m_ctx;
     pConnectSettings       m_settings;
     bool                   m_initialized;
@@ -2002,7 +2003,33 @@ void fillProxyCombobox(HWND hWnd, int defproxynr, LPCSTR iniFileName)
         SendDlgItemMessageW(hWnd, IDC_PROXYCOMBO, CB_SETCURSEL, 0, 0);
 }
 
-bool DeleteLastProxy(int proxynrtodelete, LPCSTR ServerToSkip, LPCSTR iniFileName, LPSTR AppendToList, size_t maxlen)
+// Copy every key of one proxy section onto another, then drop the source.
+static void MoveProxySection(int from, int to, LPCSTR iniFileName)
+{
+    const std::string src = std::format("proxy{}", from);
+    const std::string dst = to > 1 ? std::format("proxy{}", to) : std::string("proxy");
+
+    std::array<char, 4096> keys{};
+    GetPrivateProfileString(src.c_str(), nullptr, "", keys.data(),
+                            static_cast<DWORD>(keys.size() - 1), iniFileName);
+    for (const char* k = keys.data(); *k; k += strlen(k) + 1) {
+        std::array<char, 1024> value{};
+        GetPrivateProfileString(src.c_str(), k, "", value.data(),
+                                static_cast<DWORD>(value.size() - 1), iniFileName);
+        WritePrivateProfileString(dst.c_str(), k, value.data(), iniFileName);
+    }
+    WritePrivateProfileString(src.c_str(), nullptr, nullptr, iniFileName);
+}
+
+// Remove the proxy the user picked, not merely the last one — the button has
+// always been labelled "Delete proxy" while deleting whatever sat at the end.
+//
+// Proxies live in numbered sections and sessions point at them by number, so
+// removing one from the middle means closing the gap: every section above it
+// moves down, and every session pointing above it follows. Getting that wrong
+// silently hands a session someone else's proxy, which is why the sessions are
+// repointed in the same pass rather than left for a later one.
+bool DeleteProxy(int proxynrtodelete, LPCSTR ServerToSkip, LPCSTR iniFileName, LPSTR AppendToList, size_t maxlen)
 {
     if (proxynrtodelete <= 1)
         return false;
@@ -2024,12 +2051,40 @@ bool DeleteLastProxy(int proxynrtodelete, LPCSTR ServerToSkip, LPCSTR iniFileNam
         }
         hdl = FindNextServer(hdl, name.data(), name.size() - 1);
     }
-    if (CanDelete) {
-        std::array<char, 64> proxyentry{};
-        strlcpy(proxyentry.data(), std::format("proxy{}", proxynrtodelete), proxyentry.size() - 1);
-        WritePrivateProfileString(proxyentry.data(), nullptr, nullptr, iniFileName);
+    if (!CanDelete)
+        return false;
+
+    // How far the numbering runs. A section with no keys at all is the end.
+    int highest = proxynrtodelete;
+    for (int n = proxynrtodelete + 1; ; ++n) {
+        std::array<char, 64> probe{};
+        const std::string section = std::format("proxy{}", n);
+        GetPrivateProfileString(section.c_str(), nullptr, "", probe.data(),
+                                static_cast<DWORD>(probe.size() - 1), iniFileName);
+        if (!probe[0])
+            break;
+        highest = n;
     }
-    return CanDelete;
+
+    const std::string doomed = std::format("proxy{}", proxynrtodelete);
+    WritePrivateProfileString(doomed.c_str(), nullptr, nullptr, iniFileName);
+
+    for (int n = proxynrtodelete + 1; n <= highest; ++n)
+        MoveProxySection(n, n - 1, iniFileName);
+
+    // Sessions above the gap now point one slot too high.
+    hdl = FindFirstServer(name.data(), name.size() - 1);
+    while (hdl) {
+        const int proxynr = GetPrivateProfileInt(name.data(), "proxynr", 0, iniFileName);
+        if (proxynr > proxynrtodelete) {
+            std::array<char, 16> buf{};
+            _itoa_s(proxynr - 1, buf.data(), buf.size(), 10);
+            WritePrivateProfileString(name.data(), "proxynr", buf.data(), iniFileName);
+        }
+        hdl = FindNextServer(hdl, name.data(), name.size() - 1);
+    }
+
+    return true;
 }
 
 static void ShowHelpDialog(HWND hWnd, UINT bodyStringId)
@@ -2048,14 +2103,11 @@ static void ShowHelpDialog(HWND hWnd, UINT bodyStringId)
 // WM_COMMAND handlers - additional refactored functions
 // ============================================================================
 
-static void OnDeleteLastProxyCommand(HWND hWnd, pConnectSettings dlgConnectResults, LPCSTR dlgIniFileName)
+static void OnDeleteProxyCommand(HWND hWnd, pConnectSettings dlgConnectResults, LPCSTR dlgIniFileName)
 {
-    // Get the proxynr stored in the last real proxy item (before "Add new proxy").
-    const int count = (int)SendDlgItemMessage(hWnd, IDC_PROXYCOMBO, CB_GETCOUNT, 0, 0);
-    const int lastRealIdx = count - 2;
-    int proxynr = (lastRealIdx > 0)
-        ? (int)SendDlgItemMessage(hWnd, IDC_PROXYCOMBO, CB_GETITEMDATA, lastRealIdx, 0)
-        : 0;
+    // The proxy the user is looking at, which is what the button says it
+    // removes. "No proxy" and the first slot cannot go.
+    const int proxynr = GetProxyNrFromCombo(hWnd);
     if (proxynr >= 2) {
         std::wstring msgW = LoadResStringW(IDS_ERROR_INUSE);
         std::string errorstr = WideToUtf8(msgW.empty() ? L"Proxy is in use by connection:" : msgW);
@@ -2064,9 +2116,15 @@ static void OnDeleteLastProxyCommand(HWND hWnd, pConnectSettings dlgConnectResul
         errorstr[actualLen] = '\n';
         errorstr[actualLen + 1] = '\0';
 
-        if (DeleteLastProxy(proxynr, dlgConnectResults->DisplayName.c_str(), dlgIniFileName, errorstr.data(), errorstr.size() - 1)) {
-            int proxynrSel = GetProxyNrFromCombo(hWnd);
-            fillProxyCombobox(hWnd, proxynrSel, dlgIniFileName);
+        if (DeleteProxy(proxynr, dlgConnectResults->DisplayName.c_str(), dlgIniFileName, errorstr.data(), errorstr.size() - 1)) {
+            // Everything above the gap moved down a slot, this session
+            // included; land on "no proxy" when its own entry was the one
+            // removed.
+            if (dlgConnectResults->proxynr > proxynr)
+                dlgConnectResults->proxynr -= 1;
+            else if (dlgConnectResults->proxynr == proxynr)
+                dlgConnectResults->proxynr = 0;
+            fillProxyCombobox(hWnd, dlgConnectResults->proxynr, dlgIniFileName);
         } else {
             std::wstring werrorstr(1024, L'\0');
             const int len = MultiByteToWideChar(CP_ACP, 0, errorstr.data(), -1, werrorstr.data(), static_cast<int>(werrorstr.size()));
@@ -2161,6 +2219,7 @@ INT_PTR WINAPI ConnectDlgProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lPa
 
 ConnectionDialog::ConnectionDialog(HWND hWnd, ConnectDialogContext* ctx)
     : m_hWnd(hWnd)
+    , m_iconFont(nullptr)
     , m_ctx(ctx)
     , m_settings(ctx ? ctx->connectResults : nullptr)
     , m_initialized(false)
@@ -2177,6 +2236,77 @@ INT_PTR ConnectionDialog::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
     case WM_DESTROY:      OnDestroy(); return 0;
     }
     return 0;
+}
+
+// The narrow buttons in the proxy row carry a glyph instead of a caption, so
+// what they do lives in a tooltip. TTF_SUBCLASS lets the tooltip watch the
+// button itself, which keeps the dialog procedure out of it.
+static void AddButtonTooltip(HWND hDlg, int ctrlId, UINT stringId)
+{
+    HWND hCtrl = GetDlgItem(hDlg, ctrlId);
+    if (!hCtrl)
+        return;
+
+    HWND hTip = CreateWindowExW(0, TOOLTIPS_CLASSW, nullptr,
+                                WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX,
+                                CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+                                hDlg, nullptr, GetModuleHandleW(nullptr), nullptr);
+    if (!hTip)
+        return;
+
+    std::wstring text = LoadResStringW(stringId);
+    TTTOOLINFOW ti{};
+    ti.cbSize = sizeof(ti);
+    ti.uFlags = TTF_IDISHWND | TTF_SUBCLASS;
+    ti.hwnd = hDlg;
+    ti.uId = (UINT_PTR)hCtrl;
+    ti.lpszText = text.data();
+    SendMessageW(hTip, TTM_ADDTOOLW, 0, (LPARAM)&ti);
+}
+
+static int CALLBACK CountFontFace(const LOGFONTW*, const TEXTMETRICW*, DWORD, LPARAM lParam)
+{
+    *reinterpret_cast<bool*>(lParam) = true;
+    return 0;
+}
+
+// Put a waste-bin glyph on the delete button. The glyph comes from the icon
+// font Windows ships with rather than from a bitmap, so it stays sharp at any
+// DPI and follows the system colours. Where the font is missing the button
+// keeps the plain caption the template gave it.
+static HFONT ApplyTrashGlyph(HWND hDlg, int ctrlId)
+{
+    HWND hCtrl = GetDlgItem(hDlg, ctrlId);
+    if (!hCtrl)
+        return nullptr;
+
+    LOGFONTW query{};
+    query.lfCharSet = DEFAULT_CHARSET;
+    wcscpy_s(query.lfFaceName, L"Segoe MDL2 Assets");
+
+    bool haveFont = false;
+    HDC hdc = GetDC(hDlg);
+    EnumFontFamiliesExW(hdc, &query, CountFontFace, reinterpret_cast<LPARAM>(&haveFont), 0);
+    ReleaseDC(hDlg, hdc);
+    if (!haveFont)
+        return nullptr;
+
+    // Size the glyph from the button itself so it scales with the layout.
+    RECT rc{};
+    GetWindowRect(hCtrl, &rc);
+    LOGFONTW lf{};
+    lf.lfHeight = -((rc.bottom - rc.top) * 5 / 9);
+    lf.lfCharSet = DEFAULT_CHARSET;
+    lf.lfQuality = CLEARTYPE_QUALITY;
+    wcscpy_s(lf.lfFaceName, L"Segoe MDL2 Assets");
+
+    HFONT hFont = CreateFontIndirectW(&lf);
+    if (!hFont)
+        return nullptr;
+
+    SendMessageW(hCtrl, WM_SETFONT, (WPARAM)hFont, TRUE);
+    SetWindowTextW(hCtrl, L"");
+    return hFont;
 }
 
 INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
@@ -2216,7 +2346,6 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
         { IDC_LABEL_PROXY_SETTINGS, IDS_DLG_PROXY_SETTINGS  },
         { IDC_PHP_TAR,              IDS_DLG_PHP_TAR         },
         { IDC_LAN_TI,               IDS_LAN_TI              },
-        { IDC_DELETELAST,         IDS_DLG_DELETELAST        },
         { IDC_PLUGINHELP,         IDS_BTN_HELP              },
         { IDOK,                   IDS_BTN_OK                },
         { IDCANCEL,               IDS_BTN_CANCEL            },
@@ -2243,6 +2372,9 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
     ArrangeExpandLabel(m_hWnd, IDC_LABEL_TRANSFER,  IDC_TRANSFERMODE);
     ArrangeExpandLabel(m_hWnd, IDC_SYSTEMLABEL,     IDC_SYSTEM);
     ArrangeLabelFillButton(m_hWnd, IDC_LABEL_SESSION, IDC_SESSIONNAME, IDC_PHPSHELL);
+
+    m_iconFont = ApplyTrashGlyph(m_hWnd, IDC_DELETELAST);
+    AddButtonTooltip(m_hWnd, IDC_DELETELAST, IDS_DLG_DELETELAST);
 
     if (m_ctx->lanPeerId.empty())
         m_ctx->lanPeerId = MakeLanPeerId();
@@ -2466,7 +2598,7 @@ INT_PTR ConnectionDialog::OnCommand(WPARAM wParam, LPARAM /*lParam*/)
             OnProxyComboChanged();
         break;
     case IDC_DELETELAST:
-        OnDeleteLastProxy();
+        OnDeleteProxy();
         break;
     case IDC_PLUGINHELP:
         OnPluginHelp();
@@ -2498,6 +2630,10 @@ INT_PTR ConnectionDialog::OnCommand(WPARAM wParam, LPARAM /*lParam*/)
 void ConnectionDialog::OnDestroy()
 {
     StopLanPairing(m_ctx);
+    if (m_iconFont) {
+        DeleteObject(m_iconFont);
+        m_iconFont = nullptr;
+    }
 }
 
 INT_PTR ConnectionDialog::OnLanPeerMessage(WPARAM /*wParam*/, LPARAM lParam)
@@ -2940,9 +3076,9 @@ void ConnectionDialog::OnProxyComboChanged()
         PostMessage(m_hWnd, WM_COMMAND, IDC_PROXYBUTTON, 0);
 }
 
-void ConnectionDialog::OnDeleteLastProxy()
+void ConnectionDialog::OnDeleteProxy()
 {
-    OnDeleteLastProxyCommand(m_hWnd, m_settings, m_ctx->iniFileName);
+    OnDeleteProxyCommand(m_hWnd, m_settings, m_ctx->iniFileName);
 }
 
 void ConnectionDialog::OnPluginHelp()
