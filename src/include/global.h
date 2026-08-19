@@ -77,8 +77,8 @@ constexpr size_t wdirtypemax = 1024;
 // OutputDebugString is always used when logging is active.
 // WARNING: File logging is slow — enable only during active investigation.
 
-#define LOG_ENABLED  1                              // Master switch: 0 = off, 1 = on
-#define LOG_TO_FILE  1                              // 0 = OutputDebugString only, 1 = + file
+#define LOG_ENABLED  0                              // Master switch: 0 = off, 1 = on
+#define LOG_TO_FILE  0                              // 0 = OutputDebugString only, 1 = + file
 #define LOG_FILE_PATH "C:\\temp\\sftpplug.log"     // Log file path (directory created automatically)
 
 // Internal aliases — do not edit below this line.

@@ -8,7 +8,7 @@ detail.
 This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 `10.x` line to make divergence visible in TC's plugin manager.
 
-## 10.0.2.0 — unreleased
+## 10.0.2.0 — 2026-08-19
 
 ### Features
 
