@@ -10,6 +10,16 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 
 ## 10.0.2.1 — unreleased
 
+### Fixes
+
+- **The interface language is taken from the language file's name, not
+  from the path leading to it.** Total Commander's `LanguageIni` may
+  hold a full path, and the whole string was searched for a language
+  code — so a folder in that path could decide the language before the
+  file name was reached, and a `.lng` sitting under a directory called
+  `Ita` came out Italian whatever it was named. Spotted in the
+  numbereleven-a fork.
+
 ## 10.0.2.0 — 2026-08-19
 
 ### Features
