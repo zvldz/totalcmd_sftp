@@ -221,7 +221,8 @@ EnumerationResult WinScpAdapter::EnumerateCustomPath(const std::string& path)
 }
 
 bool WinScpAdapter::LoadSettings(const ExternalSessionEntry& entry,
-                                  pConnectSettings out)
+                                  pConnectSettings out,
+                                  SessionDependency* dependency)
 {
     if (!out) return false;
 
@@ -258,6 +259,25 @@ bool WinScpAdapter::LoadSettings(const ExternalSessionEntry& entry,
             keyFile = ExpandEnvA(PuttyUrlDecode(keyFile));
 
         hasFsProto = ReadRegDword(key, "FSProtocol", fsProtoRaw);
+
+        // WinSCP omits every key sitting at its default, so the presence of a
+        // non-zero value is the whole signal: `Tunnel` for an SSH session in
+        // front of the host, `ProxyMethod` for a proxy. Either way the route
+        // is not one the copied fields describe.
+        DWORD tunnel = 0, proxyMethod = 0;
+        if (dependency) {
+            if (ReadRegDword(key, "Tunnel", tunnel) && tunnel != 0) {
+                std::string tunnelHost;
+                ReadRegString(key, "TunnelHostName", tunnelHost);
+                dependency->kind   = SessionDependency::Kind::Tunnel;
+                dependency->detail = PuttyUrlDecode(tunnelHost);
+            } else if (ReadRegDword(key, "ProxyMethod", proxyMethod) && proxyMethod != 0) {
+                std::string proxyHost;
+                ReadRegString(key, "ProxyHost", proxyHost);
+                dependency->kind   = SessionDependency::Kind::Proxy;
+                dependency->detail = PuttyUrlDecode(proxyHost);
+            }
+        }
         RegCloseKey(key);
     } else {
         // Portable channel: sourceOrigin is the literal WinSCP.ini path.
@@ -282,6 +302,18 @@ bool WinScpAdapter::LoadSettings(const ExternalSessionEntry& entry,
 
         const int fsRaw = ReadIniDword(entry.sourceOrigin, section, "FSProtocol");
         if (fsRaw >= 0) { fsProtoRaw = static_cast<DWORD>(fsRaw); hasFsProto = true; }
+
+        if (dependency) {
+            if (ReadIniDword(entry.sourceOrigin, section, "Tunnel") > 0) {
+                dependency->kind   = SessionDependency::Kind::Tunnel;
+                dependency->detail = PuttyUrlDecode(
+                    ReadIniString(entry.sourceOrigin, section, "TunnelHostName"));
+            } else if (ReadIniDword(entry.sourceOrigin, section, "ProxyMethod") > 0) {
+                dependency->kind   = SessionDependency::Kind::Proxy;
+                dependency->detail = PuttyUrlDecode(
+                    ReadIniString(entry.sourceOrigin, section, "ProxyHost"));
+            }
+        }
     }
 
     // Unsupported protocols (FTP/WebDAV/S3) fail LoadSettings so the

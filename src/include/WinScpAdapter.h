@@ -41,7 +41,8 @@ public:
     EnumerationResult EnumerateCustomPath(const std::string& path) override;
 
     bool LoadSettings(const ExternalSessionEntry& entry,
-                      pConnectSettings out) override;
+                      pConnectSettings out,
+                      SessionDependency* dependency) override;
 
     // WinSCP portable ships a `WinSCP.ini` file; pick that with a
     // file dialog.

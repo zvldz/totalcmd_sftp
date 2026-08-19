@@ -19,6 +19,21 @@ struct ExternalSessionEntry {
     std::string sourceOrigin;
 };
 
+// What the source says about reaching the host, beyond the fields we copy.
+// A session may depend on something we cannot reproduce — a proxy, a bastion,
+// a tunnel — and importing it without that dependency would send the next
+// connection straight to the target, past the very thing the user put in the
+// way. The adapter names the dependency here so the session can refuse
+// instead of quietly going around it.
+struct SessionDependency {
+    enum class Kind { None, Proxy, Bastion, Tunnel };
+
+    Kind        kind = Kind::None;
+    std::string detail;   // the record's name where the source gives one
+
+    bool blocks() const noexcept { return kind != Kind::None; }
+};
+
 // Adapter's verdict for one channel probe. Drives cache prune behaviour:
 // Unreachable → keep existing cached entries; OkEmpty → prune this channel;
 // OkWithSessions → replace this channel's cached entries with `sessions`.
@@ -78,7 +93,8 @@ public:
     // untouched — the plugin surfaces the standard interactive prompt on
     // first connect. Returns true on success.
     virtual bool LoadSettings(const ExternalSessionEntry& entry,
-                              pConnectSettings out) = 0;
+                              tConnectSettings* out,
+                              SessionDependency* dependency) = 0;
 
     // See CustomPathPickerKind. Consulted by BuildImportsSourceListing to
     // decide whether to surface [Add custom location…] at all, and by

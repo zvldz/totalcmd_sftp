@@ -518,8 +518,45 @@ EnumerationResult FileZillaAdapter::EnumerateCustomPath(const std::string& path)
     return r;
 }
 
+// FileZilla keeps one proxy for the whole program in `filezilla.xml`, beside
+// `sitemanager.xml`; a site says only whether it opts out. So the question
+// "does this site go through a proxy" is answered by two files, and a site
+// that opts out is unaffected however the global setting is configured.
+static bool GlobalProxyConfigured(const std::wstring& sitemanagerPath, std::string& hostOut)
+{
+    const size_t slash = sitemanagerPath.find_last_of(L'\\');
+    if (slash == std::wstring::npos)
+        return false;
+    const std::wstring settingsPath =
+        sitemanagerPath.substr(0, slash + 1) + L"filezilla.xml";
+
+    std::string text;
+    if (!ReadFileAsBytes(settingsPath, text))
+        return false;
+
+    // The settings file is a flat list of <Setting name="...">value</Setting>,
+    // so it is read by name rather than walked as a tree.
+    auto settingValue = [&text](const char* name) -> std::string {
+        const std::string open = std::string("<Setting name=\"") + name + "\">";
+        const size_t at = text.find(open);
+        if (at == std::string::npos)
+            return {};
+        const size_t from = at + open.size();
+        const size_t to = text.find('<', from);
+        return to == std::string::npos ? std::string() : text.substr(from, to - from);
+    };
+
+    const std::string type = settingValue("Proxy type");
+    if (type.empty() || std::atoi(type.c_str()) == 0)
+        return false;
+
+    hostOut = settingValue("Proxy host");
+    return true;
+}
+
 bool FileZillaAdapter::LoadSettings(const ExternalSessionEntry& entry,
-                                     pConnectSettings out)
+                                     pConnectSettings out,
+                                     SessionDependency* dependency)
 {
     if (!out) return false;
 
@@ -564,6 +601,14 @@ bool FileZillaAdapter::LoadSettings(const ExternalSessionEntry& entry,
 
     const std::string host = ChildText(*srv, "Host");
     if (host.empty()) return false;
+
+    if (dependency && ChildText(*srv, "BypassProxy") != "1") {
+        std::string proxyHost;
+        if (GlobalProxyConfigured(xmlPath, proxyHost)) {
+            dependency->kind   = SessionDependency::Kind::Proxy;
+            dependency->detail = proxyHost;
+        }
+    }
 
     const std::string portStr = ChildText(*srv, "Port");
     const int port = portStr.empty() ? 0 : std::atoi(portStr.c_str());

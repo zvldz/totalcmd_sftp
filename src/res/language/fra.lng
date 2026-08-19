@@ -369,6 +369,7 @@
 12118=Cette session appartient à un autre programme et ne peut pas être modifiée ici.\nF3 affiche ses paramètres, F5 la copie dans votre propre liste.
 12119= Session LAN Pair : 
 12120=Ces paramètres proviennent de la session '{}' et sont en lecture seule. Choisissez (aucune) dans la liste des jump hosts pour en configurer un ici.
+12121=Cette session atteint son hôte via un élément qui n'a pas été importé avec elle : un proxy, un jump host ou un tunnel. Se connecter maintenant irait droit à la cible, en contournant ce qui avait été placé sur le chemin ; c'est donc refusé.
 12089=SFTP
 12104=(aucune)
 12105= (introuvable)

@@ -368,6 +368,7 @@
 12118=Esta sessão pertence a outro programa e não pode ser editada aqui.\nPressione F3 para ver suas configurações ou F5 para copiá-la para a sua lista.
 12119= Sessão LAN Pair: 
 12120=Estas configurações vêm da sessão '{}' e são somente leitura. Escolha (nenhuma) na lista de jump hosts para configurar um aqui.
+12121=Esta sessão alcança seu host através de algo que não foi importado junto: um proxy, um jump host ou um túnel. Conectar agora iria direto ao destino, contornando justamente o que foi colocado no caminho, por isso é recusado.
 12089=SFTP
 12104=(nenhuma)
 12105= (ausente)

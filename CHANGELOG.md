@@ -12,6 +12,16 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 
 ### Features
 
+- **An imported session that needs a proxy or a bastion no longer
+  connects without one.** Sessions arriving from SecureCRT, PuTTY,
+  KiTTY, WinSCP and FileZilla carry only the fields the plugin can
+  reproduce, and a proxy, jump host or tunnel was not among them — so a
+  session that reached its host through one connected **straight to the
+  target** instead, which looks like success whenever the target also
+  answers from outside. Such a session now says what is missing and
+  refuses, on connect and on copying it out. The dependency itself
+  travels across in a later version.
+
 - **The help is one HTML page instead of a CHM.** The Help button now
   opens `SFTPplug-help.html` in your browser, and `Ctrl+F` searches
   every topic at once — the whole manual is a single page. This also

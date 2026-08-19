@@ -40,7 +40,8 @@ public:
     EnumerationResult EnumerateCustomPath(const std::string& path) override;
 
     bool LoadSettings(const ExternalSessionEntry& entry,
-                      pConnectSettings out) override;
+                      pConnectSettings out,
+                      SessionDependency* dependency) override;
 
     // SecureCRT sessions live in a directory tree
     // (%APPDATA%\VanDyke\Config\Sessions\ or any portable copy of it).

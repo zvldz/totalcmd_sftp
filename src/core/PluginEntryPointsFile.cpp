@@ -94,6 +94,44 @@ static bool CopyIniSectionAcrossFiles(LPCSTR srcSection, LPCSTR srcIni,
 // consumed as a session-import gesture: success, a user-visible validation
 // failure with an explanatory MessageBox, or a name collision. Callers must
 // return the wrapped value immediately.
+// A cached session that names a dependency we did not import must not be
+// served: connecting would reach the host directly, past the proxy or bastion
+// the source put in front of it, and look like success. The refusal names the
+// record where the source gave one, on a line of its own so the sentence
+// itself needs no grammar for it.
+static bool RefuseIfDependencyBlocks(const std::string& cacheSection)
+{
+    const std::string& cachePath = sftp::GetImportCache().CacheFilePath();
+    if (cacheSection.empty() || cachePath.empty())
+        return false;
+
+    const sftp::SessionDependency dep =
+        sftp::ImportCache::ReadDependency(cacheSection, cachePath);
+    if (!dep.blocks())
+        return false;
+
+    std::string text = LngStrU8(IDS_IMPORT_BLOCKED,
+        "This session reaches its host through something that was not imported "
+        "with it: a proxy, a jump host or a tunnel. Connecting now would go "
+        "straight to the target instead, past the very thing that was put in "
+        "the way, so it is refused.");
+    if (!dep.detail.empty())
+        text.append("\r\n\r\n").append(dep.detail);
+
+    const std::wstring message = unicode_util::utf8_to_wstring(text);
+    const std::wstring title   = unicode_util::utf8_to_wstring(
+        LngStrU8(IDS_SIMPORT_TITLE, "SFTP plugin - session import"));
+    if (RequestProcW) {
+        RequestProcW(PluginNumber, RT_MsgOK,
+                     const_cast<WCHAR*>(title.c_str()),
+                     const_cast<WCHAR*>(message.c_str()), nullptr, 0);
+    } else {
+        MessageBoxW(FindWindowA("TTOTAL_CMD", nullptr),
+                    message.c_str(), title.c_str(), MB_OK | MB_ICONSTOP);
+    }
+    return true;
+}
+
 static std::optional<int> TryImportSessionFromUpload(
     LPCWSTR LocalName, LPCWSTR RemoteName, BOOL OverWrite)
 {
@@ -303,6 +341,12 @@ static int MaterialiseVirtualSession(const std::string& sourceId,
     if (cacheSection.empty() || cachePath.empty())
         return FS_FILE_NOTFOUND;
 
+    // Materialising is not a way around the refusal: the copy would land in our
+    // own list as an ordinary session, where nothing records that it was meant
+    // to go through a bastion, and the first connect would go direct.
+    if (RefuseIfDependencyBlocks(cacheSection))
+        return FS_FILE_USERABORT;
+
     if (!CopyIniSectionAcrossFiles(cacheSection.c_str(), cachePath.c_str(),
                                     newDisplay.c_str(), inifilename))
     {
@@ -348,11 +392,13 @@ static void ApplyEnumerationToCache(sftp::IExternalSessionSource* adapter,
             std::vector<sftp::CacheWriteEntry> writes;
             writes.reserve(result.sessions.size());
             for (size_t i = 0; i < result.sessions.size(); ++i) {
-                if (!adapter->LoadSettings(result.sessions[i], &settingsStore[i]))
+                sftp::SessionDependency dependency;
+                if (!adapter->LoadSettings(result.sessions[i], &settingsStore[i], &dependency))
                     continue;
                 sftp::CacheWriteEntry w;
                 w.displayName = result.sessions[i].displayName;
                 w.settings    = &settingsStore[i];
+                w.dependency  = std::move(dependency);
                 writes.push_back(std::move(w));
             }
             sftp::GetImportCache().ReplaceChannel(sourceId, channelTag, writes);
@@ -565,6 +611,8 @@ int WINAPI FsExecuteFileW(HWND MainWin, LPWSTR RemoteName, LPCWSTR Verb)
                     if (cacheSection.empty() || cachePath.empty()) {
                         return FS_EXEC_OK;
                     }
+                    if (RefuseIfDependencyBlocks(cacheSection))
+                        return FS_EXEC_OK;
 
                     // TC-safe alias: no dots, brackets, slashes — TC treats
                     // it as a single-segment session name, so its toolbar
@@ -1161,6 +1209,12 @@ int WINAPI FsGetFileW(LPCWSTR RemoteName, LPWSTR LocalName, int CopyFlags, Remot
                     sftp::GetImportCache().CacheFilePath();
                 if (cacheSection.empty() || cachePath.empty())
                     return FS_FILE_NOTFOUND;
+
+                // The snippet would describe a session that reaches its host
+                // directly, and uploading it back is a supported way to create
+                // one, so the refusal covers the way out as well.
+                if (RefuseIfDependencyBlocks(cacheSection))
+                    return FS_FILE_USERABORT;
 
                 std::string header = "Imported session from [Imports]\\[";
                 header.append(sourceId).append("]\\").append(subPath);

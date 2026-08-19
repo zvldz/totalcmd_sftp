@@ -41,7 +41,8 @@ public:
     EnumerationResult EnumerateCustomPath(const std::string& path) override;
 
     bool LoadSettings(const ExternalSessionEntry& entry,
-                      pConnectSettings out) override;
+                      pConnectSettings out,
+                      SessionDependency* dependency) override;
 
     CustomPathPickerKind CustomPathPicker() const noexcept override
     { return CustomPathPickerKind::File; }

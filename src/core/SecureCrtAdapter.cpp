@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cstring>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace sftp {
@@ -177,7 +178,8 @@ EnumerationResult SecureCrtAdapter::EnumerateCustomPath(const std::string& path)
 }
 
 bool SecureCrtAdapter::LoadSettings(const ExternalSessionEntry& entry,
-                                     pConnectSettings out)
+                                     pConnectSettings out,
+                                     SessionDependency* dependency)
 {
     if (!out) return false;
 
@@ -196,6 +198,24 @@ bool SecureCrtAdapter::LoadSettings(const ExternalSessionEntry& entry,
     if (file.empty()) return false;
 
     FillConnectSettings(file, out);
+
+    // "Firewall Name" is how a session says it does not reach its host
+    // directly. It holds "None" when there is nothing in the way, and
+    // otherwise one of two forms: the name of a record under Firewalls\,
+    // which carries the address and credentials, or "Session:<path>" naming
+    // another SecureCRT session to tunnel through. Neither travels with the
+    // fields we copy, so both are reported and the session refuses instead of
+    // connecting straight to the target.
+    if (dependency) {
+        const std::string firewall = GetString(file, "Firewall Name");
+        if (!firewall.empty() && _stricmp(firewall.c_str(), "None") != 0) {
+            constexpr std::string_view kSessionForm = "Session:";
+            dependency->kind = SessionDependency::Kind::Bastion;
+            dependency->detail = firewall.starts_with(kSessionForm)
+                ? firewall.substr(kSessionForm.size())
+                : firewall;
+        }
+    }
     return true;
 }
 

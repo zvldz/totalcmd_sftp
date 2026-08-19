@@ -368,6 +368,7 @@
 12118=Această sesiune aparține altui program și nu poate fi editată aici.\nApăsați F3 pentru a-i vedea setările sau F5 pentru a o copia în lista proprie.
 12119= Sesiune LAN Pair: 
 12120=Aceste setări provin din sesiunea '{}' și sunt doar pentru citire. Alegeți (niciuna) în lista de jump host pentru a configura unul aici.
+12121=Această sesiune ajunge la gazdă prin ceva ce nu a fost importat împreună cu ea: un proxy, un jump host sau un tunel. Conectarea acum ar merge direct la țintă, ocolind tocmai ceea ce a fost pus în cale, așa că este refuzată.
 12089=SFTP
 12104=(niciuna)
 12105= (lipsește)

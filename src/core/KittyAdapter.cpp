@@ -331,7 +331,8 @@ EnumerationResult KittyAdapter::EnumerateCustomPath(const std::string& path)
 }
 
 bool KittyAdapter::LoadSettings(const ExternalSessionEntry& entry,
-                                 pConnectSettings out)
+                                 pConnectSettings out,
+                                 SessionDependency* dependency)
 {
     if (!out) return false;
 
@@ -377,6 +378,16 @@ bool KittyAdapter::LoadSettings(const ExternalSessionEntry& entry,
     DWORD enterSendsCrLf = 0;
     const bool hasEnterSendsCrLf = ReadKittyDword(filePath, "EnterSendsCrLf",
                                                     enterSendsCrLf);
+
+    // KiTTY inherits PuTTY's key names, so a non-zero method means the same
+    // thing here: the session goes through a proxy we are not copying.
+    DWORD proxyMethod = 0;
+    if (dependency && ReadKittyDword(filePath, "ProxyMethod", proxyMethod) && proxyMethod != 0) {
+        std::string proxyHost;
+        ReadKittyString(filePath, "ProxyHost", proxyHost);
+        dependency->kind   = SessionDependency::Kind::Proxy;
+        dependency->detail = PuttyUrlDecode(proxyHost);
+    }
 
     // Compose the connect fields.
     if (hasPort && port > 0 && port != 22) {

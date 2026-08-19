@@ -67,6 +67,19 @@ std::string ReadSourceTag(const std::string& section, const std::string& iniPath
     return buf.data();
 }
 
+// The dependency is stored under keys prefixed with `_`, the same shape the
+// channel tag uses: metadata about the row rather than a field of the session.
+const char* DependencyKindTag(SessionDependency::Kind kind)
+{
+    switch (kind) {
+        case SessionDependency::Kind::Proxy:   return "proxy";
+        case SessionDependency::Kind::Bastion: return "bastion";
+        case SessionDependency::Kind::Tunnel:  return "tunnel";
+        case SessionDependency::Kind::None:    break;
+    }
+    return "";
+}
+
 // Persist one adapter-produced session as an INI section.
 //
 // Contract: the adapter populates any subset of tConnectSettings it can
@@ -283,6 +296,32 @@ void ImportCache::EraseChannelLocked(const std::string& sourceId,
         m_sessions.end());
 }
 
+SessionDependency ImportCache::ReadDependency(const std::string& section,
+                                              const std::string& iniPath)
+{
+    SessionDependency out;
+    std::array<char, 32> kind{};
+    GetPrivateProfileStringA(section.c_str(), "_blocked", "",
+                              kind.data(), static_cast<DWORD>(kind.size()),
+                              iniPath.c_str());
+    if (!kind[0])
+        return out;
+
+    if (_stricmp(kind.data(), "proxy") == 0)
+        out.kind = SessionDependency::Kind::Proxy;
+    else if (_stricmp(kind.data(), "tunnel") == 0)
+        out.kind = SessionDependency::Kind::Tunnel;
+    else
+        out.kind = SessionDependency::Kind::Bastion;
+
+    std::array<char, 512> via{};
+    GetPrivateProfileStringA(section.c_str(), "_blockedvia", "",
+                              via.data(), static_cast<DWORD>(via.size()),
+                              iniPath.c_str());
+    out.detail = via.data();
+    return out;
+}
+
 void ImportCache::ReplaceChannel(const std::string& sourceId,
                                   const std::string& channel,
                                   const std::vector<CacheWriteEntry>& newSessions)
@@ -300,6 +339,15 @@ void ImportCache::ReplaceChannel(const std::string& sourceId,
         const std::string section =
             SectionName(sourceId, channel, w.displayName);
         WriteSessionSection(section, m_cachePath, w.settings, channel);
+        if (w.dependency.blocks()) {
+            WritePrivateProfileStringA(section.c_str(), "_blocked",
+                                        DependencyKindTag(w.dependency.kind),
+                                        m_cachePath.c_str());
+            if (!w.dependency.detail.empty())
+                WritePrivateProfileStringA(section.c_str(), "_blockedvia",
+                                            w.dependency.detail.c_str(),
+                                            m_cachePath.c_str());
+        }
         CachedSessionRef ref;
         ref.sourceId     = sourceId;
         ref.displayName  = w.displayName;

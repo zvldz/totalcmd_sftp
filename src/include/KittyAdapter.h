@@ -61,7 +61,8 @@ public:
     EnumerationResult EnumerateCustomPath(const std::string& path) override;
 
     bool LoadSettings(const ExternalSessionEntry& entry,
-                      pConnectSettings out) override;
+                      pConnectSettings out,
+                      SessionDependency* dependency) override;
 
     // KiTTY sessions live in a directory of per-session files.
     CustomPathPickerKind CustomPathPicker() const noexcept override

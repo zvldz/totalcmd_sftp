@@ -368,6 +368,7 @@
 12118=Deze sessie hoort bij een ander programma en kan hier niet worden bewerkt.\nDruk op F3 om de instellingen te zien of F5 om ze naar uw eigen lijst te kopiëren.
 12119= LAN Pair-sessie: 
 12120=Deze instellingen komen uit sessie '{}' en zijn alleen-lezen. Kies (geen) in de jump-hostlijst om hier een host in te stellen.
+12121=Deze sessie bereikt zijn host via iets dat niet is meegeïmporteerd: een proxy, een jump host of een tunnel. Nu verbinden zou rechtstreeks naar het doel gaan, langs precies datgene wat ertussen was gezet, en wordt daarom geweigerd.
 12089=SFTP
 12104=(geen)
 12105= (ontbreekt)

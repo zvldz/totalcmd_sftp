@@ -297,7 +297,8 @@ EnumerationResult PuttyAdapter::EnumerateCustomPath(const std::string& path)
 }
 
 bool PuttyAdapter::LoadSettings(const ExternalSessionEntry& entry,
-                                 pConnectSettings out)
+                                 pConnectSettings out,
+                                 SessionDependency* dependency)
 {
     if (!out) return false;
 
@@ -308,9 +309,9 @@ bool PuttyAdapter::LoadSettings(const ExternalSessionEntry& entry,
 
     // Field values, populated from whichever channel this entry came
     // from. Empty string / zero here means "field not present".
-    std::string host, userName, keyFile, lineCodePage;
-    DWORD       port = 0, useAgent = 0, enterSendsCrLf = 0;
-    bool        hasPort = false, hasEnterSendsCrLf = false;
+    std::string host, userName, keyFile, lineCodePage, proxyHost;
+    DWORD       port = 0, useAgent = 0, enterSendsCrLf = 0, proxyMethod = 0;
+    bool        hasPort = false, hasEnterSendsCrLf = false, hasProxyMethod = false;
 
     if (entry.sourceOrigin == "standard") {
         // Standard channel: fields live under
@@ -341,6 +342,8 @@ bool PuttyAdapter::LoadSettings(const ExternalSessionEntry& entry,
 
         ReadRegString(key, "LineCodePage", lineCodePage);
         hasEnterSendsCrLf = ReadRegDword(key, "EnterSendsCrLf", enterSendsCrLf);
+        hasProxyMethod = ReadRegDword(key, "ProxyMethod", proxyMethod);
+        ReadRegString(key, "ProxyHost", proxyHost);
         RegCloseKey(key);
     } else {
         // Custom channel: entry.sourceOrigin is the literal path to a
@@ -387,6 +390,18 @@ bool PuttyAdapter::LoadSettings(const ExternalSessionEntry& entry,
 
         pickString("LineCodePage", lineCodePage);
         pickDword("EnterSendsCrLf", enterSendsCrLf, hasEnterSendsCrLf);
+        pickDword("ProxyMethod", proxyMethod, hasProxyMethod);
+        pickString("ProxyHost", proxyHost);
+        proxyHost = PuttyUrlDecode(proxyHost);
+    }
+
+    // Anything but method zero means the session does not reach its host
+    // directly. Which method it is decides how a proxy would be recreated,
+    // which is a question for the day we recreate one; that it is set at all
+    // is what stops the session connecting past it now.
+    if (dependency && hasProxyMethod && proxyMethod != 0) {
+        dependency->kind   = SessionDependency::Kind::Proxy;
+        dependency->detail = proxyHost;
     }
 
     // Compose the connect fields the cache writer will persist. The

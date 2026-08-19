@@ -73,7 +73,8 @@ public:
     EnumerationResult EnumerateCustomPath(const std::string& path) override;
 
     bool LoadSettings(const ExternalSessionEntry& entry,
-                      pConnectSettings out) override;
+                      pConnectSettings out,
+                      SessionDependency* dependency) override;
 
     // Portable channel points at a `sitemanager.xml` file directly.
     CustomPathPickerKind CustomPathPicker() const noexcept override

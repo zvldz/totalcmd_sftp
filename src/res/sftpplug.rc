@@ -775,6 +775,7 @@ BEGIN
     IDS_DLG_PERMISSIONS_GROUP 
                             " User &rights of newly created files/directories: "
     IDS_JUMP_FROM_SESSION   "These settings come from session '{}' and are shown read-only. Pick (none) in the jump-host list to configure a host here instead."
+    IDS_IMPORT_BLOCKED      "This session reaches its host through something that was not imported with it: a proxy, a jump host or a tunnel. Connecting now would go straight to the target instead, past the very thing that was put in the way, so it is refused."
     IDS_DLG_LANPAIR_GROUP   " LAN Pair Session: "
     IDS_DLG_FILEMOD         "New files (Upload):"
     IDS_DLG_DIRMOD          "New folders:"

@@ -368,6 +368,7 @@
 12118=Ez a munkamenet egy másik programhoz tartozik, itt nem szerkeszthető.\nAz F3 megmutatja a beállításait, az F5 a saját listájába másolja.
 12119= LAN Pair munkamenet: 
 12120=Ezek a beállítások a(z) '{}' munkamenetből származnak, és csak olvashatók. Válassza a (nincs) elemet a jump-host listában, ha itt szeretne megadni egyet.
+12121=Ez a munkamenet olyasmin keresztül éri el a kiszolgálót, ami nem került vele együtt importálásra: proxy, jump host vagy alagút. A csatlakozás most közvetlenül a célhoz menne, megkerülve azt, amit az útba állítottak, ezért elutasításra kerül.
 12089=SFTP
 12104=(nincs)
 12105= (hiányzik)

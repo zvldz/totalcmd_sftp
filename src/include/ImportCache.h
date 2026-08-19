@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 
+#include "IExternalSessionSource.h"
+
 struct tConnectSettings;
 typedef tConnectSettings* pConnectSettings;
 
@@ -24,6 +26,7 @@ struct CachedSessionRef {
 struct CacheWriteEntry {
     std::string             displayName;
     const tConnectSettings* settings;
+    SessionDependency       dependency;   // why the session must refuse, if it must
 };
 
 class ImportCache {
@@ -53,6 +56,12 @@ public:
     // Returns empty string if the session is not cached.
     std::string SectionNameForConnect(const std::string& sourceId,
                                        const std::string& displayName) const;
+
+    // The dependency a cached session cannot be served without, empty when it
+    // has none. Read straight from the section so callers that already hold
+    // one do not need the in-memory map.
+    static SessionDependency ReadDependency(const std::string& section,
+                                            const std::string& iniPath);
 
     // List all sessions currently cached for the given source. Called during
     // FsFindFirst on [Imports]\[<Source>]\.

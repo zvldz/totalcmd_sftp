@@ -527,6 +527,7 @@
 #define IDS_DLG_LANPAIR_GROUP           12119   // caption of the LAN Pair group box
 #define IDC_JUMP_FROM_SESSION           1088   // static: which session these settings come from
 #define IDS_JUMP_FROM_SESSION           12120  // static: settings taken from a session
+#define IDS_IMPORT_BLOCKED              12121  // refusal: session depends on something not imported
 
 // Next default values for new objects
 //
