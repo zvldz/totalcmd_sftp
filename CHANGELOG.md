@@ -23,6 +23,12 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 
 ### Fixes
 
+- **The help now says which way of disconnecting actually works.** Close
+  a session from inside it, or press F8 on its row in `[Active
+  Sessions]`. The toolbar button pressed from the plugin root or a magic
+  folder leaves the connection open — Total Commander never tells the
+  plugin about that click, so nothing can act on it.
+
 - **The LAN Pair box on the connection dialog is translated.** It kept
   its English caption in every language, because it was the one group
   box missing from the table that drives runtime translation — the mode
