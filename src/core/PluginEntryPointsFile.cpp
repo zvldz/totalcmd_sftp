@@ -17,6 +17,7 @@
 #include "ServerRegistry.h"
 #include "UnicodeHelpers.h"
 #include "PluginEntryPoints.h"
+#include "ConnectionDialog.h"
 #include "ProfileSettings.h"
 #include "DllExceptionBarrier.h"
 #include "LanPairSession.h"
@@ -454,6 +455,19 @@ int WINAPI FsExecuteFileW(HWND MainWin, LPWSTR RemoteName, LPCWSTR Verb)
             //   2. A live session row — Enter is a silent no-op so an
             //      accidental arrow-and-Enter doesn't kill a connection.
             //      F8 stays the deliberate disconnect gesture.
+            // Enter on a row inside [Proxies] opens that record's editor. The
+            // row name begins with the record's number, which is what makes
+            // the row identify a record even after other records come and go.
+            {
+                std::string proxyEntry;
+                if (IsProxiesPath(RemoteName, &proxyEntry) && !proxyEntry.empty()) {
+                    const int proxynr = ProxyNrFromRowName(proxyEntry);
+                    if (proxynr > 0)
+                        ShowProxyRecordDialog(proxynr, inifilename);
+                    return FS_EXEC_OK;
+                }
+            }
+
             {
                 std::string activeEntry;
                 if (IsActiveSessionsPath(RemoteName, &activeEntry)) {
@@ -1554,6 +1568,35 @@ BOOL WINAPI FsDeleteFileW(LPCWSTR RemoteName)
         // F8 on a row inside the [Active Sessions] magic folder → disconnect
         // that session (not delete it from INI). Resolved before the path
         // resolver because none of these paths correspond to a saved session.
+        // F8 on a row inside [Proxies] removes that record. Sessions still
+        // pointing at it block the removal and are named, the same rule the
+        // connection dialog applies — with no session of its own to excuse,
+        // since the folder is not editing one.
+        {
+            std::string proxyEntry;
+            if (IsProxiesPath(RemoteName, &proxyEntry) && !proxyEntry.empty()) {
+                const int proxynr = ProxyNrFromRowName(proxyEntry);
+                if (proxynr <= 0)
+                    return FS_FILE_NOTSUPPORTED;
+
+                std::string inUse = LngStrU8(IDS_ERROR_INUSE, "Proxy is in use by connection:");
+                inUse.append("\r\n");
+                inUse.resize(1024, '\0');
+                if (DeleteProxy(proxynr, "", inifilename, inUse.data(), inUse.size() - 1))
+                    return FS_FILE_OK;
+
+                const std::wstring message = unicode_util::utf8_to_wstring(inUse.c_str());
+                if (RequestProcW) {
+                    RequestProcW(PluginNumber, RT_MsgOK, L"SFTP",
+                                 const_cast<WCHAR*>(message.c_str()), nullptr, 0);
+                } else {
+                    MessageBoxW(FindWindowA("TTOTAL_CMD", nullptr),
+                                message.c_str(), L"SFTP", MB_OK | MB_ICONSTOP);
+                }
+                return FS_FILE_NOTSUPPORTED;
+            }
+        }
+
         {
             std::string entry;
             if (IsActiveSessionsPath(RemoteName, &entry) && !entry.empty()) {

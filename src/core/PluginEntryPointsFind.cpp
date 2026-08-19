@@ -16,6 +16,8 @@
 #include "ServerRegistry.h"
 #include "UnicodeHelpers.h"
 #include "PluginEntryPoints.h"
+#include "ConnectionDialog.h"
+#include "ProfileSettings.h"
 #include "DllExceptionBarrier.h"
 #include "LanPairSession.h"
 #include "PluginEntryPointsInternal.h"
@@ -92,7 +94,9 @@ struct PluginFolderEntry {
         ImportsUmbrella,  // [Imports] in the plugin root (directory)
         ImportSource,     // [SecureCRT] etc. inside [Imports] (directory)
         ImportSession,    // cached virtual session inside a source (plain file)
-        ImportPseudo      // [Refresh]/[Add custom...]/[Manage custom locations]
+        ImportPseudo,     // [Refresh]/[Add custom...]/[Manage custom locations]
+        ProxiesUmbrella,  // [Proxies] in the plugin root (directory)
+        ProxyRecord       // one proxy record inside [Proxies] (plain file)
     } kind = Kind::Session;
     DWORD       helpFileSize   = 0;      // Pseudo only — used as nFileSizeLow.
     bool        pseudoAsFolder = false;  // ImportPseudo only — true for [Manage
@@ -300,6 +304,14 @@ static void FillFindDataFromPluginEntry(WIN32_FIND_DATAW& fd, const PluginFolder
             // materialise in FsRenMovFile.
             fd.dwFileAttributes = FILE_ATTRIBUTE_NORMAL;
             break;
+        case PluginFolderEntry::Kind::ProxiesUmbrella:
+            fd.dwFileAttributes = FILE_ATTRIBUTE_DIRECTORY;
+            break;
+        case PluginFolderEntry::Kind::ProxyRecord:
+            // Plain file: Enter reaches FsExecuteFile, where the record's
+            // editor opens, and F8 reaches FsDeleteFileW to remove it.
+            fd.dwFileAttributes = FILE_ATTRIBUTE_NORMAL;
+            break;
         case PluginFolderEntry::Kind::ImportPseudo:
             // pseudoAsFolder=true → [Manage custom locations] (a real
             // sub-listing lives inside). pseudoAsFolder=false → [Refresh]
@@ -413,6 +425,17 @@ static HANDLE BuildPluginFolderListing(const std::string& folderPrefix,
         imports.name = kImportsFolder;
         imports.kind = PluginFolderEntry::Kind::ImportsUmbrella;
         state->entries.push_back(std::move(imports));
+    }
+
+    // At root, always expose [Proxies]. Unconditional for the same reason the
+    // imports umbrella is: an empty list is where the first record gets made,
+    // and a folder that appears only once a record exists offers nowhere to
+    // make one.
+    if (isRoot) {
+        PluginFolderEntry proxies;
+        proxies.name = kProxiesFolder;
+        proxies.kind = PluginFolderEntry::Kind::ProxiesUmbrella;
+        state->entries.push_back(std::move(proxies));
     }
 
     EmitDedupBuckets(buckets, state->entries);
@@ -661,12 +684,13 @@ static HANDLE BuildImportsUmbrellaListing(WIN32_FIND_DATAW* FindData)
     return static_cast<HANDLE>(lf.release());
 }
 
-// See PluginEntryPointsInternal.h for the contract.
-bool IsActiveSessionsPath(LPCWSTR path, std::string* outEntry)
+// Shared body of the magic-folder path classifiers: they differ only in
+// which folder name they match.
+static bool IsMagicFolderPath(LPCWSTR path, const wchar_t* folderNameW, std::string* outEntry)
 {
     if (!path || path[0] != L'\\') return false;
     const std::wstring_view view(path + 1);  // strip leading '\\'
-    const std::wstring_view magic(kActiveSessionsFolderW);
+    const std::wstring_view magic(folderNameW);
     if (view.size() < magic.size()) return false;
     if (_wcsnicmp(view.data(), magic.data(), magic.size()) != 0) return false;
     const std::wstring_view after = view.substr(magic.size());
@@ -691,6 +715,61 @@ bool IsActiveSessionsPath(LPCWSTR path, std::string* outEntry)
         std::replace(outEntry->begin(), outEntry->end(), '\\', '/');
     }
     return true;
+}
+
+// See PluginEntryPointsInternal.h for the contracts.
+bool IsActiveSessionsPath(LPCWSTR path, std::string* outEntry)
+{
+    return IsMagicFolderPath(path, kActiveSessionsFolderW, outEntry);
+}
+
+bool IsProxiesPath(LPCWSTR path, std::string* outEntry)
+{
+    return IsMagicFolderPath(path, kProxiesFolderW, outEntry);
+}
+
+int ProxyNrFromRowName(const std::string& rowName)
+{
+    int nr = 0;
+    size_t i = 0;
+    for (; i < rowName.size() && rowName[i] >= '0' && rowName[i] <= '9'; ++i)
+        nr = nr * 10 + (rowName[i] - '0');
+    // A row always reads "<number>: ...", so a name without that colon after
+    // its digits is some other string that merely starts with a number.
+    return (i > 0 && i < rowName.size() && rowName[i] == ':') ? nr : 0;
+}
+
+// Every proxy record, one row each. A record switched off describes as empty
+// and stays out, exactly as it stays out of the connection dialog's list.
+static HANDLE BuildProxiesListing(WIN32_FIND_DATAW* FindData)
+{
+    auto state = std::make_unique<PluginFolderFindState>();
+    for (const int proxynr : EnumerateProxyNumbers(inifilename)) {
+        const std::wstring label = DescribeProxyRecordW(proxynr, inifilename);
+        if (label.empty())
+            continue;
+        PluginFolderEntry e;
+        e.name = unicode_util::wstring_to_utf8(label);
+        e.kind = PluginFolderEntry::Kind::ProxyRecord;
+        state->entries.push_back(std::move(e));
+    }
+
+    auto lf = std::make_unique<tLastFindStuct>();
+    lf->sftpdataptr    = state.release();
+    lf->serverid       = nullptr;
+    lf->rootfindhandle = nullptr;
+    lf->rootfindfirst  = false;
+    lf->isLanPair      = false;
+    lf->isPluginFolder = true;
+
+    auto* st = static_cast<PluginFolderFindState*>(lf->sftpdataptr);
+    if (st->entries.empty()) {
+        SetLastError(ERROR_NO_MORE_FILES);
+        return static_cast<HANDLE>(lf.release());
+    }
+    FillFindDataFromPluginEntry(*FindData, st->entries[0]);
+    st->index = 1;
+    return static_cast<HANDLE>(lf.release());
 }
 
 namespace {
@@ -804,6 +883,14 @@ HANDLE WINAPI FsFindFirstW(LPCWSTR Path, LPWIN32_FIND_DATAW FindData)
         // connected sessions. Detected before the resolver because the path
         // doesn't correspond to any saved session and would otherwise fall
         // through into the implicit-connect branch.
+        {
+            std::string proxyEntry;
+            if (IsProxiesPath(Path, &proxyEntry) && proxyEntry.empty()) {
+                *FindData = {};
+                return BuildProxiesListing(FindData);
+            }
+        }
+
         {
             std::string trailingEntry;
             if (IsActiveSessionsPath(Path, &trailingEntry) && trailingEntry.empty()) {
@@ -1167,6 +1254,17 @@ BOOL WINAPI FsMkDirW(LPCWSTR Path)
         // virtual session into their own INI with F5 (materialise).
         if (IsImportsPath(Path))
             return false;
+
+        // F7 inside [Proxies] creates a record instead of a folder. TC has
+        // already asked for a name and it is ignored: a record is identified
+        // by its number and described by its own settings, so the editor
+        // decides what the row will read. Cancelling the editor leaves
+        // nothing behind, which is why the return value follows it.
+        {
+            std::string proxyEntry;
+            if (IsProxiesPath(Path, &proxyEntry))
+                return CreateProxyRecordDialog(inifilename) != 0;
+        }
 
         // Folder-aware routing: classify the path via the resolver.
         // SessionWithSubpath → real server-side mkdir on the remote.

@@ -59,6 +59,24 @@ inline constexpr const char*    kDisconnectAllEntry    = "[Disconnect All]";
 // Implementation in PluginEntryPointsFind.cpp.
 bool IsActiveSessionsPath(LPCWSTR path, std::string* outEntry = nullptr);
 
+// Magic virtual-folder listing the proxy records every session can point at.
+// Always present: it is where a first record is created, with F7. A row is
+// one record, named by the same description the connection dialog shows in
+// its dropdown, which begins with the record's number. Enter edits a record,
+// F8 deletes one.
+inline constexpr const char*    kProxiesFolder  = "[Proxies]";
+inline constexpr const wchar_t* kProxiesFolderW = L"[Proxies]";
+
+// Path classifier for [Proxies], shaped like IsActiveSessionsPath: true for
+// the folder itself, with `outEntry` cleared, or for a row inside it, with the
+// row's name written to `outEntry`.
+bool IsProxiesPath(LPCWSTR path, std::string* outEntry = nullptr);
+
+// The record number a [Proxies] row name begins with, or 0 when the name does
+// not start with one. Row names are built by DescribeProxyRecordW, so the
+// number is always the leading digits before ':'.
+int ProxyNrFromRowName(const std::string& rowName);
+
 // Umbrella folder in the plugin root that groups every known import source
 // under a single entry, avoiding one-folder-per-source clutter in the root.
 // Its children are the registered adapters' FolderName() values (always all

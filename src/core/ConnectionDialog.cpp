@@ -1942,47 +1942,60 @@ static int GetProxyNrFromCombo(HWND hWnd)
     return (data == CB_ERR || data < 0) ? 0 : static_cast<int>(data);
 }
 
+// How one proxy record reads in a list: its number, its kind and the server it
+// points at. The number leads because it is the record's identity — sessions,
+// exports and imports all refer to a record by it — and because it is what the
+// [Proxies] folder parses back out of a row name. Returns an empty string for
+// a slot that exists but is switched off, which no list should show.
+std::wstring DescribeProxyRecordW(int proxynr, LPCSTR iniFileName)
+{
+    tConnectSettings data;
+    if (!LoadProxySettingsFromNr(proxynr, &data, iniFileName))
+        return {};
+    if (data.proxytype == sftp::Proxy::notused)
+        return {};
+
+    std::wstring out = std::format(L"{}: ", proxynr);
+    switch (data.proxytype) {
+    case sftp::Proxy::http: {
+        std::array<WCHAR, 100> httpproxy{};
+        LngLoadStringW(hinst, IDS_HTTP_PROXY, httpproxy.data(), static_cast<int>(httpproxy.size()));
+        out += httpproxy.data();
+        break;
+    }
+    case sftp::Proxy::socks4: out += L"SOCKS4a: "; break;
+    case sftp::Proxy::socks5: out += L"SOCKS5: ";  break;
+    default: break;
+    }
+
+    std::array<WCHAR, 256> serverW{};
+    awlcopy(serverW.data(), data.proxyserver.c_str(), serverW.size() - 1);
+    out += serverW.data();
+    return out;
+}
+
 void fillProxyCombobox(HWND hWnd, int defproxynr, LPCSTR iniFileName)
 {
     SendDlgItemMessageW(hWnd, IDC_PROXYCOMBO, CB_RESETCONTENT, 0, 0);
     std::array<WCHAR, 100> noproxy{};
     std::array<WCHAR, 100> addproxy{};
-    std::array<WCHAR, 100> httpproxy{};
     std::array<WCHAR, 256> buf{};
     LngLoadStringW(hinst, IDS_NO_PROXY,   noproxy.data(),   static_cast<int>(noproxy.size()));
-    LngLoadStringW(hinst, IDS_HTTP_PROXY, httpproxy.data(), static_cast<int>(httpproxy.size()));
     LngLoadStringW(hinst, IDS_ADD_PROXY,  addproxy.data(),  static_cast<int>(addproxy.size()));
 
     // Item 0: "No proxy" — itemdata=0
     LRESULT i0 = SendDlgItemMessageW(hWnd, IDC_PROXYCOMBO, CB_ADDSTRING, 0, (LPARAM)noproxy.data());
     SendDlgItemMessageW(hWnd, IDC_PROXYCOMBO, CB_SETITEMDATA, i0, 0);
 
-    tConnectSettings connectData;
+    // "notused" slots describe as empty and stay out of the list, where they
+    // would read as a second "No proxy".
     for (const int proxynr : EnumerateProxyNumbers(iniFileName)) {
-        if (!LoadProxySettingsFromNr(proxynr, &connectData, iniFileName))
+        const std::wstring label = DescribeProxyRecordW(proxynr, iniFileName);
+        if (label.empty())
             continue;
-        // Skip "notused" slots — they appear as duplicate "No proxy" and confuse users.
-        if (connectData.proxytype != sftp::Proxy::notused) {
-            wcslcpy(buf.data(), std::format(L"{}: ", proxynr).c_str(), buf.size() - 1);
-            switch (connectData.proxytype) {
-            case sftp::Proxy::http:
-                wcslcat(buf.data(), httpproxy.data(), buf.size()-1);
-                break;
-            case sftp::Proxy::socks4:
-                wcslcat(buf.data(), L"SOCKS4a: ", buf.size()-1);
-                break;
-            case sftp::Proxy::socks5:
-                wcslcat(buf.data(), L"SOCKS5: ", buf.size()-1);
-                break;
-            default:
-                break;
-            }
-            std::array<WCHAR, 256> proxyW{};
-            awlcopy(proxyW.data(), connectData.proxyserver.c_str(), proxyW.size() - 1);
-            wcslcat(buf.data(), proxyW.data(), buf.size()-1);
-            LRESULT iN = SendDlgItemMessageW(hWnd, IDC_PROXYCOMBO, CB_ADDSTRING, 0, (LPARAM)buf.data());
-            SendDlgItemMessageW(hWnd, IDC_PROXYCOMBO, CB_SETITEMDATA, iN, proxynr);
-        }
+        wcslcpy(buf.data(), label.c_str(), buf.size() - 1);
+        LRESULT iN = SendDlgItemMessageW(hWnd, IDC_PROXYCOMBO, CB_ADDSTRING, 0, (LPARAM)buf.data());
+        SendDlgItemMessageW(hWnd, IDC_PROXYCOMBO, CB_SETITEMDATA, iN, proxynr);
     }
 
     // Last item: "Add new proxy" — itemdata=-1 (sentinel, not a real proxy slot)
@@ -2122,6 +2135,35 @@ static int NextFreeProxyNr(LPCSTR iniFileName)
         hdl = FindNextServer(hdl, name.data(), name.size() - 1);
     }
     return highest + 1;
+}
+
+// Open the editor for one proxy record with no session behind it. The
+// connection dialog passes the session it is editing so the password-manager
+// box can follow that session's own choice; the [Proxies] folder has no
+// session to speak for, and the dialog copes with that.
+bool ShowProxyRecordDialog(int proxynr, LPCSTR iniFileName)
+{
+    if (proxynr <= 0 || !iniFileName)
+        return false;
+
+    ProxyDialogContext proxyCtx;
+    proxyCtx.proxynr = proxynr;
+    proxyCtx.ownerConnectResults = nullptr;
+    proxyCtx.iniFileName = iniFileName;
+    return IDOK == ShowLocalizedDialogBoxParam(IDD_PROXY, GetActiveWindow(),
+                                               ProxyDlgProc, (LPARAM)&proxyCtx);
+}
+
+// Same editor on a number nothing uses yet. Returns the number the record was
+// created under, or 0 when the user backed out — the caller needs it to select
+// or refresh the row it just made.
+int CreateProxyRecordDialog(LPCSTR iniFileName)
+{
+    if (!iniFileName)
+        return 0;
+
+    const int proxynr = NextFreeProxyNr(iniFileName);
+    return ShowProxyRecordDialog(proxynr, iniFileName) ? proxynr : 0;
 }
 
 static void OnProxyButtonCommand(HWND hWnd, pConnectSettings dlgConnectResults, ConnectDialogContext* dlgCtx)
