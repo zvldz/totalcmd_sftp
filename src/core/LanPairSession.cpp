@@ -22,6 +22,7 @@
 #include <chrono>
 #include <mutex>
 #include <algorithm>
+#include <memory>
 #include <thread>
 #include <vector>
 #include <string>
@@ -808,8 +809,16 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
     std::string         password_;
     std::atomic<bool>   trustedInstaller_{false};
 
-    std::mutex               clientThreadsMu_;
-    std::vector<std::thread> clientThreads_;
+    // A finished std::thread stays joinable until someone joins it, so the
+    // thread object cannot say on its own whether the work is over. The flag
+    // does, and the accept loop uses it to clear out the ones that are done.
+    struct ClientWorker {
+        std::thread                        thread;
+        std::shared_ptr<std::atomic<bool>> done;
+    };
+
+    std::mutex                clientThreadsMu_;
+    std::vector<ClientWorker> clientThreads_;
 
     static constexpr char kDefaultPeerId[] = "lanfilesrv";
 
@@ -1180,25 +1189,35 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
 
             {
                 std::lock_guard<std::mutex> lk(clientThreadsMu_);
+                for (auto& w : clientThreads_) {
+                    if (w.done->load(std::memory_order_acquire) && w.thread.joinable())
+                        w.thread.join();
+                }
                 clientThreads_.erase(
                     std::remove_if(clientThreads_.begin(), clientThreads_.end(),
-                                   [](std::thread& t) { return !t.joinable(); }),
+                                   [](const ClientWorker& w) { return !w.thread.joinable(); }),
                     clientThreads_.end());
             }
 
             auto self = shared_from_this();
+            auto done = std::make_shared<std::atomic<bool>>(false);
             std::lock_guard<std::mutex> lk(clientThreadsMu_);
-            clientThreads_.emplace_back([self, client] {
-                sftp::DllExceptionBarrier barrier;
-                sftp::dll_invoke_void(barrier, [self, client] { self->handleClient(client); });
-            });
+            clientThreads_.push_back(ClientWorker{
+                std::thread([self, client, done] {
+                    {
+                        sftp::DllExceptionBarrier barrier;
+                        sftp::dll_invoke_void(barrier, [self, client] { self->handleClient(client); });
+                    }
+                    done->store(true, std::memory_order_release);
+                }),
+                std::move(done)});
         }
     }
 
     void joinClientThreads() {
         std::lock_guard<std::mutex> lk(clientThreadsMu_);
-        for (auto& t : clientThreads_)
-            if (t.joinable()) t.join();
+        for (auto& w : clientThreads_)
+            if (w.thread.joinable()) w.thread.join();
         clientThreads_.clear();
     }
 };

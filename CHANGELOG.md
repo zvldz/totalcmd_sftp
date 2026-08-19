@@ -20,6 +20,12 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   `Ita` came out Italian whatever it was named. Spotted in the
   numbereleven-a fork.
 
+- **LAN Pair no longer accumulates a thread per client for the life of
+  the session.** The accept loop meant to drop finished worker threads
+  but tested them with `joinable()`, which stays true until a thread is
+  joined — so nothing was ever dropped and every connection left one
+  behind until disconnect. Spotted in the numbereleven-a fork.
+
 ## 10.0.2.0 — 2026-08-19
 
 ### Features
