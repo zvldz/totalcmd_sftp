@@ -638,8 +638,10 @@ int SftpConnect(pConnectSettings ConnectSettings)
     if (jumpCfg.status != JumpConfigStatus::Disabled &&
         jumpCfg.status != JumpConfigStatus::Ready) {
         ShowStatus(jumpCfg.error.c_str());
-        if (ConnectSettings->feedback)
+        if (ConnectSettings->feedback && !ConnectSettings->jump_refusal_shown) {
+            ConnectSettings->jump_refusal_shown = true;
             ConnectSettings->feedback->ShowError(jumpCfg.error, "ProxyJump");
+        }
         return fail(-25);
     }
 

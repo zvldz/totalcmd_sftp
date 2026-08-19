@@ -12,6 +12,14 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 
 ### Fixes
 
+- **A session whose jump host cannot be resolved says so once, not on
+  every reconnect.** When the bastion is missing — a deleted reference,
+  or the checkbox left on with nothing filled in — the plugin refuses to
+  connect rather than going straight to the target. The refusal is right;
+  raising a dialog for it on each of the reconnects that run mid-transfer
+  was not. It now appears once per connection and goes to the status line
+  after that.
+
 - **The interface language is taken from the language file's name, not
   from the path leading to it.** Total Commander's `LanguageIni` may
   hold a full path, and the whole string was searched for a language

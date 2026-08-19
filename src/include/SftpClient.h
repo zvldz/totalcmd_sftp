@@ -159,6 +159,10 @@ struct tConnectSettings {
     // here rather than in JumpHostSettings because that struct is rebuilt on
     // every connect, which would make each reconnect prompt again.
     std::string    jump_key_passphrase;
+    // A refused jump host is reported with a dialog once per connection and
+    // by status line after that: the reconnects that run mid-transfer would
+    // otherwise stack a modal per attempt, on whatever thread they happen on.
+    bool           jump_refusal_shown = false;
     // When non-empty, jump host params (host/port/user/password/keys/useagent)
     // are taken from the referenced saved session at connect time, ignoring
     // the manual jump_* fields above. Stored in INI as `jumpsessionref=<name>`.
