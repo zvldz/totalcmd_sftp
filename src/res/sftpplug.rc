@@ -774,6 +774,7 @@ BEGIN
     IDS_DLG_ENCODING        "Encoding (codepage) of file names:"
     IDS_DLG_PERMISSIONS_GROUP 
                             " User &rights of newly created files/directories: "
+    IDS_DLG_LANPAIR_GROUP   " LAN Pair Session: "
     IDS_DLG_FILEMOD         "New files (Upload):"
     IDS_DLG_DIRMOD          "New folders:"
     IDS_DLG_SESSION         "Session:"

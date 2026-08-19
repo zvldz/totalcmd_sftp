@@ -12,6 +12,12 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 
 ### Fixes
 
+- **The LAN Pair box on the connection dialog is translated.** It kept
+  its English caption in every language, because it was the one group
+  box missing from the table that drives runtime translation — the mode
+  switch shows it in place of the file-rights box, so the dialog looked
+  translated in three transfer modes and half-translated in the fourth.
+
 - **A session whose jump host cannot be resolved says so once, not on
   every reconnect.** When the bastion is missing — a deleted reference,
   or the checkbox left on with nothing filled in — the plugin refuses to

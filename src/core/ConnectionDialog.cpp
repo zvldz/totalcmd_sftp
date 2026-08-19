@@ -2165,6 +2165,7 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
         { IDC_SYSTEMLABEL,        IDS_DLG_SYSTEM            },
         { IDC_CODEPAGELABEL,      IDS_DLG_ENCODING          },
         { IDC_PERMISSIONS_GROUP,  IDS_DLG_PERMISSIONS_GROUP },
+        { IDC_LANPAIR_GROUP,      IDS_DLG_LANPAIR_GROUP     },
         { IDC_FILEMOD_LABEL,      IDS_DLG_FILEMOD           },
         { IDC_DIRMOD_LABEL,       IDS_DLG_DIRMOD            },
         { IDC_LABEL_SESSION,      IDS_DLG_SESSION           },
