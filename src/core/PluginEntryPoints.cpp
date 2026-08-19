@@ -893,7 +893,7 @@ static int TryExtractImportIcon(LPCSTR RemoteName, int ExtractFlags, HICON* TheI
     // dron\hz-1) get the same padlock glyph as real saved sessions so the
     // user reads them as sessions. The distinguisher against nested folder
     // segments (dron, my, ...) is a direct match against
-    // ImportCache::ListSource — only leaf sessions have an entry there.
+    // ImportCache — only leaf sessions have an entry there.
     // Skip when subPath is under the [Manage custom locations] sub-tree.
     const std::string managePrefix = std::string(kManageCustomFolder) + "/";
     if (subPath == kManageCustomFolder ||
@@ -901,13 +901,10 @@ static int TryExtractImportIcon(LPCSTR RemoteName, int ExtractFlags, HICON* TheI
     {
         return FS_ICON_USEDEFAULT;
     }
-    const auto sessions = sftp::GetImportCache().ListSource(sourceId);
-    for (const auto& s : sessions) {
-        if (_stricmp(s.displayName.c_str(), subPath.c_str()) == 0) {
-            LPCSTR name = MAKEINTRESOURCEA(sm ? IDI_ICON1SMALL : IDI_ICON1);
-            *TheIcon = LoadIconA(hinst, name);
-            return FS_ICON_EXTRACTED;
-        }
+    if (sftp::GetImportCache().HasSession(sourceId, subPath)) {
+        LPCSTR name = MAKEINTRESOURCEA(sm ? IDI_ICON1SMALL : IDI_ICON1);
+        *TheIcon = LoadIconA(hinst, name);
+        return FS_ICON_EXTRACTED;
     }
     return FS_ICON_USEDEFAULT;
 }

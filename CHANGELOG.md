@@ -42,6 +42,13 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   until the buffer is gone. Re-upload `sftp.php` to pick this up.
   Spotted in the numbereleven-a fork.
 
+### Internal
+
+- Drawing an `[Imports]` folder no longer copies the whole cached
+  session list once per row; the cache answers whether a row is a
+  session directly. On a source holding a few hundred sessions that was
+  hundreds of thousands of string allocations per repaint.
+
 ## 10.0.2.0 — 2026-08-19
 
 ### Features

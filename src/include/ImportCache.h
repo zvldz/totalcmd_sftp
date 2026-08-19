@@ -58,6 +58,12 @@ public:
     // FsFindFirst on [Imports]\[<Source>]\.
     std::vector<CachedSessionRef> ListSource(const std::string& sourceId) const;
 
+    // Answers the one question the icon handler asks, without handing out a
+    // copy of the whole list to search. That path runs once per row, so a
+    // copy there costs three string allocations per cached session per row.
+    bool HasSession(const std::string& sourceId,
+                    const std::string& displayName) const;
+
     // Replace all cached sessions for (sourceId, channel) with `newSessions`.
     // Corresponds to a refresh whose channel result was OkWithSessions.
     // Wipes the affected `[__import.<sourceId>.<channelHash>.*]` sections

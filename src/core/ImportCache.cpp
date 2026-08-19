@@ -248,6 +248,18 @@ ImportCache::ListSource(const std::string& sourceId) const
     return out;
 }
 
+bool ImportCache::HasSession(const std::string& sourceId,
+                             const std::string& displayName) const
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    for (const auto& s : m_sessions) {
+        if (s.sourceId == sourceId &&
+            _stricmp(s.displayName.c_str(), displayName.c_str()) == 0)
+            return true;
+    }
+    return false;
+}
+
 // Sections are per (sourceId, channel, displayName) — each channel owns
 // its own set of disk sections and independent memory refs. Prune and
 // Replace touch only the requested channel's rows; other channels are
