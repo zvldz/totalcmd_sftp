@@ -5,6 +5,10 @@
 #include <vector>
 
 bool LoadProxySettingsFromNr(int proxynr, pConnectSettings ConnectResults, LPCSTR iniFileName);
+
+// Proxy record numbers present in the file, ascending. Numbering may have
+// holes, so this reads the sections rather than counting up from one.
+std::vector<int> EnumerateProxyNumbers(LPCSTR iniFileName);
 bool LoadServerSettings(LPCSTR DisplayName, pConnectSettings ConnectResults, LPCSTR iniFileName);
 
 

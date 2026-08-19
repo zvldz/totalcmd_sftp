@@ -2,6 +2,7 @@
 #include <windows.h>
 #include <algorithm>
 #include <array>
+#include <vector>
 #include <format>
 #include <sstream>
 #include <string_view>
@@ -9,6 +10,39 @@
 #include "SftpInternal.h"
 #include "ConnectionDialog.h"
 #include "ProfileSettings.h"
+
+// Which proxy records exist, in order. Numbering may have holes: deleting a
+// record leaves the ones above it where they are, so that a number stays a
+// stable identity for the sessions and imports that point at it. Counting up
+// until a number is missing would stop at the first hole, so the sections
+// themselves are what gets read. Record one is `[proxy]`, the rest `[proxyN]`.
+std::vector<int> EnumerateProxyNumbers(LPCSTR iniFileName)
+{
+    std::vector<int> numbers;
+    std::array<char, 8192> sections{};
+    GetPrivateProfileSectionNamesA(sections.data(),
+                                   static_cast<DWORD>(sections.size() - 1), iniFileName);
+    for (const char* p = sections.data(); *p; p += strlen(p) + 1) {
+        if (_strnicmp(p, "proxy", 5) != 0)
+            continue;
+        const char* tail = p + 5;
+        if (!*tail) {
+            numbers.push_back(1);
+            continue;
+        }
+        // Only digits follow the prefix in a record name; `proxyjump` and the
+        // like are other people's sections.
+        int n = 0;
+        for (const char* d = tail; *d; ++d) {
+            if (*d < '0' || *d > '9') { n = 0; break; }
+            n = n * 10 + (*d - '0');
+        }
+        if (n > 1)
+            numbers.push_back(n);
+    }
+    std::sort(numbers.begin(), numbers.end());
+    return numbers;
+}
 
 bool LoadProxySettingsFromNr(int proxynr, pConnectSettings ConnectResults, LPCSTR iniFileName)
 {

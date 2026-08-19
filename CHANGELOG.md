@@ -36,10 +36,12 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 
 - **The Delete proxy button deletes the proxy you selected.** It always
   said "Delete proxy" and always removed the last one in the list, so
-  picking a proxy and pressing it took away someone else's. Sessions
-  pointing at the proxies that shift up are repointed with it. The
-  button also moved next to the proxy list and now carries a bin icon,
-  which frees the row at the bottom of the dialog.
+  picking a proxy and pressing it took away someone else's. The first
+  proxy can now be removed too. Deleting one leaves the others exactly
+  where they are — no proxy is renumbered, so no session quietly ends up
+  on a different one than it had. The button also moved next to the
+  proxy list and now carries a bin icon, which frees the row at the
+  bottom of the dialog.
 
 - **The help now says which way of disconnecting actually works.** Close
   a session from inside it, or press F8 on its row in `[Active

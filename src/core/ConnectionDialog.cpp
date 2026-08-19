@@ -1958,8 +1958,9 @@ void fillProxyCombobox(HWND hWnd, int defproxynr, LPCSTR iniFileName)
     SendDlgItemMessageW(hWnd, IDC_PROXYCOMBO, CB_SETITEMDATA, i0, 0);
 
     tConnectSettings connectData;
-    int proxynr = 1;
-    while (LoadProxySettingsFromNr(proxynr, &connectData, iniFileName)) {
+    for (const int proxynr : EnumerateProxyNumbers(iniFileName)) {
+        if (!LoadProxySettingsFromNr(proxynr, &connectData, iniFileName))
+            continue;
         // Skip "notused" slots — they appear as duplicate "No proxy" and confuse users.
         if (connectData.proxytype != sftp::Proxy::notused) {
             wcslcpy(buf.data(), std::format(L"{}: ", proxynr).c_str(), buf.size() - 1);
@@ -1982,7 +1983,6 @@ void fillProxyCombobox(HWND hWnd, int defproxynr, LPCSTR iniFileName)
             LRESULT iN = SendDlgItemMessageW(hWnd, IDC_PROXYCOMBO, CB_ADDSTRING, 0, (LPARAM)buf.data());
             SendDlgItemMessageW(hWnd, IDC_PROXYCOMBO, CB_SETITEMDATA, iN, proxynr);
         }
-        proxynr++;
     }
 
     // Last item: "Add new proxy" — itemdata=-1 (sentinel, not a real proxy slot)
@@ -2003,35 +2003,15 @@ void fillProxyCombobox(HWND hWnd, int defproxynr, LPCSTR iniFileName)
         SendDlgItemMessageW(hWnd, IDC_PROXYCOMBO, CB_SETCURSEL, 0, 0);
 }
 
-// Copy every key of one proxy section onto another, then drop the source.
-static void MoveProxySection(int from, int to, LPCSTR iniFileName)
-{
-    const std::string src = std::format("proxy{}", from);
-    const std::string dst = to > 1 ? std::format("proxy{}", to) : std::string("proxy");
-
-    std::array<char, 4096> keys{};
-    GetPrivateProfileString(src.c_str(), nullptr, "", keys.data(),
-                            static_cast<DWORD>(keys.size() - 1), iniFileName);
-    for (const char* k = keys.data(); *k; k += strlen(k) + 1) {
-        std::array<char, 1024> value{};
-        GetPrivateProfileString(src.c_str(), k, "", value.data(),
-                                static_cast<DWORD>(value.size() - 1), iniFileName);
-        WritePrivateProfileString(dst.c_str(), k, value.data(), iniFileName);
-    }
-    WritePrivateProfileString(src.c_str(), nullptr, nullptr, iniFileName);
-}
-
-// Remove the proxy the user picked, not merely the last one — the button has
-// always been labelled "Delete proxy" while deleting whatever sat at the end.
-//
-// Proxies live in numbered sections and sessions point at them by number, so
-// removing one from the middle means closing the gap: every section above it
-// moves down, and every session pointing above it follows. Getting that wrong
-// silently hands a session someone else's proxy, which is why the sessions are
-// repointed in the same pass rather than left for a later one.
+// Remove the proxy the user picked. Records keep their numbers: the one above
+// the deleted slot is not moved down, and no session's `proxynr` is rewritten
+// to follow it. A number is therefore a stable identity, which is what lets a
+// session, an exported snippet or an import point at a record and still mean
+// the same one later. The hole it leaves costs nothing — records are found by
+// reading the sections, not by counting.
 bool DeleteProxy(int proxynrtodelete, LPCSTR ServerToSkip, LPCSTR iniFileName, LPSTR AppendToList, size_t maxlen)
 {
-    if (proxynrtodelete <= 1)
+    if (proxynrtodelete <= 0)
         return false;
 
     bool CanDelete = true;
@@ -2054,38 +2034,18 @@ bool DeleteProxy(int proxynrtodelete, LPCSTR ServerToSkip, LPCSTR iniFileName, L
     if (!CanDelete)
         return false;
 
-    // How far the numbering runs. A section with no keys at all is the end.
-    int highest = proxynrtodelete;
-    for (int n = proxynrtodelete + 1; ; ++n) {
-        std::array<char, 64> probe{};
-        const std::string section = std::format("proxy{}", n);
-        GetPrivateProfileString(section.c_str(), nullptr, "", probe.data(),
-                                static_cast<DWORD>(probe.size() - 1), iniFileName);
-        if (!probe[0])
-            break;
-        highest = n;
-    }
-
-    const std::string doomed = std::format("proxy{}", proxynrtodelete);
+    const std::string doomed = proxynrtodelete > 1
+        ? std::format("proxy{}", proxynrtodelete) : std::string("proxy");
     WritePrivateProfileString(doomed.c_str(), nullptr, nullptr, iniFileName);
 
-    for (int n = proxynrtodelete + 1; n <= highest; ++n)
-        MoveProxySection(n, n - 1, iniFileName);
-
-    // Sessions above the gap now point one slot too high. A session pointing at
-    // the deleted slot goes to "no proxy": only the session being edited can be
-    // in that state, since any other one would have blocked the delete, and
-    // leaving its number alone would silently hand it the proxy that moved down
-    // into the freed slot.
-    hdl = FindFirstServer(name.data(), name.size() - 1);
-    while (hdl) {
-        const int proxynr = GetPrivateProfileInt(name.data(), "proxynr", 0, iniFileName);
-        if (proxynr >= proxynrtodelete) {
-            std::array<char, 16> buf{};
-            _itoa_s(proxynr > proxynrtodelete ? proxynr - 1 : 0, buf.data(), buf.size(), 10);
-            WritePrivateProfileString(name.data(), "proxynr", buf.data(), iniFileName);
-        }
-        hdl = FindNextServer(hdl, name.data(), name.size() - 1);
+    // Only the session being edited can still point here — any other one would
+    // have blocked the delete above. Leaving its number behind would aim it at
+    // a record that no longer exists, which reads as "no proxy" and connects
+    // straight to the host, so it is cleared where it can be seen.
+    if (ServerToSkip && ServerToSkip[0] &&
+        GetPrivateProfileInt(ServerToSkip, "proxynr", 0, iniFileName) == proxynrtodelete)
+    {
+        WritePrivateProfileString(ServerToSkip, "proxynr", "0", iniFileName);
     }
 
     return true;
@@ -2110,9 +2070,11 @@ static void ShowHelpDialog(HWND hWnd, UINT bodyStringId)
 static void OnDeleteProxyCommand(HWND hWnd, pConnectSettings dlgConnectResults, LPCSTR dlgIniFileName)
 {
     // The proxy the user is looking at, which is what the button says it
-    // removes. "No proxy" and the first slot cannot go.
+    // removes. The combo answers 0 for "no proxy" and -1 for "add new", and
+    // neither is a record; every real one can go, the first included, since
+    // deleting it leaves a hole rather than shifting the others.
     const int proxynr = GetProxyNrFromCombo(hWnd);
-    if (proxynr >= 2) {
+    if (proxynr >= 1) {
         std::wstring msgW = LoadResStringW(IDS_ERROR_INUSE);
         std::string errorstr = WideToUtf8(msgW.empty() ? L"Proxy is in use by connection:" : msgW);
         errorstr.resize(1024, '\0');
@@ -2121,12 +2083,9 @@ static void OnDeleteProxyCommand(HWND hWnd, pConnectSettings dlgConnectResults, 
         errorstr[actualLen + 1] = '\0';
 
         if (DeleteProxy(proxynr, dlgConnectResults->DisplayName.c_str(), dlgIniFileName, errorstr.data(), errorstr.size() - 1)) {
-            // Everything above the gap moved down a slot, this session
-            // included; land on "no proxy" when its own entry was the one
-            // removed.
-            if (dlgConnectResults->proxynr > proxynr)
-                dlgConnectResults->proxynr -= 1;
-            else if (dlgConnectResults->proxynr == proxynr)
+            // Other records keep their numbers, so only a selection pointing
+            // at the record just deleted needs an answer: "no proxy".
+            if (dlgConnectResults->proxynr == proxynr)
                 dlgConnectResults->proxynr = 0;
             fillProxyCombobox(hWnd, dlgConnectResults->proxynr, dlgIniFileName);
         } else {
@@ -2151,12 +2110,13 @@ static void OnProxyButtonCommand(HWND hWnd, pConnectSettings dlgConnectResults, 
 
     int proxynr;
     if (selData == (LRESULT)-1) {
-        // "Add new proxy" selected — determine next available slot
-        const int count = (int)SendDlgItemMessage(hWnd, IDC_PROXYCOMBO, CB_GETCOUNT, 0, 0);
-        const int lastRealIdx = count - 2;  // last item before "Add new proxy"
-        const LRESULT lastData = (lastRealIdx >= 1)
-            ? SendDlgItemMessage(hWnd, IDC_PROXYCOMBO, CB_GETITEMDATA, lastRealIdx, 0) : 0;
-        proxynr = (lastData > 0) ? (int)lastData + 1 : 2;
+        // "Add new proxy" selected — take the next number above every record
+        // that exists. Numbers are never reused, so sessions and imports that
+        // point at one keep pointing at the same record. The combo cannot
+        // answer this: it hides "notused" records, and a hidden record's slot
+        // would be handed out and overwritten.
+        const std::vector<int> existing = EnumerateProxyNumbers(dlgCtx->iniFileName);
+        proxynr = existing.empty() ? 1 : existing.back() + 1;
     } else {
         proxynr = GetProxyNrFromCombo(hWnd);
     }
