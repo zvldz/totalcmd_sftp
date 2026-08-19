@@ -307,7 +307,7 @@ function op_tar_stream(): void
     }
 
     // End-of-archive: two 512-byte zero blocks
-    fwrite($out, str_repeat("\0", 1024));
+    tar_write_all($out, str_repeat("\0", 1024));
     fclose($out);
     exit;
 }
@@ -371,6 +371,24 @@ function tar_stream_dir(string $rootAbs, string $dirAbs, $out, string $relPath):
         }
     }
     closedir($dh);
+    return true;
+}
+
+// fwrite may take fewer bytes than it was given, so a single call cannot be
+// trusted to have written the whole buffer. Everything that goes into a tar
+// stream must go through here: a short write inside an archive shifts every
+// following block and the result no longer unpacks.
+function tar_write_all($out, string $data): bool
+{
+    $offset = 0;
+    $length = strlen($data);
+    while ($offset < $length) {
+        $written = fwrite($out, substr($data, $offset));
+        if ($written === false || $written === 0) {
+            return false;
+        }
+        $offset += $written;
+    }
     return true;
 }
 
@@ -588,28 +606,32 @@ function op_tar_pack(): void
             }
             $fh = fopen($real, 'rb');
             if ($fh === false) {
-                fwrite($mem, str_repeat("\0", (($size + 511) & ~511)));
+                tar_write_all($mem, str_repeat("\0", (($size + 511) & ~511)));
                 continue;
             }
             $written = 0;
             while (!feof($fh)) {
                 $chunk = fread($fh, 65536);
-                if ($chunk === false) {
+                if ($chunk === false || $chunk === '') {
                     break;
                 }
-                fwrite($mem, $chunk);
+                if (!tar_write_all($mem, $chunk)) {
+                    fclose($fh);
+                    fclose($mem);
+                    exit;
+                }
                 $written += strlen($chunk);
             }
             fclose($fh);
             $pad = (($written + 511) & ~511) - $written;
             if ($pad > 0) {
-                fwrite($mem, str_repeat("\0", $pad));
+                tar_write_all($mem, str_repeat("\0", $pad));
             }
         }
     }
 
     // End-of-archive: two zero blocks
-    fwrite($mem, str_repeat("\0", 1024));
+    tar_write_all($mem, str_repeat("\0", 1024));
     fclose($mem);
     exit;
 }

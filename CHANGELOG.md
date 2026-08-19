@@ -26,6 +26,14 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   joined — so nothing was ever dropped and every connection left one
   behind until disconnect. Spotted in the numbereleven-a fork.
 
+- **A batch TAR download can no longer come out truncated.** The
+  server-side packer ignored what `fwrite` reported and counted the
+  bytes it had *read* instead, so a short write left the archive
+  missing data while the padding was computed for the full length —
+  every following file in it shifted out of place. Writes now repeat
+  until the buffer is gone. Re-upload `sftp.php` to pick this up.
+  Spotted in the numbereleven-a fork.
+
 ## 10.0.2.0 — 2026-08-19
 
 ### Features
