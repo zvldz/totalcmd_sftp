@@ -76,7 +76,7 @@ Complete C-to-C++ rewrite of the original SFTP plugin by Christian Ghisler. Core
 - Symlink tracking including `~` home directory shortcut protection.
 - External `.lng` file localization — **15 languages** (EN/PL/RU/DE/FR/ES/IT/CS/HU/NL/PT-BR/RO/SK/UK/JA/ZH-CN) — dynamic dialog translation at runtime, auto-detected from TC `wincmd.ini`, language-aware control layout (`ArrangeInlineRow`)
 - Dual-architecture distribution: x64 (`SFTPplug.wfx64`) and x86 (`SFTPplug.wfx`) in a single ZIP.
-- Built-in CHM help (`sftpplug.chm`) opened from the plugin dialog Help button.
+- Offline help — a single page opened in your browser from the dialog's Help button.
 - Background transfer support (TC `BG_DOWNLOAD` / `BG_UPLOAD` flags).
 
 ---
@@ -566,7 +566,7 @@ Distribution archive: `SFTPplug.zip`
 | `SFTPplug.wfx` | x86 plugin binary (statically links libssh2 and Argon2, `/MT`) |
 | `pluginst.inf` | Total Commander auto-install descriptor (`file=` x86, `file64=` x64) |
 | `sftp.php` | PHP Agent script for HTTP transfer and shell modes |
-| `SFTPplug.chm` | Full offline documentation |
+| `SFTPplug-help.html` | Full offline documentation, one self-contained page |
 | `readme.txt` | Package notes |
 | `language\pol.lng` | Polish |
 | `language\rus.lng` | Russian |
@@ -711,7 +711,7 @@ User-facing summary; see `CHANGELOG.md` for per-version detail.
 - Splitting remaining oversized legacy functions
 - C-style buffer replacement with `std::vector` / `std::string`
 - Further UI/business-logic decoupling under WFX constraints
-- Expanding CHM coverage for all modes and edge cases
+- Expanding the help to cover every mode and edge case
 
 ### Planned / Deferred
 

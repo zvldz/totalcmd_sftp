@@ -1,6 +1,5 @@
 param(
-    [switch]$chm,
-    [switch]$nochm,
+    [switch]$nohelp,
     [switch]$nodeploy,
     [switch]$nozip,
     [switch]$x64only
@@ -16,8 +15,8 @@ $buildDir = Join-Path $projectRoot "build"
 $buildOutputDir    = Join-Path $buildDir "bin\x64_Release"
 $buildOutputDirX86 = Join-Path $buildDir "bin\Win32_Release"
 $phpAgentSource = Join-Path $projectRoot "src\agent\sftp.php"
-$helpProject = Join-Path $projectRoot "src\help\sftpplug.hhp"
-$helpCompiled = Join-Path $projectRoot "src\help\sftpplug.chm"
+$helpBuilder = Join-Path $projectRoot "tools\build-help-page.py"
+$helpCompiled = Join-Path $projectRoot "bin\$projectName-help.html"
 
 # Read plugin version from version.h (single source of truth)
 $pluginVersion = "0.0.0.0"
@@ -125,70 +124,44 @@ function Remove-PathSafe {
     }
 }
 
-function Compile-CHM {
-    <#
-    .SYNOPSIS
-    Compiles the CHM help file using HTML Help Workshop.
-    #>
+function Build-HelpPage {
+<#
+.SYNOPSIS
+Folds src/help/*.html into one self-contained page.
+
+.DESCRIPTION
+The help ships as a single HTML file rather than a CHM: hhc.exe is the only
+CHM compiler, Microsoft withdrew it, and a CHM carried inside a downloaded ZIP
+is blocked by Windows and opens blank. One page also means Ctrl+F searches
+every topic at once. The builder needs nothing but Python.
+#>
     Write-Host ""
-    Write-Host "--- Compiling CHM Help ---" -ForegroundColor Cyan
-    
-    $hhcPaths = @(
-        (Join-Path ${env:ProgramFiles(x86)} "HTML Help Workshop\hhc.exe"),
-        (Join-Path $env:ProgramFiles "HTML Help Workshop\hhc.exe")
-    )
-    
-    $hhcExe = $null
-    foreach ($path in $hhcPaths) {
-        if (Test-Path $path) {
-            $hhcExe = $path
-            break
-        }
-    }
-    
-    if (-not $hhcExe) {
-        Write-Host "  HTML Help Workshop not found - CHM compilation skipped" -ForegroundColor Yellow
-        Write-Host "  Download from: https://www.microsoft.com/en-us/download/details.aspx?id=21138" -ForegroundColor Gray
+    Write-Host "--- Building Help Page ---" -ForegroundColor Cyan
+
+    if (-not (Test-Path $helpBuilder)) {
+        Write-Host "  tools\build-help-page.py not found - help page skipped" -ForegroundColor Yellow
         return $false
     }
-    
-    if (-not (Test-Path $helpProject)) {
-        Write-Host "  Help project not found: $helpProject" -ForegroundColor Yellow
+
+    $python = $null
+    foreach ($candidate in @('python', 'python3', 'py')) {
+        $cmd = Get-Command $candidate -ErrorAction SilentlyContinue
+        if ($cmd) { $python = $cmd.Source; break }
+    }
+    if (-not $python) {
+        Write-Host "  Python not found - help page skipped" -ForegroundColor Yellow
         return $false
     }
-    
-    # Remove old compiled CHM
-    if (Test-Path $helpCompiled) {
-        Remove-Item $helpCompiled -Force -ErrorAction SilentlyContinue
+
+    & $python $helpBuilder $helpCompiled
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path $helpCompiled)) {
+        Write-Host "  Help page build FAILED" -ForegroundColor Red
+        return $false
     }
 
-    # Inject version into HHP title
-    if (Test-Path $helpProject) {
-        $hhpContent = Get-Content $helpProject -Raw
-        $hhpContent = $hhpContent -replace '(?m)^Title=.*', "Title=SFTPplug Help v$pluginVersion - Comprehensive Guide"
-        Set-Content $helpProject $hhpContent -NoNewline -Encoding UTF8
-    }
-
-    # Compile CHM
-    Push-Location (Split-Path $helpProject)
-    try {
-        Write-Host "  Compiling: $helpProject" -ForegroundColor Gray
-        $output = & $hhcExe $helpProject 2>&1
-        # hhc.exe always returns exit code 1, even on success.
-        # Determine success by checking whether the output .chm was created.
-        if (Test-Path $helpCompiled) {
-            Write-Host "  CHM compiled successfully" -ForegroundColor Green
-            return $true
-        } else {
-            Write-Host "  CHM compilation failed (output file not created)" -ForegroundColor Red
-            if ($output) {
-                Write-Host "  $output" -ForegroundColor DarkGray
-            }
-            return $false
-        }
-    } finally {
-        Pop-Location
-    }
+    $sizeKB = [math]::Round((Get-Item $helpCompiled).Length / 1KB)
+    Write-Host "  $projectName-help.html ($sizeKB KB)" -ForegroundColor Green
+    return $true
 }
 
 function Clean-BuildOutput {
@@ -217,12 +190,12 @@ function Clean-BuildOutput {
 
 
 
-# Determine CHM build mode
-$buildCHM = (-not $nochm) -or $chm
+# The help page needs only Python, so it is built unless explicitly skipped.
+$buildHelp = -not $nohelp
 
 Write-Host "--- SFTP Plugin Build Script ---" -ForegroundColor Cyan
 Write-Host "Project Root: $projectRoot" -ForegroundColor Gray
-Write-Host "Build CHM: $($(if ($buildCHM) { 'Yes' } else { 'No' }))" -ForegroundColor Gray
+Write-Host "Build help page: $($(if ($buildHelp) { 'Yes' } else { 'No' }))" -ForegroundColor Gray
 Write-Host ""
 
 # ============================================================================
@@ -379,10 +352,10 @@ if (-not $x64only) {
 Clean-BuildOutput
 
 # ============================================================================
-# Step 4: Compile CHM (if requested)
+# Step 4: Build the help page
 # ============================================================================
-if ($buildCHM) {
-    Compile-CHM | Out-Null
+if ($buildHelp) {
+    Build-HelpPage | Out-Null
 }
 
 # ============================================================================
@@ -435,7 +408,7 @@ version=$pluginVersion
         Add-ZipString $pluginstInf "pluginst.inf"
 
         if (Test-Path $phpAgentSource) { Add-ZipFile $phpAgentSource "sftp.php" }
-        if (Test-Path $helpCompiled)   { Add-ZipFile $helpCompiled   "$projectName.chm" }
+        if (Test-Path $helpCompiled)   { Add-ZipFile $helpCompiled   "$projectName-help.html" }
 
         $tplSource = Join-Path $projectRoot "src\res\sftpplug.tpl"
         if (Test-Path $tplSource)      { Add-ZipFile $tplSource      "sftpplug.tpl" }
@@ -483,8 +456,8 @@ if (-not $nodeploy) {
             Write-Host "  Deployed: $projectName.wfx (x86)" -ForegroundColor Green
             
             if (Test-Path $helpCompiled) {
-                Copy-Item -Path $helpCompiled -Destination (Join-Path $pluginDir "$projectName.chm") -Force
-                Write-Host "  Deployed: $projectName.chm" -ForegroundColor Green
+                Copy-Item -Path $helpCompiled -Destination (Join-Path $pluginDir "$projectName-help.html") -Force
+                Write-Host "  Deployed: $projectName-help.html" -ForegroundColor Green
             }
             
             if (Test-Path $phpAgentSource) {

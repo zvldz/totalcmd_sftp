@@ -10,6 +10,17 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 
 ## 10.0.2.1 — unreleased
 
+### Features
+
+- **The help is one HTML page instead of a CHM.** The Help button now
+  opens `SFTPplug-help.html` in your browser, and `Ctrl+F` searches
+  every topic at once — the whole manual is a single page. This also
+  ends a long-standing annoyance: a CHM that arrives inside a downloaded
+  ZIP is blocked by Windows and opens blank, which is exactly how this
+  plugin reaches people. Microsoft withdrew the only CHM compiler years
+  ago and never replaced the format; a page in the browser is what the
+  category turned into.
+
 ### Fixes
 
 - **The LAN Pair box on the connection dialog is translated.** It kept

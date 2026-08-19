@@ -85,10 +85,10 @@ jobs:
 
       - name: Build plugin (Release x64 + x86)
         shell: pwsh
-        # -nochm skips the HTML Help Workshop step, which the runner does not
-        # have. The ZIP still ships a CHM: the one committed under src/help,
-        # so a help edit needs a full local build before the tag.
-        run: ./build.ps1 -nochm
+        # The help page is generated from src/help by a Python script, so the
+        # runner builds it like everything else — nothing is carried in the
+        # repository and nothing can go stale between an edit and a tag.
+        run: ./build.ps1
 
       - name: Rename release artifact
         id: zip

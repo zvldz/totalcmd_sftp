@@ -1,8 +1,7 @@
 # Folds the help sources into one self-contained page.
 #
 # One file means Ctrl+F searches every topic at once, which is the single
-# thing a CHM gave us that a folder of pages does not. Section order comes
-# from the .hhc so the table of contents stays the one place that decides it.
+# thing a CHM gave us that a folder of pages does not.
 import html
 import os
 import re
@@ -11,9 +10,11 @@ import sys
 SRC = 'src/help'
 OUT = sys.argv[1] if len(sys.argv) > 1 else 'sftpplug-help.html'
 
-order = re.findall(r'(?i)<param\s+name="Local"\s+value="([^"]+)"',
-                   open(os.path.join(SRC, 'sftpplug.hhc'), encoding='utf-8',
-                        errors='surrogateescape').read())
+# index.html lists the topics in reading order, so it decides the order here
+# too — one file to keep straight instead of a separate table of contents.
+index = open(os.path.join(SRC, 'index.html'), encoding='utf-8',
+             errors='surrogateescape').read()
+order = ['index.html'] + re.findall(r'(?i)href="([A-Za-z0-9._-]+\.html)"', index)
 seen, pages = set(), []
 for f in order:
     f = f.strip()
@@ -21,7 +22,7 @@ for f in order:
         seen.add(f)
         pages.append(f)
 
-# anything the .hhc forgot still ships, appended in name order
+# anything index.html does not link still ships, appended in name order
 for f in sorted(os.listdir(SRC)):
     if f.endswith('.html') and f not in seen:
         pages.append(f)
