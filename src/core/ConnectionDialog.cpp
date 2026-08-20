@@ -418,7 +418,6 @@ private:
     void    OnJumpButton();
     void    OnProxyButton();
     void    OnProxyComboChanged();
-    void    OnDeleteProxy();
     void    OnPluginHelp();
     void    OnCertHelp();
     void    OnPasswordHelp();
@@ -428,7 +427,6 @@ private:
     void    OnJumpSessionPicked();
 
     HWND                  m_hWnd;
-    HFONT                  m_iconFont;
     ConnectDialogContext*  m_ctx;
     pConnectSettings       m_settings;
     bool                   m_initialized;
@@ -2080,41 +2078,6 @@ static void ShowHelpDialog(HWND hWnd, UINT bodyStringId)
 // WM_COMMAND handlers - additional refactored functions
 // ============================================================================
 
-static void OnDeleteProxyCommand(HWND hWnd, pConnectSettings dlgConnectResults, LPCSTR dlgIniFileName)
-{
-    // The proxy the user is looking at, which is what the button says it
-    // removes. The combo answers 0 for "no proxy" and -1 for "add new", and
-    // neither is a record; every real one can go, the first included, since
-    // deleting it leaves a hole rather than shifting the others.
-    const int proxynr = GetProxyNrFromCombo(hWnd);
-    if (proxynr >= 1) {
-        std::wstring msgW = LoadResStringW(IDS_ERROR_INUSE);
-        std::string errorstr = WideToUtf8(msgW.empty() ? L"Proxy is in use by connection:" : msgW);
-        errorstr.resize(1024, '\0');
-        size_t actualLen = strlen(errorstr.c_str());
-        errorstr[actualLen] = '\n';
-        errorstr[actualLen + 1] = '\0';
-
-        if (DeleteProxy(proxynr, dlgConnectResults->DisplayName.c_str(), dlgIniFileName, errorstr.data(), errorstr.size() - 1)) {
-            // Other records keep their numbers, so only a selection pointing
-            // at the record just deleted needs an answer: "no proxy".
-            if (dlgConnectResults->proxynr == proxynr)
-                dlgConnectResults->proxynr = 0;
-            fillProxyCombobox(hWnd, dlgConnectResults->proxynr, dlgIniFileName);
-        } else {
-            std::wstring werrorstr(1024, L'\0');
-            const int len = MultiByteToWideChar(CP_ACP, 0, errorstr.data(), -1, werrorstr.data(), static_cast<int>(werrorstr.size()));
-            werrorstr.resize(len > 0 ? len - 1 : 0);
-            
-            if (RequestProcW)
-                RequestProcW(PluginNumber, RT_MsgOK, L"SFTP", werrorstr.data(), nullptr, 0);
-            else
-                MessageBoxW(hWnd, werrorstr.data(), L"SFTP", MB_OK | MB_ICONSTOP);
-        }
-    } else {
-        MessageBeep(MB_ICONSTOP);
-    }
-}
 
 // The number a new proxy record may take. It has to clear two things, not one:
 // every record that exists, and every number a session still points at. Stale
@@ -2244,7 +2207,6 @@ INT_PTR WINAPI ConnectDlgProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lPa
 
 ConnectionDialog::ConnectionDialog(HWND hWnd, ConnectDialogContext* ctx)
     : m_hWnd(hWnd)
-    , m_iconFont(nullptr)
     , m_ctx(ctx)
     , m_settings(ctx ? ctx->connectResults : nullptr)
     , m_initialized(false)
@@ -2263,111 +2225,6 @@ INT_PTR ConnectionDialog::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
     return 0;
 }
 
-// The narrow buttons in the proxy row carry a glyph instead of a caption, so
-// what they do lives in a tooltip. TTF_SUBCLASS lets the tooltip watch the
-// button itself, which keeps the dialog procedure out of it.
-static void AddButtonTooltip(HWND hDlg, int ctrlId, UINT stringId)
-{
-    HWND hCtrl = GetDlgItem(hDlg, ctrlId);
-    if (!hCtrl)
-        return;
-
-    HWND hTip = CreateWindowExW(0, TOOLTIPS_CLASSW, nullptr,
-                                WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX,
-                                CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-                                hDlg, nullptr, GetModuleHandleW(nullptr), nullptr);
-    if (!hTip)
-        return;
-
-    std::wstring text = LoadResStringW(stringId);
-    TTTOOLINFOW ti{};
-    ti.cbSize = sizeof(ti);
-    ti.uFlags = TTF_IDISHWND | TTF_SUBCLASS;
-    ti.hwnd = hDlg;
-    ti.uId = (UINT_PTR)hCtrl;
-    ti.lpszText = text.data();
-    SendMessageW(hTip, TTM_ADDTOOLW, 0, (LPARAM)&ti);
-}
-
-static int CALLBACK CountFontFace(const LOGFONTW*, const TEXTMETRICW*, DWORD, LPARAM lParam)
-{
-    *reinterpret_cast<bool*>(lParam) = true;
-    return 0;
-}
-
-// Controls born from the dialog template are ANSI windows, so any caption set
-// on them is converted to the local code page — and an icon font's glyph has
-// no place there. A button created here is a Unicode window and carries the
-// glyph intact. Position, styles and tab order are taken from the control it
-// replaces.
-static HWND RecreateAsUnicodeButton(HWND hDlg, int ctrlId)
-{
-    HWND hOld = GetDlgItem(hDlg, ctrlId);
-    if (!hOld || IsWindowUnicode(hOld))
-        return hOld;
-
-    RECT rc{};
-    GetWindowRect(hOld, &rc);
-    MapWindowPoints(nullptr, hDlg, reinterpret_cast<LPPOINT>(&rc), 2);
-
-    const DWORD style   = static_cast<DWORD>(GetWindowLongPtr(hOld, GWL_STYLE));
-    const DWORD exStyle = static_cast<DWORD>(GetWindowLongPtr(hOld, GWL_EXSTYLE));
-    HWND hPrev = GetWindow(hOld, GW_HWNDPREV);
-    DestroyWindow(hOld);
-
-    HWND hNew = CreateWindowExW(exStyle, L"BUTTON", L"", style,
-                                rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top,
-                                hDlg, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ctrlId)),
-                                hinst, nullptr);
-    if (hNew && hPrev)
-        SetWindowPos(hNew, hPrev, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-    return hNew;
-}
-
-// Put a waste-bin glyph on the delete button. The glyph comes from the icon
-// font Windows ships with rather than from a bitmap, so it stays sharp at any
-// DPI and follows the system colours. Where the font is missing the button
-// keeps the plain caption the template gave it.
-static HFONT ApplyTrashGlyph(HWND hDlg, int ctrlId)
-{
-    if (!GetDlgItem(hDlg, ctrlId))
-        return nullptr;
-
-    LOGFONTW query{};
-    query.lfCharSet = DEFAULT_CHARSET;
-    wcscpy_s(query.lfFaceName, L"Segoe MDL2 Assets");
-
-    bool haveFont = false;
-    HDC hdc = GetDC(hDlg);
-    EnumFontFamiliesExW(hdc, &query, CountFontFace, reinterpret_cast<LPARAM>(&haveFont), 0);
-    ReleaseDC(hDlg, hdc);
-    if (!haveFont)
-        return nullptr;
-
-    HWND hCtrl = RecreateAsUnicodeButton(hDlg, ctrlId);
-    if (!hCtrl)
-        return nullptr;
-
-    // Size the glyph from the button itself so it scales with the layout.
-    RECT rc{};
-    GetWindowRect(hCtrl, &rc);
-    LOGFONTW lf{};
-    lf.lfHeight = -((rc.bottom - rc.top) * 5 / 9);
-    lf.lfCharSet = DEFAULT_CHARSET;
-    lf.lfQuality = CLEARTYPE_QUALITY;
-    wcscpy_s(lf.lfFaceName, L"Segoe MDL2 Assets");
-
-    HFONT hFont = CreateFontIndirectW(&lf);
-    if (!hFont) {
-        SendMessageW(hCtrl, WM_SETFONT, SendMessageW(hDlg, WM_GETFONT, 0, 0), TRUE);
-        SetWindowTextW(hCtrl, L"X");
-        return nullptr;
-    }
-
-    SendMessageW(hCtrl, WM_SETFONT, reinterpret_cast<WPARAM>(hFont), TRUE);
-    SetWindowTextW(hCtrl, L"\xE74D");
-    return hFont;
-}
 
 INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
 {
@@ -2433,8 +2290,6 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
     ArrangeExpandLabel(m_hWnd, IDC_SYSTEMLABEL,     IDC_SYSTEM);
     ArrangeLabelFillButton(m_hWnd, IDC_LABEL_SESSION, IDC_SESSIONNAME, IDC_PHPSHELL);
 
-    m_iconFont = ApplyTrashGlyph(m_hWnd, IDC_DELETELAST);
-    AddButtonTooltip(m_hWnd, IDC_DELETELAST, IDS_DLG_DELETELAST);
 
     if (m_ctx->lanPeerId.empty())
         m_ctx->lanPeerId = MakeLanPeerId();
@@ -2657,9 +2512,6 @@ INT_PTR ConnectionDialog::OnCommand(WPARAM wParam, LPARAM /*lParam*/)
         if (HIWORD(wParam) == CBN_SELCHANGE)
             OnProxyComboChanged();
         break;
-    case IDC_DELETELAST:
-        OnDeleteProxy();
-        break;
     case IDC_PLUGINHELP:
         OnPluginHelp();
         break;
@@ -2690,10 +2542,6 @@ INT_PTR ConnectionDialog::OnCommand(WPARAM wParam, LPARAM /*lParam*/)
 void ConnectionDialog::OnDestroy()
 {
     StopLanPairing(m_ctx);
-    if (m_iconFont) {
-        DeleteObject(m_iconFont);
-        m_iconFont = nullptr;
-    }
 }
 
 INT_PTR ConnectionDialog::OnLanPeerMessage(WPARAM /*wParam*/, LPARAM lParam)
@@ -3136,10 +2984,6 @@ void ConnectionDialog::OnProxyComboChanged()
         PostMessage(m_hWnd, WM_COMMAND, IDC_PROXYBUTTON, 0);
 }
 
-void ConnectionDialog::OnDeleteProxy()
-{
-    OnDeleteProxyCommand(m_hWnd, m_settings, m_ctx->iniFileName);
-}
 
 void ConnectionDialog::OnPluginHelp()
 {

@@ -44,14 +44,12 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   Its duplicate "use jump host" checkbox is gone; the one on the main
   dialog was always the one that counted.
 
-- **The Delete proxy button deletes the proxy you selected.** It always
-  said "Delete proxy" and always removed the last one in the list, so
-  picking a proxy and pressing it took away someone else's. The first
-  proxy can now be removed too. Deleting one leaves the others exactly
-  where they are — no proxy is renumbered, so no session quietly ends up
-  on a different one than it had. The button also moved next to the
-  proxy list and now carries a bin icon, which frees the row at the
-  bottom of the dialog.
+- **Proxies have a folder of their own.** `[Proxies]` sits in the plugin
+  root next to `[Imports]`: one row per proxy, `F7` to add, `Enter` to
+  edit, `F8` to delete. A proxy still used by a session is not deleted —
+  the sessions using it are named. Deleting a proxy no longer renumbers
+  the others, so no session quietly ends up on a different proxy than
+  the one it was given, and the connection dialog keeps just the list.
 
 - **The help now says which way of disconnecting actually works.** Close
   a session from inside it, or press F8 on its row in `[Active

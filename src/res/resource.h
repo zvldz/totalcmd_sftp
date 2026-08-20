@@ -350,7 +350,6 @@
 #define IDS_DLG_JUMPHOST_GRP            304
 #define IDS_DLG_USE_JUMPHOST            305
 #define IDS_DLG_PROXY_SETTINGS          306
-#define IDS_DLG_DELETELAST              307
 #define IDS_PROXY_DLG_CAPTION           309
 #define IDS_PROXY_DLG_GROUP             310
 #define IDS_PROXY_DLG_HOST              311
