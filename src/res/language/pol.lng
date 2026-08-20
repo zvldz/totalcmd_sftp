@@ -357,6 +357,7 @@
 12119= Sesja LAN Pair: 
 12120=Te ustawienia pochodzą z sesji '{}' i są tylko do odczytu. Wybierz (brak) na liście jump-hostów, aby skonfigurować hosta tutaj.
 12121=Ta sesja łączy się z hostem przez coś, co nie zostało zaimportowane razem z nią: serwer proxy, jump host albo tunel. Połączenie poszłoby teraz prosto do celu, z pominięciem tego, co ustawiono po drodze, dlatego zostało odrzucone.
+12122=Sesja miała łączyć się przez serwer proxy, ale plik nie zawiera jego opisu. Sesję zaimportowano bez proxy i będzie łączyć się bezpośrednio, więc przed użyciem sprawdź jej ustawienie proxy.
 12089=SFTP
 12090=Szukam peera LAN Pair w sieci lokalnej...
 12091={} s

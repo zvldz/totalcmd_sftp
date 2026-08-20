@@ -527,6 +527,7 @@
 #define IDC_JUMP_FROM_SESSION           1088   // static: which session these settings come from
 #define IDS_JUMP_FROM_SESSION           12120  // static: settings taken from a session
 #define IDS_IMPORT_BLOCKED              12121  // refusal: session depends on something not imported
+#define IDS_SIMPORT_PROXY_LOST          12122  // imported session referenced a proxy that did not travel
 
 // Next default values for new objects
 //

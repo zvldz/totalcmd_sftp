@@ -36,6 +36,11 @@
 // the output uses `exportSection` (typically the DisplayName) rather than
 // the raw storage section name, so cache-prefixed virtual entries land as
 // a clean `[dron/hz-1]` header rather than the ugly cache name.
+// The proxy record travels under a fixed section name: the number it had in
+// the file it came from means nothing in the file it is going to.
+static constexpr const char* kExportProxySection = "[proxy]";
+static constexpr const char* RN = "\r\n";
+
 static int ExportSessionAsIniFile(
     LPCSTR srcSection, LPCSTR srcIni,
     LPCSTR exportSection, LPCSTR headerComment,
@@ -72,6 +77,34 @@ static int ExportSessionAsIniFile(
             content.append(p).append("=").append(valueBuf.data()).append("\r\n");
         }
         p += strlen(p) + 1;
+    }
+
+    // A session that goes through a proxy takes the record with it. `proxynr`
+    // alone would be meaningless anywhere else: it would land on whatever
+    // record holds that number there, or on none at all, which reads as a
+    // direct connection to the host. The record travels without its number,
+    // since the number is local to the file it came from, and without its
+    // password, which is machine-bound where it is stored at all.
+    {
+        const int proxynr = GetPrivateProfileInt(srcSection, "proxynr", 0, srcIni);
+        if (proxynr > 0) {
+            const std::string proxySection = proxynr > 1
+                ? std::format("proxy{}", proxynr) : std::string("proxy");
+            std::array<char, 4096> proxyKeys{};
+            GetPrivateProfileStringA(proxySection.c_str(), nullptr, "",
+                proxyKeys.data(), static_cast<DWORD>(proxyKeys.size() - 1), srcIni);
+            if (proxyKeys[0]) {
+                content.append(kExportProxySection).append(RN);
+                for (const char* k = proxyKeys.data(); *k; k += strlen(k) + 1) {
+                    if (_stricmp(k, "proxypassword") == 0)
+                        continue;
+                    std::array<char, 2048> value{};
+                    GetPrivateProfileStringA(proxySection.c_str(), k, "",
+                        value.data(), static_cast<DWORD>(value.size() - 1), srcIni);
+                    content.append(k).append("=").append(value.data()).append(RN);
+                }
+            }
+        }
     }
 
     HANDLE h = CreateFileW(destFile, GENERIC_WRITE, 0, nullptr,
@@ -229,6 +262,43 @@ static std::optional<int> TryImportSessionFromUpload(
             localA.data(), display.c_str(), inifilename))
     {
         return abortWithMessage(IDS_SIMPORT_ERR_WRITE);
+    }
+
+    // The session's `proxynr` came from another file, where that number meant
+    // another record. Resolve it here: reuse a local record describing the
+    // same route, create one when the route is new, and drop the reference
+    // when nothing describes it — a number left pointing at a stranger is how
+    // a session ends up quietly on the wrong proxy, or on none at all.
+    if (GetPrivateProfileInt(display.c_str(), "proxynr", 0, inifilename) > 0) {
+        std::array<char, 512> proxyServer{}, proxyUser{};
+        const int proxytype = GetPrivateProfileInt("proxy", "proxytype", -1, localA.data());
+        GetPrivateProfileStringA("proxy", "proxyserver", "", proxyServer.data(),
+                                  static_cast<DWORD>(proxyServer.size() - 1), localA.data());
+        GetPrivateProfileStringA("proxy", "proxyuser", "", proxyUser.data(),
+                                  static_cast<DWORD>(proxyUser.size() - 1), localA.data());
+
+        int localNr = 0;
+        if (proxytype > 0 && proxyServer[0]) {
+            localNr = FindMatchingProxyNr(proxytype, proxyServer.data(),
+                                          proxyUser.data(), inifilename);
+            if (localNr == 0) {
+                localNr = NextFreeProxyNr(inifilename);
+                const std::string dest = localNr > 1
+                    ? std::format("proxy{}", localNr) : std::string("proxy");
+                // The record arrives without its password: whatever held it
+                // was bound to the machine it came from. A proxy that needs
+                // one is asked for it on connect, which is why the user name
+                // has to survive the trip.
+                CopyIniSectionAcrossFiles("proxy", localA.data(), dest.c_str(), inifilename);
+            }
+        }
+
+        std::array<char, 16> buf{};
+        _itoa_s(localNr, buf.data(), buf.size(), 10);
+        WritePrivateProfileString(display.c_str(), "proxynr", buf.data(), inifilename);
+        if (localNr == 0)
+            ShowPluginMessage(IDS_SIMPORT_PROXY_LOST, "", IDS_SIMPORT_TITLE,
+                              "SFTP plugin - session import");
     }
 
     LoadServersFromIniW(inifilenameW, s_quickconnect);

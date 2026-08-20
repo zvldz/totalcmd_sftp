@@ -2079,26 +2079,6 @@ static void ShowHelpDialog(HWND hWnd, UINT bodyStringId)
 // ============================================================================
 
 
-// The number a new proxy record may take. It has to clear two things, not one:
-// every record that exists, and every number a session still points at. Stale
-// references outlive their record — a session keeps `proxynr=1` long after
-// `[proxy]` is gone — and handing that number to a new record would quietly
-// route those sessions through it.
-static int NextFreeProxyNr(LPCSTR iniFileName)
-{
-    const std::vector<int> existing = EnumerateProxyNumbers(iniFileName);
-    int highest = existing.empty() ? 0 : existing.back();
-
-    std::array<char, wdirtypemax> name{};
-    SERVERHANDLE hdl = FindFirstServer(name.data(), name.size() - 1);
-    while (hdl) {
-        const int referenced = static_cast<int>(GetPrivateProfileInt(name.data(), "proxynr", 0, iniFileName));
-        if (referenced > highest)
-            highest = referenced;
-        hdl = FindNextServer(hdl, name.data(), name.size() - 1);
-    }
-    return highest + 1;
-}
 
 // Open the editor for one proxy record with no session behind it. The
 // connection dialog passes the session it is editing so the password-manager

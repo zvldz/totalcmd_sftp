@@ -65,6 +65,23 @@
 <h3>Copying and Moving with F5 / F6 / Drag-and-Drop</h3>
 <p>Drag-and-drop and TC's copy/move commands work uniformly across the plugin namespace: dropping a folder onto another folder relocates every session inside. Behind the scenes this is the same code path as <code>F6</code>, so jump-host references are kept consistent.</p>
 
+<h3>Moving a Session to Another Machine</h3>
+
+<p>Copying a session out of the plugin writes a small INI file describing it,
+and dropping such a file back onto the plugin creates the session again. If the
+session goes through a proxy, the proxy travels with it: on the way back an
+identical proxy already on the machine is reused, and only a proxy never seen
+before is added to your list. Either way the session ends up pointing at the
+right one, whatever number it happens to have locally.</p>
+
+<p>Two things do not travel, by design: the password of the session and the
+password of its proxy. Both are tied to the machine that stored them. You are
+asked for them on the first connection.</p>
+
+<p>A file written by an older version of the plugin names a proxy without
+describing it. Such a session is imported without a proxy and says so, rather
+than being pointed at whichever proxy happens to hold that number here.</p>
+
 <h2>Session Storage</h2>
 
 <h3>Storage Location</h3>

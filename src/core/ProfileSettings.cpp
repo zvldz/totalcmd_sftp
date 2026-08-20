@@ -44,6 +44,48 @@ std::vector<int> EnumerateProxyNumbers(LPCSTR iniFileName)
     return numbers;
 }
 
+// The number a new proxy record may take. It has to clear two things, not one:
+// every record that exists, and every number a session still points at. Stale
+// references outlive their record — a session keeps `proxynr=1` long after
+// `[proxy]` is gone — and handing that number to a new record would quietly
+// route those sessions through it.
+int NextFreeProxyNr(LPCSTR iniFileName)
+{
+    const std::vector<int> existing = EnumerateProxyNumbers(iniFileName);
+    int highest = existing.empty() ? 0 : existing.back();
+
+    std::array<char, wdirtypemax> name{};
+    SERVERHANDLE hdl = FindFirstServer(name.data(), name.size() - 1);
+    while (hdl) {
+        const int referenced = static_cast<int>(GetPrivateProfileInt(name.data(), "proxynr", 0, iniFileName));
+        if (referenced > highest)
+            highest = referenced;
+        hdl = FindNextServer(hdl, name.data(), name.size() - 1);
+    }
+    return highest + 1;
+}
+
+// The record that already describes this proxy, or 0 when none does. Identity
+// is the route: kind, server and user name. The password takes no part —
+// passwords do not travel between machines, so two records that differ only in
+// whether one is stored describe the same proxy.
+int FindMatchingProxyNr(int proxytype, const std::string& server,
+                        const std::string& user, LPCSTR iniFileName)
+{
+    for (const int proxynr : EnumerateProxyNumbers(iniFileName)) {
+        tConnectSettings data;
+        if (!LoadProxySettingsFromNr(proxynr, &data, iniFileName))
+            continue;
+        if (static_cast<int>(data.proxytype) == proxytype &&
+            _stricmp(data.proxyserver.c_str(), server.c_str()) == 0 &&
+            _stricmp(data.proxyuser.c_str(), user.c_str()) == 0)
+        {
+            return proxynr;
+        }
+    }
+    return 0;
+}
+
 bool LoadProxySettingsFromNr(int proxynr, pConnectSettings ConnectResults, LPCSTR iniFileName)
 {
     if (proxynr > 0) {

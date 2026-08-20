@@ -368,6 +368,7 @@
 12119= LAN Pair-sessie: 
 12120=Deze instellingen komen uit sessie '{}' en zijn alleen-lezen. Kies (geen) in de jump-hostlijst om hier een host in te stellen.
 12121=Deze sessie bereikt zijn host via iets dat niet is meegeïmporteerd: een proxy, een jump host of een tunnel. Nu verbinden zou rechtstreeks naar het doel gaan, langs precies datgene wat ertussen was gezet, en wordt daarom geweigerd.
+12122=De sessie was ingesteld om via een proxy te verbinden, maar het bestand bevat er geen beschrijving van. De sessie is zonder de proxy geïmporteerd en zal rechtstreeks verbinden; controleer daarom de proxy-instelling voordat u haar gebruikt.
 12089=SFTP
 12104=(geen)
 12105= (ontbreekt)

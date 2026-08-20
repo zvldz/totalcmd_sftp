@@ -44,6 +44,15 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   Its duplicate "use jump host" checkbox is gone; the one on the main
   dialog was always the one that counted.
 
+- **A session copied to another machine takes its proxy along.** Copying
+  a session out of the plugin writes an INI file; until now that file
+  named the proxy by its position in your list, so the session landed
+  elsewhere pointing at a different proxy, or at none — connecting
+  straight to the host. The proxy is now described in the file, and on
+  the way back an identical one already present is reused instead of
+  being duplicated. Passwords still stay behind, on both the session and
+  the proxy, and are asked for on the first connection.
+
 - **Proxies have a folder of their own.** `[Proxies]` sits in the plugin
   root next to `[Imports]`: one row per proxy, `F7` to add, `Enter` to
   edit, `F8` to delete. A proxy still used by a session is not deleted —

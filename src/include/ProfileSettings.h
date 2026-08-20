@@ -9,6 +9,17 @@ bool LoadProxySettingsFromNr(int proxynr, pConnectSettings ConnectResults, LPCST
 // Proxy record numbers present in the file, ascending. Numbering may have
 // holes, so this reads the sections rather than counting up from one.
 std::vector<int> EnumerateProxyNumbers(LPCSTR iniFileName);
+
+// The record describing the same route, or 0. Used when a session arrives from
+// elsewhere carrying its proxy: an identical record is reused rather than
+// duplicated, and only a route we have never seen creates one.
+int FindMatchingProxyNr(int proxytype, const std::string& server,
+                        const std::string& user, LPCSTR iniFileName);
+
+// The number a new record may take: above every record that exists and above
+// every number a session still points at, so a stale reference never inherits
+// a record it was not meant to have.
+int NextFreeProxyNr(LPCSTR iniFileName);
 bool LoadServerSettings(LPCSTR DisplayName, pConnectSettings ConnectResults, LPCSTR iniFileName);
 
 

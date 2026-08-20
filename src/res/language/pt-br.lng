@@ -368,6 +368,7 @@
 12119= Sessão LAN Pair: 
 12120=Estas configurações vêm da sessão '{}' e são somente leitura. Escolha (nenhuma) na lista de jump hosts para configurar um aqui.
 12121=Esta sessão alcança seu host através de algo que não foi importado junto: um proxy, um jump host ou um túnel. Conectar agora iria direto ao destino, contornando justamente o que foi colocado no caminho, por isso é recusado.
+12122=A sessão estava configurada para conectar através de um proxy, mas o arquivo não traz a descrição dele. A sessão foi importada sem o proxy e conectará diretamente, então verifique a configuração de proxy antes de usá-la.
 12089=SFTP
 12104=(nenhuma)
 12105= (ausente)
