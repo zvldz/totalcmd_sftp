@@ -1108,15 +1108,27 @@ int WINAPI FsRenMovFileW(LPCWSTR OldName, LPCWSTR NewName, BOOL Move, BOOL OverW
         }
 
         // --- 3. Server-side rename (file / directory inside a session) ---
+        // Two different sessions cannot be joined by a server-side rename. Say
+        // so with the code the API reserves for it: on NOTSUPPORTED, Total
+        // Commander copies the file itself, downloading to a temp file and
+        // uploading from there. Any other answer, NOTFOUND included, reads as
+        // plain failure and the copy stops. The comparison is by session name
+        // rather than by resolved pointer, since a session open only in
+        // another thread resolves to nothing here and two of those would look
+        // like one and the same.
+        const PathResolution rOldFile = ResolvePathKindW(OldName);
+        const PathResolution rNewFile = ResolvePathKindW(NewName);
+        if (_stricmp(rOldFile.displayName.c_str(), rNewFile.displayName.c_str()) != 0)
+            return FS_FILE_NOTSUPPORTED;
+
         std::wstring olddir(wdirtypemax, L'\0');
         std::wstring newdir(wdirtypemax, L'\0');
-        pConnectSettings serverid1 = GetServerIdAndRelativePathFromPathW(OldName, olddir.data(), olddir.size() - 1);
-        pConnectSettings serverid2 = GetServerIdAndRelativePathFromPathW(NewName, newdir.data(), newdir.size() - 1);
+        pConnectSettings serverid1 = ResolveTransferSession(OldName, olddir.data(), olddir.size() - 1);
+        pConnectSettings serverid2 = ResolveTransferSession(NewName, newdir.data(), newdir.size() - 1);
         olddir.resize(wcslen(olddir.data()));
         newdir.resize(wcslen(newdir.data()));
 
-        // Source and destination must be on the same server.
-        if (serverid1 != serverid2 || serverid1 == nullptr)
+        if (serverid1 == nullptr || serverid1 != serverid2)
             return FS_FILE_NOTFOUND;
 
         ResetLastPercent(serverid1);

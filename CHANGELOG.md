@@ -33,14 +33,15 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 
 ### Fixes
 
-- **Copying between two plugin panels works.** With a different session
-  open in each panel, copying a file from one to the other failed
-  immediately with "Error downloading file!" — before any network
-  activity. The plugin keeps a separate connection per thread, and a
-  transfer runs in one panel's thread while the other panel's session
-  belongs to its own; browsing had always opened a connection when it
-  found none there, but transfers gave up instead. Present since the
-  first release of the original plugin.
+- **Copying a file from one server to another works.** With a different
+  session open in each panel, copying between them failed immediately
+  with "Error downloading file!". Two servers cannot be joined by a
+  server-side move, and the plugin was answering that with the wrong
+  refusal — one Total Commander reads as plain failure instead of as
+  "do it yourself", which is what makes it copy the file through a
+  temporary one. Transfers also open the session in their own thread
+  now, rather than giving up when the panel that has it open is
+  elsewhere. Present since the first release of the original plugin.
 
 - **The jump-host dialog shows where its settings come from.** When a
   session supplies the jump host, the dialog used to be unreachable —
