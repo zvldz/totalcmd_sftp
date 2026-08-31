@@ -166,6 +166,49 @@ static bool RefuseIfDependencyBlocks(const std::string& cacheSection)
     return true;
 }
 
+// The session a transfer names, opened in this thread if it is only open in
+// another one.
+//
+// Connections are per thread: the registry is keyed by name *and* thread id, so
+// a session listed in one panel is a different connection from the one a
+// transfer thread would use. Listing has always handled that by connecting on
+// demand; transfers did not, and returned a read error before touching the
+// network — which is what copying between two plugin panels ran into, since the
+// copy runs in one panel's thread while the other panel's session lives in its
+// own.
+static pConnectSettings ResolveTransferSession(LPCWSTR RemoteName,
+                                               LPWSTR relativeOut, size_t maxlen)
+{
+    if (pConnectSettings serverid =
+            GetServerIdAndRelativePathFromPathW(RemoteName, relativeOut, maxlen))
+    {
+        return serverid;
+    }
+
+    const PathResolution r = ResolvePathKindW(RemoteName);
+    if (r.kind != PathKind::SessionLeaf && r.kind != PathKind::SessionWithSubpath)
+        return nullptr;
+
+    pConnectSettings fresh = nullptr;
+    if (sftp::IsVirtualSessionAlias(r.displayName.c_str())) {
+        // A session from [Imports] keeps its fields in the scan cache, not in
+        // our INI, and is reachable only through the alias its Enter registered.
+        const auto info = sftp::LookupVirtualSession(r.displayName.c_str());
+        const std::string& cachePath = sftp::GetImportCache().CacheFilePath();
+        if (!info || cachePath.empty())
+            return nullptr;
+        fresh = SftpConnectToServer(info->cacheSection.c_str(), cachePath.c_str(),
+                                    nullptr, r.displayName.c_str());
+    } else {
+        fresh = SftpConnectToServer(r.displayName.c_str(), inifilename, nullptr);
+    }
+    if (!fresh)
+        return nullptr;
+
+    SetServerIdForName(r.displayName.c_str(), static_cast<SERVERID>(fresh));
+    return GetServerIdAndRelativePathFromPathW(RemoteName, relativeOut, maxlen);
+}
+
 static std::optional<int> TryImportSessionFromUpload(
     LPCWSTR LocalName, LPCWSTR RemoteName, BOOL OverWrite)
 {
@@ -1382,7 +1425,7 @@ int WINAPI FsGetFileW(LPCWSTR RemoteName, LPWSTR LocalName, int CopyFlags, Remot
         SanitizeLocalFileNameW(LocalName);
 
         std::wstring remotedir(wdirtypemax, L'\0');
-        pConnectSettings serverid = GetServerIdAndRelativePathFromPathW(RemoteName, remotedir.data(), remotedir.size() - 1);
+        pConnectSettings serverid = ResolveTransferSession(RemoteName, remotedir.data(), remotedir.size() - 1);
         if (serverid == nullptr)
             return FS_FILE_READERROR;
 
@@ -1530,7 +1573,7 @@ int WINAPI FsPutFileW(LPCWSTR LocalName, LPCWSTR RemoteName, int CopyFlags)
 
         std::array<WCHAR, wdirtypemax> remotedir{};
 
-        pConnectSettings serverid = GetServerIdAndRelativePathFromPathW(RemoteName, remotedir.data(), remotedir.size() - 1);
+        pConnectSettings serverid = ResolveTransferSession(RemoteName, remotedir.data(), remotedir.size() - 1);
         if (serverid == nullptr)
             return FS_FILE_READERROR;
         ResetLastPercent(serverid);

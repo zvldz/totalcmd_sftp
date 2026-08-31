@@ -33,6 +33,15 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 
 ### Fixes
 
+- **Copying between two plugin panels works.** With a different session
+  open in each panel, copying a file from one to the other failed
+  immediately with "Error downloading file!" — before any network
+  activity. The plugin keeps a separate connection per thread, and a
+  transfer runs in one panel's thread while the other panel's session
+  belongs to its own; browsing had always opened a connection when it
+  found none there, but transfers gave up instead. Present since the
+  first release of the original plugin.
+
 - **The jump-host dialog shows where its settings come from.** When a
   session supplies the jump host, the dialog used to be unreachable —
   the button simply went grey — while anything typed into it on an
