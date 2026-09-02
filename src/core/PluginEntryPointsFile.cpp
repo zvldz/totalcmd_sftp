@@ -966,10 +966,116 @@ static bool CopyMoveEncryptedPassword(LPCSTR OldName, LPSTR NewName, bool Move)
     return (rc == FS_FILE_OK) ? true : false;
 }
 
+// Copy one file from one session to another, which no single SFTP operation
+// can do: the data travels down to this machine and back up regardless, so it
+// lands in a temporary file on the way. Directories are refused — Total
+// Commander walks a tree itself, creating each directory through FsMkDir and
+// calling here once per file.
+// Lends one session a slice of the progress bar, and the pair of names the
+// user should see, for as long as its leg of a two-leg copy runs.
+class ProgressSlice {
+public:
+    ProgressSlice(pConnectSettings cs, int from, int span, LPCWSTR source, LPCWSTR target) noexcept
+        : m_cs(cs)
+    {
+        if (!m_cs) return;
+        m_cs->progressFrom = from;
+        m_cs->progressSpan = span;
+        m_cs->progressSourceOverride = source;
+        m_cs->progressTargetOverride = target;
+    }
+    ~ProgressSlice()
+    {
+        if (!m_cs) return;
+        m_cs->progressFrom = 0;
+        m_cs->progressSpan = 100;
+        m_cs->progressSourceOverride = nullptr;
+        m_cs->progressTargetOverride = nullptr;
+    }
+    ProgressSlice(const ProgressSlice&) = delete;
+    ProgressSlice& operator=(const ProgressSlice&) = delete;
+private:
+    pConnectSettings m_cs;
+};
+
+static int CopyBetweenSessions(LPCWSTR OldName, LPCWSTR NewName,
+                               bool Move, bool OverWrite, RemoteInfoStruct* ri)
+{
+    if (ri && (ri->Attr & FILE_ATTRIBUTE_DIRECTORY))
+        return FS_FILE_NOTSUPPORTED;
+
+    std::wstring srcRel(wdirtypemax, L'\0');
+    std::wstring dstRel(wdirtypemax, L'\0');
+    pConnectSettings src = ResolveTransferSession(OldName, srcRel.data(), srcRel.size() - 1);
+    pConnectSettings dst = ResolveTransferSession(NewName, dstRel.data(), dstRel.size() - 1);
+    srcRel.resize(wcslen(srcRel.data()));
+    dstRel.resize(wcslen(dstRel.data()));
+    if (!src || !dst)
+        return FS_FILE_NOTFOUND;
+
+    std::array<wchar_t, MAX_PATH> tempDir{};
+    std::array<wchar_t, MAX_PATH> tempFile{};
+    if (!GetTempPathW(static_cast<DWORD>(tempDir.size()), tempDir.data()) ||
+        !GetTempFileNameW(tempDir.data(), L"sftp", 0, tempFile.data()))
+    {
+        return FS_FILE_WRITEERROR;
+    }
+
+    SFTP_LOG("ENTRY", "CopyBetweenSessions '%S' -> '%S' via '%S'",
+             srcRel.c_str(), dstRel.c_str(), tempFile.data());
+
+    // Reading owns the first half of the bar, writing the second, and both
+    // report the two remote names so the temporary file never shows up.
+    int rc = 0;
+    {
+        ProgressSlice _slice(src, 0, 50, OldName, NewName);
+        rc = SftpDownloadFileW(src, srcRel.c_str(), tempFile.data(), true,
+                               ri ? ri->Size64 : 0,
+                               ri ? &ri->LastWriteTime : nullptr, false);
+    }
+    SFTP_LOG("ENTRY", "CopyBetweenSessions download rc=%d", rc);
+    if (rc != SFTP_OK) {
+        DeleteFileW(tempFile.data());
+        return (rc == SFTP_ABORT) ? FS_FILE_USERABORT : FS_FILE_READERROR;
+    }
+
+    {
+        // The upload runs against the other session, so its status lines and
+        // progress belong to that one.
+        SessionContextGuard _dstGuard(dst);
+        ProgressSlice _slice(dst, 50, 50, OldName, NewName);
+        rc = SftpUploadFileW(dst, tempFile.data(), dstRel.c_str(), false, true);
+    }
+    SFTP_LOG("ENTRY", "CopyBetweenSessions upload rc=%d", rc);
+    DeleteFileW(tempFile.data());
+
+    switch (rc) {
+        case SFTP_OK: break;
+        case SFTP_EXISTS:
+            return OverWrite ? FS_FILE_WRITEERROR : FS_FILE_EXISTS;
+        case SFTP_ABORT:
+            return FS_FILE_USERABORT;
+        default:
+            return FS_FILE_WRITEERROR;
+    }
+
+    // A move is the same copy with the source taken away once the destination
+    // is safely written.
+    if (Move) {
+        SessionContextGuard _srcGuard(src);
+        SftpDeleteFileW(src, srcRel.c_str(), false);
+    }
+    return FS_FILE_OK;
+}
+
 int WINAPI FsRenMovFileW(LPCWSTR OldName, LPCWSTR NewName, BOOL Move, BOOL OverWrite, RemoteInfoStruct * ri)
 {
     sftp::DllExceptionBarrier _barrier;
     return sftp::dll_invoke(_barrier, FS_FILE_WRITEERROR, [&]() -> int {
+        SFTP_LOG("ENTRY", "FsRenMovFileW start old='%S' new='%S' move=%d overwrite=%d",
+                 OldName ? OldName : L"(null)", NewName ? NewName : L"(null)",
+                 Move ? 1 : 0, OverWrite ? 1 : 0);
+
         // \[Imports]\ interactions with FsRenMovFile:
         //   OldName in Imports + NewName outside → materialise (both F5 copy
         //     and F6 move; the "delete source" leg of a move is a no-op for
@@ -1118,8 +1224,20 @@ int WINAPI FsRenMovFileW(LPCWSTR OldName, LPCWSTR NewName, BOOL Move, BOOL OverW
         // like one and the same.
         const PathResolution rOldFile = ResolvePathKindW(OldName);
         const PathResolution rNewFile = ResolvePathKindW(NewName);
+        SFTP_LOG("ENTRY", "FsRenMovFileW file branch: oldSession='%s' newSession='%s'",
+                 rOldFile.displayName.c_str(), rNewFile.displayName.c_str());
+
+        // Two different sessions: no server-side rename can join them, and
+        // Total Commander does not step in either — answering NOTSUPPORTED
+        // just ends the copy with an error, which is what this used to do. So
+        // the plugin carries the file itself, down from one session and up to
+        // the other. It goes through a local temporary file rather than
+        // straight from socket to socket: the data has to pass through this
+        // machine either way, and the existing transfer paths already handle
+        // progress, cancellation, resume and every transport the plugin
+        // speaks.
         if (_stricmp(rOldFile.displayName.c_str(), rNewFile.displayName.c_str()) != 0)
-            return FS_FILE_NOTSUPPORTED;
+            return CopyBetweenSessions(OldName, NewName, !!Move, !!OverWrite, ri);
 
         std::wstring olddir(wdirtypemax, L'\0');
         std::wstring newdir(wdirtypemax, L'\0');

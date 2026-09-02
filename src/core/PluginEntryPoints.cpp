@@ -444,7 +444,14 @@ void ShowStatusW(LPCWSTR status) noexcept
 bool UpdatePercentBar(pConnectSettings ConnectSettings, int percent, LPCWSTR source, LPCWSTR target) noexcept
 {
     if (ConnectSettings) {
-        ConnectSettings->lastpercent = percent;  // used for MessageLoop below
+        // Fold this leg's own 0..100 into the slice of the bar it owns. A
+        // plain transfer owns the whole bar and the arithmetic changes nothing.
+        ConnectSettings->lastpercent =
+            ConnectSettings->progressFrom + percent * ConnectSettings->progressSpan / 100;
+        if (ConnectSettings->progressSourceOverride)
+            source = ConnectSettings->progressSourceOverride;
+        if (ConnectSettings->progressTargetOverride)
+            target = ConnectSettings->progressTargetOverride;
         if (source)
             wcslcpy(ConnectSettings->current_sourceW, source, countof(ConnectSettings->current_sourceW) - 1);
 

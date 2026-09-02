@@ -113,6 +113,14 @@ struct tConnectSettings {
     std::string proxypassword;
     SYSTICKS lastpercenttime;
     int lastpercent;
+    // A copy between two sessions is two transfers, and Total Commander shows
+    // one progress bar. Each leg reports its own 0..100, so it is folded into
+    // a slice of the whole here, and the names shown are those of the two
+    // remote files rather than the temporary one standing between them.
+    int  progressFrom = 0;
+    int  progressSpan = 100;
+    const wchar_t* progressSourceOverride = nullptr;
+    const wchar_t* progressTargetOverride = nullptr;
     sftp::PassSaveMode passSaveMode;
     bool InteractivePasswordSent;
     int trycustomlistcommand;  // set to 2 initially, reduce to 1 or 0 if failing

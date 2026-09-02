@@ -33,15 +33,15 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 
 ### Fixes
 
-- **Copying a file from one server to another works.** With a different
+- **Copying files from one server to another works.** With a different
   session open in each panel, copying between them failed immediately
-  with "Error downloading file!". Two servers cannot be joined by a
-  server-side move, and the plugin was answering that with the wrong
-  refusal — one Total Commander reads as plain failure instead of as
-  "do it yourself", which is what makes it copy the file through a
-  temporary one. Transfers also open the session in their own thread
-  now, rather than giving up when the panel that has it open is
-  elsewhere. Present since the first release of the original plugin.
+  with "Error downloading file!" — nothing was transferred and nothing
+  was even attempted. No single SFTP operation can join two servers, and
+  Total Commander does not step in for a plugin here, so the plugin now
+  carries the file itself: down from one session and up to the other,
+  with one progress bar across both halves. Copy, move, several files at
+  once and whole folders all work, in both directions. Broken since the
+  first release of the original plugin.
 
 - **The jump-host dialog shows where its settings come from.** When a
   session supplies the jump host, the dialog used to be unreachable —
