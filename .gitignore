@@ -64,3 +64,4 @@ src/include/build_info_gen.h
 # Archiwa lokalne
 *.7z
 *.tar.gz
+debug.log
