@@ -1758,7 +1758,17 @@ int WINAPI FsPutFileW(LPCWSTR LocalName, LPCWSTR RemoteName, int CopyFlags)
         int rc = SftpUploadFileW(serverid, LocalName, remotedir.data(), Resume, setattr);
         SFTP_LOG("ENTRY", "FsPutFileW SftpUploadFileW rc=%d", rc);
         switch (rc) {
-            case SFTP_OK:          return FS_FILE_OK;
+            case SFTP_OK:
+                // The mirror of a download that is a move: here it is the
+                // local file that has to go, and the plugin is the one asked
+                // to remove it. Total Commander only takes away the side it
+                // owns, which for an upload is the remote one.
+                if (Move && !DeleteFileW(LocalName)) {
+                    SFTP_LOG("ENTRY", "FsPutFileW move: could not delete '%S' (%lu)",
+                             LocalName, GetLastError());
+                    ShowStatusId(IDS_ERR_DELETE, nullptr, true);
+                }
+                return FS_FILE_OK;
             case SFTP_EXISTS:      return SftpSupportsResume(serverid) ? FS_FILE_EXISTSRESUMEALLOWED : FS_FILE_EXISTS;
             case SFTP_READFAILED:  return FS_FILE_READERROR;
             case SFTP_WRITEFAILED: return FS_FILE_WRITEERROR;

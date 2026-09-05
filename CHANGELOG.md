@@ -33,13 +33,15 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 
 ### Fixes
 
-- **F6 from a server to your computer moves the file instead of copying
-  it.** The download ran, and the file on the server stayed where it was
-  — the plugin was told this was a move and never acted on it. Total
-  Commander removes the local side of a move; the remote side is the
-  plugin's to remove, and now it does. If it cannot, it says so rather
-  than leaving you to notice the file twice. Affects every server type,
-  and has since the first release of the original plugin.
+- **F6 moves the file instead of copying it, in both directions.** The
+  transfer ran and the original stayed where it was: the plugin was told
+  this was a move and never acted on it, on downloads or on uploads.
+  Each side of a move is removed by whoever owns it, and the plugin owns
+  the far side of both — the file on the server when you move from it,
+  the file on your disk when you move to it. If it cannot be removed,
+  that is now said out loud rather than leaving you to notice the file
+  twice. Affects every server type, and has since the first release of
+  the original plugin.
 
 - **Servers without SFTP work outside the login directory.** On a host
   that offers only a shell — dropbear on a camera or a router, say —
