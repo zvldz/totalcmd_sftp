@@ -290,7 +290,13 @@ bool EnsureScpShell(pConnectSettings cs)
 
     // Request PTY
     int ptyRc = WaitForOperation([&] {
-        return channel->requestPty("vt102", 5, "", 0, 80, 40, 640, 480);
+        // A wide terminal, because the shell echoes back what it is sent and the
+        // reader tells output from that echo by the markers wrapped around each
+        // command. At 80 columns a command with a full path wraps, the tail
+        // carries the end marker, and the reading stops before any output is
+        // seen — a listing then looks like an empty directory and a transfer
+        // like an empty file.
+        return channel->requestPty("vt102", 5, "", 0, 1000, 40, 8000, 480);
     }, kScpPtyOpenTimeoutMs, cs);
 
     if (ptyRc < 0 && ptyRc != LIBSSH2_ERROR_EAGAIN) {

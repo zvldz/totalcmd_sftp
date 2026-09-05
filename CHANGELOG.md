@@ -44,6 +44,13 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   deletion fall back to the old reading when the server rejects the
   plain path.
 
+- **Shell transfer mode works.** The plugin asks such a server for an
+  80-column terminal, and the server echoes every command back at that
+  width. A command carrying a full path wrapped, and the plugin mistook
+  the wrapped remainder for the end of the output — so a transfer read
+  nothing and reported an empty file. The terminal is now wide enough
+  that commands are not broken up.
+
 - **Renaming and moving on such a server work.** The command was built
   from the Windows form of the path, backslashes and all, which a shell
   reads as a name no file has — and whatever the shell then answered was
