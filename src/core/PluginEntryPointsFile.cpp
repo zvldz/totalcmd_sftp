@@ -1051,19 +1051,20 @@ static int CopyBetweenSessions(LPCWSTR OldName, LPCWSTR NewName,
 
     switch (rc) {
         case SFTP_OK: break;
-        case SFTP_EXISTS:
-            return OverWrite ? FS_FILE_WRITEERROR : FS_FILE_EXISTS;
-        case SFTP_ABORT:
-            return FS_FILE_USERABORT;
-        default:
-            return FS_FILE_WRITEERROR;
+        case SFTP_EXISTS:      return FS_FILE_EXISTS;
+        case SFTP_ABORT:       return FS_FILE_USERABORT;
+        default:               return FS_FILE_WRITEERROR;
     }
 
     // A move is the same copy with the source taken away once the destination
-    // is safely written.
+    // is safely written. Leaving it behind would turn the move into a copy in
+    // silence, so a refusal to delete is reported.
     if (Move) {
         SessionContextGuard _srcGuard(src);
-        SftpDeleteFileW(src, srcRel.c_str(), false);
+        if (SftpDeleteFileW(src, srcRel.c_str(), false) != SFTP_OK) {
+            SFTP_LOG("ENTRY", "CopyBetweenSessions: the source survived the move");
+            ShowStatusId(IDS_ERR_DELETE, nullptr, true);
+        }
     }
     return FS_FILE_OK;
 }

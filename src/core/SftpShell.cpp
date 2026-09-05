@@ -411,10 +411,18 @@ bool ScpReadCommandOutput(pConnectSettings cs, const char* endMarker,
             continue;
         }
 
+        // The shell may still echo what it was sent, and that echo carries
+        // every marker the command mentions — including the end one, with a
+        // literal "$?" where the status would be. Taken for the real thing it
+        // ends the reading at once and reports a status of zero, so it is
+        // skipped before either test below.
+        if (IsEchoOrPromptLine(trimmed))
+            continue;
+
         // The command ends by echoing the marker, and whatever the command
         // wanted to report rides on that same line. It is handed back rather
         // than dropped, so callers can read an exit status from it.
-        if (!IsEchoOrPromptLine(trimmed) && trimmed.substr(0, endMarkerStr.size()) == endMarkerStr) {
+        if (trimmed.substr(0, endMarkerStr.size()) == endMarkerStr) {
             gotEnd = true;
             if (endLineOut)
                 endLineOut->assign(trimmed);

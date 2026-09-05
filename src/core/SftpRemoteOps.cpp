@@ -183,10 +183,6 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
     }
 
     if (cs->scponly) {
-        // Carries what `ls` said on the previous attempt, so the retry knows
-        // whether it is recovering from a dropped connection or from a path
-        // the server would not read.
-        int lastListStatus = 0;
         // Retry loop in case of silent TCP disconnections (e.g., home.pl)
         for (int attempt = 0; attempt < 2; ++attempt) {
             if (!EnsureScpShell(cs)) {
@@ -219,15 +215,8 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
             cs->scpShellMsgBuf.clear();
             cs->scpShellErrBuf.clear();
 
-            // The path goes to the shell as it is, absolute. Should the server
-            // refuse it, the same listing is retried relative to the login
-            // directory: an account confined to its own directory has no
-            // readable root, and that reading is the only one under which the
-            // panel can show anything there at all.
-            const bool relativeRetry = (attempt > 0 && lastListStatus != 0);
-            std::string listTarget = dirStr;
-            if (relativeRetry && !listTarget.empty() && listTarget[0] == '/')
-                listTarget = (listTarget.size() == 1) ? "." : listTarget.substr(1);
+            // The path goes to the shell exactly as it is.
+            const std::string& listTarget = dirStr;
 
             static unsigned scpListSeq = 1;
             const unsigned markerSeq = scpListSeq++;
@@ -241,8 +230,7 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
             std::string command = "echo \"" + beginMarker + "\"; ls -la '" +
                                   string_util::ShellQuoteSingle(listTarget) +
                                   "'; echo \"" + endMarker + "\":$?\n";
-            SFTP_LOG("FIND", "SCP listing '%s'%s", listTarget.c_str(),
-                     relativeRetry ? " (relative retry)" : "");
+            SFTP_LOG("FIND", "SCP listing '%s'", listTarget.c_str());
 
             // Write command
             bool writeFailed = false;
@@ -327,16 +315,12 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
                 return SFTP_FAILED;
             }
 
-            // The shell answered, and said the path is not one it will list.
-            // The second attempt asks for the same directory relative to the
-            // login directory, which is the only shape an account confined to
-            // its own directory can answer. When that fails too, the reason
-            // goes to the status line instead of leaving an empty panel that
-            // looks like an empty directory.
-            if (listStatus != 0) {
-                lastListStatus = listStatus;
-                if (attempt == 0)
-                    continue;
+            // `ls` reports trouble it ran into while still printing whatever it
+            // could read, so a non-zero status is only fatal when it left us
+            // with nothing: otherwise the panel would lose a directory it can
+            // in fact show. An empty result with a complaint is the case that
+            // used to look like an empty directory.
+            if (listStatus != 0 && entries.empty()) {
                 if (!cs->scpShellErrBuf.empty()) {
                     std::string err = cs->scpShellErrBuf;
                     StripEscapeSequences(err.data());
@@ -556,24 +540,9 @@ int SftpCreateDirectoryW(pConnectSettings cs, LPCWSTR Path)
         return PhpAgentCreateDirectoryW(cs, Path);
 
     if (cs->scponly) {
-        // The path is sent as it is; only when the server refuses it is the
-        // same path retried relative to the login directory, for accounts that
-        // are confined to it and have no readable root. Each attempt needs its
-        // own channel — the reply helper reads the command's exit status, and
-        // a channel carries one command.
-        for (int attempt = 0; attempt < 2; ++attempt) {
-            std::string target = dirStr;
-            if (attempt == 1) {
-                if (target.empty() || target[0] != '/')
-                    break;  // nothing to reinterpret
-                target = (target.size() == 1) ? "." : target.substr(1);
-            }
-
-            auto channel = ConnectChannel(cs->session.get(), cs->sock);
-            if (!channel)
-                break;
-
-            const std::string cmd = "mkdir '" + string_util::ShellQuoteSingle(target) + "'";
+        auto channel = ConnectChannel(cs->session.get(), cs->sock);
+        if (channel) {
+            const std::string cmd = "mkdir '" + string_util::ShellQuoteSingle(dirStr) + "'";
             if (GetChannelCommandReply(cs->session.get(), channel.get(), cmd.c_str(), cs->sock))
                 return SFTP_OK;
         }
@@ -700,17 +669,7 @@ int SftpDeleteFileW(pConnectSettings cs, LPCWSTR RemoteName, bool isdir)
             return gotEnd && exitCode == 0;
         };
 
-        if (runDelete(nameStr))
-            return SFTP_OK;
-
-        // Same fallback as the listing: an account with no readable root can
-        // only be addressed relative to where the login left the shell.
-        if (!nameStr.empty() && nameStr[0] == '/') {
-            const std::string relative = (nameStr.size() == 1) ? "." : nameStr.substr(1);
-            if (runDelete(relative))
-                return SFTP_OK;
-        }
-        return SFTP_FAILED;
+        return runDelete(nameStr) ? SFTP_OK : SFTP_FAILED;
     }
 
     const SYSTICKS start = get_sys_ticks();
@@ -763,18 +722,24 @@ int SftpRenameMoveFileW(pConnectSettings cs, LPCWSTR OldName, LPCWSTR NewName, b
     newNameA.resize(strlen(newNameA.c_str()));
 
     if (cs->scponly) {
-        // Built from the slash-normalised paths, not from the ones TC handed
-        // in: those carry Windows separators, and a shell takes them literally
-        // inside quotes, so the command would name a file that cannot exist.
-        std::string cmd = Move ? "mv '" : "cp '";
-        cmd += string_util::ShellQuoteSingle(oldNameA.c_str()) + "' '";
-        cmd += string_util::ShellQuoteSingle(newNameA.c_str()) + "'";
+        // Separators are turned around first: the names arrive in Windows form,
+        // and a shell reads a backslash inside quotes literally, so the command
+        // would name a file that cannot exist. The wide path is what goes to
+        // the shell helper — it applies the session's own encoding, which a
+        // narrow one would put through the local code page a second time.
+        std::wstring oldW(OldName), newW(NewName);
+        std::replace(oldW.begin(), oldW.end(), L'\\', L'/');
+        std::replace(newW.begin(), newW.end(), L'\\', L'/');
+
+        std::wstring cmdW = Move ? L"mv '" : L"cp '";
+        cmdW += string_util::ShellQuoteSingleW(oldW.c_str()) + L"' '";
+        cmdW += string_util::ShellQuoteSingleW(newW.c_str()) + L"'";
 
         // The helper returns the command's own exit status, so anything but
         // zero is a failure — treating every non-negative answer as success
         // reported renames that never happened.
-        const int rc = SftpQuoteCommand2(cs, nullptr, cmd.c_str(), nullptr, 0);
-        SFTP_LOG("SCP", "rename: %s -> rc=%d", cmd.c_str(), rc);
+        const int rc = SftpQuoteCommand2W(cs, nullptr, cmdW.c_str(), nullptr, 0);
+        SFTP_LOG("SCP", "rename: %S -> rc=%d", cmdW.c_str(), rc);
         return (rc == 0) ? SFTP_OK : SFTP_FAILED;
     }
 
