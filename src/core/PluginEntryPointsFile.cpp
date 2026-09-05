@@ -1356,6 +1356,22 @@ static int CreateHelpFileLocalW(LPCWSTR localName, bool overwrite)
     return ok ? FS_FILE_OK : FS_FILE_WRITEERROR;
 }
 
+// A download that is really a move has to take the remote file away itself —
+// Total Commander removes the local side of a move, never the plugin's side.
+// Failing to remove it leaves the file in both places, so the reason is shown;
+// the download itself has succeeded by then and stays reported as such.
+static int FinishDownloadMove(pConnectSettings serverid, LPCWSTR remoteRelative, bool Move)
+{
+    if (!Move || !serverid)
+        return FS_FILE_OK;
+
+    const int rc = SftpDeleteFileW(serverid, remoteRelative, false);
+    SFTP_LOG("ENTRY", "FsGetFileW move: deleting the source rc=%d", rc);
+    if (rc != SFTP_OK)
+        ShowStatusId(IDS_ERR_DELETE, nullptr, true);
+    return FS_FILE_OK;
+}
+
 int WINAPI FsGetFileW(LPCWSTR RemoteName, LPWSTR LocalName, int CopyFlags, RemoteInfoStruct * ri)
 {
     sftp::DllExceptionBarrier _barrier;
@@ -1620,14 +1636,16 @@ int WINAPI FsGetFileW(LPCWSTR RemoteName, LPWSTR LocalName, int CopyFlags, Remot
                                           ri ? ri->Size64 : 0,
                                           ri ? &ri->LastWriteTime : nullptr,
                                           OverWrite, Resume, &fsResult);
-            return fsResult;
+            return (fsResult == FS_FILE_OK)
+                ? FinishDownloadMove(serverid, remotedir.data(), Move)
+                : fsResult;
         }
 
         while (true) {  // auto-resume loop
             int rc = SftpDownloadFileW(serverid, remotedir.data(), LocalName, true, ri->Size64, &ri->LastWriteTime, Resume);
             SFTP_LOG("ENTRY", "FsGetFileW SftpDownloadFileW rc=%d", rc);
             switch (rc) {
-                case SFTP_OK:          return FS_FILE_OK;
+                case SFTP_OK:          return FinishDownloadMove(serverid, remotedir.data(), Move);
                 case SFTP_EXISTS:      return FS_FILE_EXISTS;
                 case SFTP_READFAILED:  return FS_FILE_READERROR;
                 case SFTP_WRITEFAILED: return FS_FILE_WRITEERROR;
