@@ -316,6 +316,39 @@ bool EnsureScpShell(pConnectSettings cs)
     cs->scpShellChannel = std::move(channel);
     cs->scpShellMsgBuf.clear();
     cs->scpShellErrBuf.clear();
+
+    // Silence the terminal's echo. Everything sent here comes back otherwise,
+    // and the reader tells a command's output from that echo by the markers
+    // around it — an echo long enough to be broken up defeats that, and an
+    // upload carries its data inside the command line, where no terminal width
+    // is enough. A shell without `stty` simply ignores this and behaves as it
+    // did before.
+    {
+        const std::string quiet = "stty -echo 2>/dev/null\n";
+        size_t written = 0;
+        const auto start = std::chrono::steady_clock::now();
+        while (written < quiet.size()) {
+            const int rc = static_cast<int>(
+                cs->scpShellChannel->write(quiet.data() + written, quiet.size() - written));
+            if (rc > 0) {
+                written += rc;
+                continue;
+            }
+            if (rc != LIBSSH2_ERROR_EAGAIN)
+                break;
+            if (std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now() - start).count() > kScpShellOpenTimeoutMs)
+                break;
+            IsSocketReadable(cs->sock);
+        }
+        // Let the command run, then drop whatever it echoed on its way out.
+        Sleep(200);
+        std::array<char, 1024> drain{};
+        while (cs->scpShellChannel->read(drain.data(), drain.size()) > 0) {
+        }
+        cs->scpShellMsgBuf.clear();
+        cs->scpShellErrBuf.clear();
+    }
     return true;
 }
 
