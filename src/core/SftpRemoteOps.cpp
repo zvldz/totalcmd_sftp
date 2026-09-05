@@ -759,13 +759,23 @@ int SftpRenameMoveFileW(pConnectSettings cs, LPCWSTR OldName, LPCWSTR NewName, b
     CopyStringW2A(cs, NewName, newNameA.data(), newNameA.size());
     ReplaceBackslashBySlash(oldNameA.data());
     ReplaceBackslashBySlash(newNameA.data());
+    oldNameA.resize(strlen(oldNameA.c_str()));
+    newNameA.resize(strlen(newNameA.c_str()));
 
     if (cs->scponly) {
-        std::wstring cmdW = Move ? L"mv '" : L"cp '";
-        cmdW += string_util::ShellQuoteSingleW(OldName) + L"' '";
-        cmdW += string_util::ShellQuoteSingleW(NewName) + L"'";
-        const int rc = SftpQuoteCommand2W(cs, nullptr, cmdW.c_str(), nullptr, 0);
-        return (rc >= 0) ? SFTP_OK : SFTP_FAILED;
+        // Built from the slash-normalised paths, not from the ones TC handed
+        // in: those carry Windows separators, and a shell takes them literally
+        // inside quotes, so the command would name a file that cannot exist.
+        std::string cmd = Move ? "mv '" : "cp '";
+        cmd += string_util::ShellQuoteSingle(oldNameA.c_str()) + "' '";
+        cmd += string_util::ShellQuoteSingle(newNameA.c_str()) + "'";
+
+        // The helper returns the command's own exit status, so anything but
+        // zero is a failure — treating every non-negative answer as success
+        // reported renames that never happened.
+        const int rc = SftpQuoteCommand2(cs, nullptr, cmd.c_str(), nullptr, 0);
+        SFTP_LOG("SCP", "rename: %s -> rc=%d", cmd.c_str(), rc);
+        return (rc == 0) ? SFTP_OK : SFTP_FAILED;
     }
 
     if (!Overwrite) {

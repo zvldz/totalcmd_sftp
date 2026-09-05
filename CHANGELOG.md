@@ -44,6 +44,11 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   deletion fall back to the old reading when the server rejects the
   plain path.
 
+- **Renaming and moving on such a server work.** The command was built
+  from the Windows form of the path, backslashes and all, which a shell
+  reads as a name no file has — and whatever the shell then answered was
+  taken as success, so nothing moved and nothing complained.
+
 - **Downloading from such a server works at all.** The plugin waited for
   an acknowledgement that `scp` never sends when it is the one supplying
   the file, and mistook the first byte of the file's header for a broken
