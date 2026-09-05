@@ -18,6 +18,7 @@
 #include "UnicodeHelpers.h"
 #include "PluginEntryPoints.h"
 #include "ConnectionDialog.h"
+#include "TransferUtils.h"
 #include "ProfileSettings.h"
 #include "DllExceptionBarrier.h"
 #include "LanPairSession.h"
@@ -966,6 +967,36 @@ static bool CopyMoveEncryptedPassword(LPCSTR OldName, LPSTR NewName, bool Move)
     return (rc == FS_FILE_OK) ? true : false;
 }
 
+// Whether the session already holds that file. Answered over SFTP where the
+// session speaks it, and over the shell otherwise; a session that can answer
+// neither says "no", which leaves the decision where it was before.
+static bool RemoteFileExists(pConnectSettings cs, LPCWSTR remoteRelative)
+{
+    if (!cs || !remoteRelative || !remoteRelative[0])
+        return false;
+
+    std::string pathA = ToRemotePathA(cs, remoteRelative);
+    if (pathA.empty())
+        return false;
+
+    if (!cs->scponly && cs->sftpsession) {
+        LIBSSH2_SFTP_ATTRIBUTES attr{};
+        int rc = 0;
+        do {
+            rc = cs->sftpsession->lstat(pathA.c_str(), &attr);
+            if (rc == LIBSSH2_ERROR_EAGAIN)
+                IsSocketReadable(cs->sock);
+        } while (rc == LIBSSH2_ERROR_EAGAIN);
+        return rc >= 0;
+    }
+
+    if (cs->scponly) {
+        const std::string cmd = "test -e '" + string_util::ShellQuoteSingle(pathA) + "'";
+        return SftpQuoteCommand2(cs, nullptr, cmd.c_str(), nullptr, 0) == 0;
+    }
+    return false;
+}
+
 // Copy one file from one session to another, which no single SFTP operation
 // can do: the data travels down to this machine and back up regardless, so it
 // lands in a temporary file on the way. Directories are refused — Total
@@ -1020,6 +1051,13 @@ static int CopyBetweenSessions(LPCWSTR OldName, LPCWSTR NewName,
     {
         return FS_FILE_WRITEERROR;
     }
+
+    // Total Commander expects to be told when the destination is taken: it
+    // asks the user and calls again with the flag set. The upload underneath
+    // truncates without looking, so without this the answer would be given by
+    // overwriting the file.
+    if (!OverWrite && RemoteFileExists(dst, dstRel.c_str()))
+        return FS_FILE_EXISTS;
 
     SFTP_LOG("ENTRY", "CopyBetweenSessions '%S' -> '%S' via '%S'",
              srcRel.c_str(), dstRel.c_str(), tempFile.data());

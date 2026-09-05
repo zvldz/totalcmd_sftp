@@ -33,6 +33,18 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 
 ### Fixes
 
+- **An upload through the shell no longer claims to have worked when it
+  did not.** Each piece of the file was counted as written the moment the
+  server answered anything at all, so a missing tool, a read-only folder
+  or a full disk still read as success — and an upload that was really a
+  move then deleted the local original. The server's own answer is now
+  read, and the size it ended up with is compared against what was sent.
+
+- **A move and a cross-server copy ask before replacing a file.** Both
+  went ahead silently: the destination was truncated without Total
+  Commander getting the chance to ask, and a move destroyed the source on
+  top of that.
+
 - **A file name can no longer run commands on the server.** On servers
   the plugin drives through a shell, the file's name went into the
   command line unquoted, so a name containing a semicolon or a backtick

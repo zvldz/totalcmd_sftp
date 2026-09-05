@@ -126,12 +126,20 @@ static bool ShellIsEchoOrPromptLine(const char* line) noexcept
 }
 
 template <typename LineHandler>
+// `outExitCode`, when given, receives what the command answered: the status is
+// appended to the end marker, and the marker line is consumed here rather than
+// passed on, so a caller has no other way to learn it. Left at -1 when the
+// command did not get that far.
 static bool ShellExecPersistentProcessLines(
     pConnectSettings cs,
     const std::string& payload,
     DWORD timeoutMs,
-    LineHandler onLine)
+    LineHandler onLine,
+    int* outExitCode = nullptr)
 {
+    if (outExitCode)
+        *outExitCode = -1;
+
     if (!cs)
         return false;
     if (!EnsureScpShell(cs))
@@ -190,10 +198,20 @@ static bool ShellExecPersistentProcessLines(
         // in the line for shells that inject prompt prefixes.
         if (!ShellIsEchoOrPromptLine(p) && strncmp(p, endMarker.data(), endMarkerLen) == 0) {
             gotEndMarker = true;
+            if (outExitCode) {
+                const char* colon = strrchr(p, ':');
+                if (colon)
+                    *outExitCode = atoi(colon + 1);
+            }
             break;
         }
-        if (strstr(p, endMarker.data()) != nullptr) {
+        if (const char* at = strstr(p, endMarker.data())) {
             gotEndMarker = true;
+            if (outExitCode) {
+                const char* colon = strchr(at, ':');
+                if (colon)
+                    *outExitCode = atoi(colon + 1);
+            }
             break;
         }
 
@@ -221,14 +239,15 @@ static bool ShellExecPersistentProcessLines(
 static bool ShellExecPersistentCollectLines(
     pConnectSettings cs,
     const std::string& payload,
-    std::vector<std::string>& outLines)
+    std::vector<std::string>& outLines,
+    int* outExitCode = nullptr)
 {
     outLines.clear();
     return ShellExecPersistentProcessLines(cs, payload, 90000,
         [&](const char* p, size_t len) -> bool {
             outLines.emplace_back(p, len);
             return true;
-        });
+        }, outExitCode);
 }
 
 // ---- helper: get remote file size via "wc -c" ----
@@ -601,8 +620,15 @@ static int ShellDdUploadBase64(
         cmd += "'";
 
         std::vector<std::string> cmdOut;
-        bool cmdOk = ShellExecPersistentCollectLines(cs, cmd, cmdOut);
+        int chunkStatus = -1;
+        // A chunk counts as written only when the shell says so. Reading just
+        // the markers reports success for a missing `base64`, a read-only
+        // destination or a full disk — and an upload that is really a move
+        // deletes the local original on the strength of that answer.
+        bool cmdOk = ShellExecPersistentCollectLines(cs, cmd, cmdOut, &chunkStatus)
+                     && chunkStatus == 0;
         if (!cmdOk) {
+            SHELL_DD_LOG("b64 upload chunk: shell answered %d", chunkStatus);
             SHELL_DD_LOG("b64 upload chunk failed at offset %lld", (long long)*outSizeLoaded);
             return SFTP_WRITEFAILED;
         }
@@ -614,6 +640,18 @@ static int ShellDdUploadBase64(
         }
         if (EscapePressed()) {
             return SFTP_ABORT;
+        }
+    }
+
+    // What the server ended up with has the last word. Every chunk answering
+    // zero still leaves room for a truncated write, and this upload's caller
+    // may delete the local original on the strength of the answer.
+    {
+        const int64_t remoteSize = ShellGetRemoteFileSize(cs, remotePath);
+        if (remoteSize >= 0 && remoteSize != *outSizeLoaded) {
+            SHELL_DD_LOG("b64 upload size mismatch: sent %lld, server holds %lld",
+                         (long long)*outSizeLoaded, (long long)remoteSize);
+            return SFTP_WRITEFAILED;
         }
     }
 

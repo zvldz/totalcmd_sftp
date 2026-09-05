@@ -750,6 +750,17 @@ int SftpRenameMoveFileW(pConnectSettings cs, LPCWSTR OldName, LPCWSTR NewName, b
         std::replace(oldW.begin(), oldW.end(), L'\\', L'/');
         std::replace(newW.begin(), newW.end(), L'\\', L'/');
 
+        // The check for an existing destination sits further down, past this
+        // branch's return, so a shell-driven move would replace whatever was
+        // already there without Total Commander ever asking. `test -e` answers
+        // that question here instead.
+        if (!Overwrite) {
+            std::wstring probeW = L"test -e '";
+            probeW += string_util::ShellQuoteSingleW(newW.c_str()) + L"'";
+            if (SftpQuoteCommand2W(cs, nullptr, probeW.c_str(), nullptr, 0) == 0)
+                return SFTP_EXISTS;
+        }
+
         std::wstring cmdW = Move ? L"mv '" : L"cp '";
         cmdW += string_util::ShellQuoteSingleW(oldW.c_str()) + L"' '";
         cmdW += string_util::ShellQuoteSingleW(newW.c_str()) + L"'";
