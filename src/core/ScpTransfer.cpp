@@ -274,13 +274,13 @@ bool PrepareScpTransferSession(pConnectSettings cs)
 
 std::string BuildScpPathArgument(const std::string& path)
 {
+    // The path reaches `scp` as it is. Making it relative would tie every
+    // transfer to wherever the login left the shell, which is the same reason
+    // listing could not leave the home directory.
     if (path.empty()) return {};
-    std::string scpTarget = path;
-    if (path[0] == '/')
-        scpTarget = (path.size() == 1) ? "." : path.substr(1);
-    if (SSH_ScpNeedQuote && scpTarget.find(' ') != std::string::npos)
-        return "\"" + scpTarget + "\"";
-    return scpTarget;
+    if (SSH_ScpNeedQuote && path.find(' ') != std::string::npos)
+        return "\"" + path + "\"";
+    return path;
 }
 
 bool OpenScpDownloadChannel(pConnectSettings cs, const char* filename,
@@ -358,17 +358,23 @@ int ShellScpDownloadFile(pConnectSettings cs,
 
     std::string cmd = "scp -f ";
     cmd += remotePathArg;
+    SFTP_LOG("SCP", "download command: %s", cmd.c_str());
     if (!SendChannelCommandNoEof(cs->session.get(), channel.get(), cmd.c_str(), cs->sock)) {
+        SFTP_LOG("SCP", "download: sending the command failed");
         return SFTP_READFAILED;
     }
 
     ScpChannel scp(std::move(channel), cs);
     std::string err;
-    if (!scp.SendAck(SFTP_SCP_WRITE_IDLE_TIMEOUT_MS) ||
-        !scp.ReadAck(err, SFTP_SCP_READ_IDLE_TIMEOUT_MS)) {
+    const bool sentAck = scp.SendAck(SFTP_SCP_WRITE_IDLE_TIMEOUT_MS);
+    const bool gotAck  = sentAck && scp.ReadAck(err, SFTP_SCP_READ_IDLE_TIMEOUT_MS);
+    if (!sentAck || !gotAck) {
+        SFTP_LOG("SCP", "download handshake failed: sentAck=%d gotAck=%d err='%s'",
+                 sentAck ? 1 : 0, gotAck ? 1 : 0, err.c_str());
         if (!err.empty()) ShowStatus(err.c_str());
         return SFTP_READFAILED;
     }
+    SFTP_LOG("SCP", "download handshake ok, reading header");
 
     int64_t remoteSize = hintedFileSize;
     bool gotDataHeader = false;

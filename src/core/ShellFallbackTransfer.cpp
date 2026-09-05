@@ -791,13 +791,16 @@ int ShellScpUploadFile(
 
     std::string cmd = "scp -t ";
     cmd += remotePathArg;
+    SFTP_LOG("SCP", "upload command: %s", cmd.c_str());
     if (!SendChannelCommandNoEof(cs->session.get(), channel.get(), cmd.c_str(), cs->sock)) {
+        SFTP_LOG("SCP", "upload: sending the command failed");
         DisconnectShell(channel.get());
         return SFTP_WRITEFAILED;
     }
 
     std::string ackErr;
     if (!ScpReadAck(channel.get(), cs, ackErr)) {
+        SFTP_LOG("SCP", "upload handshake failed: err='%s'", ackErr.c_str());
         if (!ackErr.empty())
             ShowStatus(ackErr.c_str());
         DisconnectShell(channel.get());
