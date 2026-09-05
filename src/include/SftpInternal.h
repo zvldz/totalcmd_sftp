@@ -250,7 +250,11 @@ bool  GetChannelCommandReply(ISshSession* session, ISshChannel* channel, LPCSTR 
 void  DisconnectShell(ISshChannel* channel);
 bool  EnsureScpShell(pConnectSettings cs);
 void  CloseScpShell(pConnectSettings cs);
-bool  ScpReadCommandOutput(pConnectSettings cs, const char* endMarker, std::vector<std::string>& outLines, DWORD timeoutMs, const char* beginMarker = nullptr);
+// Reads a shell command's output up to its end marker. `endLineOut`, when
+// given, receives the marker line itself: a command that appends its exit
+// status there has no other way to report it, since the line is not part of
+// the output.
+bool  ScpReadCommandOutput(pConnectSettings cs, const char* endMarker, std::vector<std::string>& outLines, DWORD timeoutMs, const char* beginMarker = nullptr, std::string* endLineOut = nullptr);
 bool  ReadChannelLine(ISshChannel* channel,
                       char* line, size_t linelen,
                       std::string& msgbuf, std::string& errbuf,

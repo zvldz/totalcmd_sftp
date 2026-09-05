@@ -336,8 +336,12 @@ void CloseScpShell(pConnectSettings cs)
 
 bool ScpReadCommandOutput(pConnectSettings cs, const char* endMarker,
                            std::vector<std::string>& outLines,
-                           DWORD timeoutMs, const char* beginMarker)
+                           DWORD timeoutMs, const char* beginMarker,
+                           std::string* endLineOut)
 {
+    if (endLineOut)
+        endLineOut->clear();
+
     if (!cs || !cs->scpShellChannel || !endMarker)
         return false;
 
@@ -368,12 +372,19 @@ bool ScpReadCommandOutput(pConnectSettings cs, const char* endMarker,
             continue;
         }
 
+        // The command ends by echoing the marker, and whatever the command
+        // wanted to report rides on that same line. It is handed back rather
+        // than dropped, so callers can read an exit status from it.
         if (!IsEchoOrPromptLine(trimmed) && trimmed.substr(0, endMarkerStr.size()) == endMarkerStr) {
             gotEnd = true;
+            if (endLineOut)
+                endLineOut->assign(trimmed);
             break;
         }
         if (trimmed.find(endMarkerStr) != std::string_view::npos) {
             gotEnd = true;
+            if (endLineOut)
+                endLineOut->assign(trimmed);
             break;
         }
 

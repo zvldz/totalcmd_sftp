@@ -233,17 +233,14 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
             const unsigned markerSeq = scpListSeq++;
             std::string beginMarker  = std::string(kScpListBeginMarker) + "_" + std::to_string(markerSeq);
             std::string endMarker    = std::string(kScpListEndMarker)   + "_" + std::to_string(markerSeq);
-            // `ls` reports its result on a line of its own rather than on the
-            // end marker: the reader stops at that marker and drops the line it
-            // came on, so a status riding there would never be seen. Without it
-            // a refused directory looks exactly like an empty one and the panel
-            // silently shows nothing.
-            std::string statusMarker = std::string(kScpListBeginMarker) + "_ST_" + std::to_string(markerSeq);
-
+            // `ls` appends its exit status to the end marker, which the reader
+            // hands back. Everything stays on one line on purpose: the shell
+            // echoes the command back, and an echo long enough to wrap arrives
+            // as two lines, the second of which would look like the end marker
+            // and cut the reading short before any output was seen.
             std::string command = "echo \"" + beginMarker + "\"; ls -la '" +
                                   string_util::ShellQuoteSingle(listTarget) +
-                                  "'; echo \"" + statusMarker + ":$?\"; echo \"" +
-                                  endMarker + "\"\n";
+                                  "'; echo \"" + endMarker + "\":$?\n";
             SFTP_LOG("FIND", "SCP listing '%s'%s", listTarget.c_str(),
                      relativeRetry ? " (relative retry)" : "");
 
@@ -284,19 +281,20 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
             }
 
             std::vector<std::string> lines;
-            bool gotEnd = ScpReadCommandOutput(cs, endMarker.c_str(), lines, kScpReadTimeoutMs, beginMarker.c_str());
-
+            std::string endLine;
+            bool gotEnd = ScpReadCommandOutput(cs, endMarker.c_str(), lines, kScpReadTimeoutMs,
+                                               beginMarker.c_str(), &endLine);
             int listStatus = 0;
+            {
+                const size_t colon = endLine.rfind(':');
+                if (colon != std::string::npos)
+                    listStatus = atoi(endLine.c_str() + colon + 1);
+            }
+
             std::vector<WIN32_FIND_DATAW> entries;
             for (const auto& line : lines) {
                 if (line.empty() || _strnicmp(line.c_str(), "total ", 6) == 0)
                     continue;
-                if (line.compare(0, statusMarker.size(), statusMarker) == 0) {
-                    const size_t colon = line.find(':', statusMarker.size());
-                    if (colon != std::string::npos)
-                        listStatus = atoi(line.c_str() + colon + 1);
-                    continue;
-                }
                 WIN32_FIND_DATAW fd{};
                 if (ParseScpListingLine(cs, line.c_str(), fd)) {
                     if (wcscmp(fd.cFileName, L".") == 0 || wcscmp(fd.cFileName, L"..") == 0)
@@ -304,6 +302,10 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
                     entries.push_back(fd);
                 }
             }
+
+            SFTP_LOG("FIND", "SCP listing result: status=%d gotEnd=%d rawLines=%d entries=%d first='%s'",
+                     listStatus, gotEnd ? 1 : 0, (int)lines.size(), (int)entries.size(),
+                     lines.empty() ? "" : lines[0].c_str());
 
 			if (!gotEnd && entries.empty()) {
                 if (!cs->scpShellErrBuf.empty()) {
@@ -659,14 +661,12 @@ int SftpDeleteFileW(pConnectSettings cs, LPCWSTR RemoteName, bool isdir)
         auto runDelete = [&](const std::string& target) -> bool {
             static unsigned scpDeleteSeq = 1;
             const unsigned seq = scpDeleteSeq++;
-            const std::string statusMarker =
-                std::string(kScpListBeginMarker) + "_RM_" + std::to_string(seq);
             const std::string endMarker =
                 std::string(kScpListEndMarker) + "_RM_" + std::to_string(seq);
 
             std::string cmd = isdir ? "rm -rf '" : "rm -f '";
             cmd += string_util::ShellQuoteSingle(target) + "'";
-            cmd += "; echo \"" + statusMarker + ":$?\"; echo \"" + endMarker + "\"\n";
+            cmd += "; echo \"" + endMarker + "\":$?\n";
 
             ISshChannel* channel = cs->scpShellChannel.get();
             if (!channel)
@@ -690,16 +690,13 @@ int SftpDeleteFileW(pConnectSettings cs, LPCWSTR RemoteName, bool isdir)
             }
 
             std::vector<std::string> lines;
+            std::string endLine;
             const bool gotEnd = ScpReadCommandOutput(cs, endMarker.c_str(), lines,
-                                                     kScpDeleteReadTimeoutMs);
+                                                     kScpDeleteReadTimeoutMs, nullptr, &endLine);
             int exitCode = -1;
-            for (const auto& l : lines) {
-                if (l.compare(0, statusMarker.size(), statusMarker) != 0)
-                    continue;
-                const size_t colon = l.find(':', statusMarker.size());
-                if (colon != std::string::npos)
-                    exitCode = atoi(l.c_str() + colon + 1);
-            }
+            const size_t colon = endLine.rfind(':');
+            if (colon != std::string::npos)
+                exitCode = atoi(endLine.c_str() + colon + 1);
             return gotEnd && exitCode == 0;
         };
 
