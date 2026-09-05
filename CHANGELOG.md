@@ -33,6 +33,15 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 
 ### Fixes
 
+- **Servers without SFTP are browsable beyond the login directory.** On a
+  host that offers only a shell — dropbear on a camera or a router, say —
+  every listing was asked for relative to wherever the login left the
+  shell, so the panel showed the home directory in place of `/` and
+  nothing outside it could be reached. Paths are now sent as they are,
+  and a directory the server refuses says so instead of appearing empty.
+  Accounts confined to their own directory keep working: the listing
+  falls back to the old reading when the server rejects the plain path.
+
 - **Copying files from one server to another works.** With a different
   session open in each panel, copying between them failed immediately
   with "Error downloading file!" — nothing was transferred and nothing

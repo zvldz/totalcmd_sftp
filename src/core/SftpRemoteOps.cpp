@@ -183,6 +183,10 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
     }
 
     if (cs->scponly) {
+        // Carries what `ls` said on the previous attempt, so the retry knows
+        // whether it is recovering from a dropped connection or from a path
+        // the server would not read.
+        int lastListStatus = 0;
         // Retry loop in case of silent TCP disconnections (e.g., home.pl)
         for (int attempt = 0; attempt < 2; ++attempt) {
             if (!EnsureScpShell(cs)) {
@@ -215,17 +219,33 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
             cs->scpShellMsgBuf.clear();
             cs->scpShellErrBuf.clear();
 
+            // The path goes to the shell as it is, absolute. Should the server
+            // refuse it, the same listing is retried relative to the login
+            // directory: an account confined to its own directory has no
+            // readable root, and that reading is the only one under which the
+            // panel can show anything there at all.
+            const bool relativeRetry = (attempt > 0 && lastListStatus != 0);
             std::string listTarget = dirStr;
-            if (!listTarget.empty() && listTarget[0] == '/')
+            if (relativeRetry && !listTarget.empty() && listTarget[0] == '/')
                 listTarget = (listTarget.size() == 1) ? "." : listTarget.substr(1);
 
             static unsigned scpListSeq = 1;
             const unsigned markerSeq = scpListSeq++;
-            std::string beginMarker = std::string(kScpListBeginMarker) + "_" + std::to_string(markerSeq);
-            std::string endMarker   = std::string(kScpListEndMarker)   + "_" + std::to_string(markerSeq);
+            std::string beginMarker  = std::string(kScpListBeginMarker) + "_" + std::to_string(markerSeq);
+            std::string endMarker    = std::string(kScpListEndMarker)   + "_" + std::to_string(markerSeq);
+            // `ls` reports its result on a line of its own rather than on the
+            // end marker: the reader stops at that marker and drops the line it
+            // came on, so a status riding there would never be seen. Without it
+            // a refused directory looks exactly like an empty one and the panel
+            // silently shows nothing.
+            std::string statusMarker = std::string(kScpListBeginMarker) + "_ST_" + std::to_string(markerSeq);
 
-            std::string command = "echo \"" + beginMarker + "\"; ls -la '" + string_util::ShellQuoteSingle(listTarget) +
-                                  "'; echo \"" + endMarker + "\":$?\n";
+            std::string command = "echo \"" + beginMarker + "\"; ls -la '" +
+                                  string_util::ShellQuoteSingle(listTarget) +
+                                  "'; echo \"" + statusMarker + ":$?\"; echo \"" +
+                                  endMarker + "\"\n";
+            SFTP_LOG("FIND", "SCP listing '%s'%s", listTarget.c_str(),
+                     relativeRetry ? " (relative retry)" : "");
 
             // Write command
             bool writeFailed = false;
@@ -266,10 +286,17 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
             std::vector<std::string> lines;
             bool gotEnd = ScpReadCommandOutput(cs, endMarker.c_str(), lines, kScpReadTimeoutMs, beginMarker.c_str());
 
+            int listStatus = 0;
             std::vector<WIN32_FIND_DATAW> entries;
             for (const auto& line : lines) {
                 if (line.empty() || _strnicmp(line.c_str(), "total ", 6) == 0)
                     continue;
+                if (line.compare(0, statusMarker.size(), statusMarker) == 0) {
+                    const size_t colon = line.find(':', statusMarker.size());
+                    if (colon != std::string::npos)
+                        listStatus = atoi(line.c_str() + colon + 1);
+                    continue;
+                }
                 WIN32_FIND_DATAW fd{};
                 if (ParseScpListingLine(cs, line.c_str(), fd)) {
                     if (wcscmp(fd.cFileName, L".") == 0 || wcscmp(fd.cFileName, L"..") == 0)
@@ -294,6 +321,26 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
                     // zamknęło kanał. W kolejnym cyklu EnsureScpShell otworzy nowy.
                     // cs->sock = INVALID_SOCKET; <-- USUNIĘTE
                     continue;
+                }
+                return SFTP_FAILED;
+            }
+
+            // The shell answered, and said the path is not one it will list.
+            // The second attempt asks for the same directory relative to the
+            // login directory, which is the only shape an account confined to
+            // its own directory can answer. When that fails too, the reason
+            // goes to the status line instead of leaving an empty panel that
+            // looks like an empty directory.
+            if (listStatus != 0) {
+                lastListStatus = listStatus;
+                if (attempt == 0)
+                    continue;
+                if (!cs->scpShellErrBuf.empty()) {
+                    std::string err = cs->scpShellErrBuf;
+                    StripEscapeSequences(err.data());
+                    ShowStatus(err.c_str());
+                } else {
+                    ShowStatusId(IDS_LOG_SCP_LIST_FAIL, nullptr, true);
                 }
                 return SFTP_FAILED;
             }
