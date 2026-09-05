@@ -364,17 +364,16 @@ int ShellScpDownloadFile(pConnectSettings cs,
         return SFTP_READFAILED;
     }
 
+    // `scp -f` sends nothing until it is asked to: the first byte goes out
+    // from here, and what comes back is already the file's header, beginning
+    // with 'C'. There is no acknowledgement to read in this direction — the
+    // loop below reads that header, and handles the 1 and 2 error codes a
+    // failing scp would send in its place.
     ScpChannel scp(std::move(channel), cs);
-    std::string err;
-    const bool sentAck = scp.SendAck(SFTP_SCP_WRITE_IDLE_TIMEOUT_MS);
-    const bool gotAck  = sentAck && scp.ReadAck(err, SFTP_SCP_READ_IDLE_TIMEOUT_MS);
-    if (!sentAck || !gotAck) {
-        SFTP_LOG("SCP", "download handshake failed: sentAck=%d gotAck=%d err='%s'",
-                 sentAck ? 1 : 0, gotAck ? 1 : 0, err.c_str());
-        if (!err.empty()) ShowStatus(err.c_str());
+    if (!scp.SendAck(SFTP_SCP_WRITE_IDLE_TIMEOUT_MS)) {
+        SFTP_LOG("SCP", "download: could not ask for the file");
         return SFTP_READFAILED;
     }
-    SFTP_LOG("SCP", "download handshake ok, reading header");
 
     int64_t remoteSize = hintedFileSize;
     bool gotDataHeader = false;

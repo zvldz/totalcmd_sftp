@@ -49,15 +49,12 @@ static size_t ShellB64Decode(std::string_view in, std::span<uint8_t> out)
     return static_cast<size_t>(MimeDecode(in.data(), in.size(), out.data(), out.size()));
 }
 
+// The shell commands address a file by the path they were given. Making it
+// relative would send every transfer looking inside the login directory, which
+// is where the listing used to be stuck as well.
 static std::string ShellNormalizeScpPath(const std::string& path)
 {
-    if (path.empty())
-        return ".";
-    if (path[0] != '/')
-        return path;
-    if (path.size() == 1)
-        return ".";
-    return path.substr(1);
+    return path.empty() ? "." : path;
 }
 
 static std::unique_ptr<ISshChannel> OpenShellDdChannel(pConnectSettings cs, const char* where)

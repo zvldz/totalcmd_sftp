@@ -35,12 +35,19 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 
 - **Servers without SFTP work outside the login directory.** On a host
   that offers only a shell — dropbear on a camera or a router, say —
-  listing, creating a folder and deleting were all asked for relative to
-  wherever the login left the shell, so the panel showed the home
-  directory in place of `/` and nothing outside it could be reached.
-  Paths are now sent as they are. Accounts confined to their own
-  directory keep working: each operation falls back to the old reading
-  when the server rejects the plain path.
+  every operation was asked for relative to wherever the login left the
+  shell: listing, creating a folder, deleting, and both directions of
+  file transfer. The panel showed the home directory in place of `/`,
+  nothing outside it could be reached, and uploads landed in the wrong
+  place or nowhere. Paths are now sent as they are. Accounts confined to
+  their own directory keep working: listing, folder creation and
+  deletion fall back to the old reading when the server rejects the
+  plain path.
+
+- **Downloading from such a server works at all.** The plugin waited for
+  an acknowledgement that `scp` never sends when it is the one supplying
+  the file, and mistook the first byte of the file's header for a broken
+  protocol. Every download failed with "SCP Protocol Error".
 
 - **A failed listing or deletion on such a server no longer passes for
   success.** A directory that could not be read looked exactly like an
