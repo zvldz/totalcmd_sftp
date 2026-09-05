@@ -554,19 +554,29 @@ int SftpCreateDirectoryW(pConnectSettings cs, LPCWSTR Path)
         return PhpAgentCreateDirectoryW(cs, Path);
 
     if (cs->scponly) {
-        auto channel = ConnectChannel(cs->session.get(), cs->sock);
-        if (!channel) {
-            ShowStatusId(IDS_LOG_SCP_MKDIR_FAIL, nullptr, true);
-            return SFTP_FAILED;
-        }
+        // The path is sent as it is; only when the server refuses it is the
+        // same path retried relative to the login directory, for accounts that
+        // are confined to it and have no readable root. Each attempt needs its
+        // own channel — the reply helper reads the command's exit status, and
+        // a channel carries one command.
+        for (int attempt = 0; attempt < 2; ++attempt) {
+            std::string target = dirStr;
+            if (attempt == 1) {
+                if (target.empty() || target[0] != '/')
+                    break;  // nothing to reinterpret
+                target = (target.size() == 1) ? "." : target.substr(1);
+            }
 
-        std::string target = dirStr;
-        if (!target.empty() && target[0] == '/')
-            target = (target.size() == 1) ? "." : target.substr(1);
-        
-        std::string cmd = "mkdir '" + string_util::ShellQuoteSingle(target) + "'";
-        bool ok = GetChannelCommandReply(cs->session.get(), channel.get(), cmd.c_str(), cs->sock);
-        return ok ? SFTP_OK : SFTP_FAILED;
+            auto channel = ConnectChannel(cs->session.get(), cs->sock);
+            if (!channel)
+                break;
+
+            const std::string cmd = "mkdir '" + string_util::ShellQuoteSingle(target) + "'";
+            if (GetChannelCommandReply(cs->session.get(), channel.get(), cmd.c_str(), cs->sock))
+                return SFTP_OK;
+        }
+        ShowStatusId(IDS_LOG_SCP_MKDIR_FAIL, nullptr, true);
+        return SFTP_FAILED;
     }
 
     const SYSTICKS start = get_sys_ticks();
@@ -639,44 +649,71 @@ int SftpDeleteFileW(pConnectSettings cs, LPCWSTR RemoteName, bool isdir)
         return SFTP_FAILED;
 
     if (cs->scponly) {
-        std::string target = nameStr;
-        if (!target.empty() && target[0] == '/')
-            target = (target.size() == 1) ? "." : target.substr(1);
-
-        std::string cmd = isdir ? "rm -rf '" : "rm -f '";
-        cmd += string_util::ShellQuoteSingle(target) + "'";
-
         if (!EnsureScpShell(cs))
             return SFTP_FAILED;
 
-        std::string fullCmd = cmd + "; echo \"" + kScpListEndMarker + "\":$?\n";
-        ISshChannel* channel = cs->scpShellChannel.get();
-        const auto writeStart = std::chrono::steady_clock::now();
-        size_t written = 0;
-        while (written < fullCmd.size()) {
-            int rc = static_cast<int>(channel->write(fullCmd.data() + written, fullCmd.size() - written));
-            if (rc > 0) {
-                written += rc;
-                continue;
-            }
-            if (rc != LIBSSH2_ERROR_EAGAIN)
-                return SFTP_FAILED;
-            const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::steady_clock::now() - writeStart).count();
-            if (elapsed > kScpWriteTimeoutMs)
-                return SFTP_FAILED;
-            IsSocketReadable(cs->sock);
-        }
+        // `rm` says whether it worked through a line of its own. Hanging the
+        // status on the end marker cannot work: the reader stops at that marker
+        // and drops the line it arrived on, so the status was never read and
+        // every deletion reported success.
+        auto runDelete = [&](const std::string& target) -> bool {
+            static unsigned scpDeleteSeq = 1;
+            const unsigned seq = scpDeleteSeq++;
+            const std::string statusMarker =
+                std::string(kScpListBeginMarker) + "_RM_" + std::to_string(seq);
+            const std::string endMarker =
+                std::string(kScpListEndMarker) + "_RM_" + std::to_string(seq);
 
-        std::vector<std::string> lines;
-        bool gotEnd = ScpReadCommandOutput(cs, kScpListEndMarker, lines, kScpDeleteReadTimeoutMs);
-        int exitCode = 0;
-        for (const auto& l : lines) {
-            size_t p = l.find(kScpListEndMarker);
-            if (p != std::string::npos && p + strlen(kScpListEndMarker) < l.size() && l[p + strlen(kScpListEndMarker)] == ':')
-                exitCode = atoi(l.c_str() + p + strlen(kScpListEndMarker) + 1);
+            std::string cmd = isdir ? "rm -rf '" : "rm -f '";
+            cmd += string_util::ShellQuoteSingle(target) + "'";
+            cmd += "; echo \"" + statusMarker + ":$?\"; echo \"" + endMarker + "\"\n";
+
+            ISshChannel* channel = cs->scpShellChannel.get();
+            if (!channel)
+                return false;
+
+            const auto writeStart = std::chrono::steady_clock::now();
+            size_t written = 0;
+            while (written < cmd.size()) {
+                int rc = static_cast<int>(channel->write(cmd.data() + written, cmd.size() - written));
+                if (rc > 0) {
+                    written += rc;
+                    continue;
+                }
+                if (rc != LIBSSH2_ERROR_EAGAIN)
+                    return false;
+                const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now() - writeStart).count();
+                if (elapsed > kScpWriteTimeoutMs)
+                    return false;
+                IsSocketReadable(cs->sock);
+            }
+
+            std::vector<std::string> lines;
+            const bool gotEnd = ScpReadCommandOutput(cs, endMarker.c_str(), lines,
+                                                     kScpDeleteReadTimeoutMs);
+            int exitCode = -1;
+            for (const auto& l : lines) {
+                if (l.compare(0, statusMarker.size(), statusMarker) != 0)
+                    continue;
+                const size_t colon = l.find(':', statusMarker.size());
+                if (colon != std::string::npos)
+                    exitCode = atoi(l.c_str() + colon + 1);
+            }
+            return gotEnd && exitCode == 0;
+        };
+
+        if (runDelete(nameStr))
+            return SFTP_OK;
+
+        // Same fallback as the listing: an account with no readable root can
+        // only be addressed relative to where the login left the shell.
+        if (!nameStr.empty() && nameStr[0] == '/') {
+            const std::string relative = (nameStr.size() == 1) ? "." : nameStr.substr(1);
+            if (runDelete(relative))
+                return SFTP_OK;
         }
-        return (gotEnd && exitCode == 0) ? SFTP_OK : SFTP_FAILED;
+        return SFTP_FAILED;
     }
 
     const SYSTICKS start = get_sys_ticks();
