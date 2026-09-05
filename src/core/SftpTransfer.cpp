@@ -359,7 +359,8 @@ int SftpDownloadFileW(pConnectSettings cs, LPCWSTR RemoteName, LPCWSTR LocalName
     if (useScp) {
         if (cs->scponly) {
             // Shell SCP path
-            return ShellScpDownloadFile(cs, remotePath, RemoteName, local.get(), LocalName,
+            return ShellScpDownloadFile(cs, BuildShellScpArgument(remotePath), RemoteName,
+                                        local.get(), LocalName,
                                         textMode, filesize, &loaded);
         } else {
             if (!OpenScpDownloadChannel(cs, BuildScpPathArgument(remotePath).c_str(), scpHandle, &scpInfo))
@@ -479,7 +480,7 @@ int SftpUploadFileW(pConnectSettings cs, LPCWSTR LocalName, LPCWSTR RemoteName,
     if (useScp) {
         if (cs->scponly) {
             // Shell SCP upload
-            return ShellScpUploadFile(cs, BuildScpPathArgument(remotePath), RemoteName,
+            return ShellScpUploadFile(cs, BuildShellScpArgument(remotePath), RemoteName,
                                       local.get(), LocalName, uploadSize, textMode, &filesize);
         } else {
             // Native SCP upload

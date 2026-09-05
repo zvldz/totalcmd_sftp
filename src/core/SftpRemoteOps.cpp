@@ -616,8 +616,18 @@ int SftpDeleteFileW(pConnectSettings cs, LPCWSTR RemoteName, bool isdir)
     if (IsPhpAgentTransport(cs))
         return PhpAgentDeleteFileW(cs, RemoteName, isdir);
 
-    if (nameStr == "/~")
-        return SFTP_FAILED;
+    // Names that address no single file are refused before any command is
+    // built. A shell asked to remove "/" would take the request literally, and
+    // a truncated or half-resolved path is exactly how such a name arrives.
+    {
+        std::string bare = nameStr;
+        while (!bare.empty() && (bare.back() == '/' || bare.back() == ' '))
+            bare.pop_back();
+        if (bare.empty() || bare == "/~" || bare == "." || bare == ".." || bare == "~") {
+            SFTP_LOG("SCP", "refusing to delete '%s'", nameStr.c_str());
+            return SFTP_FAILED;
+        }
+    }
 
     if (cs->scponly) {
         if (!EnsureScpShell(cs))
@@ -630,10 +640,18 @@ int SftpDeleteFileW(pConnectSettings cs, LPCWSTR RemoteName, bool isdir)
         auto runDelete = [&](const std::string& target) -> bool {
             static unsigned scpDeleteSeq = 1;
             const unsigned seq = scpDeleteSeq++;
+            const std::string beginMarker =
+                std::string(kScpListBeginMarker) + "_RM_" + std::to_string(seq);
             const std::string endMarker =
                 std::string(kScpListEndMarker) + "_RM_" + std::to_string(seq);
 
-            std::string cmd = isdir ? "rm -rf '" : "rm -f '";
+            // The command opens by echoing a marker of its own, exactly as the
+            // listing does. Without it the shell's echo of the command line —
+            // which carries the end marker and a literal "$?" — is taken for
+            // the result, and a deletion reads as successful whether the file
+            // went away or not.
+            std::string cmd = "echo \"" + beginMarker + "\"; ";
+            cmd += isdir ? "rm -rf '" : "rm -f '";
             cmd += string_util::ShellQuoteSingle(target) + "'";
             cmd += "; echo \"" + endMarker + "\":$?\n";
 
@@ -661,7 +679,8 @@ int SftpDeleteFileW(pConnectSettings cs, LPCWSTR RemoteName, bool isdir)
             std::vector<std::string> lines;
             std::string endLine;
             const bool gotEnd = ScpReadCommandOutput(cs, endMarker.c_str(), lines,
-                                                     kScpDeleteReadTimeoutMs, nullptr, &endLine);
+                                                     kScpDeleteReadTimeoutMs,
+                                                     beginMarker.c_str(), &endLine);
             int exitCode = -1;
             const size_t colon = endLine.rfind(':');
             if (colon != std::string::npos)

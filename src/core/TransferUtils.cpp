@@ -85,6 +85,11 @@ std::string ToRemotePathA(pConnectSettings cs, LPCWSTR pathW)
     return std::string(tmp.data());
 }
 
+std::string BuildShellScpArgument(const std::string& path)
+{
+    return "'" + string_util::ShellQuoteSingle(path) + "'";
+}
+
 int ConvertCrToCrLf(LPSTR data, size_t len, bool* pLastWasCr)
 {
     if (!data || !pLastWasCr)

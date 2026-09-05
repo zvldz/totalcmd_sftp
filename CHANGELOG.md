@@ -33,6 +33,24 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 
 ### Fixes
 
+- **A file name can no longer run commands on the server.** On servers
+  the plugin drives through a shell, the file's name went into the
+  command line unquoted, so a name containing a semicolon or a backtick
+  was read as syntax rather than as a name. Downloading such a file ran
+  whatever it spelled out. Names are now quoted, as they already were
+  everywhere else.
+
+- **Deleting on such a server reports what really happened.** The shell
+  echoes back the command it was given, and the plugin was reading that
+  echo instead of the result — so a deletion the server refused was
+  reported as done and the file quietly stayed. The same false success
+  reached moves, which then looked like copies.
+
+- **A deletion is refused outright when the path names no single file.**
+  An empty or degenerate path — `/` among them — is rejected before any
+  command is built, rather than handed to a shell that would take it
+  literally.
+
 - **F6 moves the file instead of copying it, in both directions.** The
   transfer ran and the original stayed where it was: the plugin was told
   this was a move and never acted on it, on downloads or on uploads.
