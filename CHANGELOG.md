@@ -54,6 +54,34 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   released a version with the fixes, so the plugin carries the same
   backports Debian ships for 1.11.1.
 
+- **The PHP Agent help now says how the password really travels.** It
+  claimed every request was signed and the password never crossed the
+  network. In fact the plugin sends the password in a header of every
+  request, so only HTTPS protects it; over plain HTTP anyone on the path
+  can read it and reuse it. The help, the README and `sftp.php` itself
+  now say so and ask for HTTPS. They also say plainly that PHP Shell is
+  not held to the agent's folder — it runs any command as the web server
+  user — and `sftp.php` gains `AGENT_ALLOW_SHELL`: set it to `false` and
+  the password gives file access only. It stays on by default, so
+  existing setups keep working.
+
+- **The PHP Agent can no longer be walked out of its folder.** A link
+  inside the folder pointing elsewhere let an upload, a new folder, a
+  rename or an unpacked archive land outside it, and a folder download
+  pack files from outside; a neighbouring folder whose name merely began
+  with the same letters (`html2` next to `html`) also passed the check.
+  Deleting or renaming a link now acts on the link, not on what it points
+  to, and the agent's own folder can no longer be removed — removing it
+  with its contents used to take `sftp.php` along. Anonymous `PROBE`
+  answers only what connecting needs, error replies no longer carry
+  server paths, and a replaced file keeps its old content until the new
+  one takes its name. Upload the new `sftp.php` (agent 1.0.2) to get
+  these.
+
+- **Uploading folders into the PHP Agent's top folder with TAR stream
+  on works.** The agent refused to unpack an archive into its own root
+  and answered every such upload with an error.
+
 - **An upload through the shell no longer claims to have worked when it
   did not.** Each piece of the file was counted as written the moment the
   server answered anything at all, so a missing tool, a read-only folder
