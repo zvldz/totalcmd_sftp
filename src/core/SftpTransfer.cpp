@@ -386,6 +386,28 @@ int SftpDownloadFileW(pConnectSettings cs, LPCWSTR RemoteName, LPCWSTR LocalName
         RemoteScpChannel remoteScp(std::move(scpHandle), cs);
         ret = DownloadLoop(cs, remoteScp, local, RemoteName, LocalName,
                            textMode, filesize, loaded, scpRemain, lastWasCr);
+        // The channel ending before the announced size is a short file, not
+        // a finished one. After the data scp sends one status byte: zero for
+        // a file read whole, otherwise an error with a message — a server
+        // that failed to read pads the rest with zeros, so the size alone
+        // does not tell. A server that sends no byte at all is taken at the
+        // size it announced.
+        if (ret == SFTP_OK && scpRemain > 0) {
+            SFTP_LOG("SCP", "Download ended %lld bytes short", static_cast<long long>(scpRemain));
+            ret = SFTP_READFAILED;
+        } else if (ret == SFTP_OK) {
+            char status = 0;
+            if (ScpReadByte(remoteScp.get(), cs, &status, SFTP_SCP_READ_IDLE_TIMEOUT_MS) &&
+                status != 0)
+            {
+                std::string err;
+                ScpReadLine(remoteScp.get(), cs, err, SFTP_SCP_READ_IDLE_TIMEOUT_MS);
+                SFTP_LOG("SCP", "Download status %d: %s", status, err.c_str());
+                if (!err.empty())
+                    ShowStatus(err.c_str());
+                ret = SFTP_READFAILED;
+            }
+        }
     } else {
         RemoteSftpFile remoteSftp(std::move(sftpHandle));
         int64_t dummyRemain = 0; // not used for SFTP
@@ -599,6 +621,19 @@ int SftpUploadFileW(pConnectSettings cs, LPCWSTR LocalName, LPCWSTR RemoteName,
         SFTP_LOG("SFTP", "Upload: sent %lld of %lld bytes",
                  static_cast<long long>(sent), static_cast<long long>(filesize));
         ret = SFTP_READFAILED;
+    }
+
+    // scp's receiving side writes the file, then waits for a zero byte from
+    // us and answers it; that answer is where a full disk or a quota shows.
+    // The shell-driven path returned earlier and does its own handshake.
+    if (ret == SFTP_OK && useScp) {
+        std::string err;
+        if (!ScpSendAck(scpHandle.get(), cs) || !ScpReadAck(scpHandle.get(), cs, err)) {
+            SFTP_LOG("SCP", "Upload not acknowledged: %s", err.c_str());
+            if (!err.empty())
+                ShowStatus(err.c_str());
+            ret = SFTP_WRITEFAILED;
+        }
     }
 
     if (ret == SFTP_OK && setattr) {

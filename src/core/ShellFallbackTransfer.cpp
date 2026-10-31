@@ -484,6 +484,13 @@ static int ShellDdDownloadBase64(
         SHELL_DD_LOG("b64 DL failed: no lines returned for non-empty file");
         return SFTP_READFAILED;
     }
+    // The stream carries no end-of-file status of its own, so a read that
+    // stopped early on the server only shows as a short count.
+    if (hintedSize > 0 && *outSizeLoaded != hintedSize) {
+        SHELL_DD_LOG("b64 DL size mismatch: got %lld expected %lld",
+                     (long long)*outSizeLoaded, (long long)hintedSize);
+        return SFTP_READFAILED;
+    }
 
     ShowTransferSpeedIfLarge("Shell-b64 DL", *outSizeLoaded - resumeFrom, starttime);
     return SFTP_OK;
@@ -643,14 +650,26 @@ static int ShellDdUploadBase64(
         }
     }
 
+    // The loop above also ends when reading the local file fails, which is
+    // not the end of it.
+    if (*outSizeLoaded != fileSize) {
+        SHELL_DD_LOG("b64 upload: local read stopped at %lld of %lld",
+                     (long long)*outSizeLoaded, (long long)fileSize);
+        return SFTP_READFAILED;
+    }
+
     // What the server ended up with has the last word. Every chunk answering
     // zero still leaves room for a truncated write, and this upload's caller
-    // may delete the local original on the strength of the answer.
+    // may delete the local original on the strength of the answer. A server
+    // that cannot report the size is taken at the chunks' word, which every
+    // one of them gave.
     {
         const int64_t remoteSize = ShellGetRemoteFileSize(cs, remotePath);
-        if (remoteSize >= 0 && remoteSize != *outSizeLoaded) {
-            SHELL_DD_LOG("b64 upload size mismatch: sent %lld, server holds %lld",
-                         (long long)*outSizeLoaded, (long long)remoteSize);
+        if (remoteSize < 0)
+            SHELL_DD_LOG("b64 upload: server did not report the size; chunks all confirmed");
+        if (remoteSize >= 0 && remoteSize != fileSize) {
+            SHELL_DD_LOG("b64 upload size mismatch: file %lld, server holds %lld",
+                         (long long)fileSize, (long long)remoteSize);
             return SFTP_WRITEFAILED;
         }
     }
@@ -691,7 +710,14 @@ int ShellDdDownloadFile(
         int rc = ShellDdDownloadRaw(cs, remotePath, remoteNameW,
                                     localfile, localNameW, hintedSize, resumeFrom, outSizeLoaded);
         if (rc == SFTP_OK) {
-            // Sanity-check size: if the raw channel mangled bytes the count will mismatch.
+            // Sanity-check size: if the raw channel mangled bytes the count will
+            // mismatch. A resumed file cannot be redone from scratch here, so a
+            // mismatch on it is a failure rather than a retry.
+            if (hintedSize > 0 && *outSizeLoaded != hintedSize && resumeFrom > 0) {
+                SHELL_DD_LOG("raw DL size mismatch after resume: got %lld expected %lld",
+                             (long long)*outSizeLoaded, (long long)hintedSize);
+                return SFTP_READFAILED;
+            }
             if (hintedSize > 0 && *outSizeLoaded != hintedSize && resumeFrom == 0) {
                 SHELL_DD_LOG("raw DL size mismatch: got %lld expected %lld, switching to base64",
                              (long long)*outSizeLoaded, (long long)hintedSize);

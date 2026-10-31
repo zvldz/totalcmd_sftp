@@ -119,6 +119,15 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   skipped or failed — so after `F6` on a folder, or `F8` with a file
   answered "skip", those files were wiped along with the folder.
 
+- **SCP and shell transfers check that they really finished.** With
+  "Use SCP for data transfers" on, a download the server cut short or
+  padded after a read error, and an upload it could not finish writing —
+  a full disk, a quota — both passed for complete: the status scp sends
+  at the end was never read. Downloads through the shell likewise took
+  whatever arrived for the whole file. Both now hold the result against
+  what the server announced and fail when it falls short, and a shell
+  upload whose local file stops reading partway fails as well.
+
 - **A resumed upload no longer writes over a larger file on the
   server.** When the remote file was longer than the local one, or the
   server did not report its size, resuming started writing from the
