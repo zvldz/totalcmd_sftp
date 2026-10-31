@@ -139,6 +139,13 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   through the shell — a rename or a copy on a shell-only server — that
   timed out before finishing no longer passes for a success.
 
+- **Uploading with "Use SCP for data transfers" works.** Opening the
+  upload channel asks the server to start scp, which on the plugin's
+  non-blocking connection first answers "not ready yet"; that answer was
+  taken for a refusal, so nearly every upload failed with nothing in the
+  log to say why. It is now asked again until the channel opens, as
+  downloads always did.
+
 - **SCP and shell transfers check that they really finished.** With
   "Use SCP for data transfers" on, a download the server cut short or
   padded after a read error, and an upload it could not finish writing —

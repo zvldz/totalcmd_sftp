@@ -510,11 +510,32 @@ int SftpUploadFileW(pConnectSettings cs, LPCWSTR LocalName, LPCWSTR RemoteName,
             long mtime = 0;
             if (setattr && GetFileTime(local.get(), nullptr, nullptr, &ft))
                 mtime = GetUnixTime(&ft);
-            scpHandle = cs->session->scpSend64(remotePath.c_str(), cs->filemod,
-                                               static_cast<uint64_t>(uploadSize), mtime, 0);
+            // The session is non-blocking, so opening the channel answers
+            // EAGAIN until the server has started scp. It is asked again, as
+            // the download side does, until it opens or the wait runs out;
+            // taking the first EAGAIN for a refusal failed nearly every upload.
+            const auto openStart = std::chrono::steady_clock::now();
+            int openErr = 0;
+            while (true) {
+                scpHandle = cs->session->scpSend64(remotePath.c_str(), cs->filemod,
+                                                   static_cast<uint64_t>(uploadSize), mtime, 0);
+                if (scpHandle)
+                    break;
+                openErr = cs->session->lastErrno();
+                if (openErr != LIBSSH2_ERROR_EAGAIN || EscapePressed())
+                    break;
+                const auto waited = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now() - openStart).count();
+                if (waited > SFTP_SCP_CHANNEL_OPEN_TIMEOUT_MS) {
+                    ShowStatusId(IDS_LOG_SCP_OPEN_TIMEOUT, nullptr, true);
+                    break;
+                }
+                IsSocketReadable(cs->sock);
+            }
             if (!scpHandle) {
-                SftpLogLastError("SCP upload error: ", cs->session->lastErrno());
-                return SFTP_READFAILED;
+                SFTP_LOG("SCP", "Upload: the scp channel did not open (%d)", openErr);
+                SftpLogLastError("SCP upload error: ", openErr);
+                return SFTP_WRITEFAILED;
             }
         }
     } else {
