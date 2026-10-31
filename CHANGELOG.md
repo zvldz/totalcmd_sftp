@@ -166,8 +166,9 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 - **On shell-only servers, names with non-Latin letters are written in
   UTF-8.** With "Use SCP for everything" on, the plugin never worked out
   the server's encoding and fell back to the Windows codepage, so a file
-  such as `тест.txt` arrived under a name nothing on the server could
-  read — present, yet invisible in the panel and blank in a terminal.
+  whose name holds letters outside Latin arrived under a name nothing on
+  the server could read — present, yet invisible in the panel and blank
+  in a terminal.
   The encoding is now detected as it is for SFTP, and a system with no
   locale at all — busybox on a camera or a router — is taken to be UTF-8.
   A session saved with an explicit encoding keeps it; switch it to
