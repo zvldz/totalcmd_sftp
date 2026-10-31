@@ -19,7 +19,9 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   session that reached its host through one connected **straight to the
   target** instead, which looks like success whenever the target also
   answers from outside. Such a session now says what is missing and
-  refuses, on connect and on copying it out.
+  refuses to connect or to be copied into your own list. `F3` still
+  shows its settings: the file it opens names the missing route, and the
+  plugin refuses to import that file back.
 
 - **An HTTP or SOCKS proxy from PuTTY, KiTTY or WinSCP comes along when
   the session is copied.** `F5` from `[Imports]` into your own list

@@ -41,12 +41,27 @@
 // the file it came from means nothing in the file it is going to.
 static constexpr const char* kExportProxySection = "[proxy]";
 static constexpr const char* RN = "\r\n";
+// Names, in an exported snippet, a route the plugin could not rebuild.
+// Importing the snippet refuses on it rather than create a session that
+// would connect straight to the host.
+static constexpr const char* kUnsupportedRouteKey = "unsupportedroute";
+
+static const char* DependencyName(sftp::SessionDependency::Kind kind)
+{
+    switch (kind) {
+        case sftp::SessionDependency::Kind::Proxy:   return "proxy";
+        case sftp::SessionDependency::Kind::Bastion: return "jump host";
+        case sftp::SessionDependency::Kind::Tunnel:  return "tunnel";
+        case sftp::SessionDependency::Kind::None:    break;
+    }
+    return "";
+}
 
 static int ExportSessionAsIniFile(
     LPCSTR srcSection, LPCSTR srcIni,
     LPCSTR exportSection, LPCSTR headerComment,
     LPCWSTR destFile, BOOL OverWrite,
-    const sftp::SessionDependency* importedProxy = nullptr)
+    const sftp::SessionDependency* dependency = nullptr)
 {
     if (!OverWrite) {
         const DWORD attrs = GetFileAttributesW(destFile);
@@ -84,15 +99,26 @@ static int ExportSessionAsIniFile(
     // A session from [Imports] has no record to copy: its proxy exists only
     // as the source described it. It is written the way a record would be,
     // under the same fixed name, so importing the snippet resolves it alike.
-    if (importedProxy && importedProxy->transferable()) {
+    // A route the plugin cannot rebuild is named instead of left out, so the
+    // settings can still be viewed while the way back stays shut.
+    if (dependency && dependency->transferable()) {
         content.append("proxynr=1").append(RN);
         content.append(kExportProxySection).append(RN);
         content.append("proxytype=")
-               .append(std::to_string(static_cast<int>(importedProxy->proxyType)))
+               .append(std::to_string(static_cast<int>(dependency->proxyType)))
                .append(RN);
-        content.append("proxyserver=").append(importedProxy->proxyServer).append(RN);
-        if (!importedProxy->proxyUser.empty())
-            content.append("proxyuser=").append(importedProxy->proxyUser).append(RN);
+        content.append("proxyserver=").append(dependency->proxyServer).append(RN);
+        if (!dependency->proxyUser.empty())
+            content.append("proxyuser=").append(dependency->proxyUser).append(RN);
+    } else if (dependency && dependency->blocks()) {
+        std::string route = DependencyName(dependency->kind);
+        if (!dependency->detail.empty())
+            route.append(" ").append(dependency->detail);
+        content.append("; Reaches the host through a ").append(route)
+               .append(", which the plugin does not reproduce.").append(RN)
+               .append("; Importing this file is refused while the next line is here.")
+               .append(RN);
+        content.append(kUnsupportedRouteKey).append("=").append(route).append(RN);
     }
 
     // A session that goes through a proxy takes the record with it. `proxynr`
@@ -149,17 +175,8 @@ static bool CopyIniSectionAcrossFiles(LPCSTR srcSection, LPCSTR srcIni,
 // the source put in front of it, and look like success. The refusal names the
 // record where the source gave one, on a line of its own so the sentence
 // itself needs no grammar for it.
-static bool RefuseIfDependencyBlocks(const std::string& cacheSection)
+static void ShowDependencyRefusal(const sftp::SessionDependency& dep)
 {
-    const std::string& cachePath = sftp::GetImportCache().CacheFilePath();
-    if (cacheSection.empty() || cachePath.empty())
-        return false;
-
-    const sftp::SessionDependency dep =
-        sftp::ImportCache::ReadDependency(cacheSection, cachePath);
-    if (!dep.blocks())
-        return false;
-
     std::string text = LngStrU8(IDS_IMPORT_BLOCKED,
         "This session reaches its host through something that was not imported "
         "with it: a proxy, a jump host or a tunnel. Connecting now would go "
@@ -186,6 +203,19 @@ static bool RefuseIfDependencyBlocks(const std::string& cacheSection)
         MessageBoxW(FindWindowA("TTOTAL_CMD", nullptr),
                     message.c_str(), title.c_str(), MB_OK | MB_ICONSTOP);
     }
+}
+
+static bool RefuseIfDependencyBlocks(const std::string& cacheSection)
+{
+    const std::string& cachePath = sftp::GetImportCache().CacheFilePath();
+    if (cacheSection.empty() || cachePath.empty())
+        return false;
+
+    const sftp::SessionDependency dep =
+        sftp::ImportCache::ReadDependency(cacheSection, cachePath);
+    if (!dep.blocks())
+        return false;
+    ShowDependencyRefusal(dep);
     return true;
 }
 
@@ -309,6 +339,21 @@ static std::optional<int> TryImportSessionFromUpload(
     }
     if (chosenSection.empty())
         return abortWithMessage(IDS_SIMPORT_ERR_NO_SERVER);
+
+    // A snippet exported from [Imports] names a route the plugin could not
+    // rebuild; a session made from it would connect straight to the host.
+    {
+        std::array<char, 512> route{};
+        GetPrivateProfileStringA(chosenSection.c_str(), kUnsupportedRouteKey, "",
+            route.data(), static_cast<DWORD>(route.size() - 1), localA.data());
+        if (route[0]) {
+            sftp::SessionDependency dep;
+            dep.kind   = sftp::SessionDependency::Kind::Bastion;
+            dep.detail = route.data();
+            ShowDependencyRefusal(dep);
+            return FS_FILE_USERABORT;
+        }
+    }
 
     // Destination DisplayName: strip leading `\` and, if present, a
     // trailing .ini extension. Folder structure is retained.
@@ -1575,14 +1620,11 @@ int WINAPI FsGetFileW(LPCWSTR RemoteName, LPWSTR LocalName, int CopyFlags, Remot
                 if (cacheSection.empty() || cachePath.empty())
                     return FS_FILE_NOTFOUND;
 
-                // The snippet would describe a session that reaches its host
-                // directly, and uploading it back is a supported way to create
-                // one, so the refusal covers the way out as well — except for
-                // a proxy the plugin speaks, which the snippet carries.
+                // F3 comes through here as well as F5, so the export is not
+                // refused: the snippet carries a proxy the plugin speaks, and
+                // names any other route, which makes importing it back refuse.
                 const sftp::SessionDependency dep =
                     sftp::ImportCache::ReadDependency(cacheSection, cachePath);
-                if (!dep.transferable() && RefuseIfDependencyBlocks(cacheSection))
-                    return FS_FILE_USERABORT;
 
                 std::string header = "Imported session from [Imports]\\[";
                 header.append(sourceId).append("]\\").append(subPath);
