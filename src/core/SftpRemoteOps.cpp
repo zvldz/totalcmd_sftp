@@ -759,10 +759,12 @@ int SftpRenameMoveFileW(pConnectSettings cs, LPCWSTR OldName, LPCWSTR NewName, b
         // branch's return, so a shell-driven move would replace whatever was
         // already there without Total Commander ever asking. `test -e` answers
         // that question here instead.
+        // Only `test -e` answering 1 means the name is free; a probe that
+        // could not run leaves the question open, and `mv` would replace.
         if (!Overwrite) {
             std::wstring probeW = L"test -e '";
             probeW += string_util::ShellQuoteSingleW(newW.c_str()) + L"'";
-            if (SftpQuoteCommand2W(cs, nullptr, probeW.c_str(), nullptr, 0) == 0)
+            if (SftpQuoteCommand2W(cs, nullptr, probeW.c_str(), nullptr, 0) != 1)
                 return SFTP_EXISTS;
         }
 

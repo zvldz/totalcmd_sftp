@@ -64,7 +64,12 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 - **A move and a cross-server copy ask before replacing a file.** Both
   went ahead silently: the destination was truncated without Total
   Commander getting the chance to ask, and a move destroyed the source on
-  top of that.
+  top of that. The check behind the question now treats a name as free
+  only when the server says so outright: a check that could not run —
+  a channel refused, permission denied — no longer reads as "no such
+  file", a name with non-Latin letters on a shell-only server is no
+  longer looked up encoded twice, and a PHP Agent destination is checked
+  at all.
 
 - **A file name can no longer run commands on the server.** On servers
   the plugin drives through a shell, the file's name went into the

@@ -1065,19 +1065,33 @@ static bool CopyMoveEncryptedPassword(LPCSTR OldName, LPSTR NewName, bool Move)
     return (rc == FS_FILE_OK) ? true : false;
 }
 
-// Whether the session already holds that file. Answered over SFTP where the
-// session speaks it, and over the shell otherwise; a session that can answer
-// neither says "no", which leaves the decision where it was before.
+// Whether the session may already hold that file. Only a server that clearly
+// answers "no such file" makes it absent; anything it could not answer counts
+// as present, so Total Commander asks before the upload overwrites rather
+// than the upload overwriting on a guess.
 static bool RemoteFileExists(pConnectSettings cs, LPCWSTR remoteRelative)
 {
     if (!cs || !remoteRelative || !remoteRelative[0])
         return false;
 
-    std::string pathA = ToRemotePathA(cs, remoteRelative);
-    if (pathA.empty())
-        return false;
+    if (IsPhpAgentTransport(cs))
+        return PhpAgentPathMayExist(cs, remoteRelative);
 
-    if (!cs->scponly && cs->sftpsession) {
+    if (cs->scponly) {
+        // The wide path goes to the shell helper, which applies the session's
+        // encoding once; a narrow, already converted one would be converted
+        // again and name a file that does not exist. `test -e` answers 1 for
+        // a missing path — any other answer leaves the question open.
+        std::wstring pathW(remoteRelative);
+        std::replace(pathW.begin(), pathW.end(), L'\\', L'/');
+        const std::wstring cmdW = L"test -e '" + string_util::ShellQuoteSingleW(pathW.c_str()) + L"'";
+        return SftpQuoteCommand2W(cs, nullptr, cmdW.c_str(), nullptr, 0) != 1;
+    }
+
+    if (cs->sftpsession) {
+        const std::string pathA = ToRemotePathA(cs, remoteRelative);
+        if (pathA.empty())
+            return true;
         LIBSSH2_SFTP_ATTRIBUTES attr{};
         int rc = 0;
         do {
@@ -1085,14 +1099,13 @@ static bool RemoteFileExists(pConnectSettings cs, LPCWSTR remoteRelative)
             if (rc == LIBSSH2_ERROR_EAGAIN)
                 IsSocketReadable(cs->sock);
         } while (rc == LIBSSH2_ERROR_EAGAIN);
-        return rc >= 0;
+        if (rc >= 0)
+            return true;
+        const unsigned long fx =
+            (rc == LIBSSH2_ERROR_SFTP_PROTOCOL) ? cs->sftpsession->lastError() : 0;
+        return fx != LIBSSH2_FX_NO_SUCH_FILE && fx != LIBSSH2_FX_NO_SUCH_PATH;
     }
-
-    if (cs->scponly) {
-        const std::string cmd = "test -e '" + string_util::ShellQuoteSingle(pathA) + "'";
-        return SftpQuoteCommand2(cs, nullptr, cmd.c_str(), nullptr, 0) == 0;
-    }
-    return false;
+    return true;
 }
 
 // Copy one file from one session to another, which no single SFTP operation

@@ -986,6 +986,17 @@ int PhpAgentDeleteFileW(pConnectSettings cs, LPCWSTR remoteNameW, bool isdir)
     return SFTP_OK;
 }
 
+// The agent answers 404 for a missing path or a missing parent; anything
+// else, a failed request included, leaves the question open.
+bool PhpAgentPathMayExist(pConnectSettings cs, LPCWSTR remoteNameW)
+{
+    const std::string pathUtf8 = NormalizePhpRemotePath(cs, remoteNameW);
+    const std::wstring q = BuildQueryPathOnly(L"STAT", pathUtf8);
+    DWORD code = 0;
+    const int rc = SendSimpleRequest(cs, L"GET", L"STAT", q, nullptr, 0, &code, nullptr);
+    return !(rc == SFTP_OK && code == 404);
+}
+
 // ---------------------------------------------------------------------------
 // TAR streaming download (PHP Agent php_tar mode)
 // ---------------------------------------------------------------------------
