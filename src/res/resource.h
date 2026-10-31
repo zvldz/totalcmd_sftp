@@ -509,7 +509,7 @@
 #define IDS_LAN_CONNECTING              12095
 #define IDS_LAN_ERR_CONN_FAILED         12096
 #define IDS_LAN_ERR_DONOR_NO_CONNECT    12103
-#define IDS_JUMP_SESSION_NONE           12104   // "(none)" entry in jump-session dropdown
+#define IDS_JUMP_SESSION_NONE           12104   // "(manual)" entry in jump-session dropdown
 #define IDS_JUMP_SESSION_MISSING_SUFFIX 12105   // " (missing)" appended to deleted ref'd session name
 #define IDS_JUMP_SESSION_NOT_FOUND      12106   // error: ref'd session not in INI
 #define IDS_JUMP_SESSION_CHAINED        12107   // error: ref'd session has its own jump host

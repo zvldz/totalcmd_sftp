@@ -366,11 +366,11 @@
 12088=Esiste già una sessione con questo nome.\nScegli un nome di sessione diverso.
 12118=Questa sessione appartiene a un altro programma e non può essere modificata qui.\nPremere F3 per vederne le impostazioni o F5 per copiarla nel proprio elenco.
 12119= Sessione LAN Pair: 
-12120=Queste impostazioni provengono dalla sessione '{}' e sono di sola lettura. Scegliere (nessuna) nell'elenco dei jump host per configurarne uno qui.
+12120=Queste impostazioni provengono dalla sessione '{}' e sono di sola lettura. Scegliere (manuale) nell'elenco dei jump host per configurarne uno qui.
 12121=Questa sessione raggiunge il suo host attraverso qualcosa che non è stato importato con essa: un proxy, un jump host o un tunnel. Connettersi ora andrebbe dritto alla destinazione, aggirando proprio ciò che era stato messo di mezzo, quindi viene rifiutato.
 12122=La sessione era impostata per connettersi tramite un proxy, ma il file non ne contiene la descrizione. È stata importata senza il proxy e si connetterà direttamente: controllare l'impostazione del proxy prima di usarla.
 12089=SFTP
-12104=(nessuna)
+12104=(manuale)
 12105= (mancante)
 12106=Sessione di salto '{}' non trovata tra le sessioni salvate
 12107=La sessione di salto '{}' ha una propria configurazione di host di salto — host di salto concatenati o ciclici non sono supportati. Scegliere una sessione che si connette direttamente al bastion.

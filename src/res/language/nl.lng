@@ -366,11 +366,11 @@
 12088=Er bestaat al een sessie met deze naam.\nKies een andere sessienaam.
 12118=Deze sessie hoort bij een ander programma en kan hier niet worden bewerkt.\nDruk op F3 om de instellingen te zien of F5 om ze naar uw eigen lijst te kopiëren.
 12119= LAN Pair-sessie: 
-12120=Deze instellingen komen uit sessie '{}' en zijn alleen-lezen. Kies (geen) in de jump-hostlijst om hier een host in te stellen.
+12120=Deze instellingen komen uit sessie '{}' en zijn alleen-lezen. Kies (handmatig) in de jump-hostlijst om hier een host in te stellen.
 12121=Deze sessie bereikt zijn host via iets dat niet is meegeïmporteerd: een proxy, een jump host of een tunnel. Nu verbinden zou rechtstreeks naar het doel gaan, langs precies datgene wat ertussen was gezet, en wordt daarom geweigerd.
 12122=De sessie was ingesteld om via een proxy te verbinden, maar het bestand bevat er geen beschrijving van. De sessie is zonder de proxy geïmporteerd en zal rechtstreeks verbinden; controleer daarom de proxy-instelling voordat u haar gebruikt.
 12089=SFTP
-12104=(geen)
+12104=(handmatig)
 12105= (ontbreekt)
 12106=Sprongsessie '{}' niet gevonden in de opgeslagen sessies
 12107=Sprongsessie '{}' heeft een eigen sprongbastion-configuratie — geketende of cyclische sprongbastions worden niet ondersteund. Kies een sessie die rechtstreeks verbinding maakt met het bastion.

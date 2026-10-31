@@ -550,7 +550,7 @@ Output libs are placed in `src\lib\` (suffixed: `argon2_a_x64.lib`, `argon2_a_x8
 | Architecture | x64 (`SFTPplug.wfx64`) and x86 (`SFTPplug.wfx`) |
 | Compiler (build) | Visual Studio 2026, MSVC v145 toolset, C++20 |
 | libssh2 | Statically linked (1.11.1), built against OpenSSL |
-| OpenSSL | Statically linked (3.5.7) — the crypto backend libssh2 runs on |
+| OpenSSL | Statically linked (3.5.9) — the crypto backend libssh2 runs on |
 | **Dependencies** | None — OpenSSL, libssh2 and argon2 are statically linked with `/MT`, so no VC++ Redistributable is required |
 | Windows APIs | BCrypt, DPAPI (CryptProtectData), WinHTTP, DbgHelp, Winsock2 |
 
@@ -718,7 +718,6 @@ User-facing summary; see `CHANGELOG.md` for per-version detail.
 - mDNS/SSDP cross-subnet discovery for LAN Pair
 - UPnP automatic port forwarding
 - Higher-level LAN Pair workflow refinements
-- Alternative SSH backend (libssh)
 - Multi-platform support (Linux / macOS)
 - Full parser module rewrite
 

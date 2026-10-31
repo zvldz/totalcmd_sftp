@@ -355,7 +355,7 @@
 12088=Sesja o tej nazwie już istnieje.\nWybierz inną nazwę sesji.
 12118=Ta sesja należy do innego programu i nie można jej tutaj edytować.\nNaciśnij F3, aby zobaczyć jej ustawienia, lub F5, aby skopiować ją do własnej listy.
 12119= Sesja LAN Pair: 
-12120=Te ustawienia pochodzą z sesji '{}' i są tylko do odczytu. Wybierz (brak) na liście jump-hostów, aby skonfigurować hosta tutaj.
+12120=Te ustawienia pochodzą z sesji '{}' i są tylko do odczytu. Wybierz (ręcznie) na liście jump-hostów, aby skonfigurować hosta tutaj.
 12121=Ta sesja łączy się z hostem przez coś, co nie zostało zaimportowane razem z nią: serwer proxy, jump host albo tunel. Połączenie poszłoby teraz prosto do celu, z pominięciem tego, co ustawiono po drodze, dlatego zostało odrzucone.
 12122=Sesja miała łączyć się przez serwer proxy, ale plik nie zawiera jego opisu. Sesję zaimportowano bez proxy i będzie łączyć się bezpośrednio, więc przed użyciem sprawdź jej ustawienie proxy.
 12089=SFTP
@@ -369,7 +369,7 @@
 12103=LAN Pair: ten komputer jest skonfigurowany jako Dawca. Zdalny Biorca musi się tutaj połączyć.
 450=Windows (CR/LF)
 451=Unix (LF)
-12104=(brak)
+12104=(ręcznie)
 12105= (brakuje)
 12106=Nie znaleziono sesji pośredniczącej '{}' wśród zapisanych sesji
 12107=Sesja pośrednicząca '{}' ma własną konfigurację hosta pośredniczącego — łańcuchowe ani cykliczne hosty pośredniczące nie są obsługiwane. Wybierz sesję łączącą się bezpośrednio z bastionem.

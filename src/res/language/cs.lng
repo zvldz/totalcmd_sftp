@@ -366,11 +366,11 @@
 12088=Spojení s tímto názvem již existuje.\nZvolte jiný název spojení.
 12118=Tato relace patří jinému programu a nelze ji zde upravit.\nStiskněte F3 pro zobrazení nastavení nebo F5 pro zkopírování do vlastního seznamu.
 12119= Relace LAN Pair: 
-12120=Tato nastavení pocházejí z relace '{}' a jsou jen ke čtení. Vyberte (žádná) v seznamu jump-hostů, chcete-li hostitele zadat zde.
+12120=Tato nastavení pocházejí z relace '{}' a jsou jen ke čtení. Vyberte (ručně) v seznamu jump-hostů, chcete-li hostitele zadat zde.
 12121=Tato relace se k hostiteli dostává přes něco, co s ní nebylo naimportováno: proxy, jump host nebo tunel. Připojení by nyní šlo přímo na cíl, mimo to, co bylo do cesty postaveno, proto je odmítnuto.
 12122=Relace se měla připojovat přes proxy, ale soubor její popis neobsahuje. Relace byla naimportována bez proxy a bude se připojovat přímo, proto před použitím zkontrolujte její nastavení proxy.
 12089=SFTP
-12104=(žádný)
+12104=(ručně)
 12105= (chybí)
 12106=Průchozí relace '{}' nebyla nalezena v uložených relacích
 12107=Průchozí relace '{}' má vlastní konfiguraci průchozího hostitele — řetězení ani cyklické průchozí hostitele nejsou podporovány. Vyberte relaci, která se připojuje přímo k bastionu.

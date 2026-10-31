@@ -98,6 +98,9 @@ static void UpdateMainJumpControlStates(HWND hWnd, bool sshMode)
 {
     const bool jumpChecked = IsDlgButtonChecked(hWnd, IDC_JUMP_ENABLE) == BST_CHECKED;
     EnableWindow(GetDlgItem(hWnd, IDC_JUMP_ENABLE), sshMode ? TRUE : FALSE);
+    // The picker follows the mode, not the checkbox: picking a session is
+    // what turns the jump host on, so it has to work while the box is clear.
+    EnableWindow(GetDlgItem(hWnd, IDC_JUMP_SESSION_PICK), sshMode ? TRUE : FALSE);
     EnableWindow(GetDlgItem(hWnd, IDC_JUMP_BUTTON), (sshMode && jumpChecked) ? TRUE : FALSE);
 }
 
@@ -260,7 +263,7 @@ static INT_PTR CALLBACK JumpHostDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
         if (fromSession) {
             std::string note = LngStrU8(IDS_JUMP_FROM_SESSION,
                 "These settings come from session '{}' and are shown read-only. "
-                "Pick (none) in the jump-host list to configure a host here instead.");
+                "Pick (manual) in the jump-host list to configure a host here instead.");
             const auto slot = note.find("{}");
             if (slot != std::string::npos)
                 note.replace(slot, 2, cs->jump_session_ref);
@@ -1619,8 +1622,8 @@ static void SetSessionNameField(HWND hWnd, LPCSTR currentSession)
     SetDlgItemText(hWnd, IDC_SESSIONNAME, currentSession ? currentSession : "");
 }
 
-// Populate the jump-host session-picker dropdown. First entry is "(none)"
-// meaning manual mode (use jump_* fields, or no jump host). Then all saved
+// Populate the jump-host session-picker dropdown. First entry is "(manual)":
+// no reference, the session's own jump_* fields apply. Then all saved
 // sessions except the quickconnect pseudo-session and the session being
 // edited (self-exclusion to prevent direct A->A reference).
 //
@@ -1628,13 +1631,13 @@ static void SetSessionNameField(HWND hWnd, LPCSTR currentSession)
 // was deleted/renamed), it is appended as "[!] <name> (missing)" so the
 // user can see and recover from the broken reference.
 // "[!] " is a fixed visual indicator (not translated — same ASCII bang
-// across all locales). The "(none)" entry text and the " (missing)" suffix
+// across all locales). The "(manual)" entry text and the " (missing)" suffix
 // ARE localized via IDS_JUMP_SESSION_NONE and IDS_JUMP_SESSION_MISSING_SUFFIX.
 static constexpr const char* kJumpMissingMarkerPrefix = "[!] ";
 
 // Read the jump-session-ref combobox text and convert it back to the bare
-// session name. Returns empty string for "(none)" or for the "[!] ... (missing)"
-// marker entry — both mean "no reference, use manual jump_* fields or none".
+// session name. Returns empty string for "(manual)" or for the "[!] ... (missing)"
+// marker entry — both mean "no reference, use the manual jump_* fields".
 // Used by both the immediate selection handler (OnJumpSessionPicked) and the
 // save-time read in OnConnectDlgOk, so the model matches the dropdown even
 // when the dialog filled it without the user touching it.
@@ -1642,7 +1645,7 @@ static std::string ReadJumpSessionRefFromDialog(HWND hWnd)
 {
     // Read wide to match how the combobox was filled, then compare against
     // the wide translations. Reading ANSI and comparing with the UTF-8
-    // .lng text never matches for a non-ASCII "(none)" caption, which
+    // .lng text never matches for a non-ASCII "(manual)" caption, which
     // would turn the placeholder entry into a session name.
     std::array<wchar_t, wdirtypemax> selW{};
     GetDlgItemTextW(hWnd, IDC_JUMP_SESSION_PICK, selW.data(),
@@ -1652,7 +1655,7 @@ static std::string ReadJumpSessionRefFromDialog(HWND hWnd)
         return {};
 
     std::wstring noneW = LoadResStringW(IDS_JUMP_SESSION_NONE);
-    if (noneW.empty()) noneW = L"(none)";
+    if (noneW.empty()) noneW = L"(manual)";
     if (_wcsicmp(sW.c_str(), noneW.c_str()) == 0)
         return {};
 
@@ -1678,7 +1681,7 @@ static void FillJumpSessionCombo(HWND hWnd, LPCSTR currentSessionName, LPCSTR cu
     SendDlgItemMessageW(hWnd, IDC_JUMP_SESSION_PICK, CB_RESETCONTENT, 0, 0);
     const std::wstring noneTextW = LoadResStringW(IDS_JUMP_SESSION_NONE);
     SendDlgItemMessageW(hWnd, IDC_JUMP_SESSION_PICK, CB_ADDSTRING, 0,
-                        (LPARAM)(noneTextW.empty() ? L"(none)" : noneTextW.c_str()));
+                        (LPARAM)(noneTextW.empty() ? L"(manual)" : noneTextW.c_str()));
 
     bool foundRef = false;
     std::array<char, wdirtypemax> name{};
@@ -1717,7 +1720,7 @@ static void FillJumpSessionCombo(HWND hWnd, LPCSTR currentSessionName, LPCSTR cu
         SendDlgItemMessageW(hWnd, IDC_JUMP_SESSION_PICK, CB_SELECTSTRING, (WPARAM)-1,
                             (LPARAM)refW.c_str());
     } else {
-        // Default: localized "(none)" — first entry, index 0
+        // Default: localized "(manual)" — first entry, index 0
         SendDlgItemMessageW(hWnd, IDC_JUMP_SESSION_PICK, CB_SETCURSEL, 0, 0);
     }
 }

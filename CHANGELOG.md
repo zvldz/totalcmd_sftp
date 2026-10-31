@@ -126,6 +126,15 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   once and whole folders all work, in both directions. Broken since the
   first release of the original plugin.
 
+- **The jump-host list says what its first entry means.** It read
+  "(none)", which looks like "no jump host" — while it actually meant
+  "use the settings typed into Jump...". It now reads "(manual)", and the
+  help describes the choice between those settings and a saved session
+  for the first time. The list is also disabled in PHP and LAN Pair
+  modes, like the controls beside it: picking a session there used to
+  switch the jump host on, and the Jump... button with it, in a mode that
+  never uses one.
+
 - **The jump-host dialog shows where its settings come from.** When a
   session supplies the jump host, the dialog used to be unreachable —
   the button simply went grey — while anything typed into it on an

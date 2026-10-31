@@ -772,7 +772,7 @@ BEGIN
     IDS_DLG_ENCODING        "Encoding (codepage) of file names:"
     IDS_DLG_PERMISSIONS_GROUP 
                             " User &rights of newly created files/directories: "
-    IDS_JUMP_FROM_SESSION   "These settings come from session '{}' and are shown read-only. Pick (none) in the jump-host list to configure a host here instead."
+    IDS_JUMP_FROM_SESSION   "These settings come from session '{}' and are shown read-only. Pick (manual) in the jump-host list to configure a host here instead."
     IDS_IMPORT_BLOCKED      "This session reaches its host through something that was not imported with it: a proxy, a jump host or a tunnel. Connecting now would go straight to the target instead, past the very thing that was put in the way, so it is refused."
     IDS_SIMPORT_PROXY_LOST  "The session was set to connect through a proxy, but the file carries no description of it. The session was imported without the proxy and will connect directly, so check its proxy setting before using it."
     IDS_DLG_LANPAIR_GROUP   " LAN Pair Session: "
@@ -805,7 +805,7 @@ STRINGTABLE
 BEGIN
     IDS_LAN_ERR_CONN_FAILED "LAN Pair: connection failed"
     IDS_LAN_ERR_DONOR_NO_CONNECT "LAN Pair: this machine is configured as Donor. The remote Receiver must connect here."
-    IDS_JUMP_SESSION_NONE           "(none)"
+    IDS_JUMP_SESSION_NONE           "(manual)"
     IDS_JUMP_SESSION_MISSING_SUFFIX " (missing)"
     IDS_JUMP_SESSION_NOT_FOUND      "Jump session '{}' not found in saved sessions"
     IDS_JUMP_SESSION_CHAINED        "Jump session '{}' has its own jump-host configuration — chained or cyclic jump hosts are not supported. Pick a session that connects directly to the bastion."
