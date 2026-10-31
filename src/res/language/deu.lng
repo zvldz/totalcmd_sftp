@@ -372,6 +372,7 @@
 12122=Die Sitzung sollte über einen Proxy verbinden, doch die Datei enthält keine Beschreibung davon. Die Sitzung wurde ohne den Proxy importiert und verbindet direkt; prüfen Sie daher ihre Proxy-Einstellung, bevor Sie sie verwenden.
 12123=Diesen Proxy kann das Plugin nachbilden: Kopieren Sie die Sitzung mit F5 in Ihre eigene Liste, dann wird der Proxy mitübernommen. Ein eventuell nötiges Passwort wird bei der ersten Verbindung abgefragt.
 12124=Verschieben: Die Quelle wurde behalten, weil das Kopieren auf einer bereits vorhandenen Datei fortgesetzt wurde
+12125=Quelle und Ziel sind dieselbe Datei: Beide Sitzungen zeigen auf dasselbe Konto auf demselben Server und denselben Pfad. Eine Datei auf sich selbst zu kopieren würde sie abschneiden, daher wird dies abgelehnt.
 12089=SFTP
 12104=(manuell)
 12105= (fehlt)

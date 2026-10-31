@@ -171,8 +171,10 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   carries the file itself: down from one session and up to the other,
   with one progress bar across both halves. Copy, move, several files at
   once and whole folders all work, in both directions. LAN Pair sessions
-  are not part of this and refuse. Broken since the first release of the
-  original plugin.
+  are not part of this and refuse. Two sessions that point at the same
+  account on the same server refuse to copy a file onto its own path,
+  which would cut it short — and, on a move, delete it. Broken since the
+  first release of the original plugin.
 
 - **The jump-host list says what its first entry means.** It read
   "(none)", which looks like "no jump host" — while it actually meant

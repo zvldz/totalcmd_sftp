@@ -530,6 +530,7 @@
 #define IDS_SIMPORT_PROXY_LOST          12122  // imported session referenced a proxy that did not travel
 #define IDS_IMPORT_BLOCKED_COPY         12123  // refusal hint: F5 brings a rebuildable proxy along
 #define IDS_MOVE_KEPT_RESUMED           12124  // status: a resumed move keeps its source
+#define IDS_ERR_SAME_FILE               12125  // cross-session copy onto the same file
 
 // Next default values for new objects
 //

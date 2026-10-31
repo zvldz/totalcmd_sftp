@@ -372,6 +372,7 @@
 12122=La sesión estaba configurada para conectarse a través de un proxy, pero el archivo no lo describe. La sesión se importó sin el proxy y conectará directamente, así que revise su ajuste de proxy antes de usarla.
 12123=El plugin puede recrear este proxy: copie la sesión a su propia lista con F5 y el proxy se copiará con ella. Su contraseña, si la necesita, se pedirá en la primera conexión.
 12124=Mover: se conservó el origen, porque la copia se reanudó sobre un archivo ya existente
+12125=El origen y el destino son el mismo archivo: ambas sesiones apuntan a la misma cuenta en el mismo servidor, en la misma ruta. Copiar un archivo sobre sí mismo lo truncaría, así que se rechaza.
 12089=SFTP
 12104=(manual)
 12105= (no encontrada)

@@ -372,6 +372,7 @@
 12122=La session devait se connecter via un proxy, mais le fichier n'en contient aucune description. Elle a été importée sans le proxy et se connectera directement : vérifiez son paramètre de proxy avant de l'utiliser.
 12123=Ce proxy peut être recréé par le plugin : copiez la session dans votre propre liste avec F5 et le proxy l'accompagne. Son mot de passe, s'il en faut un, est demandé à la première connexion.
 12124=Déplacement : la source a été conservée, car la copie a repris sur un fichier déjà présent
+12125=La source et la destination sont le même fichier : les deux sessions désignent le même compte sur le même serveur, au même chemin. Copier un fichier sur lui-même le tronquerait, l'opération est donc refusée.
 12089=SFTP
 12104=(manuel)
 12105= (introuvable)

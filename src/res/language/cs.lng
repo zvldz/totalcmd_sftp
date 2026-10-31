@@ -371,6 +371,7 @@
 12122=Relace se měla připojovat přes proxy, ale soubor její popis neobsahuje. Relace byla naimportována bez proxy a bude se připojovat přímo, proto před použitím zkontrolujte její nastavení proxy.
 12123=Tento proxy server umí plugin znovu vytvořit: zkopírujte relaci do vlastního seznamu klávesou F5 a proxy se přenese s ní. Heslo, je-li potřeba, bude vyžádáno při prvním připojení.
 12124=Přesun: zdroj byl ponechán, protože kopírování pokračovalo do již existujícího souboru
+12125=Zdroj a cíl jsou tentýž soubor: obě relace ukazují na stejný účet na stejném serveru a na stejnou cestu. Kopírování souboru na sebe sama by ho zkrátilo, proto je operace odmítnuta.
 12089=SFTP
 12104=(ručně)
 12105= (chybí)

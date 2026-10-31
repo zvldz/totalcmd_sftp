@@ -1127,6 +1127,27 @@ private:
     pConnectSettings m_cs;
 };
 
+// Whether two sessions name one file: the same account on the same server
+// and the same path. A PHP agent is identified by its whole URL, since two
+// agents on one host may serve different roots. Only what the sessions say
+// is compared, so another name for the same host is not recognised.
+static bool SameRemoteFile(pConnectSettings a, const std::wstring& aPath,
+                           pConnectSettings b, const std::wstring& bPath)
+{
+    if (aPath != bPath || a->user != b->user)
+        return false;
+    if (IsPhpAgentTransport(a) || IsPhpAgentTransport(b))
+        return IsPhpAgentTransport(a) && IsPhpAgentTransport(b) &&
+               _stricmp(a->server.c_str(), b->server.c_str()) == 0;
+
+    std::array<char, MAX_PATH> hostA{}, hostB{};
+    WORD portA = 0, portB = 0;
+    if (!ParseAddress(a->server.c_str(), hostA.data(), &portA, 22) ||
+        !ParseAddress(b->server.c_str(), hostB.data(), &portB, 22))
+        return false;
+    return portA == portB && _stricmp(hostA.data(), hostB.data()) == 0;
+}
+
 static int CopyBetweenSessions(LPCWSTR OldName, LPCWSTR NewName,
                                bool Move, bool OverWrite, RemoteInfoStruct* ri)
 {
@@ -1147,6 +1168,19 @@ static int CopyBetweenSessions(LPCWSTR OldName, LPCWSTR NewName,
     // session underneath.
     if (IsLanPairTransport(src) || IsLanPairTransport(dst))
         return FS_FILE_NOTSUPPORTED;
+
+    // Copied onto itself, the file is cut short by the upload before its
+    // copy is written back, and a move would then delete it. Inside one
+    // session Total Commander catches this; across two it cannot tell.
+    if (SameRemoteFile(src, srcRel, dst, dstRel)) {
+        SFTP_LOG("ENTRY", "CopyBetweenSessions refused: same file '%S'", srcRel.c_str());
+        ShowPluginMessage(IDS_ERR_SAME_FILE,
+            "Source and destination are the same file: both sessions point at "
+            "the same account on the same server, at the same path. Copying a "
+            "file onto itself would cut it short, so this is refused.",
+            IDS_TITLE_SFTP, "SFTP");
+        return FS_FILE_USERABORT;
+    }
 
     std::array<wchar_t, MAX_PATH> tempDir{};
     std::array<wchar_t, MAX_PATH> tempFile{};
