@@ -96,6 +96,22 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   says so. Affects every server type, and has since the first release of
   the original plugin.
 
+- **Copying a file within one session copies it.** Copying to another
+  folder or name on the same server — `Shift+F5`, or `F5` between two
+  panels open on the same session — renamed the file instead, so it was
+  gone from where it had been. SFTP and PHP Agent sessions now copy it
+  through this machine, since neither server offers a copy of its own;
+  shell-only servers keep using `cp`; LAN Pair refuses rather than move
+  the file.
+
+- **LAN Pair: resuming and renaming are safe.** A resumed download wrote
+  past the end of the partial file, leaving a gap of zeros, and a resume
+  that failed deleted the partial file it was continuing. Renaming onto a
+  name already taken replaced that file without asking; it now asks, as
+  on other servers — provided both machines run this version, since an
+  older peer still replaces. Moving a file up to a LAN Pair peer now
+  takes the local file away, as it does elsewhere.
+
 - **Removing a folder on a shell-only server removes only an empty
   one.** The plugin used `rm -rf` there, where SFTP servers refuse a
   folder that still holds files. Total Commander deletes the files
@@ -154,8 +170,9 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   Total Commander does not step in for a plugin here, so the plugin now
   carries the file itself: down from one session and up to the other,
   with one progress bar across both halves. Copy, move, several files at
-  once and whole folders all work, in both directions. Broken since the
-  first release of the original plugin.
+  once and whole folders all work, in both directions. LAN Pair sessions
+  are not part of this and refuse. Broken since the first release of the
+  original plugin.
 
 - **The jump-host list says what its first entry means.** It read
   "(none)", which looks like "no jump host" — while it actually meant

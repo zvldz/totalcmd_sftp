@@ -1142,6 +1142,12 @@ static int CopyBetweenSessions(LPCWSTR OldName, LPCWSTR NewName,
     if (!src || !dst)
         return FS_FILE_NOTFOUND;
 
+    // The two legs run on the SFTP-family transfer paths, which LAN Pair
+    // does not go through; it is refused rather than reached with no
+    // session underneath.
+    if (IsLanPairTransport(src) || IsLanPairTransport(dst))
+        return FS_FILE_NOTSUPPORTED;
+
     std::array<wchar_t, MAX_PATH> tempDir{};
     std::array<wchar_t, MAX_PATH> tempFile{};
     if (!GetTempPathW(static_cast<DWORD>(tempDir.size()), tempDir.data()) ||
@@ -1391,12 +1397,27 @@ int WINAPI FsRenMovFileW(LPCWSTR OldName, LPCWSTR NewName, BOOL Move, BOOL OverW
 
         bool isdir = (ri->Attr & FILE_ATTRIBUTE_DIRECTORY) ? true : false;
 
+        // A copy inside one session cannot be a rename: that would take the
+        // file away from where it was. Shell-only servers have `cp` for it;
+        // SFTP and the PHP agent have no server-side copy, so the file makes
+        // the same round trip as between two sessions; LAN Pair has neither
+        // and refuses.
+        if (!Move) {
+            if (IsLanPairTransport(serverid1))
+                return FS_FILE_NOTSUPPORTED;
+            if (!serverid1->scponly)
+                return CopyBetweenSessions(OldName, NewName, false, !!OverWrite, ri);
+        }
+
         // LAN Pair rename.
         if (IsLanPairTransport(serverid1)) {
             if (!serverid1->lanSession || !serverid1->lanSession->isConnected()) return FS_FILE_WRITEERROR;
             const std::string oldUtf8 = LanRemotePathToUtf8(olddir.data());
             const std::string newUtf8 = LanRemotePathToUtf8(newdir.data());
-            return serverid1->lanSession->rename(oldUtf8, newUtf8) ? FS_FILE_OK : FS_FILE_WRITEERROR;
+            bool exists = false;
+            if (serverid1->lanSession->rename(oldUtf8, newUtf8, !!OverWrite, &exists))
+                return FS_FILE_OK;
+            return exists ? FS_FILE_EXISTS : FS_FILE_WRITEERROR;
         }
 
         int rc = SftpRenameMoveFileW(serverid1, olddir.data(), newdir.data(), !!Move, !!OverWrite, isdir);
@@ -1510,7 +1531,15 @@ static int FinishDownloadMove(pConnectSettings serverid, LPCWSTR remoteRelative,
         return FS_FILE_OK;
     }
 
-    const int rc = SftpDeleteFileW(serverid, remoteRelative, false);
+    // LAN Pair has no SFTP session to delete through; its peer does it.
+    int rc = SFTP_FAILED;
+    if (IsLanPairTransport(serverid)) {
+        if (serverid->lanSession && serverid->lanSession->isConnected() &&
+            serverid->lanSession->remove(LanRemotePathToUtf8(remoteRelative)))
+            rc = SFTP_OK;
+    } else {
+        rc = SftpDeleteFileW(serverid, remoteRelative, false);
+    }
     SFTP_LOG("ENTRY", "FsGetFileW move: deleting the source rc=%d", rc);
     if (rc != SFTP_OK)
         ShowStatusId(IDS_ERR_DELETE, nullptr, true);
@@ -1885,6 +1914,17 @@ int WINAPI FsPutFileW(LPCWSTR LocalName, LPCWSTR RemoteName, int CopyFlags)
             const std::string remoteUtf8 = LanRemotePathToUtf8(remotedir.data());
             int fsResult = FS_FILE_WRITEERROR;
             serverid->lanSession->putFile(LocalName, remoteUtf8, OverWrite, Resume, &fsResult);
+            // A move takes the local file away here too, under the same rule
+            // as the other transports: never after a resumed transfer.
+            if (fsResult == FS_FILE_OK && Move) {
+                if (Resume) {
+                    ShowStatusId(IDS_MOVE_KEPT_RESUMED, nullptr, true);
+                } else if (!DeleteFileW(LocalName)) {
+                    SFTP_LOG("ENTRY", "FsPutFileW LAN move: could not delete '%S' (%lu)",
+                             LocalName, GetLastError());
+                    ShowStatusId(IDS_ERR_DELETE, nullptr, true);
+                }
+            }
             return fsResult;
         }
 
