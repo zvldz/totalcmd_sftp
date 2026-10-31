@@ -88,10 +88,11 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   shell: listing, creating a folder, deleting, and both directions of
   file transfer. The panel showed the home directory in place of `/`,
   nothing outside it could be reached, and uploads landed in the wrong
-  place or nowhere. Paths are now sent as they are. Accounts confined to
-  their own directory keep working: listing, folder creation and
-  deletion fall back to the old reading when the server rejects the
-  plain path.
+  place or nowhere. Paths are now sent as they are. An account confined
+  to its own directory, which only understands paths relative to it, is
+  not served yet: retrying a refused path relative to the login
+  directory was tried and dropped, because it could aim a deletion at a
+  file nobody meant.
 
 - **Shell transfer mode works.** Such a server echoes back every command
   it is sent, and the plugin mistook a command too long for one terminal
