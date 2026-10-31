@@ -289,8 +289,13 @@ std::string BuildScpPathArgument(const std::string& path)
 // carries quotes when the path holds a space.
 static bool ScpSourceIsMissing(pConnectSettings cs, const char* filename)
 {
-    if (!cs || !cs->sftpsession || cs->scponly || !filename)
+    if (!cs || !filename)
         return false;
+    if (!cs->sftpsession || cs->scponly) {
+        SFTP_LOG("SCP", "missing-check: no SFTP session to ask (sftp=%d scponly=%d)",
+                 cs->sftpsession ? 1 : 0, cs->scponly ? 1 : 0);
+        return false;
+    }
     std::string path = filename;
     if (path.size() >= 2 && path.front() == '"' && path.back() == '"')
         path = path.substr(1, path.size() - 2);
@@ -302,9 +307,8 @@ static bool ScpSourceIsMissing(pConnectSettings cs, const char* filename)
         if (rc == LIBSSH2_ERROR_EAGAIN)
             IsSocketReadable(cs->sock);
     } while (rc == LIBSSH2_ERROR_EAGAIN);
-    if (rc != LIBSSH2_ERROR_SFTP_PROTOCOL)
-        return false;
-    const unsigned long fx = cs->sftpsession->lastError();
+    const unsigned long fx = (rc == LIBSSH2_ERROR_SFTP_PROTOCOL) ? cs->sftpsession->lastError() : 0;
+    SFTP_LOG("SCP", "missing-check '%s': lstat rc=%d fx=%lu", path.c_str(), rc, fx);
     return fx == LIBSSH2_FX_NO_SUCH_FILE || fx == LIBSSH2_FX_NO_SUCH_PATH;
 }
 
