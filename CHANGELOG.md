@@ -132,6 +132,13 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   to the same name in other letter case on a Windows or macOS server no
   longer deletes it. Re-upload `sftp.php` to pick up the second fix.
 
+- **A download that keeps breaking off at the same point gives up.** The
+  automatic resume after a dropped connection retried for as long as it
+  failed, so an error striking at one spot every time held the copy
+  forever; it now stops once a retry adds nothing. And a command run
+  through the shell — a rename or a copy on a shell-only server — that
+  timed out before finishing no longer passes for a success.
+
 - **SCP and shell transfers check that they really finished.** With
   "Use SCP for data transfers" on, a download the server cut short or
   padded after a read error, and an upload it could not finish writing —

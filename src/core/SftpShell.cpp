@@ -600,6 +600,14 @@ int SftpQuoteCommand2(pConnectSettings cs, const char* remotedir, const char* cm
         }
     }
 
+    // The loop also ends on its timeouts. A command that never finished has
+    // no exit status, and the channel reports 0 for one that never came —
+    // which would pass a hung `mv` or `cp` for a success.
+    if (!channel->eof()) {
+        SFTP_LOG("SHELL", "Quote command timed out before it finished");
+        return -1;
+    }
+
     const int rc = channel->getExitStatus();
     if (rc != 0) {
         char tmp[128];
@@ -700,6 +708,14 @@ int SftpQuoteCommand2W(pConnectSettings cs, LPCWSTR remotedir, LPCWSTR cmd,
             if (ProgressLoop("QUOTE", 0, 100, &loop, &lasttime))
                 break;
         }
+    }
+
+    // The loop also ends on its timeouts. A command that never finished has
+    // no exit status, and the channel reports 0 for one that never came —
+    // which would pass a hung `mv` or `cp` for a success.
+    if (!channel->eof()) {
+        SFTP_LOG("SHELL", "Quote command timed out before it finished");
+        return -1;
     }
 
     const int rc = channel->getExitStatus();

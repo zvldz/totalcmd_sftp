@@ -1442,7 +1442,7 @@ int WINAPI FsRenMovFileW(LPCWSTR OldName, LPCWSTR NewName, BOOL Move, BOOL OverW
         ResetLastPercent(serverid1);
         SessionContextGuard _sessionGuard(serverid1);
 
-        bool isdir = (ri->Attr & FILE_ATTRIBUTE_DIRECTORY) ? true : false;
+        const bool isdir = ri && (ri->Attr & FILE_ATTRIBUTE_DIRECTORY);
 
         // A copy inside one session cannot be a rename: that would take the
         // file away from where it was. Shell-only servers have `cp` for it;
@@ -1835,8 +1835,13 @@ int WINAPI FsGetFileW(LPCWSTR RemoteName, LPWSTR LocalName, int CopyFlags, Remot
             IsPhpAgentTransport(serverid) && serverid->php_tar &&
             TarDownloadSessionIsActive(serverid))
         {
-            if (TarDownloadSessionQueue(serverid, LocalName, remotedir.data()))
+            if (TarDownloadSessionQueue(serverid, LocalName, remotedir.data())) {
+                // The file arrives only when the batch runs, after this call
+                // has returned, so a move inside a TAR batch stays a copy.
+                if (Move)
+                    SFTP_LOG("TAR", "FsGetFileW move queued as a copy; source kept");
                 return FS_FILE_OK;
+            }
         }
 
         // PHP Agent TAR directory download.
@@ -1866,6 +1871,11 @@ int WINAPI FsGetFileW(LPCWSTR RemoteName, LPWSTR LocalName, int CopyFlags, Remot
                 : fsResult;
         }
 
+        // A dropped connection leaves part of the file; the loop picks it up
+        // from there. It goes on only while each round adds to the file — an
+        // error that keeps striking at the same offset would otherwise spin
+        // here for good.
+        int64_t partialSize = -1;
         while (true) {  // auto-resume loop
             int rc = SftpDownloadFileW(serverid, remotedir.data(), LocalName, true, ri->Size64, &ri->LastWriteTime, Resume);
             SFTP_LOG("ENTRY", "FsGetFileW SftpDownloadFileW rc=%d", rc);
@@ -1875,7 +1885,20 @@ int WINAPI FsGetFileW(LPCWSTR RemoteName, LPWSTR LocalName, int CopyFlags, Remot
                 case SFTP_READFAILED:  return FS_FILE_READERROR;
                 case SFTP_WRITEFAILED: return FS_FILE_WRITEERROR;
                 case SFTP_ABORT:       return FS_FILE_USERABORT;
-                case SFTP_PARTIAL:     Resume = true; break;
+                case SFTP_PARTIAL: {
+                    WIN32_FILE_ATTRIBUTE_DATA fad{};
+                    const int64_t now = GetFileAttributesExW(LocalName, GetFileExInfoStandard, &fad)
+                        ? (static_cast<int64_t>(fad.nFileSizeHigh) << 32) | fad.nFileSizeLow
+                        : -1;
+                    if (now <= partialSize) {
+                        SFTP_LOG("ENTRY", "FsGetFileW auto-resume made no progress at %lld",
+                                 static_cast<long long>(now));
+                        return FS_FILE_READERROR;
+                    }
+                    partialSize = now;
+                    Resume = true;
+                    break;
+                }
                 default:               return FS_FILE_READERROR;
             }
         }
@@ -1981,9 +2004,15 @@ int WINAPI FsPutFileW(LPCWSTR LocalName, LPCWSTR RemoteName, int CopyFlags)
             if (!TarUploadSessionIsActive(serverid))
                 TarUploadSessionBegin(serverid);
             const std::string remoteRelA = unicode_util::wide_to_narrow(remotedir.data());
-            SFTP_LOG("TAR", "FsPutFileW queued '%S' -> '%s'", LocalName, remoteRelA.c_str());
-            TarUploadSessionQueue(serverid, LocalName, remoteRelA.c_str());
-            return FS_FILE_OK;
+            // A file the batch would not take goes up on its own below rather
+            // than being reported as sent. One it took is sent only when the
+            // batch runs, after this call has returned, so a move stays a copy.
+            if (TarUploadSessionQueue(serverid, LocalName, remoteRelA.c_str())) {
+                SFTP_LOG("TAR", "FsPutFileW queued '%S' -> '%s'%s", LocalName, remoteRelA.c_str(),
+                         Move ? " (move kept as a copy)" : "");
+                return FS_FILE_OK;
+            }
+            SFTP_LOG("TAR", "FsPutFileW not queued '%S'; uploading it alone", LocalName);
         }
         SFTP_LOG("TAR", "FsPutFileW TAR skip: isPhpAgent=%d php_tar=%d tarActive=%d",
                  IsPhpAgentTransport(serverid) ? 1 : 0,
