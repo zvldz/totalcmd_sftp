@@ -650,8 +650,13 @@ int SftpDeleteFileW(pConnectSettings cs, LPCWSTR RemoteName, bool isdir)
             // which carries the end marker and a literal "$?" — is taken for
             // the result, and a deletion reads as successful whether the file
             // went away or not.
+            //
+            // A directory goes with `rmdir`, which refuses one that is not
+            // empty, as SFTP's rmdir does. Total Commander removes the files
+            // itself and then asks for the empty directory; after a move it
+            // relies on that refusal to keep whatever was skipped or failed.
             std::string cmd = "echo \"" + beginMarker + "\"; ";
-            cmd += isdir ? "rm -rf '" : "rm -f '";
+            cmd += isdir ? "rmdir '" : "rm -f '";
             cmd += string_util::ShellQuoteSingle(target) + "'";
             cmd += "; echo \"" + endMarker + "\":$?\n";
 

@@ -96,6 +96,13 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   says so. Affects every server type, and has since the first release of
   the original plugin.
 
+- **Removing a folder on a shell-only server removes only an empty
+  one.** The plugin used `rm -rf` there, where SFTP servers refuse a
+  folder that still holds files. Total Commander deletes the files
+  itself first and relies on that refusal to keep anything that was
+  skipped or failed — so after `F6` on a folder, or `F8` with a file
+  answered "skip", those files were wiped along with the folder.
+
 - **A resumed upload no longer writes over a larger file on the
   server.** When the remote file was longer than the local one, or the
   server did not report its size, resuming started writing from the
