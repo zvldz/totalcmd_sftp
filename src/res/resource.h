@@ -531,6 +531,7 @@
 #define IDS_IMPORT_BLOCKED_COPY         12123  // refusal hint: F5 brings a rebuildable proxy along
 #define IDS_MOVE_KEPT_RESUMED           12124  // status: a resumed move keeps its source
 #define IDS_ERR_SAME_FILE               12125  // cross-session copy onto the same file
+#define IDS_ERR_NO_SFTP_HINT            12126  // SFTP subsystem failed: suggest SCP for everything
 
 // Next default values for new objects
 //

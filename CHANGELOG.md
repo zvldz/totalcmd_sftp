@@ -139,6 +139,13 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   through the shell — a rename or a copy on a shell-only server — that
   timed out before finishing no longer passes for a success.
 
+- **Connecting to a server without SFTP ends, and says what to do.** A
+  host that offers only a shell — dropbear on a camera or a router —
+  never answers the request to start SFTP, and the plugin waited for that
+  answer with no time limit, so the connection hung until cancelled. It
+  now gives up after fifteen seconds and suggests turning on "Use SCP for
+  everything (no SFTP)", which is what such a host needs.
+
 - **Uploading with "Use SCP for data transfers" works.** Opening the
   upload channel asks the server to start scp, which on the plugin's
   non-blocking connection first answers "not ready yet"; that answer was

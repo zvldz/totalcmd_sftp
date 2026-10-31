@@ -372,6 +372,7 @@
 12123=Tento proxy server umí plugin znovu vytvořit: zkopírujte relaci do vlastního seznamu klávesou F5 a proxy se přenese s ní. Heslo, je-li potřeba, bude vyžádáno při prvním připojení.
 12124=Přesun: zdroj byl ponechán, protože kopírování pokračovalo do již existujícího souboru
 12125=Zdroj a cíl jsou tentýž soubor: obě relace ukazují na stejný účet na stejném serveru a na stejnou cestu. Kopírování souboru na sebe sama by ho zkrátilo, proto je operace odmítnuta.
+12126=Server nespustil relaci SFTP. Pokud nabízí jen shell — například dropbear na kameře nebo routeru —, zapněte pro tuto relaci „Použít SCP pro vše (bez SFTP)“.
 12089=SFTP
 12104=(ručně)
 12105= (chybí)

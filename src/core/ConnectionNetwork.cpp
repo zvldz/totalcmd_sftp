@@ -95,6 +95,11 @@ bool InitializeSftpSubsystemIfNeeded(pConnectSettings ConnectSettings, int progr
     ShowStatusId(IDS_LOG_SFTP_INIT, nullptr, true);
     SFTP_LOG("CONN", "Initializing SFTP subsystem");
     ShowStatusId(IDS_SESSION_STARTUP, " (SFTP)", true);
+    // A host with no SFTP subsystem — dropbear on a camera or a router —
+    // may never answer the request, and the call keeps saying "not yet".
+    // The wait is bounded so such a host fails instead of hanging.
+    const SYSTICKS sftpInitStart = get_sys_ticks();
+    bool sftpInitTimedOut = false;
     do {
         ConnectSettings->sftpsession = nullptr;
         if (ProgressLoop(buf.data(), progress, progress + 10, loop, lasttime))
@@ -104,6 +109,9 @@ bool InitializeSftpSubsystemIfNeeded(pConnectSettings ConnectSettings, int progr
             ConnectSettings->sftpsession = std::move(sftpPtr);
         } else if (ConnectSettings->session->lastErrno() != LIBSSH2_ERROR_EAGAIN) {
             break;
+        } else if (get_ticks_between(sftpInitStart) > SFTP_INIT_TIMEOUT_MS) {
+            sftpInitTimedOut = true;
+            break;
         }
         IsSocketReadable(ConnectSettings->sock);
     } while (!ConnectSettings->sftpsession);
@@ -111,7 +119,12 @@ bool InitializeSftpSubsystemIfNeeded(pConnectSettings ConnectSettings, int progr
     if (!ConnectSettings->sftpsession) {
         ConnectSettings->session->lastError(&errmsg, &errmsg_len, false);
         ShowStatusId(IDS_ERR_INIT_SFTP, errmsg, true);
-        SFTP_LOG("CONN", "SFTP init failed: %s", errmsg ? errmsg : "(null)");
+        SFTP_LOG("CONN", "SFTP init failed%s: %s", sftpInitTimedOut ? " (no answer)" : "",
+                 errmsg ? errmsg : "(null)");
+        // The likeliest reason is a host that offers only a shell, and the
+        // session has a mode for exactly that; say so rather than leave a
+        // bare "could not initialise".
+        ShowErrorId(IDS_ERR_NO_SFTP_HINT);
         if (LogProc) {
             const std::string msg = std::format("SFTP: SFTP subsystem init failed: {}", errmsg ? errmsg : "(no details)");
             LogProc(PluginNumber, MSGTYPE_IMPORTANTERROR, msg.c_str());

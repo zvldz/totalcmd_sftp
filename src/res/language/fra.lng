@@ -373,6 +373,7 @@
 12123=Ce proxy peut être recréé par le plugin : copiez la session dans votre propre liste avec F5 et le proxy l'accompagne. Son mot de passe, s'il en faut un, est demandé à la première connexion.
 12124=Déplacement : la source a été conservée, car la copie a repris sur un fichier déjà présent
 12125=La source et la destination sont le même fichier : les deux sessions désignent le même compte sur le même serveur, au même chemin. Copier un fichier sur lui-même le tronquerait, l'opération est donc refusée.
+12126=Le serveur n'a pas démarré de session SFTP. S'il n'offre qu'un shell — dropbear sur une caméra ou un routeur, par exemple —, activez « Utiliser SCP pour tout (sans SFTP) » pour cette session.
 12089=SFTP
 12104=(manuel)
 12105= (introuvable)

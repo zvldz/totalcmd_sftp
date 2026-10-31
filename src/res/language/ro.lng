@@ -372,6 +372,7 @@
 12123=Plugin-ul poate recrea acest proxy: copiați sesiunea în propria listă cu F5 și proxy-ul vine odată cu ea. Parola, dacă este necesară, va fi cerută la prima conectare.
 12124=Mutare: sursa a fost păstrată, deoarece copierea a fost reluată peste un fișier deja existent
 12125=Sursa și destinația sunt același fișier: ambele sesiuni indică același cont pe același server, la aceeași cale. Copierea unui fișier peste el însuși l-ar trunchia, așa că operația este refuzată.
+12126=Serverul nu a pornit o sesiune SFTP. Dacă oferă doar un shell — de exemplu dropbear pe o cameră sau un router —, activați „Folosire SCP pentru totul (fără SFTP)” pentru această sesiune.
 12089=SFTP
 12104=(manual)
 12105= (lipsește)

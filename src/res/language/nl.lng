@@ -372,6 +372,7 @@
 12123=Deze proxy kan de plug-in opnieuw aanmaken: kopieer de sessie met F5 naar uw eigen lijst en de proxy gaat mee. Het wachtwoord wordt, indien nodig, bij de eerste verbinding gevraagd.
 12124=Verplaatsen: de bron is behouden, omdat het kopiëren werd hervat op een bestand dat er al was
 12125=Bron en doel zijn hetzelfde bestand: beide sessies wijzen naar hetzelfde account op dezelfde server, op hetzelfde pad. Een bestand naar zichzelf kopiëren zou het inkorten, dus dit wordt geweigerd.
+12126=De server heeft geen SFTP-sessie gestart. Biedt hij alleen een shell — zoals dropbear op een camera of router —, schakel dan voor deze sessie "SCP voor alles gebruiken (zonder SFTP)" in.
 12089=SFTP
 12104=(handmatig)
 12105= (ontbreekt)

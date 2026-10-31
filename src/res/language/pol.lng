@@ -361,6 +361,7 @@
 12123=Ten serwer proxy wtyczka potrafi odtworzyć: skopiuj sesję do własnej listy klawiszem F5, a proxy zostanie przeniesione razem z nią. Hasło, jeśli jest potrzebne, zostanie zapytane przy pierwszym połączeniu.
 12124=Przenoszenie: źródło zostało zachowane, ponieważ kopiowanie wznowiono na już istniejącym pliku
 12125=Źródło i cel to ten sam plik: obie sesje wskazują to samo konto na tym samym serwerze i tę samą ścieżkę. Skopiowanie pliku na samego siebie obcięłoby go, dlatego operacja została odrzucona.
+12126=Serwer nie uruchomił sesji SFTP. Jeśli udostępnia tylko powłokę — jak dropbear na kamerze lub routerze — włącz dla tej sesji „Użyj SCP do wszystkiego (bez SFTP)”.
 12089=SFTP
 12090=Szukam peera LAN Pair w sieci lokalnej...
 12091={} s
