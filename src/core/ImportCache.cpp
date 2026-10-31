@@ -319,6 +319,23 @@ SessionDependency ImportCache::ReadDependency(const std::string& section,
                               via.data(), static_cast<DWORD>(via.size()),
                               iniPath.c_str());
     out.detail = via.data();
+
+    // Present only when the adapter could describe the proxy in our terms.
+    const int proxyType = static_cast<int>(
+        GetPrivateProfileIntA(section.c_str(), "_blockedproxytype", 0, iniPath.c_str()));
+    if (proxyType > 0) {
+        std::array<char, 512> server{};
+        std::array<char, 512> user{};
+        GetPrivateProfileStringA(section.c_str(), "_blockedproxyserver", "",
+                                  server.data(), static_cast<DWORD>(server.size()),
+                                  iniPath.c_str());
+        GetPrivateProfileStringA(section.c_str(), "_blockedproxyuser", "",
+                                  user.data(), static_cast<DWORD>(user.size()),
+                                  iniPath.c_str());
+        out.proxyType   = static_cast<Proxy>(proxyType);
+        out.proxyServer = server.data();
+        out.proxyUser   = user.data();
+    }
     return out;
 }
 
@@ -347,6 +364,19 @@ void ImportCache::ReplaceChannel(const std::string& sourceId,
                 WritePrivateProfileStringA(section.c_str(), "_blockedvia",
                                             w.dependency.detail.c_str(),
                                             m_cachePath.c_str());
+            if (w.dependency.transferable()) {
+                const std::string type =
+                    std::to_string(static_cast<int>(w.dependency.proxyType));
+                WritePrivateProfileStringA(section.c_str(), "_blockedproxytype",
+                                            type.c_str(), m_cachePath.c_str());
+                WritePrivateProfileStringA(section.c_str(), "_blockedproxyserver",
+                                            w.dependency.proxyServer.c_str(),
+                                            m_cachePath.c_str());
+                if (!w.dependency.proxyUser.empty())
+                    WritePrivateProfileStringA(section.c_str(), "_blockedproxyuser",
+                                                w.dependency.proxyUser.c_str(),
+                                                m_cachePath.c_str());
+            }
         }
         CachedSessionRef ref;
         ref.sourceId     = sourceId;

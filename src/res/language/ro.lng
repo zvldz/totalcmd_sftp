@@ -369,6 +369,7 @@
 12120=Aceste setări provin din sesiunea '{}' și sunt doar pentru citire. Alegeți (manual) în lista de jump host pentru a configura unul aici.
 12121=Această sesiune ajunge la gazdă prin ceva ce nu a fost importat împreună cu ea: un proxy, un jump host sau un tunel. Conectarea acum ar merge direct la țintă, ocolind tocmai ceea ce a fost pus în cale, așa că este refuzată.
 12122=Sesiunea era setată să se conecteze printr-un proxy, dar fișierul nu conține descrierea acestuia. Sesiunea a fost importată fără proxy și se va conecta direct, așa că verificați setarea de proxy înainte de a o folosi.
+12123=Plugin-ul poate recrea acest proxy: copiați sesiunea în propria listă cu F5 și proxy-ul vine odată cu ea. Parola, dacă este necesară, va fi cerută la prima conectare.
 12089=SFTP
 12104=(manual)
 12105= (lipsește)

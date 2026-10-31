@@ -309,9 +309,10 @@ bool PuttyAdapter::LoadSettings(const ExternalSessionEntry& entry,
 
     // Field values, populated from whichever channel this entry came
     // from. Empty string / zero here means "field not present".
-    std::string host, userName, keyFile, lineCodePage, proxyHost;
-    DWORD       port = 0, useAgent = 0, enterSendsCrLf = 0, proxyMethod = 0;
-    bool        hasPort = false, hasEnterSendsCrLf = false, hasProxyMethod = false;
+    std::string host, userName, keyFile, lineCodePage, proxyHost, proxyUser;
+    DWORD       port = 0, useAgent = 0, enterSendsCrLf = 0, proxyMethod = 0, proxyPort = 0;
+    bool        hasPort = false, hasEnterSendsCrLf = false, hasProxyMethod = false,
+                hasProxyPort = false;
 
     if (entry.sourceOrigin == "standard") {
         // Standard channel: fields live under
@@ -344,6 +345,8 @@ bool PuttyAdapter::LoadSettings(const ExternalSessionEntry& entry,
         hasEnterSendsCrLf = ReadRegDword(key, "EnterSendsCrLf", enterSendsCrLf);
         hasProxyMethod = ReadRegDword(key, "ProxyMethod", proxyMethod);
         ReadRegString(key, "ProxyHost", proxyHost);
+        ReadRegDword(key, "ProxyPort", proxyPort);
+        ReadRegString(key, "ProxyUsername", proxyUser);
         RegCloseKey(key);
     } else {
         // Custom channel: entry.sourceOrigin is the literal path to a
@@ -393,15 +396,19 @@ bool PuttyAdapter::LoadSettings(const ExternalSessionEntry& entry,
         pickDword("ProxyMethod", proxyMethod, hasProxyMethod);
         pickString("ProxyHost", proxyHost);
         proxyHost = PuttyUrlDecode(proxyHost);
+        pickDword("ProxyPort", proxyPort, hasProxyPort);
+        pickString("ProxyUsername", proxyUser);
+        proxyUser = PuttyUrlDecode(proxyUser);
     }
 
     // Anything but method zero means the session does not reach its host
-    // directly. Which method it is decides how a proxy would be recreated,
-    // which is a question for the day we recreate one; that it is set at all
-    // is what stops the session connecting past it now.
+    // directly, so it refuses rather than connect past the proxy. A method
+    // the plugin speaks also carries the proxy itself, which lets F5 bring
+    // it across instead.
     if (dependency && hasProxyMethod && proxyMethod != 0) {
         dependency->kind   = SessionDependency::Kind::Proxy;
         dependency->detail = proxyHost;
+        DescribePuttyProxy(proxyMethod, proxyHost, proxyPort, proxyUser, *dependency);
     }
 
     // Compose the connect fields the cache writer will persist. The

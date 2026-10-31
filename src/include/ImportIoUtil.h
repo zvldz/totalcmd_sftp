@@ -8,6 +8,8 @@
 #include <string_view>
 #include <vector>
 
+#include "IExternalSessionSource.h"
+
 namespace sftp {
 
 // Return true if `iniPath` holds a section named `section` with a non-empty
@@ -60,6 +62,15 @@ bool BrowseForFile(HWND               owner,
 // exclusive by contract.
 bool ParseLineCodePage(const std::string& raw,
                        int& outUtf8, int& outCodepage) noexcept;
+
+// PuTTY's proxy numbering, which KiTTY and WinSCP share: `ProxyMethod` 1 is
+// SOCKS4, 2 SOCKS5, 3 HTTP. For those it fills the proxy part of `dep` —
+// type, address, user — so the session can be copied with its proxy.
+// Telnet (4), a local command (5) and an SSH jump host (6) are left alone:
+// they are not proxies the plugin can rebuild, and stay a refusal.
+// `port` 0 means the source stored none; PuTTY then uses 80.
+void DescribePuttyProxy(DWORD method, const std::string& host, DWORD port,
+                        const std::string& user, SessionDependency& dep);
 
 // Route an imported key-file path into the right slot of the plugin's
 // connect settings. `.pub` → public-key sidecar; anything else →

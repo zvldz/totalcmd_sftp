@@ -19,8 +19,18 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   session that reached its host through one connected **straight to the
   target** instead, which looks like success whenever the target also
   answers from outside. Such a session now says what is missing and
-  refuses, on connect and on copying it out. The dependency itself
-  travels across in a later version.
+  refuses, on connect and on copying it out.
+
+- **An HTTP or SOCKS proxy from PuTTY, KiTTY or WinSCP comes along when
+  the session is copied.** `F5` from `[Imports]` into your own list
+  points the new session at a matching entry in `[Proxies]`, reusing one
+  with the same type, address and user name or adding one. Copying it
+  out to a file writes the proxy into the file, and dropping that file
+  back onto the plugin resolves it the same way. The proxy password stays
+  behind and is asked for on the first connection. Connecting straight
+  from `[Imports]` still refuses, and now says that `F5` brings the proxy
+  along. Jump hosts, tunnels, SecureCRT firewalls and FileZilla's global
+  proxy are still refused.
 
 - **The help is one HTML page instead of a CHM.** The Help button now
   opens `SFTPplug-help.html` in your browser, and `Ctrl+F` searches

@@ -272,10 +272,16 @@ bool WinScpAdapter::LoadSettings(const ExternalSessionEntry& entry,
                 dependency->kind   = SessionDependency::Kind::Tunnel;
                 dependency->detail = PuttyUrlDecode(tunnelHost);
             } else if (ReadRegDword(key, "ProxyMethod", proxyMethod) && proxyMethod != 0) {
-                std::string proxyHost;
+                std::string proxyHost, proxyUser;
+                DWORD proxyPort = 0;
                 ReadRegString(key, "ProxyHost", proxyHost);
+                ReadRegDword(key, "ProxyPort", proxyPort);
+                ReadRegString(key, "ProxyUsername", proxyUser);
+                proxyHost = PuttyUrlDecode(proxyHost);
                 dependency->kind   = SessionDependency::Kind::Proxy;
-                dependency->detail = PuttyUrlDecode(proxyHost);
+                dependency->detail = proxyHost;
+                DescribePuttyProxy(proxyMethod, proxyHost, proxyPort,
+                                   PuttyUrlDecode(proxyUser), *dependency);
             }
         }
         RegCloseKey(key);
@@ -308,10 +314,18 @@ bool WinScpAdapter::LoadSettings(const ExternalSessionEntry& entry,
                 dependency->kind   = SessionDependency::Kind::Tunnel;
                 dependency->detail = PuttyUrlDecode(
                     ReadIniString(entry.sourceOrigin, section, "TunnelHostName"));
-            } else if (ReadIniDword(entry.sourceOrigin, section, "ProxyMethod") > 0) {
-                dependency->kind   = SessionDependency::Kind::Proxy;
-                dependency->detail = PuttyUrlDecode(
+            } else if (const int method = ReadIniDword(entry.sourceOrigin, section, "ProxyMethod");
+                       method > 0) {
+                const std::string proxyHost = PuttyUrlDecode(
                     ReadIniString(entry.sourceOrigin, section, "ProxyHost"));
+                const int proxyPort = ReadIniDword(entry.sourceOrigin, section, "ProxyPort");
+                dependency->kind   = SessionDependency::Kind::Proxy;
+                dependency->detail = proxyHost;
+                DescribePuttyProxy(static_cast<DWORD>(method), proxyHost,
+                                   proxyPort > 0 ? static_cast<DWORD>(proxyPort) : 0,
+                                   PuttyUrlDecode(ReadIniString(entry.sourceOrigin, section,
+                                                                "ProxyUsername")),
+                                   *dependency);
             }
         }
     }

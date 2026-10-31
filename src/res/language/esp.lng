@@ -370,6 +370,7 @@
 12120=Estos ajustes provienen de la sesión '{}' y son de solo lectura. Elija (manual) en la lista de jump host para configurar uno aquí.
 12121=Esta sesión llega a su host a través de algo que no se importó con ella: un proxy, un jump host o un túnel. Conectar ahora iría directo al destino, esquivando precisamente lo que se puso en medio, así que se rechaza.
 12122=La sesión estaba configurada para conectarse a través de un proxy, pero el archivo no lo describe. La sesión se importó sin el proxy y conectará directamente, así que revise su ajuste de proxy antes de usarla.
+12123=El plugin puede recrear este proxy: copie la sesión a su propia lista con F5 y el proxy se copiará con ella. Su contraseña, si la necesita, se pedirá en la primera conexión.
 12089=SFTP
 12104=(manual)
 12105= (no encontrada)

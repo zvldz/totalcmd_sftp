@@ -105,6 +105,8 @@
   <tr><td>Line endings</td><td>&mdash;</td><td>yes</td><td>yes</td><td>&mdash;</td><td>yes</td></tr>
   <tr><td>SCP transport</td><td>&mdash;</td><td>&mdash;</td><td>yes</td><td>&mdash;</td><td>&mdash;</td></tr>
   <tr><td>Password</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>partly</td><td>yes</td></tr>
+  <tr><td>Proxy (HTTP, SOCKS4, SOCKS5)</td><td>refused</td><td>on copy</td><td>on copy</td><td>refused</td><td>on copy</td></tr>
+  <tr><td>Jump host / tunnel</td><td>refused</td><td>refused</td><td>refused</td><td>&mdash;</td><td>refused</td></tr>
 </table>
 
 <p>Folder structure is preserved: a WinSCP session in a folder, a FileZilla site inside a <code>&lt;Folder&gt;</code>, or a SecureCRT session in a subdirectory all show up as nested folders in the panel.</p>
@@ -140,9 +142,18 @@
   <li>If a source becomes temporarily unreachable — a USB stick unplugged, a network share offline — its sessions stay listed rather than disappearing. They are removed only when the source is reachable and genuinely empty.</li>
 </ul>
 
+<h2>Proxies, jump hosts and tunnels</h2>
+
+<p>A session that reaches its host through a proxy, a jump host or a tunnel in the source program is never connected without it: going straight to the target would look like success while quietly skipping what was put in the way. What happens depends on whether the plugin can rebuild the dependency:</p>
+
+<ul>
+  <li><b>An HTTP, SOCKS4 or SOCKS5 proxy from PuTTY, KiTTY or WinSCP</b> comes along when you copy the session with <code>F5</code> — into your own session list, or out to a file. The copy points at a proxy in <code>[Proxies]</code>: an existing one when the type, address and user name match, otherwise a new one. The proxy password is not carried over; you are asked for it on the first connection if the proxy needs one. Pressing <code>Enter</code> on the session inside <code>[Imports]</code> still refuses and says to copy it first, since connecting has no business creating proxy records.</li>
+  <li><b>Anything else</b> — a jump host or tunnel, a proxy run by a local command, a SecureCRT firewall, FileZilla's global proxy — is refused on <code>Enter</code> and on copy, with a message naming what is missing.</li>
+</ul>
+
 <h2>Not carried over</h2>
 
-<p>Proxy, firewall and tunnel definitions are not imported yet. A session that connects through a proxy in the source program will import cleanly, but the proxy has to be set up again in the plugin. Host key fingerprints are not inherited either — the plugin asks you to confirm the fingerprint on the first connection, as it does for any new host.</p>
+<p>Host key fingerprints are not inherited — the plugin asks you to confirm the fingerprint on the first connection, as it does for any new host.</p>
 
 <p><a href="index.html">Back to index</a></p>
 </body>

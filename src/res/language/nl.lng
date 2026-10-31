@@ -369,6 +369,7 @@
 12120=Deze instellingen komen uit sessie '{}' en zijn alleen-lezen. Kies (handmatig) in de jump-hostlijst om hier een host in te stellen.
 12121=Deze sessie bereikt zijn host via iets dat niet is meegeïmporteerd: een proxy, een jump host of een tunnel. Nu verbinden zou rechtstreeks naar het doel gaan, langs precies datgene wat ertussen was gezet, en wordt daarom geweigerd.
 12122=De sessie was ingesteld om via een proxy te verbinden, maar het bestand bevat er geen beschrijving van. De sessie is zonder de proxy geïmporteerd en zal rechtstreeks verbinden; controleer daarom de proxy-instelling voordat u haar gebruikt.
+12123=Deze proxy kan de plug-in opnieuw aanmaken: kopieer de sessie met F5 naar uw eigen lijst en de proxy gaat mee. Het wachtwoord wordt, indien nodig, bij de eerste verbinding gevraagd.
 12089=SFTP
 12104=(handmatig)
 12105= (ontbreekt)

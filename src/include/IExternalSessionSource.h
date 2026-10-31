@@ -8,6 +8,8 @@ typedef tConnectSettings* pConnectSettings;
 
 namespace sftp {
 
+enum class Proxy : int;   // SftpClient.h
+
 // One session reported by an adapter.
 // displayName uses '/' as folder separator (round-trips through our path
 // normalisation). sourceOrigin identifies the channel the entry came from:
@@ -31,7 +33,20 @@ struct SessionDependency {
     Kind        kind = Kind::None;
     std::string detail;   // the record's name where the source gives one
 
+    // The proxy itself, filled only when it is a kind the plugin speaks
+    // (HTTP, SOCKS4, SOCKS5). Copying such a session into the user's list
+    // then brings a matching proxy record along instead of refusing; any
+    // other dependency still refuses. No password: it is asked for on the
+    // first connect, which is why the user name has to come across.
+    Proxy       proxyType{};   // notused unless the source names a kind we speak
+    std::string proxyServer;   // host, or host:port when the port is not the default
+    std::string proxyUser;
+
     bool blocks() const noexcept { return kind != Kind::None; }
+    bool transferable() const noexcept {
+        return kind == Kind::Proxy && static_cast<int>(proxyType) != 0 &&
+               !proxyServer.empty();
+    }
 };
 
 // Adapter's verdict for one channel probe. Drives cache prune behaviour:

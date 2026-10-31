@@ -369,6 +369,7 @@
 12120=Tieto nastavenia pochádzajú z relácie '{}' a sú iba na čítanie. Vyberte (ručne) v zozname jump-hostov, ak chcete hostiteľa zadať tu.
 12121=Táto relácia sa k hostiteľovi dostáva cez niečo, čo s ňou nebolo naimportované: proxy, jump host alebo tunel. Pripojenie by teraz šlo priamo k cieľu, mimo toho, čo bolo postavené do cesty, preto je odmietnuté.
 12122=Relácia sa mala pripájať cez proxy, ale súbor jeho popis neobsahuje. Relácia bola naimportovaná bez proxy a bude sa pripájať priamo, preto pred použitím skontrolujte jej nastavenie proxy.
+12123=Tento proxy server dokáže plugin znovu vytvoriť: skopírujte reláciu do vlastného zoznamu klávesom F5 a proxy sa prenesie spolu s ňou. Heslo, ak je potrebné, bude vyžiadané pri prvom pripojení.
 12089=SFTP
 12104=(ručne)
 12105= (chýba)

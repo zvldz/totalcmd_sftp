@@ -379,14 +379,21 @@ bool KittyAdapter::LoadSettings(const ExternalSessionEntry& entry,
     const bool hasEnterSendsCrLf = ReadKittyDword(filePath, "EnterSendsCrLf",
                                                     enterSendsCrLf);
 
-    // KiTTY inherits PuTTY's key names, so a non-zero method means the same
-    // thing here: the session goes through a proxy we are not copying.
+    // KiTTY inherits PuTTY's key names and method numbers, so a non-zero
+    // method means the same thing here: the session goes through a proxy,
+    // which F5 can bring across when it is one the plugin speaks.
     DWORD proxyMethod = 0;
     if (dependency && ReadKittyDword(filePath, "ProxyMethod", proxyMethod) && proxyMethod != 0) {
-        std::string proxyHost;
+        std::string proxyHost, proxyUser;
+        DWORD proxyPort = 0;
         ReadKittyString(filePath, "ProxyHost", proxyHost);
+        ReadKittyDword(filePath, "ProxyPort", proxyPort);
+        ReadKittyString(filePath, "ProxyUsername", proxyUser);
+        proxyHost = PuttyUrlDecode(proxyHost);
         dependency->kind   = SessionDependency::Kind::Proxy;
-        dependency->detail = PuttyUrlDecode(proxyHost);
+        dependency->detail = proxyHost;
+        DescribePuttyProxy(proxyMethod, proxyHost, proxyPort,
+                           PuttyUrlDecode(proxyUser), *dependency);
     }
 
     // Compose the connect fields.

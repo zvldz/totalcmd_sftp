@@ -1,4 +1,5 @@
 #include "ImportIoUtil.h"
+#include "SftpClient.h"
 
 #include <commdlg.h>
 #include <shlobj.h>
@@ -199,6 +200,36 @@ bool ParseLineCodePage(const std::string& raw,
         }
     }
     return false;
+}
+
+void DescribePuttyProxy(DWORD method, const std::string& host, DWORD port,
+                        const std::string& user, SessionDependency& dep)
+{
+    Proxy type{};
+    switch (method) {
+        case 1: type = Proxy::socks4; break;
+        case 2: type = Proxy::socks5; break;
+        case 3: type = Proxy::http;   break;
+        default: return;
+    }
+    if (host.empty())
+        return;
+    if (port == 0)
+        port = 80;
+
+    // The plugin assumes 8080 for HTTP and 1080 for SOCKS when the address
+    // carries no port, so only a different one is spelled out — which also
+    // lets the copy match a record typed in by hand. An IPv6 literal needs
+    // brackets before a port can follow it.
+    const DWORD assumed = type == Proxy::http ? 8080 : 1080;
+    const bool  ipv6    = host.find(':') != std::string::npos && host.front() != '[';
+    std::string server  = ipv6 ? "[" + host + "]" : host;
+    if (port != assumed)
+        server += ":" + std::to_string(port);
+
+    dep.proxyType   = type;
+    dep.proxyServer = server;
+    dep.proxyUser   = user;
 }
 
 bool IniSectionExists(const std::string& section, LPCSTR iniPath) noexcept

@@ -33,7 +33,7 @@
 // Serialise one session INI section into a human-readable INI-format text
 // file. Used by FsGetFile when TC copies (or "views"/"edits") a session
 // entry from the plugin panel out to a real filesystem path. The plugin
-// internal `_source` provenance marker is filtered out; the `[header]` in
+// internal `_` metadata keys (provenance, refusal) are filtered out; the `[header]` in
 // the output uses `exportSection` (typically the DisplayName) rather than
 // the raw storage section name, so cache-prefixed virtual entries land as
 // a clean `[dron/hz-1]` header rather than the ugly cache name.
@@ -45,7 +45,8 @@ static constexpr const char* RN = "\r\n";
 static int ExportSessionAsIniFile(
     LPCSTR srcSection, LPCSTR srcIni,
     LPCSTR exportSection, LPCSTR headerComment,
-    LPCWSTR destFile, BOOL OverWrite)
+    LPCWSTR destFile, BOOL OverWrite,
+    const sftp::SessionDependency* importedProxy = nullptr)
 {
     if (!OverWrite) {
         const DWORD attrs = GetFileAttributesW(destFile);
@@ -69,7 +70,7 @@ static int ExportSessionAsIniFile(
         srcIni);
     const char* p = keyList.data();
     while (p[0]) {
-        if (_stricmp(p, "_source") != 0) {
+        if (p[0] != '_') {
             std::array<char, 2048> valueBuf{};
             GetPrivateProfileStringA(srcSection, p, "",
                 valueBuf.data(),
@@ -78,6 +79,20 @@ static int ExportSessionAsIniFile(
             content.append(p).append("=").append(valueBuf.data()).append("\r\n");
         }
         p += strlen(p) + 1;
+    }
+
+    // A session from [Imports] has no record to copy: its proxy exists only
+    // as the source described it. It is written the way a record would be,
+    // under the same fixed name, so importing the snippet resolves it alike.
+    if (importedProxy && importedProxy->transferable()) {
+        content.append("proxynr=1").append(RN);
+        content.append(kExportProxySection).append(RN);
+        content.append("proxytype=")
+               .append(std::to_string(static_cast<int>(importedProxy->proxyType)))
+               .append(RN);
+        content.append("proxyserver=").append(importedProxy->proxyServer).append(RN);
+        if (!importedProxy->proxyUser.empty())
+            content.append("proxyuser=").append(importedProxy->proxyUser).append(RN);
     }
 
     // A session that goes through a proxy takes the record with it. `proxynr`
@@ -152,6 +167,13 @@ static bool RefuseIfDependencyBlocks(const std::string& cacheSection)
         "the way, so it is refused.");
     if (!dep.detail.empty())
         text.append("\r\n\r\n").append(dep.detail);
+    // Only connecting refuses such a proxy: copying the session creates the
+    // record it needs, which a plain connect has no business doing.
+    if (dep.transferable())
+        text.append("\r\n\r\n").append(LngStrU8(IDS_IMPORT_BLOCKED_COPY,
+            "The proxy is one the plugin can rebuild: copy the session into "
+            "your own list with F5 and the proxy comes with it. Its password, "
+            "if it needs one, is asked for on the first connect."));
 
     const std::wstring message = unicode_util::utf8_to_wstring(text);
     const std::wstring title   = unicode_util::utf8_to_wstring(
@@ -384,9 +406,9 @@ static std::vector<std::string> CollectSessionsUnderFolder(
 }
 
 // Copy every key/value pair from `srcSection` in `srcIni` into `dstSection`
-// in `dstIni`. The plugin-internal `_source` provenance marker is filtered
-// out so the materialised session in the user's own INI carries only the
-// user-visible connect fields. The destination section is cleared first so
+// in `dstIni`. The plugin-internal `_` metadata keys (provenance, refusal)
+// are filtered out so the materialised session in the user's own INI carries
+// only the user-visible connect fields. The destination section is cleared first so
 // an overwrite is a full clean replace — leftover keys from a prior session
 // (password, proxy, jump-host refs) never survive materialisation.
 // Returns true if at least one key was copied.
@@ -405,7 +427,7 @@ static bool CopyIniSectionAcrossFiles(LPCSTR srcSection, LPCSTR srcIni,
     bool any = false;
     char* p = keyList.data();
     while (p[0]) {
-        if (_stricmp(p, "_source") != 0) {
+        if (p[0] != '_') {
             std::array<char, 2048> valueBuf{};
             GetPrivateProfileStringA(srcSection, p, "",
                                      valueBuf.data(),
@@ -421,14 +443,36 @@ static bool CopyIniSectionAcrossFiles(LPCSTR srcSection, LPCSTR srcIni,
     return any;
 }
 
+// The local record for a proxy an imported session goes through: the one
+// that already describes the same route, or a new one under a number no
+// session still points at. Written without a password.
+static int ProxyRecordForDependency(const sftp::SessionDependency& dep, LPCSTR iniFile)
+{
+    const int type = static_cast<int>(dep.proxyType);
+    int nr = FindMatchingProxyNr(type, dep.proxyServer, dep.proxyUser, iniFile);
+    if (nr > 0)
+        return nr;
+
+    nr = NextFreeProxyNr(iniFile);
+    const std::string section = nr > 1 ? std::format("proxy{}", nr) : std::string("proxy");
+    WritePrivateProfileStringA(section.c_str(), "proxytype",
+                               std::to_string(type).c_str(), iniFile);
+    WritePrivateProfileStringA(section.c_str(), "proxyserver",
+                               dep.proxyServer.c_str(), iniFile);
+    if (!dep.proxyUser.empty())
+        WritePrivateProfileStringA(section.c_str(), "proxyuser",
+                                   dep.proxyUser.c_str(), iniFile);
+    return nr;
+}
+
 // F5 materialise: copy a virtual session from the import cache into the
 // user's own sftpplug.ini as a real saved session. `sourceId` identifies
 // the adapter (e.g. "securecrt"), `subPath` is the virtual DisplayName
 // inside the source (e.g. "my/ha1_remote"), NewName is the destination
-// TC path the user copied to. The materialised session keeps only what the
-// adapter cached (host, user, key file, encoding); password / proxy details
-// are not carried across, and the user can add them manually through the
-// session Configure dialog afterwards.
+// TC path the user copied to. The materialised session keeps what the
+// adapter cached (host, user, key file, encoding) plus, when the source
+// put a proxy the plugin speaks in front of it, that proxy as a local
+// record. The password is never carried; it is asked for on connect.
 static int MaterialiseVirtualSession(const std::string& sourceId,
                                       const std::string& subPath,
                                       LPCWSTR NewName,
@@ -458,14 +502,23 @@ static int MaterialiseVirtualSession(const std::string& sourceId,
 
     // Materialising is not a way around the refusal: the copy would land in our
     // own list as an ordinary session, where nothing records that it was meant
-    // to go through a bastion, and the first connect would go direct.
-    if (RefuseIfDependencyBlocks(cacheSection))
+    // to go through a bastion, and the first connect would go direct. Only a
+    // proxy the plugin can rebuild gets through, and it comes along.
+    const sftp::SessionDependency dep =
+        sftp::ImportCache::ReadDependency(cacheSection, cachePath);
+    if (!dep.transferable() && RefuseIfDependencyBlocks(cacheSection))
         return FS_FILE_USERABORT;
 
     if (!CopyIniSectionAcrossFiles(cacheSection.c_str(), cachePath.c_str(),
                                     newDisplay.c_str(), inifilename))
     {
         return FS_FILE_NOTFOUND;
+    }
+
+    if (dep.transferable()) {
+        const int proxynr = ProxyRecordForDependency(dep, inifilename);
+        WritePrivateProfileStringA(newDisplay.c_str(), "proxynr",
+                                   std::to_string(proxynr).c_str(), inifilename);
     }
 
     // Sync g_servers so the new session shows up in the plugin panel on the
@@ -1524,15 +1577,18 @@ int WINAPI FsGetFileW(LPCWSTR RemoteName, LPWSTR LocalName, int CopyFlags, Remot
 
                 // The snippet would describe a session that reaches its host
                 // directly, and uploading it back is a supported way to create
-                // one, so the refusal covers the way out as well.
-                if (RefuseIfDependencyBlocks(cacheSection))
+                // one, so the refusal covers the way out as well — except for
+                // a proxy the plugin speaks, which the snippet carries.
+                const sftp::SessionDependency dep =
+                    sftp::ImportCache::ReadDependency(cacheSection, cachePath);
+                if (!dep.transferable() && RefuseIfDependencyBlocks(cacheSection))
                     return FS_FILE_USERABORT;
 
                 std::string header = "Imported session from [Imports]\\[";
                 header.append(sourceId).append("]\\").append(subPath);
                 return ExportSessionAsIniFile(cacheSection.c_str(),
                     cachePath.c_str(), subPath.c_str(),
-                    header.c_str(), LocalName, OverWrite);
+                    header.c_str(), LocalName, OverWrite, &dep);
             }
         }
 
