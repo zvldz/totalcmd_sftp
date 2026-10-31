@@ -532,6 +532,7 @@
 #define IDS_MOVE_KEPT_RESUMED           12124  // status: a resumed move keeps its source
 #define IDS_ERR_SAME_FILE               12125  // cross-session copy onto the same file
 #define IDS_ERR_NO_SFTP_HINT            12126  // SFTP subsystem failed: suggest SCP for everything
+#define IDS_ERR_KEY_ONLY_NO_KEY         12127  // key-only server, nothing to offer
 
 // Next default values for new objects
 //

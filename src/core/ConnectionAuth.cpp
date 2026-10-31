@@ -123,8 +123,24 @@ int PerformAuthentication(
         }
     }
 
-    const bool skipProbe = ConnectSettings->scponly
-        || !ConnectSettings->password.empty()
+    // A private key entered in the public-key field is still the key to log
+    // in with; left there it is ignored, and a key-only server then ends the
+    // login without a word. The swap is for this connection only.
+    if (ConnectSettings->privkeyfile.empty() &&
+        KeyFileHoldsPrivateKey(ConnectSettings->pubkeyfile, ConnectSettings->user)) {
+        SFTP_LOG("AUTH", "Private key found in the public-key field: %s",
+                 ConnectSettings->pubkeyfile.c_str());
+        ShowStatus("Using the private key entered as the public key file");
+        ConnectSettings->privkeyfile = ConnectSettings->pubkeyfile;
+        ConnectSettings->pubkeyfile.clear();
+    }
+
+    // The probe is skipped only when there are credentials to try anyway.
+    // With nothing configured it runs — shell-only mode included — so a
+    // server that takes keys only is recognised instead of being asked for
+    // a password it will refuse. A slow answer costs at most the probe's
+    // own timeout, after which every method is assumed.
+    const bool skipProbe = !ConnectSettings->password.empty()
         || !ConnectSettings->privkeyfile.empty();
     if (skipProbe) {
         ShowStatusId(IDS_LOG_SCP_SKIP_PROBE, nullptr, true);
@@ -187,6 +203,13 @@ int PerformAuthentication(
         const std::string status = std::format("PubKey: rc={} auth={} pw=0x{:x}", rc, auth, auth_pw);
         ShowStatus(status.c_str());
     } else {
+        // A server that takes keys only, with neither a key file nor a
+        // running Pageant to offer it, leaves nothing to try; say so rather
+        // than let the login end without a word.
+        if (auth_pw == SSH_AUTH_PUBKEY) {
+            SFTP_LOG("AUTH", "Server accepts only public keys; none to offer");
+            ShowErrorId(IDS_ERR_KEY_ONLY_NO_KEY);
+        }
         auth_pw &= ~SSH_AUTH_PUBKEY;
     }
 

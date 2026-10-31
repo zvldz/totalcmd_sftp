@@ -373,6 +373,7 @@
 12124=Mutare: sursa a fost păstrată, deoarece copierea a fost reluată peste un fișier deja existent
 12125=Sursa și destinația sunt același fișier: ambele sesiuni indică același cont pe același server, la aceeași cale. Copierea unui fișier peste el însuși l-ar trunchia, așa că operația este refuzată.
 12126=Serverul nu a pornit o sesiune SFTP. Dacă oferă doar un shell — de exemplu dropbear pe o cameră sau un router —, activați „Folosire SCP pentru totul (fără SFTP)” pentru această sesiune.
+12127=Serverul acceptă doar autentificarea cu cheie, iar această sesiune nu are niciuna de oferit. Setați un fișier de cheie privată pentru sesiune sau folosiți Pageant cu cheia încărcată.
 12089=SFTP
 12104=(manual)
 12105= (lipsește)

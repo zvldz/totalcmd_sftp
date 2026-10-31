@@ -240,6 +240,11 @@ int SftpAuthPubKey(pConnectSettings ConnectSettings,
                    LPCSTR progressbuf, int progress,
                    int* ploop, SYSTICKS* plasttime, int* auth_pw);
 
+// Whether the file at `path` (expanded the way key paths are at connect)
+// holds a private key, judged by its contents rather than by which field
+// it was entered in.
+bool KeyFileHoldsPrivateKey(const std::string& path, const std::string& user);
+
 // ---------------------------------------------------------------------------
 // Shell / channel helpers defined in SftpShell.cpp
 // ---------------------------------------------------------------------------

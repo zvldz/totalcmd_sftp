@@ -779,6 +779,7 @@ BEGIN
     IDS_MOVE_KEPT_RESUMED   "Move: the source was kept, because the copy was resumed onto a file already there"
     IDS_ERR_SAME_FILE       "Source and destination are the same file: both sessions point at the same account on the same server, at the same path. Copying a file onto itself would cut it short, so this is refused."
     IDS_ERR_NO_SFTP_HINT    "The server did not start an SFTP session. If it offers only a shell — dropbear on a camera or a router, say — turn on ""Use SCP for everything (no SFTP)"" for this session."
+    IDS_ERR_KEY_ONLY_NO_KEY "The server accepts only login with a key, and this session has none to offer. Set a private key file for the session, or use Pageant with the key loaded."
     IDS_DLG_LANPAIR_GROUP   " LAN Pair Session: "
     IDS_DLG_FILEMOD         "New files (Upload):"
     IDS_DLG_DIRMOD          "New folders:"

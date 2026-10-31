@@ -362,6 +362,7 @@
 12124=Przenoszenie: źródło zostało zachowane, ponieważ kopiowanie wznowiono na już istniejącym pliku
 12125=Źródło i cel to ten sam plik: obie sesje wskazują to samo konto na tym samym serwerze i tę samą ścieżkę. Skopiowanie pliku na samego siebie obcięłoby go, dlatego operacja została odrzucona.
 12126=Serwer nie uruchomił sesji SFTP. Jeśli udostępnia tylko powłokę — jak dropbear na kamerze lub routerze — włącz dla tej sesji „Użyj SCP do wszystkiego (bez SFTP)”.
+12127=Serwer akceptuje tylko logowanie kluczem, a ta sesja nie ma żadnego do zaoferowania. Ustaw dla sesji plik klucza prywatnego albo użyj Pageant z załadowanym kluczem.
 12089=SFTP
 12090=Szukam peera LAN Pair w sieci lokalnej...
 12091={} s

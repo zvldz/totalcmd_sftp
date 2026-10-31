@@ -139,6 +139,15 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   through the shell — a rename or a copy on a shell-only server — that
   timed out before finishing no longer passes for a success.
 
+- **Logging in to a server that takes keys only says what is missing.**
+  With no key to offer, the login used to end without a word; it now
+  says that the server accepts only a key and the session has none. In
+  "Use SCP for everything" mode the plugin did not even ask the server
+  which logins it takes, and offered a password prompt the server would
+  never accept — it now asks whenever no key or password is set. And a
+  private key entered in the public-key field is used to log in, instead
+  of being passed over.
+
 - **Connecting to a server without SFTP ends, and says what to do.** A
   host that offers only a shell — dropbear on a camera or a router —
   never answers the request to start SFTP, and the plugin waited for that

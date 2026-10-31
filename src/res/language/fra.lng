@@ -374,6 +374,7 @@
 12124=Déplacement : la source a été conservée, car la copie a repris sur un fichier déjà présent
 12125=La source et la destination sont le même fichier : les deux sessions désignent le même compte sur le même serveur, au même chemin. Copier un fichier sur lui-même le tronquerait, l'opération est donc refusée.
 12126=Le serveur n'a pas démarré de session SFTP. S'il n'offre qu'un shell — dropbear sur une caméra ou un routeur, par exemple —, activez « Utiliser SCP pour tout (sans SFTP) » pour cette session.
+12127=Le serveur n'accepte que la connexion par clé, et cette session n'en a aucune à proposer. Indiquez un fichier de clé privée pour la session, ou utilisez Pageant avec la clé chargée.
 12089=SFTP
 12104=(manuel)
 12105= (introuvable)

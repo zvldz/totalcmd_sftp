@@ -175,6 +175,32 @@ static void ExpandAuthPath(char* path, size_t pathLen, LPCSTR user)
     ReplaceEnvVars(path, pathLen - 1);
 }
 
+bool KeyFileHoldsPrivateKey(const std::string& path, const std::string& user)
+{
+    if (path.empty())
+        return false;
+    std::array<char, 1024> expanded{};
+    strlcpy(expanded.data(), path.c_str(), expanded.size() - 1);
+    ExpandAuthPath(expanded.data(), expanded.size(), user.c_str());
+
+    handle_util::FileHandle hf(CreateFileA(expanded.data(), GENERIC_READ,
+        FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL, nullptr));
+    if (!hf)
+        return false;
+
+    // Every private format the plugin takes says so in its opening line —
+    // "...PRIVATE KEY-----" for OpenSSH and PEM, "PuTTY-User-Key-File-" for
+    // PPK — and no public one does.
+    std::array<char, 512> head{};
+    DWORD got = 0;
+    if (!ReadFile(hf.get(), head.data(), static_cast<DWORD>(head.size() - 1), &got, nullptr))
+        return false;
+    const std::string_view text(head.data(), got);
+    return text.find("PRIVATE KEY-----") != std::string_view::npos ||
+           text.find("PuTTY-User-Key-File-") != std::string_view::npos;
+}
+
 static bool DetectPrivateKeyEncrypted(LPCSTR privkeyfile, bool* outEncrypted)
 {
     if (!privkeyfile || !outEncrypted)
