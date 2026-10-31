@@ -283,6 +283,31 @@ std::string BuildScpPathArgument(const std::string& path)
     return path;
 }
 
+// Whether an scp download was refused because the file is not there. Asked
+// over SFTP, which "SCP for data" keeps open beside scp; without it there is
+// no telling, and the answer is no. `filename` is the scp argument, which
+// carries quotes when the path holds a space.
+static bool ScpSourceIsMissing(pConnectSettings cs, const char* filename)
+{
+    if (!cs || !cs->sftpsession || cs->scponly || !filename)
+        return false;
+    std::string path = filename;
+    if (path.size() >= 2 && path.front() == '"' && path.back() == '"')
+        path = path.substr(1, path.size() - 2);
+
+    LIBSSH2_SFTP_ATTRIBUTES attr{};
+    int rc = 0;
+    do {
+        rc = cs->sftpsession->lstat(path.c_str(), &attr);
+        if (rc == LIBSSH2_ERROR_EAGAIN)
+            IsSocketReadable(cs->sock);
+    } while (rc == LIBSSH2_ERROR_EAGAIN);
+    if (rc != LIBSSH2_ERROR_SFTP_PROTOCOL)
+        return false;
+    const unsigned long fx = cs->sftpsession->lastError();
+    return fx == LIBSSH2_FX_NO_SUCH_FILE || fx == LIBSSH2_FX_NO_SUCH_PATH;
+}
+
 bool OpenScpDownloadChannel(pConnectSettings cs, const char* filename,
                             std::unique_ptr<ISshChannel>& outChannel,
                             libssh2_struct_stat* outInfo)
@@ -321,7 +346,15 @@ bool OpenScpDownloadChannel(pConnectSettings cs, const char* filename,
                 }
                 break;
             } else if (err == LIBSSH2_ERROR_SCP_PROTOCOL) {
-                if (cs->feedback) {
+                // The commonest refusal is a file that is not there — Shift+F4
+                // on a new name asks for one first — which is not scp failing
+                // to run. libssh2 reads scp's own message and drops it, so the
+                // question goes to SFTP, which this mode keeps open: a missing
+                // file gets a status line, anything else the dialog.
+                if (ScpSourceIsMissing(cs, filename)) {
+                    SFTP_LOG("SCP", "Download refused: '%s' does not exist", filename);
+                    ShowStatus("SCP: no such file");
+                } else if (cs->feedback) {
                     cs->feedback->ShowError(
                         LngStrA(IDS_SCP_EXEC_FAILED, "Cannot execute SCP to start transfer. Please make sure that SCP is installed on the server and path to it is included in PATH.\n\nYou may also try SFTP instead of SCP (uncheck 'Use SCP for all' in connection settings).").c_str(),
                         LngStrA(IDS_SCP_PROTOCOL_ERROR, "SCP Protocol Error").c_str());

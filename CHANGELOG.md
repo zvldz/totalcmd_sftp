@@ -163,6 +163,13 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   now gives up after fifteen seconds and suggests turning on "Use SCP for
   everything (no SFTP)", which is what such a host needs.
 
+- **A file that is not there no longer reads as scp missing.** With "Use
+  SCP for data transfers" on, asking for a file the server does not have
+  — which `Shift+F4` does for a new name, before the editor opens — showed
+  "Cannot execute SCP… make sure SCP is installed", although scp had only
+  said there was no such file. The plugin now checks over SFTP and leaves
+  a status line instead; the dialog stays for scp really refusing.
+
 - **Uploading with "Use SCP for data transfers" works.** Opening the
   upload channel asks the server to start scp, which on the plugin's
   non-blocking connection first answers "not ready yet"; that answer was
