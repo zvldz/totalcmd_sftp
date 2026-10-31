@@ -818,6 +818,22 @@ function op_rmdir(): void
     ok(['removed' => true, 'path' => $relPath, 'recursive' => $recursive]);
 }
 
+// Whether two paths name one file. Inode numbers decide where the platform
+// has them; where it reports none (PHP on Windows), the same path in other
+// letter case is the same file, since that file system ignores case.
+function same_file(string $a, string $b): bool
+{
+    $sa = @stat($a);
+    $sb = @stat($b);
+    if ($sa === false || $sb === false) {
+        return false;
+    }
+    if ($sa['ino'] !== 0 || $sb['ino'] !== 0) {
+        return $sa['dev'] === $sb['dev'] && $sa['ino'] === $sb['ino'];
+    }
+    return strcasecmp($a, $b) === 0;
+}
+
 function op_rename(): void
 {
     $fromRel = normalize_rel((string)get_param('from', ''));
@@ -830,7 +846,10 @@ function op_rename(): void
     $toAbs = resolve_path_for_create($toRel);
     ensure_parent_dir($toAbs);
     $overwrite = bool_param('overwrite', true);
-    if (file_exists($toAbs)) {
+    // Changing only the letter case on a case-insensitive file system finds
+    // the source itself at the target name; replacing that target would
+    // delete the very file being renamed.
+    if (file_exists($toAbs) && !same_file($fromAbs, $toAbs)) {
         if (!$overwrite) {
             fail(409, 'TARGET_EXISTS', 'Target exists and overwrite=false');
         }

@@ -119,6 +119,14 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   skipped or failed — so after `F6` on a folder, or `F8` with a file
   answered "skip", those files were wiped along with the folder.
 
+- **PHP Agent: an upload no longer takes up a leftover `.part` file
+  unasked.** A `.part` left by an earlier upload was continued even
+  without Resume — splicing its start, possibly from another file, onto
+  this one, or at equal size turning it into the file without a byte
+  sent. It is now continued only when you choose Resume. Renaming a file
+  to the same name in other letter case on a Windows or macOS server no
+  longer deletes it. Re-upload `sftp.php` to pick up the second fix.
+
 - **SCP and shell transfers check that they really finished.** With
   "Use SCP for data transfers" on, a download the server cut short or
   padded after a read error, and an upload it could not finish writing —

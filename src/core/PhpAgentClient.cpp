@@ -846,9 +846,11 @@ int PhpAgentUploadFileW(pConnectSettings cs,
     PHP_LOG("PUT normalized path='%s'", pathUtf8.c_str());
 
     int64_t offset = 0;
-    // Auto-resume from "<path>.part" even when host did not request Resume via TC prompt.
-    // This makes interrupted PHP uploads continue seamlessly on restrictive hosts.
-    {
+    // Continue a "<path>.part" only when the user asked to resume. A leftover
+    // one may belong to another file: taking it up unasked would splice its
+    // head onto this file's tail — or, at equal size, finalise it without a
+    // byte sent — and a move would then delete the local original.
+    if (resume) {
         std::wstring statQuery = BuildQueryPathOnly(L"STAT", pathUtf8 + ".part");
         DWORD statCode = 0;
         std::string statBody;
@@ -861,8 +863,7 @@ int PhpAgentUploadFileW(pConnectSettings cs,
                 offset = partSize;
                 if (offset > localSize)
                     offset = 0;
-                PHP_LOG("PUT %sresume found .part size=%lld local=%lld",
-                        resume ? "" : "auto-",
+                PHP_LOG("PUT resume found .part size=%lld local=%lld",
                         (long long)partSize,
                         (long long)localSize);
             }
