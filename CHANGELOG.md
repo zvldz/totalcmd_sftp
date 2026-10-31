@@ -33,6 +33,15 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 
 ### Fixes
 
+- **A malicious server can no longer attack the plugin through its SSH
+  library.** libssh2 1.11.1, which the plugin is built on, had ten flaws a
+  server could trigger. The worst, an out-of-bounds write while reading a
+  packet's length (CVE-2026-55200), could let it run code on your machine;
+  another tied up the CPU before any login (CVE-2026-55199). Some needed
+  nothing more than connecting. libssh2 has fixed them but not yet
+  released a version with the fixes, so the plugin carries the same
+  backports Debian ships for 1.11.1.
+
 - **An upload through the shell no longer claims to have worked when it
   did not.** Each piece of the file was counted as written the moment the
   server answered anything at all, so a missing tool, a read-only folder
@@ -187,6 +196,15 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   Spotted in the numbereleven-a fork.
 
 ### Internal
+
+- libssh2 stays on its 1.11.1 tag, with Debian's security backports
+  applied at build time from `thirdparty/patches/libssh2-1.11.1/`. The
+  patches are bound to that tag: a submodule on any other tag is refused,
+  and a new tag gets none until someone decides it needs them.
+
+- OpenSSL updated to 3.5.9. Its fixes since 3.5.7 sit mostly in QUIC,
+  DTLS, CMS and CRL handling, which SSH does not reach; taken to stay
+  current rather than for a known exposure.
 
 - Drawing an `[Imports]` folder no longer copies the whole cached
   session list once per row; the cache answers whether a row is a

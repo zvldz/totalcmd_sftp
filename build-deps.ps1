@@ -54,12 +54,13 @@ $argon2Src        = Join-Path $thirdparty 'argon2'
 $argon2Cmake      = Join-Path $thirdparty 'argon2-cmake'
 $argon2BuildX64   = Join-Path $buildRoot  'argon2-x64'
 $argon2BuildX86   = Join-Path $buildRoot  'argon2-x86'
+$patchesRoot      = Join-Path $thirdparty 'patches'
 $libDestDir       = Join-Path $projectRoot 'src\lib'
 $includeDestDir   = Join-Path $projectRoot 'src\include\libssh2'
 $vswhereDir       = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer'
 
 # Pinned version sanity (must match .gitmodules / submodule SHAs)
-$expectedOpensslTag = 'openssl-3.5.6'
+$expectedOpensslTag = 'openssl-3.5.9'
 $expectedLibssh2Tag = 'libssh2-1.11.1'
 $expectedArgon2Tag  = '20190702'
 
@@ -156,6 +157,58 @@ function Test-SubmoduleCheckedOut([string]$Path, [string]$ExpectedTag) {
     }
 }
 
+function Invoke-SubmodulePatches([string]$Path, [string]$Tag) {
+    <#
+    Applies thirdparty/patches/<tag>/ to the submodule working tree, in the
+    order its series file lists. Patches are bound to that tag: a submodule on
+    any other tag is refused, and a tag with no patch folder gets none, so a
+    version bump never inherits backports written for the previous release.
+    The set is applied as a whole: git apply is all-or-nothing, and checking
+    it in reverse tells an already patched tree from a pristine one.
+    #>
+    $patchDir = Join-Path $patchesRoot $Tag
+    $series   = Join-Path $patchDir 'series'
+    if (-not (Test-Path $series)) {
+        Write-Step "$Path : no patches for $Tag"
+        return
+    }
+    $forward = @(Get-Content $series |
+                 ForEach-Object { $_.Trim() } |
+                 Where-Object { $_ -and -not $_.StartsWith('#') } |
+                 ForEach-Object { Join-Path $patchDir $_ })
+    if ($forward.Count -eq 0) {
+        Write-Step "$Path : series for $Tag is empty"
+        return
+    }
+    $reverse = @($forward[($forward.Count - 1)..0])
+
+    Push-Location $Path
+    $savedPref = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $describe = & git describe --tags --exact-match HEAD 2>$null
+        if ($LASTEXITCODE -ne 0 -or -not $describe -or $describe.Trim() -ne $Tag) {
+            throw "$Path is not on $Tag; refusing to apply patches written for it."
+        }
+        & git apply --check @forward 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            & git apply @forward
+            if ($LASTEXITCODE -ne 0) { throw "git apply failed in $Path" }
+            Write-OK "$Path : applied $($forward.Count) patches for $Tag"
+            return
+        }
+        & git apply --reverse --check @reverse 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Step "$Path : $($forward.Count) patches for $Tag already applied"
+            return
+        }
+        throw "$Path is neither pristine $Tag nor patched with its series; inspect 'git -C $Path status'."
+    } finally {
+        $ErrorActionPreference = $savedPref
+        Pop-Location
+    }
+}
+
 function Copy-IfDifferent([string]$Source, [string]$Dest) {
     $destDir = Split-Path -Parent $Dest
     if (-not (Test-Path $destDir)) { New-Item -ItemType Directory -Path $destDir -Force | Out-Null }
@@ -228,6 +281,14 @@ Write-Section 'Submodules'
 Test-SubmoduleCheckedOut $opensslSrc $expectedOpensslTag
 Test-SubmoduleCheckedOut $libssh2Src $expectedLibssh2Tag
 Test-SubmoduleCheckedOut $argon2Src  $expectedArgon2Tag
+
+# ============================================================================
+# Patches
+# ============================================================================
+if (-not $SkipLibssh2) {
+    Write-Section 'Patches'
+    Invoke-SubmodulePatches $libssh2Src $expectedLibssh2Tag
+}
 
 # ============================================================================
 # Clean
