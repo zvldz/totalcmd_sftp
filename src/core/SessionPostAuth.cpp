@@ -28,14 +28,23 @@ int SftpSessionDetectUtf8(pConnectSettings ConnectSettings)
     reply[0] = 0;
     if (SftpQuoteCommand2(ConnectSettings, nullptr, "echo $LC_ALL $LC_CTYPE $LANG", reply.data(), reply.size()-1, 3000, 8000) == 0) {
         ToUpperInPlace(reply.data());
+        const bool noLocaleVars = reply.data()[strspn(reply.data(), " \t\r\n")] == 0;
         if (strstr(reply.data(), "UTF-8")) {
             hr = AUTODETECT_ON;
         } else {
             reply[0] = 0;
-            if (SftpQuoteCommand2(ConnectSettings, nullptr, "locale", reply.data(), reply.size()-1, 3000, 8000) == 0) {
+            const int localeRc = SftpQuoteCommand2(ConnectSettings, nullptr, "locale", reply.data(), reply.size()-1, 3000, 8000);
+            if (localeRc == 0) {
                 ToUpperInPlace(reply.data());
                 if (strstr(reply.data(), "UTF-8"))
                     hr = AUTODETECT_ON;
+            } else if (noLocaleVars) {
+                // No locale variable and no `locale` command — busybox on a
+                // camera or a router. Such a system names files in bytes and
+                // has no codepage of its own to suggest; UTF-8 is what its
+                // other clients write, where the Windows codepage would leave
+                // names nothing on the device can read.
+                hr = AUTODETECT_ON;
             }
         }
     }
@@ -137,9 +146,6 @@ int SftpSessionSendCommand(pConnectSettings ConnectSettings, LPCSTR progressbuf,
 
 void RunPostAuthAutoDetect(pConnectSettings ConnectSettings)
 {
-    if (ConnectSettings->scponly && ConnectSettings->utf8names < 0)
-        ConnectSettings->utf8names = AUTODETECT_OFF;
-
     SFTP_LOG("CONN", "Post-auth init start: scponly=%d scpfordata=%d utf8=%d unixlinebreaks=%d large=%d",
              ConnectSettings->scponly ? 1 : 0,
              ConnectSettings->scpfordata ? 1 : 0,
@@ -147,9 +153,10 @@ void RunPostAuthAutoDetect(pConnectSettings ConnectSettings)
              ConnectSettings->unixlinebreaks,
              ConnectSettings->scpserver64bit);
 
-    if (ConnectSettings->scponly)
-        return;
-
+    // Shell-only sessions skip the other probes, but not this one: every
+    // file name they send goes through the shell in this encoding, and
+    // leaving it undecided meant the Windows codepage, unreadable on the
+    // server.
     if (ConnectSettings->utf8names == AUTODETECT_PENDING) {
         ShowStatusId(IDS_LOG_DETECT_UTF8, nullptr, true);
         ConnectSettings->codepage = 0;
@@ -157,6 +164,8 @@ void RunPostAuthAutoDetect(pConnectSettings ConnectSettings)
         int rc = SftpSessionDetectUtf8(ConnectSettings);
         ConnectSettings->utf8names = (rc == AUTODETECT_ON) ? AUTODETECT_ON : AUTODETECT_OFF;
     }
+    if (ConnectSettings->scponly)
+        return;
     if (ConnectSettings->unixlinebreaks == AUTODETECT_PENDING) {
         ShowStatusId(IDS_LOG_DETECT_LINEBREAK, nullptr, true);
         ConnectSettings->unixlinebreaks = AUTODETECT_OFF;
