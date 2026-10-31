@@ -224,17 +224,15 @@ Subsystem sftp /usr/lib/openssh/sftp-server  # Must be present
 <h4>Causes</h4>
 <ul>
   <li>Password doesn't match PSK in sftp.php</li>
-  <li>Timestamp too far from server time</li>
-  <li>Nonce replay detected</li>
-  <li>Signature computation error</li>
+  <li>An old sftp.php on the server, generated for a different password</li>
+  <li>A proxy or CDN in front of the server drops the <code>X-SFTP-Auth</code> header</li>
 </ul>
 
 <h4>Solutions</h4>
 <ol>
   <li>Regenerate sftp.php with correct password</li>
   <li>Upload new sftp.php to server</li>
-  <li>Check system time synchronization</li>
-  <li>Verify HMAC-SHA256 implementation</li>
+  <li>Make sure custom request headers reach PHP unchanged</li>
 </ol>
 
 <h3>HTTP 404 Not Found</h3>

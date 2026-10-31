@@ -440,7 +440,7 @@ Open `https://example.com/sftp.php?op=PROBE` in a browser:
 
 | Response | Meaning |
 |----------|---------|
-| HTTP 200 `{"status":"ok"}` | Ready — proceed to connect |
+| HTTP 200 `{"ok":true,...}` | Ready — proceed to connect |
 | HTTP 401 Unauthorized | Script running, awaiting auth — also OK |
 | HTTP 503 Service Unavailable | PSK not configured — wrong file uploaded; repeat from Step 1 |
 | HTTP 404 Not Found | Wrong URL or file not yet uploaded |
@@ -455,9 +455,11 @@ Select the saved session in Total Commander and connect.
 |----------|--------|-------------------|
 | `sftpplug.ini` (your PC) | Password encrypted with Windows DPAPI | No |
 | `sftp.php` (server) | `AGENT_PSK_SALT` + SHA-256(salt + password) | No — one-way hash |
-| Network (HTTPS) | HMAC-SHA256 signature + timestamp + nonce per request | No — signature only |
+| Network | Password in the `X-SFTP-AUTH` header of every request | Over HTTPS no (TLS); over plain HTTP **yes** |
 
-Even if someone reads `sftp.php` on the server, the original password cannot be recovered.
+Reading `sftp.php` on the server gives only the hash, which does not log in; a long random password keeps it from being guessed offline. HTTPS is required beyond local testing.
+
+PHP Shell runs commands as the web server user, outside `AGENT_ROOT` too. Set `AGENT_ALLOW_SHELL = false` in `sftp.php` when the shell is not needed.
 
 ---
 
