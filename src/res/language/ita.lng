@@ -370,6 +370,7 @@
 12121=Questa sessione raggiunge il suo host attraverso qualcosa che non è stato importato con essa: un proxy, un jump host o un tunnel. Connettersi ora andrebbe dritto alla destinazione, aggirando proprio ciò che era stato messo di mezzo, quindi viene rifiutato.
 12122=La sessione era impostata per connettersi tramite un proxy, ma il file non ne contiene la descrizione. È stata importata senza il proxy e si connetterà direttamente: controllare l'impostazione del proxy prima di usarla.
 12123=Il plugin può ricreare questo proxy: copiare la sessione nel proprio elenco con F5 e il proxy viene copiato con essa. La password, se necessaria, viene chiesta alla prima connessione.
+12124=Spostamento: l'origine è stata mantenuta, perché la copia è ripresa su un file già presente
 12089=SFTP
 12104=(manuale)
 12105= (mancante)

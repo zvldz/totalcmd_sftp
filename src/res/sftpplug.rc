@@ -776,6 +776,7 @@ BEGIN
     IDS_IMPORT_BLOCKED      "This session reaches its host through something that was not imported with it: a proxy, a jump host or a tunnel. Connecting now would go straight to the target instead, past the very thing that was put in the way, so it is refused."
     IDS_SIMPORT_PROXY_LOST  "The session was set to connect through a proxy, but the file carries no description of it. The session was imported without the proxy and will connect directly, so check its proxy setting before using it."
     IDS_IMPORT_BLOCKED_COPY "The proxy is one the plugin can rebuild: copy the session into your own list with F5 and the proxy comes with it. Its password, if it needs one, is asked for on the first connect."
+    IDS_MOVE_KEPT_RESUMED   "Move: the source was kept, because the copy was resumed onto a file already there"
     IDS_DLG_LANPAIR_GROUP   " LAN Pair Session: "
     IDS_DLG_FILEMOD         "New files (Upload):"
     IDS_DLG_DIRMOD          "New folders:"

@@ -515,15 +515,20 @@ int SftpUploadFileW(pConnectSettings cs, LPCWSTR LocalName, LPCWSTR RemoteName,
                 if (rc == LIBSSH2_ERROR_EAGAIN)
                     IsSocketReadable(cs->sock);
             } while (rc == LIBSSH2_ERROR_EAGAIN);
-            // Check if server actually returned size (some servers may not honor the flag)
-            if (rc == 0 && (attr.flags & LIBSSH2_SFTP_ATTR_SIZE) && attr.filesize > 0) {
-                 int64_t remoteSize = static_cast<int64_t>(attr.filesize);
-                if (remoteSize <= filesize) {
-                    sftpHandle->seek(static_cast<size_t>(remoteSize));
-                    if (!local.Seek(remoteSize))
-                        return SFTP_READFAILED;
-                    resumeOffset = remoteSize;
-                }
+            // Resuming continues a remote file that is a prefix of this one.
+            // A size the server does not report, or one larger than the local
+            // file, means it is not: the file is opened without truncation,
+            // so writing from the start would leave the old tail behind.
+            if (rc != 0 || !(attr.flags & LIBSSH2_SFTP_ATTR_SIZE))
+                return SFTP_WRITEFAILED;
+            const int64_t remoteSize = static_cast<int64_t>(attr.filesize);
+            if (remoteSize > filesize)
+                return SFTP_WRITEFAILED;
+            if (remoteSize > 0) {
+                sftpHandle->seek(static_cast<size_t>(remoteSize));
+                if (!local.Seek(remoteSize))
+                    return SFTP_READFAILED;
+                resumeOffset = remoteSize;
             }
         }
     }
@@ -536,7 +541,13 @@ int SftpUploadFileW(pConnectSettings cs, LPCWSTR LocalName, LPCWSTR RemoteName,
 
     while (true) {
         DWORD read = 0;
-        if (!ReadFile(local.get(), buffer.data(), static_cast<DWORD>(buffer.size()), &read, nullptr) || read == 0)
+        if (!ReadFile(local.get(), buffer.data(), static_cast<DWORD>(buffer.size()), &read, nullptr)) {
+            SFTP_LOG("SFTP", "Upload: local read failed at %lld (%lu)",
+                     static_cast<long long>(sent), GetLastError());
+            ret = SFTP_READFAILED;
+            break;
+        }
+        if (read == 0)
             break;
 
         int dataLen = static_cast<int>(read);
@@ -580,6 +591,14 @@ int SftpUploadFileW(pConnectSettings cs, LPCWSTR LocalName, LPCWSTR RemoteName,
             break;
         }
         if (ret != SFTP_OK) break;
+    }
+
+    // End of file is only a success when it falls where the file was measured
+    // to end; anything else is a file that changed under the upload.
+    if (ret == SFTP_OK && sent != filesize) {
+        SFTP_LOG("SFTP", "Upload: sent %lld of %lld bytes",
+                 static_cast<long long>(sent), static_cast<long long>(filesize));
+        ret = SFTP_READFAILED;
     }
 
     if (ret == SFTP_OK && setattr) {

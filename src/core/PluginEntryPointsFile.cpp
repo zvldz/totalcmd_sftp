@@ -1497,10 +1497,18 @@ static int CreateHelpFileLocalW(LPCWSTR localName, bool overwrite)
 // Total Commander removes the local side of a move, never the plugin's side.
 // Failing to remove it leaves the file in both places, so the reason is shown;
 // the download itself has succeeded by then and stays reported as such.
-static int FinishDownloadMove(pConnectSettings serverid, LPCWSTR remoteRelative, bool Move)
+// A download the user resumed keeps the source: part of the result was there
+// before this transfer started, and nothing vouches that it matches.
+static int FinishDownloadMove(pConnectSettings serverid, LPCWSTR remoteRelative,
+                              bool Move, bool resumed)
 {
     if (!Move || !serverid)
         return FS_FILE_OK;
+    if (resumed) {
+        SFTP_LOG("ENTRY", "FsGetFileW move: resumed, source kept");
+        ShowStatusId(IDS_MOVE_KEPT_RESUMED, nullptr, true);
+        return FS_FILE_OK;
+    }
 
     const int rc = SftpDeleteFileW(serverid, remoteRelative, false);
     SFTP_LOG("ENTRY", "FsGetFileW move: deleting the source rc=%d", rc);
@@ -1515,6 +1523,10 @@ int WINAPI FsGetFileW(LPCWSTR RemoteName, LPWSTR LocalName, int CopyFlags, Remot
     return sftp::dll_invoke(_barrier, FS_FILE_READERROR, [&]() -> int {
         const bool OverWrite = !!(CopyFlags & FS_COPYFLAGS_OVERWRITE);
         bool Resume = !!(CopyFlags & FS_COPYFLAGS_RESUME);
+        // What the user asked for, kept apart from `Resume`, which the
+        // auto-resume loop below also sets after a dropped connection: that
+        // continues this very transfer and does not make a move unsafe.
+        const bool resumeAsked = Resume;
         const bool Move = !!(CopyFlags & FS_COPYFLAGS_MOVE);
         SFTP_LOG("ENTRY", "FsGetFileW start flags=0x%x overwrite=%d resume=%d move=%d shift=%d",
                  CopyFlags, OverWrite ? 1 : 0, Resume ? 1 : 0, Move ? 1 : 0,
@@ -1774,7 +1786,7 @@ int WINAPI FsGetFileW(LPCWSTR RemoteName, LPWSTR LocalName, int CopyFlags, Remot
                                           ri ? &ri->LastWriteTime : nullptr,
                                           OverWrite, Resume, &fsResult);
             return (fsResult == FS_FILE_OK)
-                ? FinishDownloadMove(serverid, remotedir.data(), Move)
+                ? FinishDownloadMove(serverid, remotedir.data(), Move, resumeAsked)
                 : fsResult;
         }
 
@@ -1782,7 +1794,7 @@ int WINAPI FsGetFileW(LPCWSTR RemoteName, LPWSTR LocalName, int CopyFlags, Remot
             int rc = SftpDownloadFileW(serverid, remotedir.data(), LocalName, true, ri->Size64, &ri->LastWriteTime, Resume);
             SFTP_LOG("ENTRY", "FsGetFileW SftpDownloadFileW rc=%d", rc);
             switch (rc) {
-                case SFTP_OK:          return FinishDownloadMove(serverid, remotedir.data(), Move);
+                case SFTP_OK:          return FinishDownloadMove(serverid, remotedir.data(), Move, resumeAsked);
                 case SFTP_EXISTS:      return FS_FILE_EXISTS;
                 case SFTP_READFAILED:  return FS_FILE_READERROR;
                 case SFTP_WRITEFAILED: return FS_FILE_WRITEERROR;
@@ -1899,8 +1911,12 @@ int WINAPI FsPutFileW(LPCWSTR LocalName, LPCWSTR RemoteName, int CopyFlags)
                 // The mirror of a download that is a move: here it is the
                 // local file that has to go, and the plugin is the one asked
                 // to remove it. Total Commander only takes away the side it
-                // owns, which for an upload is the remote one.
-                if (Move && !DeleteFileW(LocalName)) {
+                // owns, which for an upload is the remote one. A resumed
+                // upload keeps it, as a resumed download keeps the remote.
+                if (Move && Resume) {
+                    SFTP_LOG("ENTRY", "FsPutFileW move: resumed, source kept");
+                    ShowStatusId(IDS_MOVE_KEPT_RESUMED, nullptr, true);
+                } else if (Move && !DeleteFileW(LocalName)) {
                     SFTP_LOG("ENTRY", "FsPutFileW move: could not delete '%S' (%lu)",
                              LocalName, GetLastError());
                     ShowStatusId(IDS_ERR_DELETE, nullptr, true);

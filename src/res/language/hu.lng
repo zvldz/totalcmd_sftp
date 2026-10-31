@@ -370,6 +370,7 @@
 12121=Ez a munkamenet olyasmin keresztül éri el a kiszolgálót, ami nem került vele együtt importálásra: proxy, jump host vagy alagút. A csatlakozás most közvetlenül a célhoz menne, megkerülve azt, amit az útba állítottak, ezért elutasításra kerül.
 12122=A munkamenet proxyn keresztül csatlakozott volna, de a fájl nem írja le azt. A munkamenet a proxy nélkül lett importálva és közvetlenül fog csatlakozni, ezért használat előtt ellenőrizze a proxy beállítását.
 12123=Ezt a proxyt a bővítmény újra tudja hozni: másolja a munkamenetet a saját listájába az F5 billentyűvel, és a proxy vele együtt átkerül. A jelszót, ha szükséges, az első csatlakozáskor kéri.
+12124=Áthelyezés: a forrás megmaradt, mert a másolás egy már meglévő fájlra folytatódott
 12089=SFTP
 12104=(kézi)
 12105= (hiányzik)

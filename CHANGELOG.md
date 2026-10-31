@@ -91,8 +91,19 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   the far side of both — the file on the server when you move from it,
   the file on your disk when you move to it. If it cannot be removed,
   that is now said out loud rather than leaving you to notice the file
-  twice. Affects every server type, and has since the first release of
+  twice. A move you resume keeps its source, since part of the result
+  was there before and nothing vouches that it matches; the status line
+  says so. Affects every server type, and has since the first release of
   the original plugin.
+
+- **A resumed upload no longer writes over a larger file on the
+  server.** When the remote file was longer than the local one, or the
+  server did not report its size, resuming started writing from the
+  beginning without cutting the file, so the old tail stayed behind and
+  the upload reported success. It now fails instead. An upload whose
+  local file stops reading partway — a network drive dropping out, say —
+  also fails now, rather than passing for complete with a short copy on
+  the server.
 
 - **Servers without SFTP work outside the login directory.** On a host
   that offers only a shell — dropbear on a camera or a router, say —
