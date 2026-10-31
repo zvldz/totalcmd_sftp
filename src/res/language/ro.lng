@@ -206,7 +206,7 @@
 288=Schimbare parolă...
 289=Protejare parolă cu manager de parole (TC>=7.5)
 290=Certificat client pentru &autentificare:
-291=Fișier cheie publică (*.pub):
+291=Certificat (*-cert.pub), opțional:
 292=Fișier cheie privată (*.pem;*.ppk):
 293=Comprimare cu &ZLIB (poate să nu funcționeze pe unele servere)
 294=Înregistrare listă completă directoare (&debug)
@@ -238,7 +238,7 @@
 318=Port:
 319=Nume utilizator:
 320=&Parolă:
-321=Fișier cheie publică (*.pub):
+321=Certificat (*-cert.pub), opțional:
 322=Fișier cheie privată (*.pem;*.ppk):
 323=Folosire agent SSH &(Pageant) pentru autentificarea gazdei intermediare
 324=Ajutor
@@ -335,7 +335,7 @@
 414=PHP Agent: actualizare locală sftp.php omisă (fișier lipsă sau doar citire).
 415=Trimitere TAR:
 416=Trimitere TAR eșuată
-417=Selectați fișierul cheii publice
+417=Selectați fișierul certificatului
 418=Selectați fișierul cheii private
 426=SOCKS4a: 
 427=SOCKS5: 

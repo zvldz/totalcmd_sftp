@@ -206,7 +206,7 @@
 288=Wachtwoord wijzigen...
 289=Wachtwoord beveiligen met wachtwoordbeheerder (TC>=7.5)
 290=Clientcertificaat voor &verificatie:
-291=Bestand met publieke sleutel (*.pub):
+291=Certificaat (*-cert.pub), optioneel:
 292=Bestand met privésleutel (*.pem;*.ppk):
 293=Comprimeren met &ZLIB (werkt mogelijk niet op sommige servers)
 294=Volledige maplijst vastleggen (&debug)
@@ -238,7 +238,7 @@
 318=Poort:
 319=Gebruikersnaam:
 320=&Wachtwoord:
-321=Bestand met publieke sleutel (*.pub):
+321=Certificaat (*-cert.pub), optioneel:
 322=Bestand met privésleutel (*.pem;*.ppk):
 323=SSH-agent &(Pageant) gebruiken voor verificatie van de tussenliggende host
 324=Help
@@ -335,7 +335,7 @@
 414=PHP Agent: lokale sftp.php-update overgeslagen (bestand ontbreekt of is alleen-lezen).
 415=TAR-upload:
 416=TAR-upload mislukt
-417=Selecteer bestand met publieke sleutel
+417=Certificaatbestand selecteren
 418=Selecteer bestand met privésleutel
 426=SOCKS4a: 
 427=SOCKS5: 

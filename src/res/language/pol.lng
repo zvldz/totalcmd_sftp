@@ -209,7 +209,7 @@
 288=Zmień hasło...
 289=Chroń hasło menedżerem haseł (TC>=7.5)
 290=Certyfikat klienta do &uwierzytelniania:
-291=Plik klucza publicznego (*.pub):
+291=Certyfikat (*-cert.pub), opcjonalnie:
 292=Plik klucza prywatnego (*.pem;*.ppk):
 293=Kompresuj z &ZLIB (może nie działać na niektórych serwerach)
 294=Rejestruj pełne listowanie katalogów (&debug)
@@ -241,7 +241,7 @@
 318=Port:
 319=Nazwa użytkownika:
 320=&Hasło:
-321=Plik klucza publicznego (*.pub):
+321=Certyfikat (*-cert.pub), opcjonalnie:
 322=Plik klucza prywatnego (*.pem;*.ppk):
 323=Użyj agenta SSH &(Pageant) do uwierzytelniania hosta pośredniego
 327=System:
@@ -334,7 +334,7 @@
 414=PHP Agent: pominięto aktualizację lokalnego sftp.php (brak pliku lub tylko do odczytu).
 415=Przesyłanie TAR:
 416=Przesyłanie TAR nieudane
-417=Wybierz plik klucza publicznego
+417=Wybierz plik certyfikatu
 418=Wybierz plik klucza prywatnego
 426=SOCKS4a: 
 427=SOCKS5: 

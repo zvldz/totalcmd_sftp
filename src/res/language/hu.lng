@@ -206,7 +206,7 @@
 288=Jelszó módosítása...
 289=Jelszó védelme jelszókezelővel (TC>=7.5)
 290=Ügyféltanúsítvány &hitelesítéshez:
-291=Nyilvános kulcs fájlja (*.pub):
+291=Tanúsítvány (*-cert.pub), nem kötelező:
 292=Titkos kulcs fájlja (*.pem;*.ppk):
 293=Tömörítés &ZLIB-bel (egyes kiszolgálókon nem működhet)
 294=Teljes könyvtárlistázás naplózása (&debug)
@@ -238,7 +238,7 @@
 318=Port:
 319=Felhasználónév:
 320=&Jelszó:
-321=Nyilvános kulcs fájlja (*.pub):
+321=Tanúsítvány (*-cert.pub), nem kötelező:
 322=Titkos kulcs fájlja (*.pem;*.ppk):
 323=SSH-ügynök &(Pageant) használata a közvetítő gazdagép hitelesítéséhez
 324=Súgó
@@ -335,7 +335,7 @@
 414=PHP Agent: helyi sftp.php frissítés kihagyva (hiányzó vagy írásvédett fájl).
 415=TAR feltöltés:
 416=TAR feltöltés sikertelen
-417=Nyilvános kulcsfájl kiválasztása
+417=Tanúsítványfájl kiválasztása
 418=Privát kulcsfájl kiválasztása
 426=SOCKS4a: 
 427=SOCKS5: 

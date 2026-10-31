@@ -40,7 +40,7 @@ BEGIN
     CONTROL         "Protect password with password manager (TC>=7.5)",IDC_CRYPTPASS,
                     "Button",BS_AUTOCHECKBOX | WS_TABSTOP,5,82,305,10
     GROUPBOX        "Client certificate for &authentication:",IDC_LABEL_CERTGROUP,5,92,305,60
-    LTEXT           "Public key file (*.pub):",IDC_STATICPUB,10,103,269,8
+    LTEXT           "Certificate (*-cert.pub), optional:",IDC_STATICPUB,10,103,269,8
     EDITTEXT        IDC_PUBKEY,10,112,261,12,ES_AUTOHSCROLL
     PUSHBUTTON      "?",IDC_CERTHELP,275,112,12,12
     PUSHBUTTON      ">>",IDC_LOADPUBKEY,289,112,16,12
@@ -156,7 +156,7 @@ BEGIN
     CONTROL         "Protect password with password manager (TC>=7.5)",IDC_JUMP_CRYPTPASS,
                     "Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,90,286,10
     PUSHBUTTON      "Change password...",IDC_JUMP_EDITPASS,65,75,233,14,NOT WS_VISIBLE
-    LTEXT           "Public key file (*.pub):",IDC_JUMP_LABEL_PUBKEY,12,105,120,8
+    LTEXT           "Certificate (*-cert.pub), optional:",IDC_JUMP_LABEL_PUBKEY,12,105,270,8
     EDITTEXT        IDC_JUMP_PUBKEY,12,115,270,12,ES_AUTOHSCROLL
     PUSHBUTTON      ">>",IDC_JUMP_LOADPUBKEY,284,115,16,12
     LTEXT           "Private key file (*.pem;*.ppk):",IDC_JUMP_LABEL_PRIVKEY,12,131,180,8
@@ -427,7 +427,7 @@ END
 STRINGTABLE
 BEGIN
     IDS_JUMP_DLG_PASS       "&Password:"
-    IDS_JUMP_DLG_PUBKEY     "Public key file (*.pub):"
+    IDS_JUMP_DLG_PUBKEY     "Certificate (*-cert.pub), optional:"
     IDS_JUMP_DLG_PRIVKEY    "Private key file (*.pem;*.ppk):"
     IDS_JUMP_DLG_USEAGENT   "Use SSH &agent (Pageant) for jump host auth"
     IDS_BTN_HELP            "Help"
@@ -560,7 +560,7 @@ END
 STRINGTABLE
 BEGIN
     IDS_LOG_TAR_UPLOAD_FAIL "TAR upload failed"
-    IDS_DLG_SELECT_PUBKEY   "Select public key file"
+    IDS_DLG_SELECT_PUBKEY   "Select certificate file"
     IDS_DLG_SELECT_PRIVKEY  "Select private key file"
     IDS_PROXY_LABEL_SOCKS4A "SOCKS4a: "
     IDS_PROXY_LABEL_SOCKS5  "SOCKS5: "
@@ -761,7 +761,7 @@ BEGIN
     IDS_DLG_CHANGEPASS      "Change password..."
     IDS_DLG_CRYPTPASS       "Protect password with password manager (TC>=7.5)"
     IDS_DLG_CERTGROUP       "Client certificate for &authentication:"
-    IDS_DLG_PUBKEY          "Public key file (*.pub):"
+    IDS_DLG_PUBKEY          "Certificate (*-cert.pub), optional:"
     IDS_DLG_PRIVKEY         "Private key file (*.pem;*.ppk):"
     IDS_DLG_COMPRESS        "Compress with &ZLIB (may fail on some servers)"
     IDS_DLG_DETAILED_LOG    "Log full directory listings (&debug)"

@@ -39,7 +39,7 @@
       <li>Shows detailed log of which keys were tried</li>
     </ul>
   </li>
-  <li><b>Public key file:</b> Optional path to public key (.pub, .pem)</li>
+  <li><b>Certificate:</b> Optional. An OpenSSH certificate (<code>*-cert.pub</code>) signed for the private key, for servers that log users in by certificate. Leave it empty otherwise: the public half of the key is derived from the private key file. A private key entered here by mistake is still used to log in.</li>
   <li><b>Private key file:</b> 
     <ul>
       <li>Accepts PEM format (OpenSSH)</li>

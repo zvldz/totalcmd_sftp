@@ -206,7 +206,7 @@
 288=Passwort ändern...
 289=Passwort mit Passwort-Manager schützen (TC>=7.5)
 290=Client-Zertifikat zur &Authentifizierung:
-291=Datei mit öffentlichem Schlüssel (*.pub):
+291=Zertifikat (*-cert.pub), optional:
 292=Datei mit privatem Schlüssel (*.pem;*.ppk):
 293=Mit &ZLIB komprimieren (funktioniert möglicherweise nicht auf allen Servern)
 294=Vollständige Verzeichnislisten protokollieren (&Debug)
@@ -238,7 +238,7 @@
 318=Port:
 319=Benutzername:
 320=&Passwort:
-321=Datei mit öffentlichem Schlüssel (*.pub):
+321=Zertifikat (*-cert.pub), optional:
 322=Datei mit privatem Schlüssel (*.pem;*.ppk):
 323=SSH-&Agent (Pageant) für Jump-Host-Authentifizierung verwenden
 
@@ -336,7 +336,7 @@
 414=PHP Agent: lokales sftp.php-Update übersprungen (Datei fehlt oder schreibgeschützt).
 415=TAR-Upload:
 416=TAR-Upload fehlgeschlagen
-417=Öffentliche Schlüsseldatei auswählen
+417=Zertifikatsdatei auswählen
 418=Private Schlüsseldatei auswählen
 426=SOCKS4a: 
 427=SOCKS5: 

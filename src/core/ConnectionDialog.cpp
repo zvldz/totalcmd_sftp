@@ -1094,9 +1094,9 @@ static void OnBrowseKeyFileCommand(HWND hWnd, bool isPublicKey)
     ofn.nMaxFile = static_cast<DWORD>(szFileName.size());
     
     if (isPublicKey) {
-        lstrcpy(szFileName.data(), TEXT("*.pub"));
-        ofn.lpstrFilter = TEXT("Public key files (*.pub)\0*.pub\0All Files\0*.*\0");
-        ofn.lpstrTitle = TEXT("Select public key file");
+        lstrcpy(szFileName.data(), TEXT("*-cert.pub"));
+        ofn.lpstrFilter = TEXT("Certificates (*-cert.pub)\0*-cert.pub\0Public keys (*.pub)\0*.pub\0All Files\0*.*\0");
+        ofn.lpstrTitle = TEXT("Select certificate file");
     } else {
         lstrcpy(szFileName.data(), TEXT("*.pem"));
         ofn.lpstrFilter = TEXT("Private key files (*.pem;*.ppk)\0*.pem;*.ppk\0OpenSSH private key (*.pem)\0*.pem\0PuTTY private key (*.ppk)\0*.ppk\0All Files\0*.*\0");

@@ -206,7 +206,7 @@
 288=Změnit heslo...
 289=Chránit heslo správcem hesel (TC>=7.5)
 290=Klientský certifikát pro &ověřování:
-291=Soubor veřejného klíče (*.pub):
+291=Certifikát (*-cert.pub), volitelné:
 292=Soubor soukromého klíče (*.pem;*.ppk):
 293=Komprimovat pomocí &ZLIB (nemusí fungovat na některých serverech)
 294=Zaznamenávat úplný výpis adresářů (&debug)
@@ -238,7 +238,7 @@
 318=Port:
 319=Uživatelské jméno:
 320=&Heslo:
-321=Soubor veřejného klíče (*.pub):
+321=Certifikát (*-cert.pub), volitelné:
 322=Soubor soukromého klíče (*.pem;*.ppk):
 323=Použít agenta SSH &(Pageant) k ověření přechodového hostitele
 324=Nápověda
@@ -335,7 +335,7 @@
 414=PHP Agent: aktualizace lokálního sftp.php přeskočena (soubor chybí nebo je pouze pro čtení).
 415=Nahrávání TAR:
 416=Nahrávání TAR selhalo
-417=Vybrat soubor veřejného klíče
+417=Vybrat soubor certifikátu
 418=Vybrat soubor privátního klíče
 426=SOCKS4a: 
 427=SOCKS5: 

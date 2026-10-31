@@ -139,6 +139,14 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   through the shell — a rename or a copy on a shell-only server — that
   timed out before finishing no longer passes for a success.
 
+- **The public-key field is labelled for what it is now for: an OpenSSH
+  certificate.** Since the move to OpenSSL the public half of a key is
+  derived from the private key file, so the field asking for "Public key
+  file (*.pub)" invited a file the login does not need — and a private
+  key put there was ignored. It now reads "Certificate (*-cert.pub),
+  optional", in the session and jump-host dialogs alike, and the file
+  picker looks for certificates first.
+
 - **Logging in to a server that takes keys only says what is missing.**
   With no key to offer, the login used to end without a word; it now
   says that the server accepts only a key and the session has none. In

@@ -206,7 +206,7 @@
 288=Cambiar contraseña...
 289=Proteger contraseña con gestor de contraseñas (TC>=7.5)
 290=Certificado de cliente para &autenticación:
-291=Archivo de clave pública (*.pub):
+291=Certificado (*-cert.pub), opcional:
 292=Archivo de clave privada (*.pem;*.ppk):
 293=Comprimir con &ZLIB (puede fallar en algunos servidores)
 294=Registrar listados completos de directorio (&depuración)
@@ -238,7 +238,7 @@
 318=Puerto:
 319=Nombre de usuario:
 320=&Contraseña:
-321=Archivo de clave pública (*.pub):
+321=Certificado (*-cert.pub), opcional:
 322=Archivo de clave privada (*.pem;*.ppk):
 323=Usar &agente SSH (Pageant) para autenticación del host intermediario
 
@@ -336,7 +336,7 @@
 414=PHP Agent: actualización local de sftp.php omitida (archivo ausente o de solo lectura).
 415=Subida TAR:
 416=Subida TAR fallida
-417=Seleccionar archivo de clave pública
+417=Seleccionar archivo de certificado
 418=Seleccionar archivo de clave privada
 426=SOCKS4a: 
 427=SOCKS5: 
