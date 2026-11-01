@@ -79,25 +79,11 @@ struct AutoFileHandle {
     HANDLE get() const noexcept { return h; }
 };
 
-// Utf8ToWide removed - use unicode_util::utf8_to_wstring() instead
-// WideToUtf8 removed - use unicode_util::wide_to_narrow() instead
-
-static bool StartsWithIcase(const std::string& s, const std::string& prefix)
-{
-    if (prefix.size() > s.size())
-        return false;
-    for (size_t i = 0; i < prefix.size(); ++i) {
-        const unsigned char a = static_cast<unsigned char>(s[i]);
-        const unsigned char b = static_cast<unsigned char>(prefix[i]);
-        if (std::tolower(a) != std::tolower(b))
-            return false;
-    }
-    return true;
-}
+// The agent speaks UTF-8: paths go out and names come back in it.
 
 static std::string NormalizePhpRemotePath(pConnectSettings cs, LPCWSTR pathW)
 {
-    std::string p = unicode_util::wide_to_narrow(pathW ? pathW : L".");
+    std::string p = unicode_util::wstring_to_utf8(pathW ? pathW : L".");
     if (p.empty())
         return ".";
     ReplaceBackslashBySlash(p.data());
@@ -117,44 +103,9 @@ static std::string NormalizePhpRemotePath(pConnectSettings cs, LPCWSTR pathW)
         }
     }
     p.swap(collapsed);
+    // The panel path is relative to the agent root as it is; nothing of the
+    // agent URL is part of it, so no host or script name is cut from it.
     while (!p.empty() && p.front() == '/')
-        p.erase(p.begin());
-
-    AgentUrl url;
-    if (ParseAgentUrl(cs, &url)) {
-        std::string host = unicode_util::wide_to_narrow(url.host.c_str());
-        if (!host.empty()) {
-            if (StartsWithIcase(p, host + "/"))
-                p.erase(0, host.size() + 1);
-            else if (StartsWithIcase(p, host))
-                p.erase(0, host.size());
-        }
-
-        std::string object = unicode_util::wide_to_narrow(url.object.c_str());
-        size_t q = object.find('?');
-        if (q != std::string::npos)
-            object = object.substr(0, q);
-        while (!object.empty() && object.front() == '/')
-            object.erase(object.begin());
-
-        if (!object.empty()) {
-            if (StartsWithIcase(p, object + "/"))
-                p.erase(0, object.size() + 1);
-            else if (StartsWithIcase(p, object))
-                p.erase(0, object.size());
-
-            size_t slash = object.find_last_of('/');
-            std::string base = (slash == std::string::npos) ? object : object.substr(slash + 1);
-            if (!base.empty()) {
-                if (StartsWithIcase(p, base + "/"))
-                    p.erase(0, base.size() + 1);
-                else if (StartsWithIcase(p, base))
-                    p.erase(0, base.size());
-            }
-        }
-    }
-
-    while (!p.empty() && (p.front() == '/' || p.front() == '\\'))
         p.erase(p.begin());
     return p.empty() ? "." : p;
 }
@@ -739,19 +690,11 @@ int PhpAgentListDirectoryW(pConnectSettings cs, LPCWSTR remoteDir, std::vector<W
         return SendSimpleRequest(cs, L"GET", L"LIST", query, nullptr, 0, &code, &body);
     };
 
+    // A missing folder is an error, never the root listed under its name:
+    // files copied there would land somewhere else than the panel shows.
     int rc = doList(pathUtf8);
     if (rc != SFTP_OK)
         return rc;
-    if (!IsHttpSuccess(code)) {
-        // Some sessions start in virtual/home path from SSH mode.
-        // PHP agent has its own root jail, so fallback to agent root listing.
-        if (code == 404 && pathUtf8 != "." && pathUtf8 != "/") {
-            PHP_LOG("LIST 404 for path='%s', retrying with root", pathUtf8.c_str());
-            rc = doList(".");
-            if (rc != SFTP_OK)
-                return rc;
-        }
-    }
     if (!IsHttpSuccess(code)) {
         ReportPhpAgentHttpError(cs, code, "LIST");
         return SFTP_FAILED;
@@ -1379,7 +1322,7 @@ bool TarUploadSessionQueue(pConnectSettings cs, LPCWSTR localPath, const char* r
     }
 
     // Compute TAR name: strip remoteBase prefix
-    std::string baseA = unicode_util::wide_to_narrow(s_tarSession.remoteBaseRel.c_str());
+    std::string baseA = unicode_util::wstring_to_utf8(s_tarSession.remoteBaseRel);
     std::string tarName;
     if (!baseA.empty() && remoteA.size() > baseA.size() + 1
         && _strnicmp(remoteA.c_str(), baseA.c_str(), baseA.size()) == 0

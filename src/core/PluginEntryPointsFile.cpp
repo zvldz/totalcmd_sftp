@@ -2003,7 +2003,7 @@ int WINAPI FsPutFileW(LPCWSTR LocalName, LPCWSTR RemoteName, int CopyFlags)
             // Fill in cs on first file if session was started without one (PUT_MULTI_THREAD).
             if (!TarUploadSessionIsActive(serverid))
                 TarUploadSessionBegin(serverid);
-            const std::string remoteRelA = unicode_util::wide_to_narrow(remotedir.data());
+            const std::string remoteRelA = unicode_util::wstring_to_utf8(remotedir.data());
             // A file the batch would not take goes up on its own below rather
             // than being reported as sent. One it took is sent only when the
             // batch runs, after this call has returned, so a move stays a copy.

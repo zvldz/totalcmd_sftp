@@ -78,6 +78,22 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   one takes its name. Upload the new `sftp.php` (agent 1.0.2) to get
   these.
 
+- **PHP Agent files land where the panel shows them.** With a port in
+  the agent's URL (`http://host:8083/sftp.php`) the plugin took part of
+  the URL for a folder, so every upload went into extra folders named
+  after the port and the script, while the panel still looked like the
+  top folder. A folder that does not exist was also shown with the top
+  folder's contents instead of an error. And names with non-Latin
+  letters were sent in the Windows code page instead of UTF-8: such a
+  file arrived under a garbled name, and one put on the server by other
+  means could not be opened. A name that began with the server's name
+  or the script's (`example.com.zip`, `sftp.php.bak`) lost that part on
+  the way, so the operation reached another file or none.
+
+- **New folders appear on a PHP Agent with TAR stream on.** `F7`
+  reported success without creating anything, and the empty folders of
+  a copied tree were left out, since the archive carries files only.
+
 - **Uploading folders into the PHP Agent's top folder with TAR stream
   on works.** The agent refused to unpack an archive into its own root
   and answered every such upload with an error.

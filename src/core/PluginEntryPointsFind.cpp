@@ -1286,15 +1286,10 @@ BOOL WINAPI FsMkDirW(LPCWSTR Path)
                 if (!serverid->lanSession || !serverid->lanSession->isConnected()) return false;
                 return serverid->lanSession->mkdir(LanRemotePathToUtf8(remotedir.data()));
             }
-            // PHP Agent TAR mode: skip remote mkdir; directories are created by TAR extraction.
-            // Also start TAR session here if not already active (e.g. single-directory copy).
-            if (IsPhpAgentTransport(serverid) && serverid->php_tar) {
-                SFTP_LOG("TAR", "FsMkDirW TAR: dir='%S' tarWasActive=%d",
-                         remotedir.data(), TarUploadSessionIsActive(serverid) ? 1 : 0);
-                if (!TarUploadSessionIsActive(serverid))
-                    TarUploadSessionBegin(serverid);
-                return true;
-            }
+            // PHP Agent in TAR mode creates the folder right away too: F7 has no
+            // archive to carry it, and a TAR batch holds files only, so an empty
+            // folder of a copied tree would otherwise never appear. Unpacking
+            // into a folder that already exists is harmless.
             int rc = SftpCreateDirectoryW(serverid, remotedir.data());
             return (rc == SFTP_OK) ? true : false;
         }
