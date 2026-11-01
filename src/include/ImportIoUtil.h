@@ -63,6 +63,13 @@ bool BrowseForFile(HWND               owner,
 bool ParseLineCodePage(const std::string& raw,
                        int& outUtf8, int& outCodepage) noexcept;
 
+// Fills the proxy part of `dep` — type, address, user — so the session can
+// be copied with its proxy. The port is spelled out only when it differs
+// from the one the plugin assumes for that type; 0 means the source gave
+// none. An empty host leaves `dep` alone.
+void DescribeProxy(Proxy type, const std::string& host, DWORD port,
+                   const std::string& user, SessionDependency& dep);
+
 // PuTTY's proxy numbering, which KiTTY and WinSCP share: `ProxyMethod` 1 is
 // SOCKS4, 2 SOCKS5, 3 HTTP. For those it fills the proxy part of `dep` —
 // type, address, user — so the session can be copied with its proxy.

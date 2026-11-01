@@ -522,17 +522,19 @@ EnumerationResult FileZillaAdapter::EnumerateCustomPath(const std::string& path)
 // `sitemanager.xml`; a site says only whether it opts out. So the question
 // "does this site go through a proxy" is answered by two files, and a site
 // that opts out is unaffected however the global setting is configured.
-static bool GlobalProxyConfigured(const std::wstring& sitemanagerPath, std::string& hostOut)
+// A proxy of a kind the plugin speaks is described in `dep` so the site can
+// be copied with it; any other kind is only marked, and stays a refusal.
+static void DescribeGlobalProxy(const std::wstring& sitemanagerPath, SessionDependency& dep)
 {
     const size_t slash = sitemanagerPath.find_last_of(L'\\');
     if (slash == std::wstring::npos)
-        return false;
+        return;
     const std::wstring settingsPath =
         sitemanagerPath.substr(0, slash + 1) + L"filezilla.xml";
 
     std::string text;
     if (!ReadFileAsBytes(settingsPath, text))
-        return false;
+        return;
 
     // The settings file is a flat list of <Setting name="...">value</Setting>,
     // so it is read by name rather than walked as a tree.
@@ -543,15 +545,28 @@ static bool GlobalProxyConfigured(const std::wstring& sitemanagerPath, std::stri
             return {};
         const size_t from = at + open.size();
         const size_t to = text.find('<', from);
-        return to == std::string::npos ? std::string() : text.substr(from, to - from);
+        return to == std::string::npos ? std::string() : DecodeEntities(text.substr(from, to - from));
     };
 
-    const std::string type = settingValue("Proxy type");
-    if (type.empty() || std::atoi(type.c_str()) == 0)
-        return false;
+    const int method = std::atoi(settingValue("Proxy type").c_str());
+    if (method == 0)
+        return;
 
-    hostOut = settingValue("Proxy host");
-    return true;
+    const std::string host = settingValue("Proxy host");
+    dep.kind   = SessionDependency::Kind::Proxy;
+    dep.detail = host;
+
+    // FileZilla numbers its generic proxy 1 HTTP, 2 SOCKS5, 3 SOCKS4.
+    Proxy type{};
+    switch (method) {
+        case 1: type = Proxy::http;   break;
+        case 2: type = Proxy::socks5; break;
+        case 3: type = Proxy::socks4; break;
+        default: return;
+    }
+    const int port = std::atoi(settingValue("Proxy port").c_str());
+    DescribeProxy(type, host, port > 0 ? static_cast<DWORD>(port) : 0,
+                  settingValue("Proxy user"), dep);
 }
 
 bool FileZillaAdapter::LoadSettings(const ExternalSessionEntry& entry,
@@ -602,13 +617,8 @@ bool FileZillaAdapter::LoadSettings(const ExternalSessionEntry& entry,
     const std::string host = ChildText(*srv, "Host");
     if (host.empty()) return false;
 
-    if (dependency && ChildText(*srv, "BypassProxy") != "1") {
-        std::string proxyHost;
-        if (GlobalProxyConfigured(xmlPath, proxyHost)) {
-            dependency->kind   = SessionDependency::Kind::Proxy;
-            dependency->detail = proxyHost;
-        }
-    }
+    if (dependency && ChildText(*srv, "BypassProxy") != "1")
+        DescribeGlobalProxy(xmlPath, *dependency);
 
     const std::string portStr = ChildText(*srv, "Port");
     const int port = portStr.empty() ? 0 : std::atoi(portStr.c_str());
