@@ -12,6 +12,13 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 
 ### Features
 
+- **`~/.ssh/config` as an import source.** `[Imports]\[OpenSSH]` lists
+  every host of the OpenSSH client config and connects with what it says,
+  resolved as `ssh <host>` would: `HostName`, `Port`, `User`,
+  `IdentityFile`, defaults from `Host *` and other patterns, `Include`,
+  and `ProxyJump` with one hop as the jump host. The config stays the
+  place the settings live; nothing has to be copied. `ProxyCommand` and
+  jump chains are refused, `Match` is skipped.
 - **Owner, group and permissions in the file list.** The plugin now
   offers custom columns — owner, group, permissions (`rwxr-xr-x`), octal
   (`0755`) and link target — and a default view with the first three next

@@ -1,6 +1,6 @@
 <!doctype html>
 <html>
-<head><meta charset="utf-8"><title>Import from PuTTY / WinSCP / FileZilla / KiTTY / SecureCRT</title><link rel="stylesheet" href="assets/style.css"></head>
+<head><meta charset="utf-8"><title>Import from PuTTY / WinSCP / FileZilla / KiTTY / SecureCRT / OpenSSH</title><link rel="stylesheet" href="assets/style.css"></head>
 <body>
 <h1>Import sessions from other programs</h1>
 
@@ -17,7 +17,8 @@
 ├── [PuTTY]
 ├── [WinSCP]
 ├── [FileZilla]
-└── [KiTTY]</pre>
+├── [KiTTY]
+└── [OpenSSH]</pre>
 
 <p>Only the programs that were actually found are listed.</p>
 
@@ -74,7 +75,16 @@
     <td><code>%APPDATA%\KiTTY\Sessions\</code>, <code>%LOCALAPPDATA%\KiTTY\Sessions\</code>, <code>%USERPROFILE%\KiTTY\Sessions\</code>, or the folder registered for the <code>.kitty</code> file association</td>
     <td>The <code>Sessions\</code> folder, or the KiTTY install root — the plugin steps into <code>Sessions\</code> by itself</td>
   </tr>
+  <tr>
+    <td><b>OpenSSH</b></td>
+    <td><code>%USERPROFILE%\.ssh\config</code> (where OpenSSH for Windows keeps it)</td>
+    <td>Any OpenSSH client config file</td>
+  </tr>
 </table>
+
+<div class="note">
+  <b>OpenSSH config.</b> Every concrete <code>Host</code> name is a session; patterns such as <code>Host 10.*</code> or <code>Host *</code> are not listed but their values apply to the hosts they match, the first value found winning, exactly as <code>ssh myserver</code> resolves them. Read: <code>HostName</code>, <code>Port</code>, <code>User</code> (your Windows user name when absent, as <code>ssh</code> does), the first <code>IdentityFile</code>, <code>ProxyJump</code> with one hop, and <code>Include</code>. <code>Match</code> blocks are skipped. A <code>ProxyCommand</code> or a chain of jump hosts is refused. The config stays the place the settings live: <code>Enter</code> connects with what it says, and <code>[Refresh]</code> picks up your edits.
+</div>
 
 <div class="note">
   KiTTY is portable by design and has no fixed install path. If you unpacked it somewhere the probes do not cover — a Downloads folder, a second drive, a USB stick — the source folder stays empty until you add the location through <code>[Add custom location...]</code>.
@@ -96,17 +106,17 @@
 <h2>What is carried over</h2>
 
 <table border="1" cellpadding="5" cellspacing="0">
-  <tr><th>Setting</th><th>SecureCRT</th><th>PuTTY</th><th>WinSCP</th><th>FileZilla</th><th>KiTTY</th></tr>
-  <tr><td>Host and port</td><td>yes</td><td>yes</td><td>yes</td><td>yes</td><td>yes</td></tr>
-  <tr><td>User name</td><td>yes</td><td>yes</td><td>yes</td><td>yes</td><td>yes</td></tr>
-  <tr><td>Key file</td><td>yes</td><td>yes</td><td>yes</td><td>yes</td><td>yes</td></tr>
-  <tr><td>SSH agent</td><td>&mdash;</td><td>yes</td><td>yes</td><td>&mdash;</td><td>yes</td></tr>
-  <tr><td>File name encoding</td><td>yes</td><td>yes</td><td>&mdash;</td><td>yes</td><td>yes</td></tr>
-  <tr><td>Line endings</td><td>&mdash;</td><td>yes</td><td>yes</td><td>&mdash;</td><td>yes</td></tr>
-  <tr><td>SCP transport</td><td>&mdash;</td><td>&mdash;</td><td>yes</td><td>&mdash;</td><td>&mdash;</td></tr>
-  <tr><td>Password</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>partly</td><td>yes</td></tr>
-  <tr><td>Proxy (HTTP, SOCKS4, SOCKS5)</td><td>refused</td><td>on copy</td><td>on copy</td><td>refused</td><td>on copy</td></tr>
-  <tr><td>Jump host / tunnel</td><td>yes</td><td>yes</td><td>yes</td><td>&mdash;</td><td>refused</td></tr>
+  <tr><th>Setting</th><th>SecureCRT</th><th>PuTTY</th><th>WinSCP</th><th>FileZilla</th><th>KiTTY</th><th>OpenSSH</th></tr>
+  <tr><td>Host and port</td><td>yes</td><td>yes</td><td>yes</td><td>yes</td><td>yes</td><td>yes</td></tr>
+  <tr><td>User name</td><td>yes</td><td>yes</td><td>yes</td><td>yes</td><td>yes</td><td>yes</td></tr>
+  <tr><td>Key file</td><td>yes</td><td>yes</td><td>yes</td><td>yes</td><td>yes</td><td>yes</td></tr>
+  <tr><td>SSH agent</td><td>&mdash;</td><td>yes</td><td>yes</td><td>&mdash;</td><td>yes</td><td>&mdash;</td></tr>
+  <tr><td>File name encoding</td><td>yes</td><td>yes</td><td>&mdash;</td><td>yes</td><td>yes</td><td>UTF-8</td></tr>
+  <tr><td>Line endings</td><td>&mdash;</td><td>yes</td><td>yes</td><td>&mdash;</td><td>yes</td><td>Unix</td></tr>
+  <tr><td>SCP transport</td><td>&mdash;</td><td>&mdash;</td><td>yes</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td></tr>
+  <tr><td>Password</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>partly</td><td>yes</td><td>&mdash;</td></tr>
+  <tr><td>Proxy (HTTP, SOCKS4, SOCKS5)</td><td>on copy</td><td>on copy</td><td>on copy</td><td>on copy</td><td>on copy</td><td>&mdash;</td></tr>
+  <tr><td>Jump host / tunnel</td><td>yes</td><td>yes</td><td>yes</td><td>&mdash;</td><td>refused</td><td>yes</td></tr>
 </table>
 
 <p>Folder structure is preserved: a WinSCP session in a folder, a FileZilla site inside a <code>&lt;Folder&gt;</code>, or a SecureCRT session in a subdirectory all show up as nested folders in the panel.</p>
@@ -120,6 +130,7 @@
   <li><b>WinSCP</b> and <b>SecureCRT</b> — not imported. You are asked for the password on the first connection, or you can save one through the plugin's own connection dialog.</li>
   <li><b>FileZilla</b> — imported when the site uses <i>Save password</i>. Sites protected by a FileZilla master password are skipped and you are prompted instead.</li>
   <li><b>KiTTY</b> — imported. Ticking <i>Save password</i> in KiTTY is an explicit action, so the value is carried over.</li>
+  <li><b>OpenSSH</b> — nothing to import; the config holds no passwords.</li>
 </ul>
 
 <p>Whenever a password is imported it is re-protected with Windows DPAPI before being stored, exactly like a password you type into the plugin yourself. Nothing is written in plain text.</p>
