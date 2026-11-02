@@ -1,5 +1,6 @@
 #include "global.h"
 #include <windows.h>
+#include <wincrypt.h>
 #include <array>
 #include <cerrno>
 #include <memory>
@@ -161,44 +162,96 @@ int InitializeSshSession(
     return 0;
 }
 
+HostKeyFingerprint ReadHostKeyFingerprint(ISshSession* session)
+{
+    HostKeyFingerprint fp;
+    if (!session)
+        return fp;
+
+    if (const char* sha = session->hostkeyHash(LIBSSH2_HOSTKEY_HASH_SHA256)) {
+        std::array<char, 64> b64{};
+        DWORD len = static_cast<DWORD>(b64.size());
+        if (CryptBinaryToStringA(reinterpret_cast<const BYTE*>(sha), 32,
+                                 CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF, b64.data(), &len)) {
+            std::string s(b64.data(), len);
+            while (!s.empty() && s.back() == '=')
+                s.pop_back();
+            fp.sha256 = "SHA256:" + s;
+        }
+    }
+    if (const char* md5 = session->hostkeyHash(LIBSSH2_HOSTKEY_HASH_MD5)) {
+        fp.md5.reserve(16 * 3);
+        for (size_t i = 0; i < 16; i++) {
+            if (i > 0) fp.md5 += ' ';
+            fp.md5 += std::format("{:02X}", static_cast<unsigned char>(md5[i]));
+        }
+    }
+    return fp;
+}
+
+bool FingerprintMatches(const std::string& stored, const HostKeyFingerprint& fp)
+{
+    if (stored.empty())
+        return false;
+    if (stored.starts_with("SHA256:"))
+        return !fp.sha256.empty() && stored == fp.sha256;
+    return !fp.md5.empty() && stored == fp.md5;
+}
+
+const std::string& FingerprintToStore(const HostKeyFingerprint& fp)
+{
+    return fp.sha256.empty() ? fp.md5 : fp.sha256;
+}
+
+std::string FingerprintForPrompt(const HostKeyFingerprint& fp)
+{
+    if (fp.sha256.empty())
+        return "MD5: " + fp.md5;
+    if (fp.md5.empty())
+        return fp.sha256;
+    return fp.sha256 + "\nMD5: " + fp.md5;
+}
+
 int VerifyServerFingerprint(pConnectSettings ConnectSettings)
 {
-    LPCSTR fingerprint = ConnectSettings->session->hostkeyHash(LIBSSH2_HOSTKEY_HASH_MD5);
-    if (fingerprint == nullptr) {
+    const HostKeyFingerprint fp = ReadHostKeyFingerprint(ConnectSettings->session.get());
+    if (fp.sha256.empty() && fp.md5.empty()) {
         SftpLogLastError("Fingerprint error: ", ConnectSettings->session->lastErrno());
         return -90;
     }
     ShowStatusId(IDS_SERVER_FINGERPRINT, nullptr, true);
-    std::string fingerprintHex;
-    fingerprintHex.reserve(16 * 3);
-    for (size_t i = 0; i < 16; i++) {
-        if (i > 0) fingerprintHex += ' ';
-        fingerprintHex += std::format("{:02X}", static_cast<unsigned char>(fingerprint[i]));
-    }
-    ShowStatus(fingerprintHex.c_str());
+    ShowStatus(FingerprintToStore(fp).c_str());
 
-    if (ConnectSettings->savedfingerprint != fingerprintHex) {
-        std::array<char, 4 * MAX_PATH> msg1{};
-        std::array<char, MAX_PATH> msg2{};
-        if (ConnectSettings->savedfingerprint.empty())
-            LoadStr(msg1, IDS_CONNECTION_FIRSTTIME);
-        else
-            LoadStr(msg1, IDS_FINGERPRINT_CHANGED);
-        LoadStr(msg2, IDS_FINGERPRINT);
-        const std::string prompt = std::string(msg1.data()) + msg2.data() + fingerprintHex;
-
-        bool verified = false;
-        if (ConnectSettings->feedback) {
-            verified = ConnectSettings->feedback->AskYesNo(prompt.c_str(), "SFTP Security Warning");
-        } else {
-            verified = false;
+    const std::string& stored = ConnectSettings->savedfingerprint;
+    if (FingerprintMatches(stored, fp)) {
+        // A match on an MD5 saved by an earlier version: same key, stored
+        // again in the SHA256 form so later checks use the stronger hash.
+        if (!stored.starts_with("SHA256:") && !fp.sha256.empty()) {
+            WritePrivateProfileString(ConnectSettings->DisplayName.c_str(), "fingerprint",
+                                      fp.sha256.c_str(), ConnectSettings->IniFileName.c_str());
+            ConnectSettings->savedfingerprint = fp.sha256;
+            SFTP_LOG("CONN", "Stored MD5 fingerprint matched, rewritten as %s", fp.sha256.c_str());
         }
-
-        if (!verified)
-            return -100;
-
-        WritePrivateProfileString(ConnectSettings->DisplayName.c_str(), "fingerprint", fingerprintHex.c_str(), ConnectSettings->IniFileName.c_str());
-        ConnectSettings->savedfingerprint = fingerprintHex;
+        return 0;
     }
+
+    std::array<char, 4 * MAX_PATH> msg1{};
+    std::array<char, MAX_PATH> msg2{};
+    if (stored.empty())
+        LoadStr(msg1, IDS_CONNECTION_FIRSTTIME);
+    else
+        LoadStr(msg1, IDS_FINGERPRINT_CHANGED);
+    LoadStr(msg2, IDS_FINGERPRINT);
+    const std::string prompt = std::string(msg1.data()) + msg2.data() + FingerprintForPrompt(fp);
+
+    bool verified = false;
+    if (ConnectSettings->feedback)
+        verified = ConnectSettings->feedback->AskYesNo(prompt.c_str(), "SFTP Security Warning");
+    if (!verified)
+        return -100;
+
+    WritePrivateProfileString(ConnectSettings->DisplayName.c_str(), "fingerprint",
+                              FingerprintToStore(fp).c_str(), ConnectSettings->IniFileName.c_str());
+    ConnectSettings->savedfingerprint = FingerprintToStore(fp);
     return 0;
 }

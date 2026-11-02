@@ -19,6 +19,7 @@
 #include "PluginEntryPoints.h"
 #include "CoreUtils.h"
 #include "ProfileSettings.h"   // LoadServerSettings, for the session-reference case
+#include "SshSessionInit.h"    // host key fingerprints
 #include "res/resource.h"
 
 #include <libssh2/libssh2.h>
@@ -306,29 +307,42 @@ static bool VerifyJumpFingerprint(
     ISshSession*     jmpSession,
     JumpHostSettings& jump)        // in/out: fingerprint field updated
 {
-    const char* raw = jmpSession->hostkeyHash(LIBSSH2_HOSTKEY_HASH_MD5);
-    if (!raw) {
+    const HostKeyFingerprint fp = ReadHostKeyFingerprint(jmpSession);
+    if (fp.sha256.empty() && fp.md5.empty()) {
         ShowStatusId(IDS_LOG_JUMP_NO_FP, nullptr, true);
         return false;
     }
+    ShowStatus(("Jump host fingerprint: " + FingerprintToStore(fp)).c_str());
 
-    std::string fp;
-    fp.reserve(16 * 3);
-    for (int i = 0; i < 16; i++) {
-        if (i > 0) fp += ' ';
-        fp += std::format("{:02X}", static_cast<unsigned char>(raw[i]));
+    // Write it back where the resolver read it from. For a referenced session
+    // that is the session's own `fingerprint`, shared with a direct
+    // connection to the same machine; for a manual jump host it is this
+    // session's `jumpfingerprint`. Writing anywhere else means the value is
+    // never found again and the prompt returns on every connect.
+    auto store = [&](const std::string& value) {
+        if (!jump.fingerprintSection.empty() && !jump.fingerprintKey.empty()) {
+            WritePrivateProfileString(
+                jump.fingerprintSection.c_str(), jump.fingerprintKey.c_str(),
+                value.c_str(), cs->IniFileName.c_str());
+        }
+        jump.fingerprint = value;
+    };
+
+    if (FingerprintMatches(jump.fingerprint, fp)) {
+        // An MD5 saved by an earlier version: same key, stored again as SHA256.
+        if (!jump.fingerprint.starts_with("SHA256:") && !fp.sha256.empty()) {
+            store(fp.sha256);
+            SFTP_LOG("JUMP", "Stored MD5 fingerprint matched, rewritten as %s", fp.sha256.c_str());
+        }
+        return true;
     }
-    ShowStatus(("Jump host fingerprint: " + fp).c_str());
-
-    if (jump.fingerprint == fp)
-        return true;   // known host, matches
 
     // First time or changed — ask user.
     const bool firstTime = jump.fingerprint.empty();
     std::string msg = firstTime
         ? "First connection to jump host — fingerprint unknown.\nFingerprint: "
         : "Jump host fingerprint has CHANGED!\nNew fingerprint: ";
-    msg += fp;
+    msg += FingerprintForPrompt(fp);
     msg += "\nAccept?";
 
     bool accepted = false;
@@ -338,17 +352,7 @@ static bool VerifyJumpFingerprint(
     if (!accepted)
         return false;
 
-    // Write it back where the resolver read it from. For a referenced session
-    // that is the session's own `fingerprint`, shared with a direct
-    // connection to the same machine; for a manual jump host it is this
-    // session's `jumpfingerprint`. Writing anywhere else means the value is
-    // never found again and the prompt returns on every connect.
-    if (!jump.fingerprintSection.empty() && !jump.fingerprintKey.empty()) {
-        WritePrivateProfileString(
-            jump.fingerprintSection.c_str(), jump.fingerprintKey.c_str(),
-            fp.c_str(), cs->IniFileName.c_str());
-    }
-    jump.fingerprint = fp;
+    store(FingerprintToStore(fp));
     return true;
 }
 

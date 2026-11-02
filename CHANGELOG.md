@@ -23,6 +23,11 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   listing, and below them the server's own `stat` reply. Without a shell
   on the server, the SFTP attributes stand in for it. Translated into all
   languages.
+- **Host key fingerprints are SHA256**, in the form OpenSSH prints, so
+  they can be compared with `ssh-keygen -lf` on the server. The
+  confirmation shows MD5 below it. A fingerprint stored by an earlier
+  version (MD5) still matches and is rewritten as SHA256 on the next
+  connection, without asking. The same for jump hosts.
 - **Imported sessions that go through a jump host now come with it.** A
   WinSCP tunnel, a SecureCRT session firewalled through another session,
   and a PuTTY session using "SSH to proxy and use port forwarding" import
