@@ -39,6 +39,9 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 
 ### Fixes
 
+- **"Log full directory listings" works in SCP mode**: the raw `ls -la`
+  lines go to the log window, as the server's long entries already did in
+  SFTP mode.
 - **SCP mode: names with spaces or quotes are listed as they are.** GNU
   `ls` writing to a terminal wraps such names in quotes (`'a b'`), which
   then appeared in the panel and led nowhere.

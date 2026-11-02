@@ -414,6 +414,10 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
             std::vector<WIN32_FIND_DATAW> entries;
             DirectoryExtras extras;
             for (const auto& line : lines) {
+                // The raw `ls` lines, as SFTP mode shows its long entries:
+                // what to look at when a listing parses wrong.
+                if (cs->detailedlog && !line.empty())
+                    ShowStatus(line.c_str());
                 if (line.empty() || _strnicmp(line.c_str(), "total ", 6) == 0)
                     continue;
                 WIN32_FIND_DATAW fd{};
