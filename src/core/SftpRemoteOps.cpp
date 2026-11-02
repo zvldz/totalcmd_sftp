@@ -356,8 +356,10 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
             // and cut the reading short before any output was seen.
             // `env` sets the locale and zone in any shell, csh included, and
             // runs the real `ls` past any alias: English month names, times
-            // in UTC.
-            std::string command = "echo \"" + beginMarker + "\"; env TZ=UTC0 LC_TIME=C ls -la '" +
+            // in UTC. GNU `ls` on a terminal quotes names with spaces or
+            // quotes in them ('a b'); QUOTING_STYLE=literal keeps them bare,
+            // and other `ls` builds ignore it.
+            std::string command = "echo \"" + beginMarker + "\"; env TZ=UTC0 LC_TIME=C QUOTING_STYLE=literal ls -la '" +
                                   string_util::ShellQuoteSingle(listTarget) +
                                   "'; echo \"" + endMarker + "\":$?\n";
             SFTP_LOG("FIND", "SCP listing '%s'", listTarget.c_str());

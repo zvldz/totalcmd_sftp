@@ -39,6 +39,9 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 
 ### Fixes
 
+- **SCP mode: names with spaces or quotes are listed as they are.** GNU
+  `ls` writing to a terminal wraps such names in quotes (`'a b'`), which
+  then appeared in the panel and led nowhere.
 - **SCP mode shows dates and permissions.** The listing kept only names
   and sizes, so every row had an empty date. Dates now come from `ls`
   run in English and UTC, whatever the server's locale and time zone, and
