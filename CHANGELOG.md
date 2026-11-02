@@ -23,17 +23,19 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   shows its settings: the file it opens names the missing route, and the
   plugin refuses to import that file back.
 
-- **An HTTP or SOCKS proxy from PuTTY, KiTTY, WinSCP or FileZilla comes
-  along when the session is copied.** FileZilla keeps one proxy for the
-  whole program, so it comes along with every site that does not bypass
-  it. `F5` from `[Imports]` into your own list
+- **An HTTP or SOCKS proxy from PuTTY, KiTTY, WinSCP, FileZilla or
+  SecureCRT comes along when the session is copied.** FileZilla keeps one
+  proxy for the whole program, so it comes along with every site that
+  does not bypass it. SecureCRT keeps its proxies as firewall records; a
+  session that tunnels through another SecureCRT session, or names a
+  record that no longer exists, is still refused. `F5` from `[Imports]` into your own list
   points the new session at a matching entry in `[Proxies]`, reusing one
   with the same type, address and user name or adding one. Copying it
   out to a file writes the proxy into the file, and dropping that file
   back onto the plugin resolves it the same way. The proxy password stays
   behind and is asked for on the first connection. Connecting straight
   from `[Imports]` still refuses, and now says that `F5` brings the proxy
-  along. Jump hosts, tunnels and SecureCRT firewalls are still refused.
+  along. Jump hosts and tunnels are still refused.
 
 - **The help is one HTML page instead of a CHM.** The Help button now
   opens `SFTPplug-help.html` in your browser, and `Ctrl+F` searches

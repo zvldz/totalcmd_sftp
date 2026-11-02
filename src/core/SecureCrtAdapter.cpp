@@ -137,6 +137,39 @@ void FillConnectSettings(const VanDykeFile& file, tConnectSettings* out)
         out->utf8names = 1;
 }
 
+// Firewall records live in Firewalls\ beside the Sessions folder, one
+// <name>.ini each. A record that exists is a proxy; one of a kind the plugin
+// speaks also has its address and user filled in. A missing record leaves
+// `dep` as it is, since nothing says what stood in the way.
+void DescribeFirewallRecord(const std::string& sessionsRoot,
+                            const std::string& name,
+                            SessionDependency& dep)
+{
+    const size_t slash = sessionsRoot.find_last_of("\\/");
+    if (slash == std::string::npos)
+        return;
+    const VanDykeFile record = ParseVanDykeFile(
+        sessionsRoot.substr(0, slash) + "\\Firewalls\\" + name + ".ini");
+    if (record.empty())
+        return;
+    dep.kind = SessionDependency::Kind::Proxy;
+
+    // Plain HTTP is the no-authentication kind, so a user name left in the
+    // record from an earlier type is not carried over.
+    const std::string type = GetString(record, "Firewall Type");
+    Proxy proxyType{};
+    bool  withUser = true;
+    if      (_stricmp(type.c_str(), "SOCKSv4") == 0)        proxyType = Proxy::socks4;
+    else if (_stricmp(type.c_str(), "SOCKSv5") == 0)        proxyType = Proxy::socks5;
+    else if (_stricmp(type.c_str(), "HTTP_BASICAUTH") == 0) proxyType = Proxy::http;
+    else if (_stricmp(type.c_str(), "HTTP") == 0)         { proxyType = Proxy::http; withUser = false; }
+    else return;
+
+    DescribeProxy(proxyType, GetString(record, "Firewall Address"),
+                  GetDWord(record, "Firewall Port", 0),
+                  withUser ? GetString(record, "Firewall User") : std::string(), dep);
+}
+
 }  // namespace
 
 bool SecureCrtAdapter::DetectStandard() const noexcept
@@ -203,17 +236,20 @@ bool SecureCrtAdapter::LoadSettings(const ExternalSessionEntry& entry,
     // directly. It holds "None" when there is nothing in the way, and
     // otherwise one of two forms: the name of a record under Firewalls\,
     // which carries the address and credentials, or "Session:<path>" naming
-    // another SecureCRT session to tunnel through. Neither travels with the
-    // fields we copy, so both are reported and the session refuses instead of
-    // connecting straight to the target.
+    // another SecureCRT session to tunnel through. A record of a proxy kind
+    // the plugin speaks is described so the session can be copied with it;
+    // anything else — a session to tunnel through, another firewall type, a
+    // record that is missing — refuses instead of connecting straight to the
+    // target.
     if (dependency) {
         const std::string firewall = GetString(file, "Firewall Name");
         if (!firewall.empty() && _stricmp(firewall.c_str(), "None") != 0) {
             constexpr std::string_view kSessionForm = "Session:";
-            dependency->kind = SessionDependency::Kind::Bastion;
-            dependency->detail = firewall.starts_with(kSessionForm)
-                ? firewall.substr(kSessionForm.size())
-                : firewall;
+            const bool viaSession = firewall.starts_with(kSessionForm);
+            dependency->kind   = SessionDependency::Kind::Bastion;
+            dependency->detail = viaSession ? firewall.substr(kSessionForm.size()) : firewall;
+            if (!viaSession)
+                DescribeFirewallRecord(channelRoot, firewall, *dependency);
         }
     }
     return true;
