@@ -10,6 +10,12 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 
 ## 10.0.2.2 — unreleased
 
+### Fixes
+
+- **An idle connection is no longer dropped by a router or firewall in
+  between.** The plugin turns on TCP keepalive for the server socket and
+  the jump host socket, so the link stays open after a minute of silence.
+
 ## 10.0.2.1 — 2026-11-02
 
 ### Features

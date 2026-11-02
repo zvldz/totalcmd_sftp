@@ -51,6 +51,7 @@ int EstablishSocketConnection(pConnectSettings ConnectSettings, LPCSTR connectto
         int nodelay = 1;
         setsockopt(ConnectSettings->sock, IPPROTO_TCP, TCP_NODELAY,
                    reinterpret_cast<const char*>(&nodelay), sizeof(nodelay));
+        EnableTcpKeepAlive(ConnectSettings->sock);
         SetBlockingSocket(ConnectSettings->sock, false);
         connected = connect(ConnectSettings->sock, ai->ai_addr, (int)ai->ai_addrlen) == 0;
         if (!connected && WSAGetLastError() == WSAEWOULDBLOCK) {

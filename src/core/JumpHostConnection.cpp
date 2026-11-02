@@ -535,6 +535,7 @@ std::unique_ptr<ITransportStream> ConnectViaJumpHost(
         if (jmpSock == INVALID_SOCKET)
             continue;
 
+        EnableTcpKeepAlive(jmpSock);
         SetBlockingSocket(jmpSock, false);
         if (connect(jmpSock, ai->ai_addr, static_cast<int>(ai->ai_addrlen)) == 0) {
             connected = true;

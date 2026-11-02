@@ -3,6 +3,7 @@
 #include "global.h"
 #include <windows.h>
 #include <ws2tcpip.h>
+#include <mstcpip.h>
 #include <shellapi.h>
 #include <commdlg.h>
 #include <wincrypt.h>
@@ -219,6 +220,16 @@ void SetBlockingSocket(SOCKET s, bool blocking)
 {
     u_long arg = blocking ? 0 : 1;
     ioctlsocket(s, FIONBIO, &arg);
+}
+
+// Keeps NAT and firewall mappings alive while a session sits idle: the
+// kernel probes after 60 s of silence and every 10 s after that, with no
+// SSH traffic and no thread of our own. A dead peer is noticed too.
+void EnableTcpKeepAlive(SOCKET s)
+{
+    tcp_keepalive ka{1, 60000, 10000};
+    DWORD bytes = 0;
+    WSAIoctl(s, SIO_KEEPALIVE_VALS, &ka, sizeof(ka), nullptr, 0, &bytes, nullptr, nullptr);
 }
 
 bool IsSocketError(SOCKET s)

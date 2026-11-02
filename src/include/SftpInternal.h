@@ -116,6 +116,7 @@ void  ShowError(LPCSTR error);
 
 // Socket helpers (defined in SftpConnection.cpp)
 void  SetBlockingSocket(SOCKET s, bool blocking);
+void  EnableTcpKeepAlive(SOCKET s);
 bool  IsSocketError(SOCKET s);
 bool  IsSocketWritable(SOCKET s);
 bool  IsSocketReadable(SOCKET s);
