@@ -103,14 +103,16 @@
   <li><b>Show entire directory listings in log:</b> Includes full remote <code>ls -la</code> output in the log — useful for diagnosing SCP/shell listing problems</li>
 </ul>
 
-<h3>File Permissions (SFTP mode)</h3>
-<p>In SFTP transfer mode you can change file and directory permissions directly from Total Commander:</p>
+<h3>Permissions, Owner and Group</h3>
+<p>The plugin offers custom columns for remote files:</p>
 <ul>
-  <li>Use <b>Properties</b> (Alt+Enter) on a remote file or directory to view and edit its Unix permissions</li>
-  <li>Permission changes use SFTP setstat — the plugin reads current permissions first, applies your change, and writes back</li>
-  <li>Works on files and directories; symlinks are not followed</li>
-  <li>Not available in SCP-only, Shell, PHP Agent, or LAN Pair modes</li>
+  <li><b>permissions</b> — as <code>ls</code> writes them, e.g. <code>rwxr-xr-x</code>, with <code>s</code>/<code>t</code> for setuid, setgid and sticky</li>
+  <li><b>octal</b> — the same as a number, e.g. <code>0755</code></li>
+  <li><b>owner</b> and <b>group</b> — names; a server that sends no names shows the numeric ids</li>
+  <li><b>link target</b> — where a symbolic link points</li>
 </ul>
+<p>Total Commander picks up a default view for the plugin on its own: size, date, permissions, owner and group. Other combinations are set up under <i>Configuration → Custom columns</i>, file system <i>Secure FTP</i>. The values come from the directory listing in SFTP and SCP mode; PHP Agent and LAN Pair leave the columns empty.</p>
+<p>To change permissions, use <b>Files → Change Attributes</b> (Alt+A) on one or more remote files. Over SFTP the mode is set through the protocol, which also works on servers without a shell; in SCP mode the plugin runs <code>chmod</code>. Owner and group cannot be changed from the plugin.</p>
 
 <h3>Character Encoding</h3>
 <ul>

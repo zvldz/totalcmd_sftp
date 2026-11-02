@@ -12,6 +12,12 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 
 ### Features
 
+- **Owner, group and permissions in the file list.** The plugin now
+  offers custom columns — owner, group, permissions (`rwxr-xr-x`), octal
+  (`0755`) and link target — and a default view with the first three next
+  to size and date, which Total Commander picks up on its own. Values come
+  from the directory listing in both SFTP and SCP mode; a server that
+  sends no names shows numeric ids.
 - **Imported sessions that go through a jump host now come with it.** A
   WinSCP tunnel, a SecureCRT session firewalled through another session,
   and a PuTTY session using "SSH to proxy and use port forwarding" import
@@ -27,6 +33,11 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   and sizes, so every row had an empty date. Dates now come from `ls`
   run in English and UTC, whatever the server's locale and time zone, and
   the permissions reach Total Commander as they do in SFTP mode.
+- **Changing permissions with Alt+A works.** The command went out with
+  the path in Windows form, failed on the server, and was reported as
+  done. Over SFTP the mode is now set through the protocol, so it also
+  works on servers without a shell; SCP mode runs `chmod` and reports its
+  failure.
 - **A jump host with no saved password now asks for one** instead of
   failing the login without a word.
 - **An idle connection is no longer dropped by a router or firewall in

@@ -960,6 +960,112 @@ int WINAPI FsGetBackgroundFlags(void)
     });
 }
 
+// ---------------------------------------------------------------------------
+// Custom columns. Values come from what the last listing of the directory
+// said (listingExtras); nothing here touches the server.
+// ---------------------------------------------------------------------------
+namespace {
+
+enum ContentField { cfOwner, cfGroup, cfPermissions, cfOctal, cfLinkTarget, cfCount };
+
+constexpr const char* kContentFieldNames[cfCount] = {
+    "owner", "group", "permissions", "octal", "link target" };
+
+// "rwxr-xr-x" with s/S and t/T for the special bits, as `ls` writes it.
+std::wstring PermissionString(DWORD mode)
+{
+    std::wstring s = L"---------";
+    static constexpr DWORD kBits[9] = { 0400, 0200, 0100, 040, 020, 010, 04, 02, 01 };
+    static constexpr wchar_t kChars[9] = { L'r', L'w', L'x', L'r', L'w', L'x', L'r', L'w', L'x' };
+    for (int i = 0; i < 9; ++i)
+        if (mode & kBits[i])
+            s[i] = kChars[i];
+    if (mode & 04000) s[2] = (mode & 0100) ? L's' : L'S';
+    if (mode & 02000) s[5] = (mode & 010)  ? L's' : L'S';
+    if (mode & 01000) s[8] = (mode & 01)   ? L't' : L'T';
+    return s;
+}
+
+}  // namespace
+
+int WINAPI FsContentGetSupportedField(int FieldIndex, char* FieldName, char* Units, int maxlen)
+{
+    sftp::DllExceptionBarrier _barrier;
+    return sftp::dll_invoke(_barrier, ft_nomorefields, [&]() -> int {
+        if (FieldIndex < 0 || FieldIndex >= cfCount)
+            return ft_nomorefields;
+        strlcpy(FieldName, kContentFieldNames[FieldIndex], maxlen - 1);
+        Units[0] = 0;
+        return ft_string;
+    });
+}
+
+int WINAPI FsContentGetValueW(WCHAR* FileName, int FieldIndex, int UnitIndex, void* FieldValue, int maxlen, int flags)
+{
+    sftp::DllExceptionBarrier _barrier;
+    return sftp::dll_invoke(_barrier, ft_fileerror, [&]() -> int {
+        if (FieldIndex < 0 || FieldIndex >= cfCount)
+            return ft_nosuchfield;
+        std::array<WCHAR, wdirtypemax> relative{};
+        pConnectSettings serverid = GetServerIdAndRelativePathFromPathW(FileName, relative.data(), relative.size() - 1);
+        const ListingExtra* extra = FindListingExtra(serverid, relative.data());
+        if (!extra)
+            return ft_fieldempty;
+
+        std::wstring value;
+        switch (FieldIndex) {
+            case cfOwner:       value = extra->owner; break;
+            case cfGroup:       value = extra->group; break;
+            case cfPermissions: if (extra->mode) value = PermissionString(extra->mode); break;
+            case cfOctal:
+                if (extra->mode) {
+                    std::array<wchar_t, 8> buf{};
+                    swprintf_s(buf.data(), buf.size(), L"%04o", extra->mode & 07777);
+                    value = buf.data();
+                }
+                break;
+            case cfLinkTarget:  value = extra->linkTarget; break;
+        }
+        if (value.empty())
+            return ft_fieldempty;
+        // maxlen is in bytes.
+        wcslcpy(static_cast<WCHAR*>(FieldValue), value.c_str(), maxlen / sizeof(WCHAR) - 1);
+        return ft_stringw;
+    });
+}
+
+int WINAPI FsContentGetValue(char* FileName, int FieldIndex, int UnitIndex, void* FieldValue, int maxlen, int flags)
+{
+    sftp::DllExceptionBarrier _barrier;
+    return sftp::dll_invoke(_barrier, ft_fileerror, [&]() -> int {
+        std::array<WCHAR, wdirtypemax> fileNameW{};
+        std::array<WCHAR, 1024> valueW{};
+        const int rc = FsContentGetValueW(awlcopy(fileNameW.data(), FileName, fileNameW.size() - 1),
+                                          FieldIndex, UnitIndex, valueW.data(),
+                                          static_cast<int>(valueW.size() * sizeof(WCHAR)), flags);
+        if (rc != ft_stringw)
+            return rc;
+        walcopy(static_cast<char*>(FieldValue), valueW.data(), maxlen - 1);
+        return ft_string;
+    });
+}
+
+int WINAPI FsContentGetSupportedFieldFlags(int FieldIndex)
+{
+    return 0;
+}
+
+// The view Total Commander offers for this file system: the usual size and
+// date next to the Unix columns.
+BOOL WINAPI FsContentGetDefaultView(char* ViewContents, char* ViewHeaders, char* ViewWidths, char* ViewOptions, int maxlen)
+{
+    strlcpy(ViewContents, "[=tc.size]\\n[=tc.writedate]\\n[=<fs>.permissions]\\n[=<fs>.owner]\\n[=<fs>.group]", maxlen - 1);
+    strlcpy(ViewHeaders, "Size\\nDate\\nPermissions\\nOwner\\nGroup", maxlen - 1);
+    strlcpy(ViewWidths, "148,23,-40,60,40,40,40", maxlen - 1);
+    strlcpy(ViewOptions, "-1|0", maxlen - 1);
+    return TRUE;
+}
+
 int WINAPI FsServerSupportsChecksumsW(LPCWSTR RemoteName)
 {
     sftp::DllExceptionBarrier _barrier;

@@ -8,6 +8,7 @@
 
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include "ServerRegistry.h"
 #include "CoreUtils.h"
 #include "ISshBackend.h"
@@ -62,6 +63,19 @@ struct scp_opendir_data {
     int TempPathUniqueValue;
     HANDLE tempfile;
 };
+
+// What a listing says about an entry beyond WIN32_FIND_DATA, served to Total
+// Commander's custom columns. The mode is kept as a number and formatted on
+// request, since a column call gets the path and nothing else.
+struct ListingExtra {
+    std::wstring owner;
+    std::wstring group;
+    std::wstring linkTarget;
+    DWORD        mode = 0;   // st_mode, 0 when the listing gave none
+};
+
+// Entry name → its extras, for one directory.
+using DirectoryExtras = std::unordered_map<std::wstring, ListingExtra>;
 
 struct tConnectSettings {
     std::string DisplayName;
@@ -187,6 +201,11 @@ struct tConnectSettings {
     WCHAR current_sourceW[wdirtypemax];
     WCHAR current_targetW[wdirtypemax];
     std::unique_ptr<IUserFeedback> feedback;
+
+    // Listing extras per directory, keyed by the directory as Total Commander
+    // names it (`\etc`). A new listing replaces that directory's entry only,
+    // so the other panel showing another directory keeps its columns.
+    std::unordered_map<std::wstring, DirectoryExtras> listingExtras;
 };
 
 using pConnectSettings = tConnectSettings*;
@@ -245,6 +264,11 @@ int  SftpSetAttr(pConnectSettings ConnectSettings, LPCSTR RemoteName, int NewAtt
 int  SftpSetDateTimeW(pConnectSettings ConnectSettings, LPCWSTR RemoteName, LPFILETIME LastWriteTime);
 void SftpGetLastActivePathW(pConnectSettings ConnectSettings, LPWSTR RelativePath, size_t maxlen);
 bool SftpChmodW(pConnectSettings ConnectSettings, LPCWSTR RemoteName, LPCWSTR chmod);
+// Key of a directory in listingExtras: Total Commander's form, no trailing
+// separator except for the root.
+std::wstring ListingDirKey(std::wstring_view dir);
+// Extras the last listing gave for a path relative to the session, or null.
+const ListingExtra* FindListingExtra(pConnectSettings cs, std::wstring_view relPath);
 bool SftpLinkFolderTargetW(pConnectSettings ConnectSettings, LPWSTR RemoteName, size_t maxlen);
 int  SftpQuoteCommand2(pConnectSettings ConnectSettings, LPCSTR remotedir, LPCSTR cmd, LPSTR reply, size_t replylen,
                        DWORD idleTimeoutMs = 10000, DWORD totalTimeoutMs = 45000);

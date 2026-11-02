@@ -128,8 +128,49 @@ bool ParseLsDate(const std::string& mon, const std::string& day,
     return SystemTimeToFileTime(&st, &ft) != 0;
 }
 
+// Owner, group and link target from an `ls -l` style line, the shape of both
+// the SCP listing and SFTP's long entry. The link count has to be a number,
+// or the line is not in that shape and nothing is taken from it.
+void ExtrasFromLsLine(pConnectSettings cs, const char* line, ListingExtra& extra)
+{
+    std::vector<std::string_view> tokens;
+    const std::string_view sv(line);
+    size_t pos = 0;
+    while (tokens.size() < 4 && pos < sv.size()) {
+        pos = sv.find_first_not_of(" \t", pos);
+        if (pos == std::string_view::npos)
+            break;
+        const size_t end = (std::min)(sv.find_first_of(" \t", pos), sv.size());
+        tokens.push_back(sv.substr(pos, end - pos));
+        pos = end;
+    }
+    if (tokens.size() < 4 ||
+        tokens[1].find_first_not_of("0123456789") != std::string_view::npos)
+        return;
+
+    auto widen = [cs](std::string_view s) {
+        const std::string narrow(s);
+        std::array<WCHAR, 1024> wide{};
+        CopyStringA2W(cs, narrow.c_str(), wide.data(), wide.size());
+        return std::wstring(wide.data());
+    };
+    extra.owner = widen(tokens[2]);
+    extra.group = widen(tokens[3]);
+
+    if (tokens[0].starts_with('l')) {
+        const size_t arrow = sv.find(" -> ");
+        if (arrow != std::string_view::npos) {
+            std::string_view target = sv.substr(arrow + 4);
+            while (!target.empty() && (target.back() == '\r' || target.back() == '\n'))
+                target.remove_suffix(1);
+            extra.linkTarget = widen(target);
+        }
+    }
+}
+
 // Parse SCP listing line into WIN32_FIND_DATAW
-bool ParseScpListingLine(pConnectSettings cs, const char* line, WIN32_FIND_DATAW& outData)
+bool ParseScpListingLine(pConnectSettings cs, const char* line, WIN32_FIND_DATAW& outData,
+                         ListingExtra* extra = nullptr)
 {
     if (!cs || !line || !line[0])
         return false;
@@ -210,6 +251,11 @@ bool ParseScpListingLine(pConnectSettings cs, const char* line, WIN32_FIND_DATAW
         unsigned long long sz = _strtoui64(tokens[4].c_str(), nullptr, 10);
         fd.nFileSizeHigh = static_cast<DWORD>(sz >> 32);
         fd.nFileSizeLow = static_cast<DWORD>(sz & 0xFFFFFFFFULL);
+    }
+
+    if (extra) {
+        extra->mode = (fd.dwFileAttributes & FS_ATTR_UNIXMODE) ? fd.dwReserved0 : 0;
+        ExtrasFromLsLine(cs, lineStr.c_str(), *extra);
     }
 
     outData = fd;
@@ -362,13 +408,16 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
             }
 
             std::vector<WIN32_FIND_DATAW> entries;
+            DirectoryExtras extras;
             for (const auto& line : lines) {
                 if (line.empty() || _strnicmp(line.c_str(), "total ", 6) == 0)
                     continue;
                 WIN32_FIND_DATAW fd{};
-                if (ParseScpListingLine(cs, line.c_str(), fd)) {
+                ListingExtra extra;
+                if (ParseScpListingLine(cs, line.c_str(), fd, &extra)) {
                     if (wcscmp(fd.cFileName, L".") == 0 || wcscmp(fd.cFileName, L"..") == 0)
                         continue;
+                    extras[fd.cFileName] = std::move(extra);
                     entries.push_back(fd);
                 }
             }
@@ -420,7 +469,8 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
             scpd->listingState = std::move(state);
             *davdataptr = scpd.release();
             wcslcpy(cs->lastactivepath, remotedir, _countof(cs->lastactivepath) - 1);
-            
+            cs->listingExtras[ListingDirKey(remotedir)] = std::move(extras);
+
             return SFTP_OK;
         }
     }
@@ -490,6 +540,8 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
 
     *davdataptr = dirhandle.release();
     wcslcpy(cs->lastactivepath, remotedir, _countof(cs->lastactivepath) - 1);
+    // Refilled entry by entry as SftpFindNextFileW reads the directory.
+    cs->listingExtras[ListingDirKey(remotedir)].clear();
     return SFTP_OK;
 }
 
@@ -563,9 +615,46 @@ int SftpFindNextFileW(pConnectSettings cs, LPVOID davdataptr, LPWIN32_FIND_DATAW
             FindData->dwFileAttributes |= 0x80000000;
             FindData->dwReserved0 = file.permissions & 0xFFFF;
         }
+
+        // The long entry carries the names; a server that sends none still
+        // has the numeric ids in the attributes.
+        ListingExtra extra;
+        extra.mode = (file.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS) ? (file.permissions & 0xFFFF) : 0;
+        if (longentry[0])
+            ExtrasFromLsLine(cs, longentry.data(), extra);
+        if (extra.owner.empty() && (file.flags & LIBSSH2_SFTP_ATTR_UIDGID)) {
+            extra.owner = std::to_wstring(file.uid);
+            extra.group = std::to_wstring(file.gid);
+        }
+        cs->listingExtras[ListingDirKey(cs->lastactivepath)][FindData->cFileName] = std::move(extra);
         return SFTP_OK;
     }
     return SFTP_FAILED;
+}
+
+std::wstring ListingDirKey(std::wstring_view dir)
+{
+    std::wstring key(dir);
+    std::replace(key.begin(), key.end(), L'/', L'\\');
+    while (key.size() > 1 && key.back() == L'\\')
+        key.pop_back();
+    if (key.empty())
+        key = L"\\";
+    return key;
+}
+
+const ListingExtra* FindListingExtra(pConnectSettings cs, std::wstring_view relPath)
+{
+    if (!cs)
+        return nullptr;
+    const size_t sep = relPath.find_last_of(L"\\/");
+    if (sep == std::wstring_view::npos)
+        return nullptr;
+    const auto dir = cs->listingExtras.find(ListingDirKey(relPath.substr(0, sep)));
+    if (dir == cs->listingExtras.end())
+        return nullptr;
+    const auto it = dir->second.find(std::wstring(relPath.substr(sep + 1)));
+    return it == dir->second.end() ? nullptr : &it->second;
 }
 
 int SftpFindClose(pConnectSettings cs, LPVOID davdataptr)
@@ -962,12 +1051,43 @@ bool SftpChmodW(pConnectSettings cs, LPCWSTR RemoteName, LPCWSTR chmod)
     if (!cs || !RemoteName || !chmod || !chmod[0])
         return false;
 
+    // Total Commander sends the mode as octal digits ("755", "4755").
+    wchar_t* end = nullptr;
+    const unsigned long mode = wcstoul(chmod, &end, 8);
+    if (!end || *end != L'\0' || mode > 07777)
+        return false;
+
+    std::wstring pathW(RemoteName);
+    std::replace(pathW.begin(), pathW.end(), L'\\', L'/');
+
+    // Over SFTP the protocol sets the mode itself, which also works on a
+    // server that offers no shell. SCP mode has only the shell.
+    if (!cs->scponly && cs->sftpsession) {
+        std::string pathA(wdirtypemax, '\0');
+        CopyStringW2A(cs, pathW.c_str(), pathA.data(), pathA.size());
+        pathA.resize(strlen(pathA.c_str()));
+        LIBSSH2_SFTP_ATTRIBUTES attrs{};
+        attrs.flags       = LIBSSH2_SFTP_ATTR_PERMISSIONS;
+        attrs.permissions = mode;
+        int rc = 0;
+        do {
+            rc = cs->sftpsession->setstat(pathA.c_str(), &attrs);
+            if (rc == LIBSSH2_ERROR_EAGAIN)
+                IsSocketReadable(cs->sock);
+        } while (rc == LIBSSH2_ERROR_EAGAIN);
+        SFTP_LOG("CHMOD", "setstat '%s' %lo rc=%d", pathA.c_str(), mode, rc);
+        return rc == 0;
+    }
+
     std::wstring cmd = L"chmod ";
     cmd += chmod;
     cmd += L" '";
-    cmd += string_util::ShellQuoteSingleW(RemoteName);
+    cmd += string_util::ShellQuoteSingleW(pathW);
     cmd += L"'";
-    return SftpQuoteCommand2W(cs, nullptr, cmd.c_str(), nullptr, 0) >= 0;
+    // The helper returns chmod's own exit status: only zero is success.
+    const int rc = SftpQuoteCommand2W(cs, nullptr, cmd.c_str(), nullptr, 0);
+    SFTP_LOG("CHMOD", "shell chmod %ls rc=%d", chmod, rc);
+    return rc == 0;
 }
 
 bool SftpLinkFolderTargetW(pConnectSettings cs, LPWSTR RemoteName, size_t maxlen)
