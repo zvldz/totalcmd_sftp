@@ -23,6 +23,10 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 
 ### Fixes
 
+- **SCP mode shows dates and permissions.** The listing kept only names
+  and sizes, so every row had an empty date. Dates now come from `ls`
+  run in English and UTC, whatever the server's locale and time zone, and
+  the permissions reach Total Commander as they do in SFTP mode.
 - **A jump host with no saved password now asks for one** instead of
   failing the login without a word.
 - **An idle connection is no longer dropped by a router or firewall in

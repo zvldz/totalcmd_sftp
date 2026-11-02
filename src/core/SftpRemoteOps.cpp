@@ -51,6 +51,83 @@ ScpData* AsScpData(LPVOID data) noexcept
     return (scpd->magic == kScpDataMagic) ? scpd : nullptr;
 }
 
+// Full st_mode from the `drwxr-xr-x` column: file type plus permission bits,
+// with s/S and t/T as setuid/setgid/sticky (upper case: execute not set).
+DWORD ParseLsMode(const std::string& perms)
+{
+    if (perms.size() < 10)
+        return 0;
+    DWORD mode = 0;
+    switch (perms[0]) {
+        case 'd': mode = LIBSSH2_SFTP_S_IFDIR;  break;
+        case 'l': mode = LIBSSH2_SFTP_S_IFLNK;  break;
+        case 'b': mode = LIBSSH2_SFTP_S_IFBLK;  break;
+        case 'c': mode = LIBSSH2_SFTP_S_IFCHR;  break;
+        case 'p': mode = LIBSSH2_SFTP_S_IFIFO;  break;
+        case 's': mode = LIBSSH2_SFTP_S_IFSOCK; break;
+        default:  mode = LIBSSH2_SFTP_S_IFREG;  break;
+    }
+    static constexpr DWORD kBits[9] = { 0400, 0200, 0100, 040, 020, 010, 04, 02, 01 };
+    for (int i = 0; i < 9; ++i) {
+        const char c = perms[1 + i];
+        if (c != '-' && c != 'S' && c != 'T')
+            mode |= kBits[i];
+    }
+    if (perms[3] == 's' || perms[3] == 'S') mode |= 04000;
+    if (perms[6] == 's' || perms[6] == 'S') mode |= 02000;
+    if (perms[9] == 't' || perms[9] == 'T') mode |= 01000;
+    return mode;
+}
+
+// Date columns of `ls -la` run with LC_TIME=C and TZ=UTC0: "Mon DD HH:MM" for
+// recent files, "Mon DD YYYY" for older ones. A time without a year that
+// lands more than a day ahead belongs to last year.
+bool ParseLsDate(const std::string& mon, const std::string& day,
+                 const std::string& timeOrYear, FILETIME& ft)
+{
+    static constexpr const char* kMonths[12] = {
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
+    WORD month = 0;
+    for (WORD i = 0; i < 12; ++i) {
+        if (_stricmp(mon.c_str(), kMonths[i]) == 0) {
+            month = i + 1;
+            break;
+        }
+    }
+    const int d = atoi(day.c_str());
+    if (month == 0 || d < 1 || d > 31)
+        return false;
+
+    SYSTEMTIME st{};
+    st.wMonth = month;
+    st.wDay   = static_cast<WORD>(d);
+    int hh = 0, mm = 0;
+    if (sscanf_s(timeOrYear.c_str(), "%d:%d", &hh, &mm) == 2) {
+        if (hh < 0 || hh > 23 || mm < 0 || mm > 59)
+            return false;
+        SYSTEMTIME now{};
+        GetSystemTime(&now);
+        st.wYear   = now.wYear;
+        st.wHour   = static_cast<WORD>(hh);
+        st.wMinute = static_cast<WORD>(mm);
+        FILETIME nowFt{};
+        SystemTimeToFileTime(&now, &nowFt);
+        auto ticks = [](const FILETIME& f) {
+            return (static_cast<ULONGLONG>(f.dwHighDateTime) << 32) | f.dwLowDateTime;
+        };
+        constexpr ULONGLONG kOneDay100ns = 24ULL * 60 * 60 * 10000000;
+        if (SystemTimeToFileTime(&st, &ft) && ticks(ft) > ticks(nowFt) + kOneDay100ns)
+            --st.wYear;
+    } else {
+        const int year = atoi(timeOrYear.c_str());
+        if (year < 1601 || year > 9999)
+            return false;
+        st.wYear = static_cast<WORD>(year);
+    }
+    return SystemTimeToFileTime(&st, &ft) != 0;
+}
+
 // Parse SCP listing line into WIN32_FIND_DATAW
 bool ParseScpListingLine(pConnectSettings cs, const char* line, WIN32_FIND_DATAW& outData)
 {
@@ -122,12 +199,14 @@ bool ParseScpListingLine(pConnectSettings cs, const char* line, WIN32_FIND_DATAW
         return false;
 
     fd.dwFileAttributes = (c0 == 'd') ? FILE_ATTRIBUTE_DIRECTORY : 0;
-    if (c0 == 'l') {
+    if (const DWORD mode = ParseLsMode(tokens[0])) {
         fd.dwFileAttributes |= FS_ATTR_UNIXMODE;
-        fd.dwReserved0 = LIBSSH2_SFTP_S_IFLNK | 0555;
+        fd.dwReserved0 = mode;
     }
+    // A date that does not parse leaves the field empty; the entry stays.
+    ParseLsDate(tokens[5], tokens[6], tokens[7], fd.ftLastWriteTime);
 
-    if (fd.dwFileAttributes == 0 && tokens.size() > 4) {
+    if (c0 != 'd' && c0 != 'l' && tokens.size() > 4) {
         unsigned long long sz = _strtoui64(tokens[4].c_str(), nullptr, 10);
         fd.nFileSizeHigh = static_cast<DWORD>(sz >> 32);
         fd.nFileSizeLow = static_cast<DWORD>(sz & 0xFFFFFFFFULL);
@@ -227,7 +306,10 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
             // echoes the command back, and an echo long enough to wrap arrives
             // as two lines, the second of which would look like the end marker
             // and cut the reading short before any output was seen.
-            std::string command = "echo \"" + beginMarker + "\"; ls -la '" +
+            // `env` sets the locale and zone in any shell, csh included, and
+            // runs the real `ls` past any alias: English month names, times
+            // in UTC.
+            std::string command = "echo \"" + beginMarker + "\"; env TZ=UTC0 LC_TIME=C ls -la '" +
                                   string_util::ShellQuoteSingle(listTarget) +
                                   "'; echo \"" + endMarker + "\":$?\n";
             SFTP_LOG("FIND", "SCP listing '%s'", listTarget.c_str());
