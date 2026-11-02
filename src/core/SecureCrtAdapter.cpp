@@ -109,10 +109,9 @@ std::string ResolveSessionPath(const std::string& channelRoot,
     return PathExistsW(ToWide(direct)) ? direct : std::string{};
 }
 
-// Copy the connect fields SecureCRT exposes into `out`. Password, proxy and
-// jump-host details are left out: the password is prompted for on first
-// connect, but nothing prompts for the other two — a session that reached its
-// host through a firewall record imports without it and connects direct.
+// Copy the connect fields SecureCRT exposes into `out`. The password is left
+// out and prompted for on first connect; the route to the host is read
+// separately, from "Firewall Name".
 void FillConnectSettings(const VanDykeFile& file, tConnectSettings* out)
 {
     if (!out) return;
@@ -168,6 +167,38 @@ void DescribeFirewallRecord(const std::string& sessionsRoot,
     DescribeProxy(proxyType, GetString(record, "Firewall Address"),
                   GetDWord(record, "Firewall Port", 0),
                   withUser ? GetString(record, "Firewall User") : std::string(), dep);
+}
+
+// A session tunnelled through another SecureCRT session gets that session as
+// its jump host. Only a direct SSH2 session qualifies: the plugin's jump host
+// takes one hop and connects to it without a proxy, so a session that has a
+// firewall of its own cannot be reproduced. Returns false to refuse.
+bool FillJumpFromSession(const std::string& channelRoot,
+                         const std::string& name,
+                         tConnectSettings* out)
+{
+    const std::string path = ResolveSessionPath(channelRoot, name);
+    if (path.empty())
+        return false;
+    const VanDykeFile jump = ParseVanDykeFile(path);
+    if (jump.empty() || _stricmp(GetString(jump, "Protocol Name").c_str(), "SSH2") != 0)
+        return false;
+    const std::string firewall = GetString(jump, "Firewall Name");
+    if (!firewall.empty() && _stricmp(firewall.c_str(), "None") != 0)
+        return false;
+    const std::string host = GetString(jump, "Hostname");
+    if (host.empty())
+        return false;
+
+    out->use_jump_host = true;
+    out->jump_host     = host;
+    const uint32_t port = GetDWord(jump, "[SSH2] Port", 22);
+    if (port != 0 && port <= 0xFFFF)
+        out->jump_port = static_cast<unsigned short>(port);
+    out->jump_user = GetString(jump, "Username");
+    AssignImportedKeyFile(ExpandEnvA(GetString(jump, "Identity Filename V2")),
+                          out->jump_privkeyfile, out->jump_pubkeyfile);
+    return true;
 }
 
 }  // namespace
@@ -236,18 +267,21 @@ bool SecureCrtAdapter::LoadSettings(const ExternalSessionEntry& entry,
     // directly. It holds "None" when there is nothing in the way, and
     // otherwise one of two forms: the name of a record under Firewalls\,
     // which carries the address and credentials, or "Session:<path>" naming
-    // another SecureCRT session to tunnel through. A record of a proxy kind
-    // the plugin speaks is described so the session can be copied with it;
-    // anything else — a session to tunnel through, another firewall type, a
-    // record that is missing — refuses instead of connecting straight to the
-    // target.
-    if (dependency) {
-        const std::string firewall = GetString(file, "Firewall Name");
-        if (!firewall.empty() && _stricmp(firewall.c_str(), "None") != 0) {
-            constexpr std::string_view kSessionForm = "Session:";
-            const bool viaSession = firewall.starts_with(kSessionForm);
+    // another SecureCRT session to tunnel through. A session to tunnel through
+    // becomes the jump host; a record of a proxy kind the plugin speaks is
+    // described so the session can be copied with it. Anything else — a
+    // tunnel session we cannot reproduce, another firewall type, a record
+    // that is missing — refuses instead of connecting straight to the target.
+    const std::string firewall = GetString(file, "Firewall Name");
+    if (!firewall.empty() && _stricmp(firewall.c_str(), "None") != 0) {
+        constexpr std::string_view kSessionForm = "Session:";
+        const bool viaSession = firewall.starts_with(kSessionForm);
+        const std::string name = viaSession ? firewall.substr(kSessionForm.size()) : firewall;
+        if (viaSession && FillJumpFromSession(channelRoot, name, out))
+            return true;
+        if (dependency) {
             dependency->kind   = SessionDependency::Kind::Bastion;
-            dependency->detail = viaSession ? firewall.substr(kSessionForm.size()) : firewall;
+            dependency->detail = name;
             if (!viaSession)
                 DescribeFirewallRecord(channelRoot, firewall, *dependency);
         }

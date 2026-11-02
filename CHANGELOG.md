@@ -10,8 +10,21 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 
 ## 10.0.2.2 — unreleased
 
+### Features
+
+- **Imported sessions that go through a jump host now come with it.** A
+  WinSCP tunnel, a SecureCRT session firewalled through another session,
+  and a PuTTY session using "SSH to proxy and use port forwarding" import
+  with the jump host filled in — connect straight from `[Imports]` or copy
+  with F5. The jump host's password is asked for on connect, as is the
+  target's. Still refused: a jump host that itself goes through a proxy or
+  another jump host, a WinSCP tunnel combined with a proxy, and
+  command-driven proxies (Telnet, local command).
+
 ### Fixes
 
+- **A jump host with no saved password now asks for one** instead of
+  failing the login without a word.
 - **An idle connection is no longer dropped by a router or firewall in
   between.** The plugin turns on TCP keepalive for the server socket and
   the jump host socket, so the link stays open after a minute of silence.

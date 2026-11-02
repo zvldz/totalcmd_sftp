@@ -232,6 +232,10 @@ bool WinScpAdapter::LoadSettings(const ExternalSessionEntry& entry,
     std::string host, userName, keyFile;
     DWORD port = 0, useAgent = 0, fsProtoRaw = 0;
     bool  hasPort = false, hasFsProto = false;
+    // WinSCP's tunnel is an SSH session in front of the host, which is what
+    // the plugin's jump host is.
+    std::string tunnelHost, tunnelUser, tunnelKey;
+    DWORD tunnel = 0, tunnelPort = 0, proxyMethod = 0;
 
     if (entry.sourceOrigin == "standard") {
         const std::string subKey =
@@ -262,27 +266,27 @@ bool WinScpAdapter::LoadSettings(const ExternalSessionEntry& entry,
 
         // WinSCP omits every key sitting at its default, so the presence of a
         // non-zero value is the whole signal: `Tunnel` for an SSH session in
-        // front of the host, `ProxyMethod` for a proxy. Either way the route
-        // is not one the copied fields describe.
-        DWORD tunnel = 0, proxyMethod = 0;
-        if (dependency) {
-            if (ReadRegDword(key, "Tunnel", tunnel) && tunnel != 0) {
-                std::string tunnelHost;
-                ReadRegString(key, "TunnelHostName", tunnelHost);
-                dependency->kind   = SessionDependency::Kind::Tunnel;
-                dependency->detail = PuttyUrlDecode(tunnelHost);
-            } else if (ReadRegDword(key, "ProxyMethod", proxyMethod) && proxyMethod != 0) {
-                std::string proxyHost, proxyUser;
-                DWORD proxyPort = 0;
-                ReadRegString(key, "ProxyHost", proxyHost);
-                ReadRegDword(key, "ProxyPort", proxyPort);
-                ReadRegString(key, "ProxyUsername", proxyUser);
-                proxyHost = PuttyUrlDecode(proxyHost);
-                dependency->kind   = SessionDependency::Kind::Proxy;
-                dependency->detail = proxyHost;
-                DescribePuttyProxy(proxyMethod, proxyHost, proxyPort,
-                                   PuttyUrlDecode(proxyUser), *dependency);
-            }
+        // front of the host, `ProxyMethod` for a proxy.
+        ReadRegDword(key, "Tunnel", tunnel);
+        ReadRegDword(key, "ProxyMethod", proxyMethod);
+        if (tunnel != 0) {
+            ReadRegString(key, "TunnelHostName", tunnelHost);
+            ReadRegDword(key, "TunnelPortNumber", tunnelPort);
+            ReadRegString(key, "TunnelUserName", tunnelUser);
+            ReadRegString(key, "TunnelPublicKeyFile", tunnelKey);
+        }
+        // A tunnel is dealt with below, together with any proxy beside it.
+        if (dependency && tunnel == 0 && proxyMethod != 0) {
+            std::string proxyHost, proxyUser;
+            DWORD proxyPort = 0;
+            ReadRegString(key, "ProxyHost", proxyHost);
+            ReadRegDword(key, "ProxyPort", proxyPort);
+            ReadRegString(key, "ProxyUsername", proxyUser);
+            proxyHost = PuttyUrlDecode(proxyHost);
+            dependency->kind   = SessionDependency::Kind::Proxy;
+            dependency->detail = proxyHost;
+            DescribePuttyProxy(proxyMethod, proxyHost, proxyPort,
+                               PuttyUrlDecode(proxyUser), *dependency);
         }
         RegCloseKey(key);
     } else {
@@ -309,24 +313,28 @@ bool WinScpAdapter::LoadSettings(const ExternalSessionEntry& entry,
         const int fsRaw = ReadIniDword(entry.sourceOrigin, section, "FSProtocol");
         if (fsRaw >= 0) { fsProtoRaw = static_cast<DWORD>(fsRaw); hasFsProto = true; }
 
-        if (dependency) {
-            if (ReadIniDword(entry.sourceOrigin, section, "Tunnel") > 0) {
-                dependency->kind   = SessionDependency::Kind::Tunnel;
-                dependency->detail = PuttyUrlDecode(
-                    ReadIniString(entry.sourceOrigin, section, "TunnelHostName"));
-            } else if (const int method = ReadIniDword(entry.sourceOrigin, section, "ProxyMethod");
-                       method > 0) {
-                const std::string proxyHost = PuttyUrlDecode(
-                    ReadIniString(entry.sourceOrigin, section, "ProxyHost"));
-                const int proxyPort = ReadIniDword(entry.sourceOrigin, section, "ProxyPort");
-                dependency->kind   = SessionDependency::Kind::Proxy;
-                dependency->detail = proxyHost;
-                DescribePuttyProxy(static_cast<DWORD>(method), proxyHost,
-                                   proxyPort > 0 ? static_cast<DWORD>(proxyPort) : 0,
-                                   PuttyUrlDecode(ReadIniString(entry.sourceOrigin, section,
-                                                                "ProxyUsername")),
-                                   *dependency);
-            }
+        if (ReadIniDword(entry.sourceOrigin, section, "Tunnel") > 0) {
+            tunnel     = 1;
+            tunnelHost = ReadIniString(entry.sourceOrigin, section, "TunnelHostName");
+            tunnelUser = ReadIniString(entry.sourceOrigin, section, "TunnelUserName");
+            tunnelKey  = ReadIniString(entry.sourceOrigin, section, "TunnelPublicKeyFile");
+            const int tp = ReadIniDword(entry.sourceOrigin, section, "TunnelPortNumber");
+            if (tp > 0) tunnelPort = static_cast<DWORD>(tp);
+        }
+        const int method = ReadIniDword(entry.sourceOrigin, section, "ProxyMethod");
+        if (method > 0) proxyMethod = static_cast<DWORD>(method);
+
+        if (dependency && tunnel == 0 && method > 0) {
+            const std::string proxyHost = PuttyUrlDecode(
+                ReadIniString(entry.sourceOrigin, section, "ProxyHost"));
+            const int proxyPort = ReadIniDword(entry.sourceOrigin, section, "ProxyPort");
+            dependency->kind   = SessionDependency::Kind::Proxy;
+            dependency->detail = proxyHost;
+            DescribePuttyProxy(static_cast<DWORD>(method), proxyHost,
+                               proxyPort > 0 ? static_cast<DWORD>(proxyPort) : 0,
+                               PuttyUrlDecode(ReadIniString(entry.sourceOrigin, section,
+                                                            "ProxyUsername")),
+                               *dependency);
         }
     }
 
@@ -363,6 +371,29 @@ bool WinScpAdapter::LoadSettings(const ExternalSessionEntry& entry,
 
     if (!keyFile.empty())
         AssignImportedKeyFile(keyFile, out->privkeyfile, out->pubkeyfile);
+
+    // The tunnel becomes the session's jump host. Its password stays behind
+    // and is asked for on connect. Refused instead when there is no host to
+    // go through, or when a proxy is set as well: the plugin's jump host
+    // connects directly, so the proxy would be skipped.
+    if (tunnel != 0) {
+        tunnelHost = PuttyUrlDecode(tunnelHost);
+        if (tunnelHost.empty() || proxyMethod != 0) {
+            if (dependency) {
+                dependency->kind   = SessionDependency::Kind::Tunnel;
+                dependency->detail = tunnelHost;
+            }
+        } else {
+            out->use_jump_host = true;
+            out->jump_host     = tunnelHost;
+            if (tunnelPort > 0 && tunnelPort <= 0xFFFF)
+                out->jump_port = static_cast<unsigned short>(tunnelPort);
+            out->jump_user = PuttyUrlDecode(tunnelUser);
+            tunnelKey = ExpandEnvA(PuttyUrlDecode(tunnelKey));
+            if (!tunnelKey.empty())
+                AssignImportedKeyFile(tunnelKey, out->jump_privkeyfile, out->jump_pubkeyfile);
+        }
+    }
 
     return true;
 }

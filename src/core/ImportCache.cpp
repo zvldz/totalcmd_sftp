@@ -166,6 +166,32 @@ void WriteSessionSection(const std::string& section,
         WritePrivateProfileStringA(section.c_str(), "largefilesupport",
                                     s->scpserver64bit == 1 ? "1" : "0",
                                     iniPath.c_str());
+
+    // Jump host, under the same keys a saved session uses, so connecting,
+    // copying and exporting the row all take it along. Written only with a
+    // host to go through; the port only when it is not the default 22.
+    if (s->use_jump_host && !s->jump_host.empty()) {
+        WritePrivateProfileStringA(section.c_str(), "usejumphost",
+                                    "1", iniPath.c_str());
+        WritePrivateProfileStringA(section.c_str(), "jumphost",
+                                    s->jump_host.c_str(), iniPath.c_str());
+        if (s->jump_port != 0 && s->jump_port != 22)
+            WritePrivateProfileStringA(section.c_str(), "jumpport",
+                                        std::to_string(s->jump_port).c_str(),
+                                        iniPath.c_str());
+        if (!s->jump_user.empty())
+            WritePrivateProfileStringA(section.c_str(), "jumpuser",
+                                        s->jump_user.c_str(), iniPath.c_str());
+        if (!s->jump_pubkeyfile.empty())
+            WritePrivateProfileStringA(section.c_str(), "jumppubkeyfile",
+                                        s->jump_pubkeyfile.c_str(), iniPath.c_str());
+        if (!s->jump_privkeyfile.empty())
+            WritePrivateProfileStringA(section.c_str(), "jumpprivkeyfile",
+                                        s->jump_privkeyfile.c_str(), iniPath.c_str());
+        if (s->jump_useagent)
+            WritePrivateProfileStringA(section.c_str(), "jumpuseagent",
+                                        "1", iniPath.c_str());
+    }
 }
 
 }  // namespace

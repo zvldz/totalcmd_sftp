@@ -449,6 +449,19 @@ static bool AuthJumpHost(
         ShowStatusId(IDS_LOG_JUMP_PUBKEY_FAIL, nullptr, true);
     }
 
+    // No stored password, but the server takes one: ask, as for the target.
+    // The answer is kept for the reconnects of this connection and never saved.
+    if ((canPassword || canKbd) && jump.password.empty()) {
+        if (cs->jump_entered_password.empty()) {
+            std::array<char, 256> buf{};
+            const std::string title = std::format("Jump host password for {}@{}", jump.user, jump.host);
+            ShowStatusId(IDS_LOG_REQUEST_PASS, nullptr, true);
+            if (RequestProc(PluginNumber, RT_Password, title.c_str(), nullptr, buf.data(), buf.size() - 1))
+                cs->jump_entered_password = buf.data();
+        }
+        jump.password = cs->jump_entered_password;
+    }
+
     // --- 3. Password auth ---
     if (canPassword && !jump.password.empty()) {
         ShowStatusId(IDS_LOG_JUMP_PASS_TRY, nullptr, true);

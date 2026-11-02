@@ -167,6 +167,9 @@ struct tConnectSettings {
     // here rather than in JumpHostSettings because that struct is rebuilt on
     // every connect, which would make each reconnect prompt again.
     std::string    jump_key_passphrase;
+    // Jump host password typed at the prompt when none is stored. Runtime
+    // only, for the same reason as the passphrase above.
+    std::string    jump_entered_password;
     // A refused jump host is reported with a dialog once per connection and
     // by status line after that: the reconnects that run mid-transfer would
     // otherwise stack a modal per attempt, on whatever thread they happen on.

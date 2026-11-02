@@ -208,6 +208,55 @@ void ParseRegFile(const std::string& utf8, RegFileParsed& out)
     }
 }
 
+// PuTTY's SSH proxy (ProxyMethod 6, "SSH to proxy and use port forwarding")
+// is a jump host. Its ProxyHost may name a saved session, in which case that
+// session describes the jump; the fields below are read from it, from the
+// same channel as the session going through it.
+struct JumpSessionFields {
+    std::string host, user, keyFile;
+    DWORD       port = 0, proxyMethod = 0;
+};
+
+bool ReadJumpSession(const std::string& sourceOrigin,
+                     const std::string& name,
+                     JumpSessionFields& f)
+{
+    const std::string subKeyName = PuttyUrlEncode(name);
+    if (sourceOrigin == "standard") {
+        const std::string subKey = std::string(kPuttySessionsRoot) + "\\" + subKeyName;
+        HKEY key = nullptr;
+        if (RegOpenKeyExA(HKEY_CURRENT_USER, subKey.c_str(), 0, KEY_READ, &key) != ERROR_SUCCESS)
+            return false;
+        ReadRegString(key, "HostName", f.host);
+        ReadRegDword(key, "PortNumber", f.port);
+        ReadRegString(key, "UserName", f.user);
+        ReadRegString(key, "PublicKeyFile", f.keyFile);
+        ReadRegDword(key, "ProxyMethod", f.proxyMethod);
+        RegCloseKey(key);
+    } else {
+        std::string text;
+        if (!ReadRegFileAsUtf8(sourceOrigin, text))
+            return false;
+        RegFileParsed parsed;
+        ParseRegFile(text, parsed);
+        const std::string prefix = subKeyName + "::";
+        if (auto it = parsed.strings.find(prefix + "HostName"); it != parsed.strings.end())
+            f.host = it->second;
+        if (auto it = parsed.dwords.find(prefix + "PortNumber"); it != parsed.dwords.end())
+            f.port = it->second;
+        if (auto it = parsed.strings.find(prefix + "UserName"); it != parsed.strings.end())
+            f.user = it->second;
+        if (auto it = parsed.strings.find(prefix + "PublicKeyFile"); it != parsed.strings.end())
+            f.keyFile = it->second;
+        if (auto it = parsed.dwords.find(prefix + "ProxyMethod"); it != parsed.dwords.end())
+            f.proxyMethod = it->second;
+    }
+    f.host    = PuttyUrlDecode(f.host);
+    f.user    = PuttyUrlDecode(f.user);
+    f.keyFile = ExpandEnvA(PuttyUrlDecode(f.keyFile));
+    return !f.host.empty();
+}
+
 }  // namespace
 
 bool PuttyAdapter::DetectStandard() const noexcept
@@ -344,9 +393,11 @@ bool PuttyAdapter::LoadSettings(const ExternalSessionEntry& entry,
         ReadRegString(key, "LineCodePage", lineCodePage);
         hasEnterSendsCrLf = ReadRegDword(key, "EnterSendsCrLf", enterSendsCrLf);
         hasProxyMethod = ReadRegDword(key, "ProxyMethod", proxyMethod);
-        ReadRegString(key, "ProxyHost", proxyHost);
+        if (ReadRegString(key, "ProxyHost", proxyHost))
+            proxyHost = PuttyUrlDecode(proxyHost);
         ReadRegDword(key, "ProxyPort", proxyPort);
-        ReadRegString(key, "ProxyUsername", proxyUser);
+        if (ReadRegString(key, "ProxyUsername", proxyUser))
+            proxyUser = PuttyUrlDecode(proxyUser);
         RegCloseKey(key);
     } else {
         // Custom channel: entry.sourceOrigin is the literal path to a
@@ -401,11 +452,39 @@ bool PuttyAdapter::LoadSettings(const ExternalSessionEntry& entry,
         proxyUser = PuttyUrlDecode(proxyUser);
     }
 
-    // Anything but method zero means the session does not reach its host
+    // Method 6 is an SSH session in front of the host, which becomes the
+    // jump host. A saved session named as the proxy host describes it, and
+    // qualifies only when it connects directly: the plugin's jump host takes
+    // one hop, with no proxy before it. A plain address carries no key; the
+    // password is asked for on connect.
+    constexpr DWORD kProxySshForward = 6;
+    bool viaJump = false;
+    if (hasProxyMethod && proxyMethod == kProxySshForward && !proxyHost.empty()) {
+        JumpSessionFields saved;
+        if (ReadJumpSession(entry.sourceOrigin, proxyHost, saved)) {
+            if (saved.proxyMethod == 0) {
+                out->jump_host = saved.host;
+                if (saved.port > 0 && saved.port <= 0xFFFF)
+                    out->jump_port = static_cast<unsigned short>(saved.port);
+                out->jump_user = saved.user;
+                AssignImportedKeyFile(saved.keyFile, out->jump_privkeyfile, out->jump_pubkeyfile);
+                viaJump = true;
+            }
+        } else {
+            out->jump_host = proxyHost;
+            if (proxyPort > 0 && proxyPort <= 0xFFFF)
+                out->jump_port = static_cast<unsigned short>(proxyPort);
+            out->jump_user = proxyUser;
+            viaJump = true;
+        }
+        out->use_jump_host = viaJump;
+    }
+
+    // Any other method but zero means the session does not reach its host
     // directly, so it refuses rather than connect past the proxy. A method
     // the plugin speaks also carries the proxy itself, which lets F5 bring
     // it across instead.
-    if (dependency && hasProxyMethod && proxyMethod != 0) {
+    if (dependency && hasProxyMethod && proxyMethod != 0 && !viaJump) {
         dependency->kind   = SessionDependency::Kind::Proxy;
         dependency->detail = proxyHost;
         DescribePuttyProxy(proxyMethod, proxyHost, proxyPort, proxyUser, *dependency);
