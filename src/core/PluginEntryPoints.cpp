@@ -971,21 +971,6 @@ enum ContentField { cfOwner, cfGroup, cfPermissions, cfOctal, cfLinkTarget, cfCo
 constexpr const char* kContentFieldNames[cfCount] = {
     "owner", "group", "permissions", "octal", "link target" };
 
-// "rwxr-xr-x" with s/S and t/T for the special bits, as `ls` writes it.
-std::wstring PermissionString(DWORD mode)
-{
-    std::wstring s = L"---------";
-    static constexpr DWORD kBits[9] = { 0400, 0200, 0100, 040, 020, 010, 04, 02, 01 };
-    static constexpr wchar_t kChars[9] = { L'r', L'w', L'x', L'r', L'w', L'x', L'r', L'w', L'x' };
-    for (int i = 0; i < 9; ++i)
-        if (mode & kBits[i])
-            s[i] = kChars[i];
-    if (mode & 04000) s[2] = (mode & 0100) ? L's' : L'S';
-    if (mode & 02000) s[5] = (mode & 010)  ? L's' : L'S';
-    if (mode & 01000) s[8] = (mode & 01)   ? L't' : L'T';
-    return s;
-}
-
 }  // namespace
 
 int WINAPI FsContentGetSupportedField(int FieldIndex, char* FieldName, char* Units, int maxlen)
@@ -1016,7 +1001,7 @@ int WINAPI FsContentGetValueW(WCHAR* FileName, int FieldIndex, int UnitIndex, vo
         switch (FieldIndex) {
             case cfOwner:       value = extra->owner; break;
             case cfGroup:       value = extra->group; break;
-            case cfPermissions: if (extra->mode) value = PermissionString(extra->mode); break;
+            case cfPermissions: if (extra->mode) value = FormatPermissions(extra->mode); break;
             case cfOctal:
                 if (extra->mode) {
                     std::array<wchar_t, 8> buf{};

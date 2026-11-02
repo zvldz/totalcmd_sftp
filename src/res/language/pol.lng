@@ -363,6 +363,16 @@
 12125=Źródło i cel to ten sam plik: obie sesje wskazują to samo konto na tym samym serwerze i tę samą ścieżkę. Skopiowanie pliku na samego siebie obcięłoby go, dlatego operacja została odrzucona.
 12126=Serwer nie uruchomił sesji SFTP. Jeśli udostępnia tylko powłokę — jak dropbear na kamerze lub routerze — włącz dla tej sesji „Użyj SCP do wszystkiego (bez SFTP)”.
 12127=Serwer akceptuje tylko logowanie kluczem, a ta sesja nie ma żadnego do zaoferowania. Ustaw dla sesji plik klucza prywatnego albo użyj Pageant z załadowanym kluczem.
+12128=Właściwości
+12129=Właściwości pliku
+12130=Nazwa:
+12131=Właściciel:
+12132=Grupa:
+12133=Uprawnienia:
+12134=Rozmiar:
+12135=Ostatnia modyfikacja:
+12136=Odpowiedź polecenia stat na serwerze
+12137=Serwer nie wykonał polecenia stat. Dane z protokołu SFTP:
 12089=SFTP
 12090=Szukam peera LAN Pair w sieci lokalnej...
 12091={} s

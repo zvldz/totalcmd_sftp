@@ -90,28 +90,27 @@ BEGIN
     PUSHBUTTON      "Cancel",IDCANCEL,258,301,50,14
 END
 
-IDD_PROPERTIES DIALOGEX 0, 0, 249, 214
-STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+IDD_PROPERTIES DIALOGEX 0, 0, 380, 236
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Properties"
 FONT 8, "MS Shell Dlg", 0, 0, 0x1
 BEGIN
-    DEFPUSHBUTTON   "OK",IDOK,123,193,50,14
-    PUSHBUTTON      "Cancel",IDCANCEL,192,193,50,14
-    GROUPBOX        "File properties",IDC_STATIC,7,7,235,93
-    LTEXT           "Name:",IDC_STATIC,16,20,22,8
-    LTEXT           "Owner:",IDC_STATIC,16,33,24,8
-    LTEXT           "Group:",IDC_STATIC,16,46,22,8
-    LTEXT           "Permissions:",IDC_STATIC,16,59,40,8
-    LTEXT           "Size:",IDC_STATIC,16,72,16,8
-    LTEXT           "Last modified:",IDC_STATIC,16,85,44,8
-    EDITTEXT        IDC_PROP_NAME,72,20,164,12,ES_AUTOHSCROLL | ES_READONLY | NOT WS_BORDER
-    EDITTEXT        IDC_PROP_OWNER,72,33,164,12,ES_AUTOHSCROLL | ES_READONLY | NOT WS_BORDER
-    EDITTEXT        IDC_PROP_GROUP,72,46,164,12,ES_AUTOHSCROLL | ES_READONLY | NOT WS_BORDER
-    EDITTEXT        IDC_PROP_PERMISSIONS,72,59,164,12,ES_AUTOHSCROLL | ES_READONLY | NOT WS_BORDER
-    EDITTEXT        IDC_PROP_SIZE,72,72,164,12,ES_AUTOHSCROLL | ES_READONLY | NOT WS_BORDER
-    EDITTEXT        IDC_PROP_MODIFIED,72,85,164,12,ES_AUTOHSCROLL | ES_READONLY | NOT WS_BORDER
-    GROUPBOX        " Raw STAT reply",IDC_STATIC,7,103,235,88
-    EDITTEXT        IDC_PROP_RAWSTAT,15,113,220,73,ES_MULTILINE | ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_READONLY | NOT WS_BORDER
+    DEFPUSHBUTTON   "OK",IDOK,323,215,50,14
+    GROUPBOX        "File properties",IDC_PROP_GRP_FILE,7,7,366,93
+    LTEXT           "Name:",IDC_PROP_LBL_NAME,16,20,54,8
+    LTEXT           "Owner:",IDC_PROP_LBL_OWNER,16,33,54,8
+    LTEXT           "Group:",IDC_PROP_LBL_GROUP,16,46,54,8
+    LTEXT           "Permissions:",IDC_PROP_LBL_PERMS,16,59,54,8
+    LTEXT           "Size:",IDC_PROP_LBL_SIZE,16,72,54,8
+    LTEXT           "Last modified:",IDC_PROP_LBL_MODIFIED,16,85,54,8
+    EDITTEXT        IDC_PROP_NAME,72,20,295,12,ES_AUTOHSCROLL | ES_READONLY | NOT WS_BORDER
+    EDITTEXT        IDC_PROP_OWNER,72,33,295,12,ES_AUTOHSCROLL | ES_READONLY | NOT WS_BORDER
+    EDITTEXT        IDC_PROP_GROUP,72,46,295,12,ES_AUTOHSCROLL | ES_READONLY | NOT WS_BORDER
+    EDITTEXT        IDC_PROP_PERMISSIONS,72,59,295,12,ES_AUTOHSCROLL | ES_READONLY | NOT WS_BORDER
+    EDITTEXT        IDC_PROP_SIZE,72,72,295,12,ES_AUTOHSCROLL | ES_READONLY | NOT WS_BORDER
+    EDITTEXT        IDC_PROP_MODIFIED,72,85,295,12,ES_AUTOHSCROLL | ES_READONLY | NOT WS_BORDER
+    GROUPBOX        "Server's stat reply",IDC_PROP_GRP_RAW,7,103,366,107
+    EDITTEXT        IDC_PROP_RAWSTAT,13,114,354,91,ES_MULTILINE | ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_READONLY | NOT WS_BORDER | WS_VSCROLL | WS_HSCROLL
 END
 
 IDD_PROXY DIALOGEX 0, 0, 315, 120
@@ -780,6 +779,16 @@ BEGIN
     IDS_ERR_SAME_FILE       "Source and destination are the same file: both sessions point at the same account on the same server, at the same path. Copying a file onto itself would cut it short, so this is refused."
     IDS_ERR_NO_SFTP_HINT    "The server did not start an SFTP session. If it offers only a shell — dropbear on a camera or a router, say — turn on ""Use SCP for everything (no SFTP)"" for this session."
     IDS_ERR_KEY_ONLY_NO_KEY "The server accepts only login with a key, and this session has none to offer. Set a private key file for the session, or use Pageant with the key loaded."
+    IDS_PROP_CAPTION        "Properties"
+    IDS_PROP_GRP_FILE       "File properties"
+    IDS_PROP_LBL_NAME       "Name:"
+    IDS_PROP_LBL_OWNER      "Owner:"
+    IDS_PROP_LBL_GROUP      "Group:"
+    IDS_PROP_LBL_PERMS      "Permissions:"
+    IDS_PROP_LBL_SIZE       "Size:"
+    IDS_PROP_LBL_MODIFIED   "Last modified:"
+    IDS_PROP_GRP_RAW        "Server's stat reply"
+    IDS_PROP_NO_STAT        "The server ran no stat command. What the SFTP protocol reports:"
     IDS_DLG_LANPAIR_GROUP   " LAN Pair Session: "
     IDS_DLG_FILEMOD         "New files (Upload):"
     IDS_DLG_DIRMOD          "New folders:"

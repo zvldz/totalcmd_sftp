@@ -504,6 +504,15 @@
 // ---------------------------------------------------------------------------
 #define IDC_LAN_TI                      1108
 #define IDC_JUMP_SESSION_PICK           1109   // dropdown: pick existing session as jump host (in IDD_CONNECTION)
+// File properties dialog: frames and labels, named so they can be translated
+#define IDC_PROP_GRP_FILE               1110
+#define IDC_PROP_LBL_NAME               1111
+#define IDC_PROP_LBL_OWNER              1112
+#define IDC_PROP_LBL_GROUP              1113
+#define IDC_PROP_LBL_PERMS              1114
+#define IDC_PROP_LBL_SIZE               1115
+#define IDC_PROP_LBL_MODIFIED           1116
+#define IDC_PROP_GRP_RAW                1117
 #define IDS_LAN_TI                      12093
 #define IDS_LAN_TI_ERR                  12094
 #define IDS_LAN_CONNECTING              12095
@@ -533,6 +542,16 @@
 #define IDS_ERR_SAME_FILE               12125  // cross-session copy onto the same file
 #define IDS_ERR_NO_SFTP_HINT            12126  // SFTP subsystem failed: suggest SCP for everything
 #define IDS_ERR_KEY_ONLY_NO_KEY         12127  // key-only server, nothing to offer
+#define IDS_PROP_CAPTION                12128  // file properties dialog (Alt+Enter)
+#define IDS_PROP_GRP_FILE               12129
+#define IDS_PROP_LBL_NAME               12130
+#define IDS_PROP_LBL_OWNER              12131
+#define IDS_PROP_LBL_GROUP              12132
+#define IDS_PROP_LBL_PERMS              12133
+#define IDS_PROP_LBL_SIZE               12134
+#define IDS_PROP_LBL_MODIFIED           12135
+#define IDS_PROP_GRP_RAW                12136
+#define IDS_PROP_NO_STAT                12137  // raw box: no stat command, SFTP attributes shown instead
 
 // Next default values for new objects
 //

@@ -375,6 +375,16 @@
 12125=El origen y el destino son el mismo archivo: ambas sesiones apuntan a la misma cuenta en el mismo servidor, en la misma ruta. Copiar un archivo sobre sí mismo lo truncaría, así que se rechaza.
 12126=El servidor no inició una sesión SFTP. Si solo ofrece un shell —como dropbear en una cámara o un router—, active «Usar SCP para todo (sin SFTP)» para esta sesión.
 12127=El servidor solo acepta el inicio de sesión con clave, y esta sesión no tiene ninguna que ofrecer. Indique un archivo de clave privada para la sesión o use Pageant con la clave cargada.
+12128=Propiedades
+12129=Propiedades del archivo
+12130=Nombre:
+12131=Propietario:
+12132=Grupo:
+12133=Permisos:
+12134=Tamaño:
+12135=Última modificación:
+12136=Respuesta de stat en el servidor
+12137=El servidor no ejecutó ningún comando stat. Lo que informa el protocolo SFTP:
 12089=SFTP
 12104=(manual)
 12105= (no encontrada)

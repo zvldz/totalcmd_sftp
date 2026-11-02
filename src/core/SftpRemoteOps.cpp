@@ -254,7 +254,9 @@ bool ParseScpListingLine(pConnectSettings cs, const char* line, WIN32_FIND_DATAW
     }
 
     if (extra) {
-        extra->mode = (fd.dwFileAttributes & FS_ATTR_UNIXMODE) ? fd.dwReserved0 : 0;
+        extra->mode  = (fd.dwFileAttributes & FS_ATTR_UNIXMODE) ? fd.dwReserved0 : 0;
+        extra->size  = (static_cast<uint64_t>(fd.nFileSizeHigh) << 32) | fd.nFileSizeLow;
+        extra->mtime = fd.ftLastWriteTime;
         ExtrasFromLsLine(cs, lineStr.c_str(), *extra);
     }
 
@@ -624,6 +626,10 @@ int SftpFindNextFileW(pConnectSettings cs, LPVOID davdataptr, LPWIN32_FIND_DATAW
         // has the numeric ids in the attributes.
         ListingExtra extra;
         extra.mode = (file.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS) ? (file.permissions & 0xFFFF) : 0;
+        if (file.flags & LIBSSH2_SFTP_ATTR_SIZE)
+            extra.size = file.filesize;
+        if (file.flags & LIBSSH2_SFTP_ATTR_ACMODTIME)
+            extra.mtime = FindData->ftLastWriteTime;
         if (longentry[0])
             ExtrasFromLsLine(cs, longentry.data(), extra);
         if (extra.owner.empty() && (file.flags & LIBSSH2_SFTP_ATTR_UIDGID)) {
@@ -1236,10 +1242,212 @@ bool SftpLinkFolderTargetW(pConnectSettings cs, LPWSTR RemoteName, size_t maxlen
     return false;
 }
 
+std::wstring FormatPermissions(DWORD mode)
+{
+    std::wstring s = L"---------";
+    static constexpr DWORD kBits[9] = { 0400, 0200, 0100, 040, 020, 010, 04, 02, 01 };
+    static constexpr wchar_t kChars[9] = { L'r', L'w', L'x', L'r', L'w', L'x', L'r', L'w', L'x' };
+    for (int i = 0; i < 9; ++i)
+        if (mode & kBits[i])
+            s[i] = kChars[i];
+    if (mode & 04000) s[2] = (mode & 0100) ? L's' : L'S';
+    if (mode & 02000) s[5] = (mode & 010)  ? L's' : L'S';
+    if (mode & 01000) s[8] = (mode & 01)   ? L't' : L'T';
+    return s;
+}
+
+namespace {
+
+std::wstring LoadStringLngW(UINT id)
+{
+    if (const char* lng = LngGetString(id))
+        return unicode_util::utf8_to_wstring(lng);
+    std::array<wchar_t, 512> buf{};
+    const int n = LoadStringW(hinst, id, buf.data(), static_cast<int>(buf.size() - 1));
+    return n > 0 ? std::wstring(buf.data(), static_cast<size_t>(n)) : std::wstring();
+}
+
+// 1234567 → "1 234 567" with the user's thousands separator.
+std::wstring FormatSize(uint64_t size)
+{
+    std::array<wchar_t, 8> sep{};
+    if (GetLocaleInfoW(LOCALE_USER_DEFAULT, LOCALE_STHOUSAND, sep.data(), static_cast<int>(sep.size())) <= 0)
+        sep[0] = L' ';
+    const std::wstring digits = std::to_wstring(size);
+    std::wstring out;
+    for (size_t i = 0; i < digits.size(); ++i) {
+        if (i > 0 && (digits.size() - i) % 3 == 0)
+            out += sep.data();
+        out += digits[i];
+    }
+    return out;
+}
+
+// UTC file time → local date and time in the user's short format.
+std::wstring FormatFileTime(const FILETIME& ft)
+{
+    if (ft.dwLowDateTime == 0 && ft.dwHighDateTime == 0)
+        return {};
+    FILETIME local{};
+    SYSTEMTIME st{};
+    if (!FileTimeToLocalFileTime(&ft, &local) || !FileTimeToSystemTime(&local, &st))
+        return {};
+    std::array<wchar_t, 64> date{}, time{};
+    GetDateFormatW(LOCALE_USER_DEFAULT, DATE_SHORTDATE, &st, nullptr, date.data(), static_cast<int>(date.size()));
+    GetTimeFormatW(LOCALE_USER_DEFAULT, 0, &st, nullptr, time.data(), static_cast<int>(time.size()));
+    return std::wstring(date.data()) + L" " + time.data();
+}
+
+struct PropertiesData {
+    std::wstring name, owner, group, permissions, size, modified, raw;
+    HFONT        monoFont = nullptr;
+};
+
+INT_PTR CALLBACK PropertiesDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+    switch (msg) {
+    case WM_INITDIALOG: {
+        auto* d = reinterpret_cast<PropertiesData*>(lParam);
+        SetWindowLongPtrW(hDlg, DWLP_USER, lParam);
+
+        const std::wstring caption = LoadStringLngW(IDS_PROP_CAPTION);
+        if (!caption.empty())
+            SetWindowTextW(hDlg, caption.c_str());
+        static constexpr std::pair<int, UINT> kLabels[] = {
+            { IDC_PROP_GRP_FILE,     IDS_PROP_GRP_FILE },
+            { IDC_PROP_LBL_NAME,     IDS_PROP_LBL_NAME },
+            { IDC_PROP_LBL_OWNER,    IDS_PROP_LBL_OWNER },
+            { IDC_PROP_LBL_GROUP,    IDS_PROP_LBL_GROUP },
+            { IDC_PROP_LBL_PERMS,    IDS_PROP_LBL_PERMS },
+            { IDC_PROP_LBL_SIZE,     IDS_PROP_LBL_SIZE },
+            { IDC_PROP_LBL_MODIFIED, IDS_PROP_LBL_MODIFIED },
+            { IDC_PROP_GRP_RAW,      IDS_PROP_GRP_RAW },
+        };
+        for (const auto& [ctrl, str] : kLabels) {
+            const std::wstring s = LoadStringLngW(str);
+            if (!s.empty())
+                SetDlgItemTextW(hDlg, ctrl, s.c_str());
+        }
+
+        SetDlgItemTextW(hDlg, IDC_PROP_NAME,        d->name.c_str());
+        SetDlgItemTextW(hDlg, IDC_PROP_OWNER,       d->owner.c_str());
+        SetDlgItemTextW(hDlg, IDC_PROP_GROUP,       d->group.c_str());
+        SetDlgItemTextW(hDlg, IDC_PROP_PERMISSIONS, d->permissions.c_str());
+        SetDlgItemTextW(hDlg, IDC_PROP_SIZE,        d->size.c_str());
+        SetDlgItemTextW(hDlg, IDC_PROP_MODIFIED,    d->modified.c_str());
+
+        // stat lines up its fields with spaces, which only a fixed-pitch
+        // font keeps aligned.
+        HDC dc = GetDC(hDlg);
+        d->monoFont = CreateFontW(-MulDiv(8, GetDeviceCaps(dc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL,
+                                  FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
+                                  CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, FIXED_PITCH | FF_MODERN, L"Consolas");
+        ReleaseDC(hDlg, dc);
+        if (d->monoFont)
+            SendDlgItemMessageW(hDlg, IDC_PROP_RAWSTAT, WM_SETFONT, reinterpret_cast<WPARAM>(d->monoFont), FALSE);
+        SetDlgItemTextW(hDlg, IDC_PROP_RAWSTAT, d->raw.c_str());
+
+        // Focus on OK, so no read-only field opens with its text selected.
+        SetFocus(GetDlgItem(hDlg, IDOK));
+        return FALSE;
+    }
+    case WM_COMMAND:
+        if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL) {
+            EndDialog(hDlg, LOWORD(wParam));
+            return TRUE;
+        }
+        break;
+    case WM_DESTROY: {
+        auto* d = reinterpret_cast<PropertiesData*>(GetWindowLongPtrW(hDlg, DWLP_USER));
+        if (d && d->monoFont) {
+            DeleteObject(d->monoFont);
+            d->monoFont = nullptr;
+        }
+        break;
+    }
+    }
+    return FALSE;
+}
+
+}  // namespace
+
+// Alt+Enter on a remote file. The upper fields come from the last listing,
+// so they need neither a shell nor any parsing; the lower box is the live
+// answer of `stat` on the server, shown as it is. Without one, the SFTP
+// attributes stand in.
 void SftpShowPropertiesW(pConnectSettings cs, LPCWSTR remotename)
 {
-    (void)cs;
-    (void)remotename;
+    if (!cs || !remotename || !remotename[0])
+        return;
+
+    std::wstring pathW(remotename);
+    std::replace(pathW.begin(), pathW.end(), L'\\', L'/');
+
+    PropertiesData d;
+    d.name = pathW;
+    if (const ListingExtra* extra = FindListingExtra(cs, remotename)) {
+        if (!extra->linkTarget.empty())
+            d.name += L" -> " + extra->linkTarget;
+        d.owner = extra->owner;
+        d.group = extra->group;
+        if (extra->mode) {
+            std::array<wchar_t, 16> octal{};
+            swprintf_s(octal.data(), octal.size(), L" (%04o)", extra->mode & 07777);
+            d.permissions = FormatPermissions(extra->mode) + octal.data();
+        }
+        if ((extra->mode & LIBSSH2_SFTP_S_IFMT) != LIBSSH2_SFTP_S_IFDIR &&
+            (extra->mode & LIBSSH2_SFTP_S_IFMT) != LIBSSH2_SFTP_S_IFLNK)
+            d.size = FormatSize(extra->size);
+        d.modified = FormatFileTime(extra->mtime);
+    }
+
+    std::array<char, 8192> reply{};
+    const std::wstring cmd = L"stat '" + string_util::ShellQuoteSingleW(pathW) + L"'";
+    const int rc = SftpQuoteCommand2W(cs, nullptr, cmd.c_str(), reply.data(), reply.size() - 1);
+    SFTP_LOG("PROPS", "stat rc=%d replyLen=%zu", rc, strlen(reply.data()));
+    if (rc == 0 && reply[0]) {
+        std::vector<WCHAR> wide(reply.size());
+        CopyStringA2W(cs, reply.data(), wide.data(), wide.size());
+        d.raw = wide.data();
+    } else {
+        d.raw = LoadStringLngW(IDS_PROP_NO_STAT);
+        LIBSSH2_SFTP_ATTRIBUTES attrs{};
+        if (!cs->scponly && cs->sftpsession) {
+            std::string pathA(wdirtypemax, '\0');
+            CopyStringW2A(cs, pathW.c_str(), pathA.data(), pathA.size());
+            pathA.resize(strlen(pathA.c_str()));
+            int src = 0;
+            do {
+                src = cs->sftpsession->lstat(pathA.c_str(), &attrs);
+                if (src == LIBSSH2_ERROR_EAGAIN)
+                    IsSocketReadable(cs->sock);
+            } while (src == LIBSSH2_ERROR_EAGAIN);
+            if (src != 0)
+                attrs.flags = 0;
+        }
+        std::array<wchar_t, 128> line{};
+        if (attrs.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS) {
+            swprintf_s(line.data(), line.size(), L"\r\n\r\nmode: %06lo  %s",
+                       attrs.permissions, FormatPermissions(attrs.permissions).c_str());
+            d.raw += line.data();
+        }
+        if (attrs.flags & LIBSSH2_SFTP_ATTR_UIDGID) {
+            swprintf_s(line.data(), line.size(), L"\r\nuid: %lu  gid: %lu", attrs.uid, attrs.gid);
+            d.raw += line.data();
+        }
+        if (attrs.flags & LIBSSH2_SFTP_ATTR_SIZE) {
+            d.raw += L"\r\nsize: " + std::to_wstring(attrs.filesize);
+        }
+        if (attrs.flags & LIBSSH2_SFTP_ATTR_ACMODTIME) {
+            FILETIME at{}, mt{};
+            ConvUnixTimeToFileTime(&at, attrs.atime);
+            ConvUnixTimeToFileTime(&mt, attrs.mtime);
+            d.raw += L"\r\naccess: " + FormatFileTime(at) + L"\r\nmodify: " + FormatFileTime(mt);
+        }
+    }
+
+    DialogBoxParamW(hinst, MAKEINTRESOURCEW(IDD_PROPERTIES), GetActiveWindow(),
+                    PropertiesDlgProc, reinterpret_cast<LPARAM>(&d));
 }
 
 void SftpSetTransferModeW(LPCWSTR mode)

@@ -112,6 +112,7 @@
   <li><b>link target</b> — where a symbolic link points</li>
 </ul>
 <p>Total Commander picks up a default view for the plugin on its own: size, date, permissions, owner and group. Other combinations are set up under <i>Configuration → Custom columns</i>, file system <i>Secure FTP</i>. The values come from the directory listing in SFTP and SCP mode; PHP Agent and LAN Pair leave the columns empty.</p>
+<p><b>Alt+Enter</b> on a remote file opens its properties: path, link target, owner, group, permissions, size and date as the listing gave them, and below that the reply of <code>stat</code> run on the server. A server without a shell shows what the SFTP protocol reports instead. The window is for viewing only.</p>
 <p>To change permissions, use <b>Files → Change Attributes</b> (Alt+A) on one or more remote files. Over SFTP the mode is set through the protocol, which also works on servers without a shell; in SCP mode the plugin runs <code>chmod</code>. Owner and group cannot be changed from the plugin.</p>
 
 <h3>Character Encoding</h3>

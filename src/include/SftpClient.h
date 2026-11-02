@@ -72,6 +72,8 @@ struct ListingExtra {
     std::wstring group;
     std::wstring linkTarget;
     DWORD        mode = 0;   // st_mode, 0 when the listing gave none
+    uint64_t     size = 0;
+    FILETIME     mtime{};    // zero when the listing gave none
 };
 
 // Entry name → its extras, for one directory.
@@ -269,6 +271,8 @@ bool SftpChmodW(pConnectSettings ConnectSettings, LPCWSTR RemoteName, LPCWSTR ch
 std::wstring ListingDirKey(std::wstring_view dir);
 // Extras the last listing gave for a path relative to the session, or null.
 const ListingExtra* FindListingExtra(pConnectSettings cs, std::wstring_view relPath);
+// "rwxr-xr-x" with s/S and t/T for the special bits, as `ls` writes it.
+std::wstring FormatPermissions(DWORD mode);
 bool SftpLinkFolderTargetW(pConnectSettings ConnectSettings, LPWSTR RemoteName, size_t maxlen);
 int  SftpQuoteCommand2(pConnectSettings ConnectSettings, LPCSTR remotedir, LPCSTR cmd, LPSTR reply, size_t replylen,
                        DWORD idleTimeoutMs = 10000, DWORD totalTimeoutMs = 45000);

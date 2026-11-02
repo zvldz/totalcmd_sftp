@@ -374,6 +374,16 @@
 12125=Sursa și destinația sunt același fișier: ambele sesiuni indică același cont pe același server, la aceeași cale. Copierea unui fișier peste el însuși l-ar trunchia, așa că operația este refuzată.
 12126=Serverul nu a pornit o sesiune SFTP. Dacă oferă doar un shell — de exemplu dropbear pe o cameră sau un router —, activați „Folosire SCP pentru totul (fără SFTP)” pentru această sesiune.
 12127=Serverul acceptă doar autentificarea cu cheie, iar această sesiune nu are niciuna de oferit. Setați un fișier de cheie privată pentru sesiune sau folosiți Pageant cu cheia încărcată.
+12128=Proprietăți
+12129=Proprietățile fișierului
+12130=Nume:
+12131=Proprietar:
+12132=Grup:
+12133=Permisiuni:
+12134=Dimensiune:
+12135=Ultima modificare:
+12136=Răspunsul comenzii stat pe server
+12137=Serverul nu a rulat comanda stat. Ce raportează protocolul SFTP:
 12089=SFTP
 12104=(manual)
 12105= (lipsește)

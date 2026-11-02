@@ -18,6 +18,11 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   to size and date, which Total Commander picks up on its own. Values come
   from the directory listing in both SFTP and SCP mode; a server that
   sends no names shows numeric ids.
+- **Alt+Enter on a remote file shows its properties**: path (with the
+  link target), owner, group, permissions, size and date from the
+  listing, and below them the server's own `stat` reply. Without a shell
+  on the server, the SFTP attributes stand in for it. Translated into all
+  languages.
 - **Imported sessions that go through a jump host now come with it.** A
   WinSCP tunnel, a SecureCRT session firewalled through another session,
   and a PuTTY session using "SSH to proxy and use port forwarding" import

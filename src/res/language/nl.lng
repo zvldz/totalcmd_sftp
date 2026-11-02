@@ -374,6 +374,16 @@
 12125=Bron en doel zijn hetzelfde bestand: beide sessies wijzen naar hetzelfde account op dezelfde server, op hetzelfde pad. Een bestand naar zichzelf kopiëren zou het inkorten, dus dit wordt geweigerd.
 12126=De server heeft geen SFTP-sessie gestart. Biedt hij alleen een shell — zoals dropbear op een camera of router —, schakel dan voor deze sessie "SCP voor alles gebruiken (zonder SFTP)" in.
 12127=De server accepteert alleen aanmelden met een sleutel, en deze sessie heeft er geen aan te bieden. Stel een privésleutelbestand in voor de sessie, of gebruik Pageant met de sleutel geladen.
+12128=Eigenschappen
+12129=Bestandseigenschappen
+12130=Naam:
+12131=Eigenaar:
+12132=Groep:
+12133=Rechten:
+12134=Grootte:
+12135=Laatst gewijzigd:
+12136=Antwoord van stat op de server
+12137=De server heeft geen stat-opdracht uitgevoerd. Wat het SFTP-protocol meldt:
 12089=SFTP
 12104=(handmatig)
 12105= (ontbreekt)

@@ -374,6 +374,16 @@
 12125=Zdroj a cíl jsou tentýž soubor: obě relace ukazují na stejný účet na stejném serveru a na stejnou cestu. Kopírování souboru na sebe sama by ho zkrátilo, proto je operace odmítnuta.
 12126=Server nespustil relaci SFTP. Pokud nabízí jen shell — například dropbear na kameře nebo routeru —, zapněte pro tuto relaci „Použít SCP pro vše (bez SFTP)“.
 12127=Server přijímá pouze přihlášení klíčem a tato relace žádný nenabízí. Nastavte pro relaci soubor soukromého klíče, nebo použijte Pageant s načteným klíčem.
+12128=Vlastnosti
+12129=Vlastnosti souboru
+12130=Název:
+12131=Vlastník:
+12132=Skupina:
+12133=Oprávnění:
+12134=Velikost:
+12135=Poslední změna:
+12136=Odpověď příkazu stat na serveru
+12137=Server nespustil příkaz stat. Co hlásí protokol SFTP:
 12089=SFTP
 12104=(ručně)
 12105= (chybí)

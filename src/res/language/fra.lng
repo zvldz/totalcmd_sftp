@@ -375,6 +375,16 @@
 12125=La source et la destination sont le même fichier : les deux sessions désignent le même compte sur le même serveur, au même chemin. Copier un fichier sur lui-même le tronquerait, l'opération est donc refusée.
 12126=Le serveur n'a pas démarré de session SFTP. S'il n'offre qu'un shell — dropbear sur une caméra ou un routeur, par exemple —, activez « Utiliser SCP pour tout (sans SFTP) » pour cette session.
 12127=Le serveur n'accepte que la connexion par clé, et cette session n'en a aucune à proposer. Indiquez un fichier de clé privée pour la session, ou utilisez Pageant avec la clé chargée.
+12128=Propriétés
+12129=Propriétés du fichier
+12130=Nom :
+12131=Propriétaire :
+12132=Groupe :
+12133=Permissions :
+12134=Taille :
+12135=Dernière modification :
+12136=Réponse de stat sur le serveur
+12137=Le serveur n'a exécuté aucune commande stat. Ce qu'indique le protocole SFTP :
 12089=SFTP
 12104=(manuel)
 12105= (introuvable)

@@ -374,6 +374,16 @@
 12125=A forrás és a cél ugyanaz a fájl: mindkét munkamenet ugyanarra a fiókra mutat ugyanazon a kiszolgálón, ugyanazon az útvonalon. Egy fájl önmagára másolása csonkítaná azt, ezért a művelet elutasítva.
 12126=A kiszolgáló nem indított SFTP-munkamenetet. Ha csak shellt kínál – például dropbear egy kamerán vagy routeren –, kapcsolja be ennél a munkamenetnél ezt: „SCP használata mindenhez (SFTP nélkül)”.
 12127=A kiszolgáló csak kulccsal történő bejelentkezést fogad el, ennek a munkamenetnek pedig nincs mit felkínálnia. Adjon meg privát kulcsfájlt a munkamenethez, vagy használja a Pageantet betöltött kulccsal.
+12128=Tulajdonságok
+12129=Fájl tulajdonságai
+12130=Név:
+12131=Tulajdonos:
+12132=Csoport:
+12133=Jogosultságok:
+12134=Méret:
+12135=Utolsó módosítás:
+12136=A stat parancs válasza a szerveren
+12137=A szerver nem futtatott stat parancsot. Az SFTP protokoll adatai:
 12089=SFTP
 12104=(kézi)
 12105= (hiányzik)
