@@ -565,6 +565,7 @@ int SftpQuoteCommand2(pConnectSettings cs, const char* remotedir, const char* cm
     display += cmd;
     std::replace(display.begin(), display.end(), '\\', '/');
     ShowStatus(display.c_str());
+    SFTP_LOG("SHELL", "Quote command: %s", cmd);
 
     auto channel = ConnectChannel(cs->session.get(), cs->sock);
     if (!channel)
@@ -609,6 +610,7 @@ int SftpQuoteCommand2(pConnectSettings cs, const char* remotedir, const char* cm
     }
 
     const int rc = channel->getExitStatus();
+    SFTP_LOG("SHELL", "Quote command done: rc=%d", rc);
     if (rc != 0) {
         char tmp[128];
         snprintf(tmp, sizeof(tmp), "Function return code: %d", rc);
@@ -719,6 +721,7 @@ int SftpQuoteCommand2W(pConnectSettings cs, LPCWSTR remotedir, LPCWSTR cmd,
     }
 
     const int rc = channel->getExitStatus();
+    SFTP_LOG("SHELL", "Quote command done: rc=%d", rc);
     if (rc != 0) {
         char tmp[128];
         snprintf(tmp, sizeof(tmp), "Function return code: %d", rc);

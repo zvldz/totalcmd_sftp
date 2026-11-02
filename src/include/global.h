@@ -132,11 +132,16 @@ inline void sftp_debug_logf(const char* tag, const char* fmt, ...) noexcept
     _vsnprintf_s(msg, sizeof(msg), _TRUNCATE, fmt ? fmt : "", args);
     va_end(args);
 
+    // Local time to the millisecond, so a slow step shows as a gap between lines.
+    SYSTEMTIME st;
+    GetLocalTime(&st);
     char line[1200];
     if (tag && tag[0]) {
-        _snprintf_s(line, sizeof(line), _TRUNCATE, "[%s] %s", tag, msg);
+        _snprintf_s(line, sizeof(line), _TRUNCATE, "%02u:%02u:%02u.%03u [%s] %s",
+                    st.wHour, st.wMinute, st.wSecond, st.wMilliseconds, tag, msg);
     } else {
-        _snprintf_s(line, sizeof(line), _TRUNCATE, "%s", msg);
+        _snprintf_s(line, sizeof(line), _TRUNCATE, "%02u:%02u:%02u.%03u %s",
+                    st.wHour, st.wMinute, st.wSecond, st.wMilliseconds, msg);
     }
     sftp_debug_emit_line(line);
 }
