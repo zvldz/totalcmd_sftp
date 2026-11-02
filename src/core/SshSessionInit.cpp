@@ -159,6 +159,20 @@ int InitializeSshSession(
         return -70;
     }
     SftpLogLastError("libssh2_session_startup: ", ConnectSettings->session->lastErrno());
+
+    // What the handshake settled on; the cipher in particular decides how
+    // fast a transfer can go.
+    auto method = [&](int type) {
+        const char* m = ConnectSettings->session->methods(type);
+        return m ? m : "?";
+    };
+    const std::string negotiated = std::format(
+        "SSH: kex={} hostkey={} cipher={}/{} mac={}/{}",
+        method(LIBSSH2_METHOD_KEX), method(LIBSSH2_METHOD_HOSTKEY),
+        method(LIBSSH2_METHOD_CRYPT_CS), method(LIBSSH2_METHOD_CRYPT_SC),
+        method(LIBSSH2_METHOD_MAC_CS), method(LIBSSH2_METHOD_MAC_SC));
+    ShowStatus(negotiated.c_str());
+    SFTP_LOG("CONN", "%s", negotiated.c_str());
     return 0;
 }
 
