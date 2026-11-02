@@ -599,7 +599,11 @@ int SftpFindNextFileW(pConnectSettings cs, LPVOID davdataptr, LPWIN32_FIND_DATAW
         FindData->ftLastAccessTime.dwHighDateTime = 0;
         FindData->ftLastAccessTime.dwLowDateTime = 0;
 
-        if (file.flags & LIBSSH2_SFTP_ATTR_SIZE && FindData->dwFileAttributes == 0) {
+        // A link's size is the length of its target path; left out, as in SCP
+        // mode, so the panel shows it as a link.
+        const bool isLink = (file.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS) &&
+                            (file.permissions & LIBSSH2_SFTP_S_IFMT) == LIBSSH2_SFTP_S_IFLNK;
+        if (file.flags & LIBSSH2_SFTP_ATTR_SIZE && FindData->dwFileAttributes == 0 && !isLink) {
             FindData->nFileSizeHigh = static_cast<DWORD>(file.filesize >> 32);
             FindData->nFileSizeLow = static_cast<DWORD>(file.filesize);
         } else {

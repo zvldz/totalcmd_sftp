@@ -33,6 +33,8 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   and sizes, so every row had an empty date. Dates now come from `ls`
   run in English and UTC, whatever the server's locale and time zone, and
   the permissions reach Total Commander as they do in SFTP mode.
+- **Symbolic links show as links in SFTP mode too**, instead of with the
+  length of their target as a size.
 - **Changing permissions with Alt+A works.** The command went out with
   the path in Windows form, failed on the server, and was reported as
   done. Over SFTP the mode is now set through the protocol, so it also
