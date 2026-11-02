@@ -36,6 +36,9 @@ public:
     const char* FolderName()  const noexcept override { return "[PuTTY]"; }
 
     bool DetectStandard() const noexcept override;
+    // The Sessions registry key and each session key under it.
+    std::string ChangeStamp() const override;
+    std::string CustomPathStamp(const std::string& path) const override;
 
     EnumerationResult EnumerateStandard() override;
     EnumerationResult EnumerateCustomPath(const std::string& path) override;

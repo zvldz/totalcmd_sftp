@@ -142,11 +142,16 @@ std::vector<std::string> SplitArgs(std::string_view s)
     return args;
 }
 
-void ParseFile(const std::wstring& path, std::vector<ConfigLine>& out, int depth);
+// Files read while parsing, the config and its includes, for ChangeStamp.
+using VisitedFiles = std::vector<std::wstring>;
+
+void ParseFile(const std::wstring& path, std::vector<ConfigLine>& out, int depth,
+               VisitedFiles* visited = nullptr);
 
 // `Include` takes paths relative to ~/.ssh and may hold wildcards; matches
 // are read in name order, as `ssh` reads them.
-void ExpandInclude(const std::string& pattern, std::vector<ConfigLine>& out, int depth)
+void ExpandInclude(const std::string& pattern, std::vector<ConfigLine>& out, int depth,
+                   VisitedFiles* visited)
 {
     std::string p = pattern;
     if (p.starts_with("~"))
@@ -172,13 +177,16 @@ void ExpandInclude(const std::string& pattern, std::vector<ConfigLine>& out, int
     FindClose(h);
     std::sort(files.begin(), files.end());
     for (const auto& f : files)
-        ParseFile(f, out, depth + 1);
+        ParseFile(f, out, depth + 1, visited);
 }
 
-void ParseFile(const std::wstring& path, std::vector<ConfigLine>& out, int depth)
+void ParseFile(const std::wstring& path, std::vector<ConfigLine>& out, int depth,
+               VisitedFiles* visited)
 {
     if (depth > kMaxIncludeDepth)
         return;
+    if (visited)
+        visited->push_back(path);
     std::string text;
     if (!ReadFileUtf8(path, text))
         return;
@@ -210,7 +218,7 @@ void ParseFile(const std::wstring& path, std::vector<ConfigLine>& out, int depth
 
         if (cl.key == "include") {
             for (const auto& arg : cl.args)
-                ExpandInclude(arg, out, depth);
+                ExpandInclude(arg, out, depth, visited);
             continue;
         }
         out.push_back(std::move(cl));
@@ -362,6 +370,26 @@ bool OpenSshAdapter::DetectStandard() const noexcept
     if (p.empty()) return false;
     const DWORD a = GetFileAttributesW(p.c_str());
     return a != INVALID_FILE_ATTRIBUTES && !(a & FILE_ATTRIBUTE_DIRECTORY);
+}
+
+std::string OpenSshAdapter::ChangeStamp() const
+{
+    const std::wstring path = StandardConfigPath();
+    if (path.empty())
+        return {};
+    std::vector<ConfigLine> lines;
+    VisitedFiles visited;
+    ParseFile(path, lines, 0, &visited);
+
+    return FileChangeStamp(visited);
+}
+
+std::string OpenSshAdapter::CustomPathStamp(const std::string& path) const
+{
+    std::vector<ConfigLine> lines;
+    VisitedFiles visited;
+    ParseFile(AnsiToWide(path), lines, 0, &visited);
+    return FileChangeStamp(visited);
 }
 
 EnumerationResult OpenSshAdapter::EnumerateStandard()

@@ -28,7 +28,7 @@
 
 <table border="1" cellpadding="5" cellspacing="0">
   <tr><th>Entry</th><th>What it does</th></tr>
-  <tr><td><code>[Refresh]</code></td><td>Re-reads the source program and updates the list. Run this after you add or rename a session in the source program.</td></tr>
+  <tr><td><code>[Refresh]</code></td><td>Re-reads the source program and updates the list on demand. Changes show by themselves the next time you open the folder, in the auto-detected location and in the ones you added.</td></tr>
   <tr><td><code>[Add custom location...]</code></td><td>Point the plugin at a portable installation, a backup folder, or a USB stick in addition to the auto-detected location.</td></tr>
   <tr><td><code>[Manage custom locations]</code></td><td>Lists the locations you added. <code>F8</code> removes one and drops only the sessions that came from it.</td></tr>
   <tr><td>A session</td><td><code>Enter</code> connects. <code>F5</code> copies it into your own session list.</td></tr>
@@ -37,7 +37,7 @@
 <h2>Two ways to use an imported session</h2>
 
 <h3>Connect directly (Enter)</h3>
-<p>Press <code>Enter</code> on a session and the plugin connects using the settings read from the source program. Nothing is written to your own configuration — the entry stays a live view of the other program's session. If you later change the session in PuTTY, hit <code>[Refresh]</code> and the change is picked up.</p>
+<p>Press <code>Enter</code> on a session and the plugin connects using the settings read from the source program. Nothing is written to your own configuration — the entry stays a live view of the other program's session. If you later change the session in PuTTY, the change is picked up the next time you open the folder. A host key you confirmed for such a session is kept across that re-read as long as the host stays the same.</p>
 
 <h3>Make it your own (F5)</h3>
 <p>Select one or more sessions and press <code>F5</code> (or drag them) onto the other panel showing the plugin root. They are written into your <code>sftpplug.ini</code> as ordinary saved sessions and from then on behave like any session you created yourself — you can edit them with <code>Alt+Enter</code>, rename with <code>F6</code>, put them in folders.</p>
@@ -83,7 +83,7 @@
 </table>
 
 <div class="note">
-  <b>OpenSSH config.</b> Every concrete <code>Host</code> name is a session; patterns such as <code>Host 10.*</code> or <code>Host *</code> are not listed but their values apply to the hosts they match, the first value found winning, exactly as <code>ssh myserver</code> resolves them. Read: <code>HostName</code>, <code>Port</code>, <code>User</code> (your Windows user name when absent, as <code>ssh</code> does), the first <code>IdentityFile</code>, <code>ProxyJump</code> with one hop, and <code>Include</code>. <code>Match</code> blocks are skipped. A <code>ProxyCommand</code> or a chain of jump hosts is refused. The config stays the place the settings live: <code>Enter</code> connects with what it says, and <code>[Refresh]</code> picks up your edits.
+  <b>OpenSSH config.</b> Every concrete <code>Host</code> name is a session; patterns such as <code>Host 10.*</code> or <code>Host *</code> are not listed but their values apply to the hosts they match, the first value found winning, exactly as <code>ssh myserver</code> resolves them. Read: <code>HostName</code>, <code>Port</code>, <code>User</code> (your Windows user name when absent, as <code>ssh</code> does), the first <code>IdentityFile</code>, <code>ProxyJump</code> with one hop, and <code>Include</code>. <code>Match</code> blocks are skipped. A <code>ProxyCommand</code> or a chain of jump hosts is refused. The config stays the place the settings live: <code>Enter</code> connects with what it says, and an edit to the config or to any file it includes shows the next time you open <code>[OpenSSH]</code>.
 </div>
 
 <div class="note">
@@ -149,7 +149,7 @@
 <p>Session lists are stored next to <code>sftpplug.ini</code> so they are available immediately when Total Commander starts, without re-scanning anything. Consequences worth knowing:</p>
 
 <ul>
-  <li>Changes you make in the source program become visible after <code>[Refresh]</code>, not before.</li>
+  <li>Changes you make in the source program become visible the next time you open its folder: the plugin notices that the files or registry keys changed and re-reads them, the locations you added included.</li>
   <li>If a source becomes temporarily unreachable — a USB stick unplugged, a network share offline — its sessions stay listed rather than disappearing. They are removed only when the source is reachable and genuinely empty.</li>
 </ul>
 

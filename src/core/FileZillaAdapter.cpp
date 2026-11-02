@@ -482,6 +482,22 @@ bool FileZillaAdapter::DetectStandard() const noexcept
     return a != INVALID_FILE_ATTRIBUTES && !(a & FILE_ATTRIBUTE_DIRECTORY);
 }
 
+std::string FileZillaAdapter::ChangeStamp() const
+{
+    const std::wstring p = GetStandardSitemanagerPath();
+    if (p.empty()) return {};
+    const size_t slash = p.find_last_of(L'\\');
+    return FileChangeStamp({ p, p.substr(0, slash + 1) + L"filezilla.xml" });
+}
+
+std::string FileZillaAdapter::CustomPathStamp(const std::string& path) const
+{
+    const std::wstring p = AnsiPathToWide(path);
+    const size_t slash = p.find_last_of(L'\\');
+    if (slash == std::wstring::npos) return FileChangeStamp({ p });
+    return FileChangeStamp({ p, p.substr(0, slash + 1) + L"filezilla.xml" });
+}
+
 EnumerationResult FileZillaAdapter::EnumerateStandard()
 {
     const std::wstring p = GetStandardSitemanagerPath();

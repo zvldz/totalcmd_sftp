@@ -116,6 +116,18 @@ public:
     // FsExecuteFileW to pick between the folder- and file-picker.
     virtual CustomPathPickerKind CustomPathPicker() const noexcept = 0;
 
+    // A short string that changes whenever the standard location may have
+    // changed — file names and modification times, say. Opening the source
+    // folder compares it with the last one and re-scans on a difference, so
+    // edits show without [Refresh]. Empty (the default) means the adapter
+    // does not track changes and only [Refresh] re-scans it.
+    virtual std::string ChangeStamp() const { return {}; }
+
+    // The same for one user-supplied path. A path that has gone missing
+    // still yields a stamp of its own, so its going away triggers a re-scan
+    // — which reports it Unreachable and keeps its cached sessions.
+    virtual std::string CustomPathStamp(const std::string& /*path*/) const { return {}; }
+
     // Only meaningful when CustomPathPicker() == File. NUL-separated Win32
     // filter string ("PuTTY export\0*.reg\0All files\0*.*\0"). Adapters
     // returning Folder or None can leave the default nullptr — callers never

@@ -35,6 +35,9 @@ public:
     const char* FolderName()  const noexcept override { return "[SecureCRT]"; }
 
     bool DetectStandard() const noexcept override;
+    // The Sessions tree and the Firewalls folder beside it.
+    std::string ChangeStamp() const override;
+    std::string CustomPathStamp(const std::string& path) const override;
 
     EnumerationResult EnumerateStandard() override;
     EnumerationResult EnumerateCustomPath(const std::string& path) override;

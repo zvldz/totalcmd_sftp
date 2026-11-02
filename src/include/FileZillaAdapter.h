@@ -68,6 +68,9 @@ public:
     const char* FolderName() const noexcept override { return "[FileZilla]"; }
 
     bool DetectStandard() const noexcept override;
+    // sitemanager.xml, and filezilla.xml beside it for the global proxy.
+    std::string ChangeStamp() const override;
+    std::string CustomPathStamp(const std::string& path) const override;
 
     EnumerationResult EnumerateStandard() override;
     EnumerationResult EnumerateCustomPath(const std::string& path) override;

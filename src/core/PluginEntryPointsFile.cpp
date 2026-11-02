@@ -624,7 +624,7 @@ static void ApplyEnumerationToCache(sftp::IExternalSessionSource* adapter,
 // registry / %APPDATA% location plus every user-added custom path) and
 // update the on-disk cache accordingly. Called from FsExecuteFileW when
 // the user activates [Refresh] inside an [Imports]\<Source>\ folder.
-static void RefreshImportSource(const std::string& sourceId)
+void RefreshImportSource(const std::string& sourceId)
 {
     auto* adapter = sftp::GetImportSourceRegistry().Find(sourceId.c_str());
     if (!adapter) return;

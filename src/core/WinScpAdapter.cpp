@@ -114,6 +114,16 @@ bool WinScpAdapter::DetectStandard() const noexcept
     return true;
 }
 
+std::string WinScpAdapter::ChangeStamp() const
+{
+    return RegistryChangeStamp(kWinScpSessionsRoot);
+}
+
+std::string WinScpAdapter::CustomPathStamp(const std::string& path) const
+{
+    return FileChangeStamp({ AnsiPathToWide(path) });
+}
+
 EnumerationResult WinScpAdapter::EnumerateStandard()
 {
     EnumerationResult r;

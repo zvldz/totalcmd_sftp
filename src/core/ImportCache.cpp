@@ -372,16 +372,57 @@ void ImportCache::ReplaceChannel(const std::string& sourceId,
     std::lock_guard<std::mutex> lock(m_mutex);
     if (m_cachePath.empty()) return;
 
+    // What connecting wrote into a row — an accepted host key, a probe's
+    // answer — is not in the source and would be lost with the row. Keep it
+    // across the rewrite while the row still names the same host: a host
+    // key belongs to the host, so a changed address asks again.
+    struct Learned {
+        std::string server, jumphost;
+        std::vector<std::pair<const char*, std::string>> keys;
+    };
+    static constexpr const char* kLearnedKeys[] = {
+        "fingerprint", "jumpfingerprint", "utf8", "unixlinebreaks", "largefilesupport" };
+    auto readKey = [this](const std::string& section, const char* key) {
+        std::array<char, 512> buf{};
+        GetPrivateProfileStringA(section.c_str(), key, "", buf.data(),
+                                 static_cast<DWORD>(buf.size()), m_cachePath.c_str());
+        return std::string(buf.data());
+    };
+    std::vector<Learned> learned(newSessions.size());
+    for (size_t i = 0; i < newSessions.size(); ++i) {
+        const std::string section = SectionName(sourceId, channel, newSessions[i].displayName);
+        learned[i].server   = readKey(section, "server");
+        learned[i].jumphost = readKey(section, "jumphost");
+        for (const char* key : kLearnedKeys) {
+            std::string v = readKey(section, key);
+            if (!v.empty())
+                learned[i].keys.emplace_back(key, std::move(v));
+        }
+    }
+
     EraseChannelLocked(sourceId, channel);
 
     // Add the new scan results as fresh sections + memory refs. All rows
     // added here share the same `channel` provenance, so a later
     // PruneChannel or [Manage custom locations] removal (also keyed on
     // channel) matches every row this call inserted.
-    for (const auto& w : newSessions) {
+    for (size_t i = 0; i < newSessions.size(); ++i) {
+        const auto& w = newSessions[i];
         const std::string section =
             SectionName(sourceId, channel, w.displayName);
         WriteSessionSection(section, m_cachePath, w.settings, channel);
+
+        // Back only where the adapter wrote nothing, and only for the same
+        // host; the jump host's key only for the same jump host.
+        const Learned& old = learned[i];
+        const bool sameHost = !old.server.empty() && old.server == readKey(section, "server");
+        const bool sameJump = !old.jumphost.empty() && old.jumphost == readKey(section, "jumphost");
+        for (const auto& [key, value] : old.keys) {
+            const bool isJumpKey = std::strcmp(key, "jumpfingerprint") == 0;
+            if (!(isJumpKey ? sameJump : sameHost) || !readKey(section, key).empty())
+                continue;
+            WritePrivateProfileStringA(section.c_str(), key, value.c_str(), m_cachePath.c_str());
+        }
         if (w.dependency.blocks()) {
             WritePrivateProfileStringA(section.c_str(), "_blocked",
                                         DependencyKindTag(w.dependency.kind),

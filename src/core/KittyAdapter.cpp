@@ -313,6 +313,25 @@ bool KittyAdapter::DetectStandard() const noexcept
     return !ResolveStandardSessionsDir().empty();
 }
 
+std::string KittyAdapter::ChangeStamp() const
+{
+    const std::string dir = ResolveStandardSessionsDir();
+    if (dir.empty()) return {};
+    std::wstring wide(dir.size() + 1, L'\0');
+    const int n = MultiByteToWideChar(CP_ACP, 0, dir.c_str(), -1, wide.data(), static_cast<int>(wide.size()));
+    if (n <= 0) return {};
+    wide.resize(static_cast<size_t>(n - 1));
+    return FolderChangeStamp(wide);
+}
+
+std::string KittyAdapter::CustomPathStamp(const std::string& path) const
+{
+    // The picked folder may be the install root; the sessions sit below it.
+    const std::string dir = NormalizeCustomPath(path);
+    return dir.empty() ? FileChangeStamp({ AnsiPathToWide(path) })
+                       : FolderChangeStamp(AnsiPathToWide(dir));
+}
+
 EnumerationResult KittyAdapter::EnumerateStandard()
 {
     const std::string dir = ResolveStandardSessionsDir();

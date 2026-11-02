@@ -41,6 +41,11 @@ public:
                       pConnectSettings out,
                       SessionDependency* dependency) override;
 
+    // The standard config and every file it includes, with their times, so
+    // an edit anywhere among them re-scans the folder on the next visit.
+    std::string ChangeStamp() const override;
+    std::string CustomPathStamp(const std::string& path) const override;
+
     CustomPathPickerKind CustomPathPicker() const noexcept override
     { return CustomPathPickerKind::File; }
 

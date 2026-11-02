@@ -210,6 +210,30 @@ bool SecureCrtAdapter::DetectStandard() const noexcept
     return PathExistsW(ToWide(root + "\\Default.ini"));
 }
 
+std::string SecureCrtAdapter::ChangeStamp() const
+{
+    const std::string root = GetStandardSessionsRoot();
+    if (root.empty()) return {};
+    const size_t slash = root.find_last_of("\\/");
+    std::string stamp = FolderChangeStamp(ToWide(root));
+    if (slash != std::string::npos)
+        stamp += FolderChangeStamp(ToWide(root.substr(0, slash) + "\\Firewalls"));
+    return stamp;
+}
+
+// Read the same way EnumerateCustomPath reads it, Firewalls beside it.
+std::string SecureCrtAdapter::CustomPathStamp(const std::string& path) const
+{
+    std::string root = path;
+    while (!root.empty() && (root.back() == '\\' || root.back() == '/'))
+        root.pop_back();
+    const size_t slash = root.find_last_of("\\/");
+    std::string stamp = FolderChangeStamp(ToWide(root));
+    if (slash != std::string::npos)
+        stamp += FolderChangeStamp(ToWide(root.substr(0, slash) + "\\Firewalls"));
+    return stamp;
+}
+
 EnumerationResult SecureCrtAdapter::EnumerateStandard()
 {
     EnumerationResult r;

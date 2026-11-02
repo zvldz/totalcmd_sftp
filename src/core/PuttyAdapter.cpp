@@ -269,6 +269,16 @@ bool PuttyAdapter::DetectStandard() const noexcept
     return true;
 }
 
+std::string PuttyAdapter::ChangeStamp() const
+{
+    return RegistryChangeStamp(kPuttySessionsRoot);
+}
+
+std::string PuttyAdapter::CustomPathStamp(const std::string& path) const
+{
+    return FileChangeStamp({ AnsiPathToWide(path) });
+}
+
 EnumerationResult PuttyAdapter::EnumerateStandard()
 {
     EnumerationResult r;

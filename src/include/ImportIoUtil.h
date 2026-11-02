@@ -35,6 +35,20 @@ void WalkDirectoryFiles(const std::wstring& root,
                         const std::wstring& ext,
                         WalkFileCallback     onFile);
 
+// Change stamps for IExternalSessionSource::ChangeStamp: names joined with
+// their last-write times, so an edit, an addition or a removal changes the
+// string. A path that does not exist contributes a marker of its own, so
+// its appearing later changes the stamp too.
+std::string FileChangeStamp(const std::vector<std::wstring>& files);
+// Every file under `root`, at any depth.
+std::string FolderChangeStamp(const std::wstring& root);
+// A key under HKEY_CURRENT_USER and each of its direct subkeys. A subkey's
+// time moves when one of its values is written, which is how PuTTY and
+// WinSCP store an edited session.
+std::string RegistryChangeStamp(const char* subKey);
+// A user-supplied path as the pickers deliver it (ANSI), widened.
+std::wstring AnsiPathToWide(const std::string& path);
+
 // Modern shell folder picker. `title` and `initialPath` are ANSI (CP_ACP);
 // the returned `outPath` is ANSI. Returns false if the user cancelled or the
 // selection could not be resolved to a filesystem path (e.g. namespace-only).

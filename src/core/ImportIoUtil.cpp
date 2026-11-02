@@ -257,6 +257,82 @@ void WalkDirectoryFiles(const std::wstring& root,
 
 namespace {
 
+std::string FileTimeText(const FILETIME& ft)
+{
+    return std::to_string((static_cast<unsigned long long>(ft.dwHighDateTime) << 32) |
+                          ft.dwLowDateTime);
+}
+
+std::string WideToUtf8Text(const std::wstring& s)
+{
+    const int n = WideCharToMultiByte(CP_UTF8, 0, s.c_str(), -1, nullptr, 0, nullptr, nullptr);
+    if (n <= 0) return {};
+    std::string out(static_cast<size_t>(n - 1), '\0');
+    WideCharToMultiByte(CP_UTF8, 0, s.c_str(), -1, out.data(), n, nullptr, nullptr);
+    return out;
+}
+
+void AppendFileStamp(std::string& stamp, const std::wstring& path)
+{
+    WIN32_FILE_ATTRIBUTE_DATA a{};
+    const bool ok = GetFileAttributesExW(path.c_str(), GetFileExInfoStandard, &a) != 0;
+    stamp += WideToUtf8Text(path) + '|' + (ok ? FileTimeText(a.ftLastWriteTime) : std::string("-")) + ';';
+}
+
+}  // namespace
+
+std::string FileChangeStamp(const std::vector<std::wstring>& files)
+{
+    std::string stamp;
+    for (const auto& f : files)
+        AppendFileStamp(stamp, f);
+    return stamp;
+}
+
+std::string FolderChangeStamp(const std::wstring& root)
+{
+    std::string stamp = WideToUtf8Text(root) + '>';
+    WalkDirectoryFiles(root, L"", [&stamp](const std::wstring& fullPath, const std::string&) {
+        AppendFileStamp(stamp, fullPath);
+        return true;
+    });
+    return stamp;
+}
+
+std::wstring AnsiPathToWide(const std::string& path)
+{
+    const int n = MultiByteToWideChar(CP_ACP, 0, path.c_str(), -1, nullptr, 0);
+    if (n <= 0) return {};
+    std::wstring out(static_cast<size_t>(n - 1), L'\0');
+    MultiByteToWideChar(CP_ACP, 0, path.c_str(), -1, out.data(), n);
+    return out;
+}
+
+std::string RegistryChangeStamp(const char* subKey)
+{
+    std::string stamp = std::string(subKey) + '>';
+    HKEY key = nullptr;
+    if (RegOpenKeyExA(HKEY_CURRENT_USER, subKey, 0, KEY_READ, &key) != ERROR_SUCCESS)
+        return stamp + '-';
+    FILETIME ft{};
+    if (RegQueryInfoKeyA(key, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+                         nullptr, nullptr, nullptr, nullptr, &ft) == ERROR_SUCCESS)
+        stamp += FileTimeText(ft) + ';';
+    for (DWORD i = 0;; ++i) {
+        std::array<char, 512> name{};
+        DWORD len = static_cast<DWORD>(name.size());
+        const LONG rc = RegEnumKeyExA(key, i, name.data(), &len, nullptr, nullptr, nullptr, &ft);
+        if (rc == ERROR_NO_MORE_ITEMS)
+            break;
+        if (rc == ERROR_SUCCESS)
+            stamp += std::string(name.data(), len) + '|' + FileTimeText(ft) + ';';
+    }
+    RegCloseKey(key);
+    return stamp;
+}
+
+namespace {
+
 // Convert an ANSI, NUL-separated Win32 filter ("A\0*.a\0B\0*.b\0") into a
 // wide, NUL-separated buffer with the required trailing double-NUL. Returns
 // empty vector on empty input.

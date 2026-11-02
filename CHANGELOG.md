@@ -19,6 +19,13 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   and `ProxyJump` with one hop as the jump host. The config stays the
   place the settings live; nothing has to be copied. `ProxyCommand` and
   jump chains are refused, `Match` is skipped.
+- **Imports follow their sources without `[Refresh]`.** Opening a source
+  folder notices when the program's files or registry keys changed since
+  the last look — and on the first look after Total Commander starts — and
+  re-reads them, in the auto-detected location and in the ones added by
+  hand. A location that has gone missing keeps its sessions, as before. A
+  host key confirmed for an imported session survives the re-read while
+  the host stays the same.
 - **Owner, group and permissions in the file list.** The plugin now
   offers custom columns — owner, group, permissions (`rwxr-xr-x`), octal
   (`0755`) and link target — and a default view with the first three next

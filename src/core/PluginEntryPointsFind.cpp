@@ -533,6 +533,27 @@ static HANDLE BuildImportsSourceListing(const std::string& sourceId,
     const bool isManageView = (subPath == kManageCustomFolder);
     const bool atSourceRoot = subPath.empty();
 
+    // A source that can tell when it changed is re-scanned on the visit
+    // after a change, so its edits show without [Refresh] — the standard
+    // location and every path the user added. The first visit in a session
+    // always scans once: the files may have changed while Total Commander
+    // was closed. A path that has gone missing re-scans as Unreachable,
+    // which keeps its sessions in the cache.
+    if (atSourceRoot && adapter) {
+        static std::unordered_map<std::string, std::string> s_lastStamp;
+        std::string stamp = adapter->ChangeStamp();
+        for (const auto& path : LoadImportCustomPaths(sourceId.c_str(), inifilename))
+            stamp += adapter->CustomPathStamp(path);
+        if (!stamp.empty()) {
+            const auto it = s_lastStamp.find(sourceId);
+            if (it == s_lastStamp.end() || it->second != stamp) {
+                SFTP_LOG("IMPORT", "%s changed on disk, re-scanning", sourceId.c_str());
+                RefreshImportSource(sourceId);
+                s_lastStamp[sourceId] = stamp;
+            }
+        }
+    }
+
     if (atSourceRoot) {
         // Detection hint — shown only when the standard location is not
         // currently reachable. The hint is a plain-file pseudo so Enter does

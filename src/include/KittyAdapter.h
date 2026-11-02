@@ -56,6 +56,9 @@ public:
     const char* FolderName() const noexcept override { return "[KiTTY]"; }
 
     bool DetectStandard() const noexcept override;
+    // Every file in the standard Sessions folder.
+    std::string ChangeStamp() const override;
+    std::string CustomPathStamp(const std::string& path) const override;
 
     EnumerationResult EnumerateStandard() override;
     EnumerationResult EnumerateCustomPath(const std::string& path) override;

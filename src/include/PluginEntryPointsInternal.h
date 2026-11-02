@@ -29,6 +29,10 @@ extern bool    g_inMultiOpTransfer;
 // Path helpers — defined in PluginEntryPoints.cpp, used across all entry-point TUs.
 pConnectSettings GetServerIdAndRelativePathFromPath(LPCSTR Path, LPSTR RelativePath, size_t maxlen);
 pConnectSettings GetServerIdAndRelativePathFromPathW(LPCWSTR Path, LPWSTR RelativePath, size_t maxlen);
+
+// Re-scans every channel of one import source into the cache, as
+// [Refresh] does (PluginEntryPointsFile.cpp).
+void RefreshImportSource(const std::string& sourceId);
 void  ResetLastPercent(pConnectSettings ConnectSettings);
 void  ApplyTcLanguageToPluginResources(const char* tcIniPath) noexcept;
 
