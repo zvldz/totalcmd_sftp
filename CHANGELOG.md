@@ -43,6 +43,14 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   and sizes, so every row had an empty date. Dates now come from `ls`
   run in English and UTC, whatever the server's locale and time zone, and
   the permissions reach Total Commander as they do in SFTP mode.
+- **Uploads no longer spin a CPU core while waiting for the server.**
+  When the connection could not take more data yet, the plugin polled the
+  socket in a tight loop instead of waiting for what libssh2 was actually
+  waiting on.
+- **A one-time code is not reused as the password.** With two-factor
+  login, an answer to a verification-code prompt was kept as the session
+  password and sent again on a reconnect or a background transfer. Only
+  answers to password prompts are kept now.
 - **Symbolic links show as links in SFTP mode too**, instead of with the
   length of their target as a size.
 - **Changing permissions with Alt+A works.** The command went out with

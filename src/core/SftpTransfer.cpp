@@ -620,7 +620,9 @@ int SftpUploadFileW(pConnectSettings cs, LPCWSTR LocalName, LPCWSTR RemoteName,
                         break;
                     }
                 }
-                IsSocketWritable(cs->sock);
+                // libssh2 is often waiting to read here (a window adjust from
+                // the server), not to write: wait for whichever it names.
+                WaitForSshIo(cs);
             } else {
                 SftpLogLastError("Upload write error: ", w);
                 ret = SFTP_WRITEFAILED;

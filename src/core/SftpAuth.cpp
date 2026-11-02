@@ -72,11 +72,11 @@ void kbd_callback(LPCSTR name, int name_len,
         memcpy(retbuf.data(), prompts[i].text, copyLen);
         retbuf[copyLen] = '\0';
         ShowStatus(retbuf.data());
-        bool autoSendPassword = (ConnectSettings && !ConnectSettings->account_password.empty() && !ConnectSettings->InteractivePasswordSent);
-        if (autoSendPassword) {
-            _strlwr_s(retbuf.data(), retbuf.size());
-            autoSendPassword = PromptLooksLikePasswordRequest(retbuf.data());
-        }
+        _strlwr_s(retbuf.data(), retbuf.size());
+        const bool passwordPrompt = PromptLooksLikePasswordRequest(retbuf.data());
+        bool autoSendPassword = passwordPrompt && ConnectSettings &&
+                                !ConnectSettings->account_password.empty() &&
+                                !ConnectSettings->InteractivePasswordSent;
         if (autoSendPassword) {
             ConnectSettings->InteractivePasswordSent = true;
             responses[i].text = _strdup(ConnectSettings->account_password.c_str());
@@ -109,8 +109,10 @@ void kbd_callback(LPCSTR name, int name_len,
             if (RequestProc(PluginNumber, RT_Password, title.c_str(), promptMsg.c_str(), retbuf.data(), retbuf.size()-1)) {
                 responses[i].text = _strdup(retbuf.data());
                 responses[i].length = (unsigned int)strlen(retbuf.data());
-                // Remember password for background transfers
-                if (ConnectSettings && ConnectSettings->account_password.empty()) {
+                // Remember the password for background transfers and
+                // reconnects. Only an answer to a password prompt: a one-time
+                // code kept here would be replayed as the password next time.
+                if (passwordPrompt && ConnectSettings && ConnectSettings->account_password.empty()) {
                     ConnectSettings->account_password = retbuf.data();
                     if (ConnectSettings->password.empty())
                         ConnectSettings->password = retbuf.data();
