@@ -146,6 +146,7 @@ struct FileStamp {
 
 struct IniDoc {
     bool                     loaded = false;
+    std::wstring             ioPath;  // file actually read and written
     FileStamp                stamp;
     std::vector<std::string> lines;   // UTF-8, without line breaks
 };
@@ -173,19 +174,62 @@ bool SameStamp(const FileStamp& a, const FileStamp& b)
            (a.size == b.size && CompareFileTime(&a.writeTime, &b.writeTime) == 0);
 }
 
-std::wstring DocKey(const std::wstring& path)
+std::wstring FullPath(const std::wstring& path)
 {
     const DWORD need = GetFullPathNameW(path.c_str(), 0, nullptr, nullptr);
-    std::wstring full = path;
-    if (need > 0) {
-        full.assign(need, L'\0');
-        const DWORD len = GetFullPathNameW(path.c_str(), need, full.data(), nullptr);
-        full.resize(len < need ? len : 0);
-        if (full.empty())
-            full = path;
-    }
-    CharLowerBuffW(full.data(), static_cast<DWORD>(full.size()));
+    if (need == 0)
+        return path;
+    std::wstring full(need, L'\0');
+    const DWORD len = GetFullPathNameW(path.c_str(), need, full.data(), nullptr);
+    if (len == 0 || len >= need)
+        return path;
+    full.resize(len);
     return full;
+}
+
+std::wstring DocKey(const std::wstring& full)
+{
+    std::wstring key = full;
+    CharLowerBuffW(key.data(), static_cast<DWORD>(key.size()));
+    return key;
+}
+
+// Total Commander keeps writable copies of INI files from write-protected
+// folders (Program Files) under %APPDATA%\GHISLER\redirect\<drive>_\<path>
+// and sends the plugin's profile API calls there. Direct file access does
+// not go through that, so the same place is looked up here.
+std::wstring RedirectPath(const std::wstring& full)
+{
+    if (full.size() < 3 || full[1] != L':' || full[2] != L'\\')
+        return {};
+    wchar_t appData[MAX_PATH];
+    const DWORD n = GetEnvironmentVariableW(L"APPDATA", appData, MAX_PATH);
+    if (n == 0 || n >= MAX_PATH)
+        return {};
+    return std::wstring(appData) + L"\\GHISLER\\redirect\\" + full[0] + L"_" + full.substr(2);
+}
+
+// An existing redirected copy wins over the original, as in TC.
+std::wstring ResolveIoPath(const std::wstring& full)
+{
+    const std::wstring redirected = RedirectPath(full);
+    if (!redirected.empty() && GetFileAttributesW(redirected.c_str()) != INVALID_FILE_ATTRIBUTES)
+        return redirected;
+    return full;
+}
+
+bool CreateParentDirs(const std::wstring& file)
+{
+    const size_t last = file.find_last_of(L'\\');
+    if (last == std::wstring::npos)
+        return false;
+    for (size_t pos = file.find(L'\\', 3); pos != std::wstring::npos && pos <= last;
+         pos = file.find(L'\\', pos + 1)) {
+        const std::wstring dir = file.substr(0, pos);
+        if (!CreateDirectoryW(dir.c_str(), nullptr) && GetLastError() != ERROR_ALREADY_EXISTS)
+            return false;
+    }
+    return true;
 }
 
 bool ReadAll(const std::wstring& path, std::string& out)
@@ -247,39 +291,55 @@ void Load(const std::wstring& path, IniDoc& doc, const FileStamp& st)
     }
 }
 
-// The parsed file for `key`, re-read when the file on disk changed.
-// Caller holds g_mutex.
-IniDoc& GetDoc(const std::wstring& key)
+// The parsed file for the full path `full`, re-read when the file on disk
+// changed or a redirected copy appeared. Caller holds g_mutex.
+IniDoc& GetDoc(const std::wstring& full)
 {
-    IniDoc& doc = g_docs[key];
-    const FileStamp st = ReadStamp(key);
-    if (!doc.loaded || !SameStamp(doc.stamp, st))
-        Load(key, doc, st);
+    IniDoc& doc = g_docs[DocKey(full)];
+    const std::wstring io = ResolveIoPath(full);
+    const FileStamp st = ReadStamp(io);
+    if (!doc.loaded || doc.ioPath != io || !SameStamp(doc.stamp, st)) {
+        doc.ioPath = io;
+        Load(io, doc, st);
+    }
     return doc;
 }
 
-bool Save(const std::wstring& path, IniDoc& doc)
+// Replace through a temporary copy so a reader never sees half a file.
+// When the target is held open without delete sharing, overwrite it in
+// place instead.
+bool WriteReplace(const std::wstring& path, const std::string& body)
+{
+    const std::wstring tmp = path + L".tmp";
+    if (WriteAll(tmp, body) &&
+        MoveFileExW(tmp.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+        return true;
+    DeleteFileW(tmp.c_str());
+    return WriteAll(path, body);
+}
+
+bool Save(const std::wstring& full, IniDoc& doc)
 {
     std::string body;
     for (const auto& line : doc.lines) {
         body += line;
         body += "\r\n";
     }
-    // Replace through a temporary copy so a reader never sees half a file.
-    // When the target is held open without delete sharing, overwrite it in
-    // place instead.
-    const std::wstring tmp = path + L".tmp";
-    bool ok = WriteAll(tmp, body) &&
-              MoveFileExW(tmp.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
-    if (!ok) {
-        DeleteFileW(tmp.c_str());
-        ok = WriteAll(path, body);
+    bool ok = WriteReplace(doc.ioPath, body);
+    // A write-protected original goes to the redirected copy, where TC
+    // would have put it.
+    if (!ok && doc.ioPath == full) {
+        const std::wstring redirected = RedirectPath(full);
+        if (!redirected.empty() && CreateParentDirs(redirected) && WriteReplace(redirected, body)) {
+            doc.ioPath = redirected;
+            ok = true;
+        }
     }
     if (!ok) {
         doc.loaded = false;   // drop the unsaved change, re-read the disk
         return false;
     }
-    doc.stamp = ReadStamp(path);
+    doc.stamp = ReadStamp(doc.ioPath);
     return true;
 }
 
@@ -477,7 +537,7 @@ DWORD GetStringT(const Ch* section, const Ch* key, const Ch* defaultValue,
     if (!out || outSize == 0)
         return 0;
     std::lock_guard<std::mutex> lock(g_mutex);
-    const IniDoc& doc = GetDoc(DocKey(PathOf(path)));
+    const IniDoc& doc = GetDoc(FullPath(PathOf(path)));
     if (!section)
         return CopyList(SectionNames(doc), out, outSize);
     if (const auto r = FindSection(doc, ToUtf8(section))) {
@@ -532,7 +592,7 @@ UINT GetIntT(const Ch* section, const Ch* key, INT defaultValue, const Ch* path)
     if (!section || !key)
         return static_cast<UINT>(defaultValue);
     std::lock_guard<std::mutex> lock(g_mutex);
-    const IniDoc& doc = GetDoc(DocKey(PathOf(path)));
+    const IniDoc& doc = GetDoc(FullPath(PathOf(path)));
     const auto r = FindSection(doc, ToUtf8(section));
     if (!r)
         return static_cast<UINT>(defaultValue);
@@ -551,11 +611,11 @@ BOOL WriteStringT(const Ch* section, const Ch* key, const Ch* value, const Ch* p
 {
     if (!section || !path)
         return FALSE;
-    const std::wstring docKey = DocKey(PathOf(path));
-    PathLock fileLock(docKey);
+    const std::wstring full = FullPath(PathOf(path));
+    PathLock fileLock(DocKey(full));
     std::lock_guard<std::mutex> lock(g_mutex);
     // Re-read under the lock: another process may have written meanwhile.
-    IniDoc& doc = GetDoc(docKey);
+    IniDoc& doc = GetDoc(full);
     const std::string sec = ToUtf8(section);
     bool changed;
     if (!key)
@@ -566,7 +626,7 @@ BOOL WriteStringT(const Ch* section, const Ch* key, const Ch* value, const Ch* p
         changed = SetValue(doc, sec, ToUtf8(key), ToUtf8(value));
     if (!changed)
         return TRUE;
-    return Save(docKey, doc) ? TRUE : FALSE;
+    return Save(full, doc) ? TRUE : FALSE;
 }
 
 }  // namespace

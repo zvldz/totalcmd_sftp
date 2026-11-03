@@ -20,6 +20,11 @@
 // write. ANSI overloads convert through CP_ACP at the boundary, wide ones
 // through UTF-16.
 //
+// A file in a write-protected folder is looked up and written where Total
+// Commander redirects the profile API for plugins:
+// %APPDATA%\GHISLER\redirect\<drive>_\<path>. An existing copy there wins;
+// a write the original folder refuses creates it.
+//
 // Parsed files are cached by path and re-read when their timestamp or size
 // changes. A write takes a named mutex for the path, re-reads the file if
 // another process changed it, applies the change and replaces the file via
