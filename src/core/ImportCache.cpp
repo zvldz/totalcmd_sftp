@@ -1,5 +1,6 @@
 #include "ImportCache.h"
 #include "ImportIoUtil.h"
+#include "IniFile.h"
 #include "PluginEntryPointsInternal.h"
 #include "SftpClient.h"
 
@@ -61,9 +62,9 @@ bool ParseSectionName(const std::string& section,
 std::string ReadSourceTag(const std::string& section, const std::string& iniPath)
 {
     std::array<char, 512> buf{};
-    GetPrivateProfileStringA(section.c_str(), "_source", "",
-                              buf.data(), static_cast<DWORD>(buf.size()),
-                              iniPath.c_str());
+    IniGetString(section.c_str(), "_source", "",
+                  buf.data(), static_cast<DWORD>(buf.size()),
+                  iniPath.c_str());
     return buf.data();
 }
 
@@ -97,28 +98,28 @@ void WriteSessionSection(const std::string& section,
                          const std::string& sourceOrigin)
 {
     // Clear any previous section content, then rewrite.
-    WritePrivateProfileStringA(section.c_str(), nullptr, nullptr, iniPath.c_str());
+    IniWriteString(section.c_str(), nullptr, nullptr, iniPath.c_str());
     if (!s) return;
 
     // Channel provenance tag. Always present.
-    WritePrivateProfileStringA(section.c_str(), "_source",
-                                sourceOrigin.c_str(), iniPath.c_str());
+    IniWriteString(section.c_str(), "_source",
+                    sourceOrigin.c_str(), iniPath.c_str());
 
     if (!s->server.empty())
-        WritePrivateProfileStringA(section.c_str(), "server",
-                                    s->server.c_str(), iniPath.c_str());
+        IniWriteString(section.c_str(), "server",
+                        s->server.c_str(), iniPath.c_str());
     if (!s->user.empty())
-        WritePrivateProfileStringA(section.c_str(), "user",
-                                    s->user.c_str(), iniPath.c_str());
+        IniWriteString(section.c_str(), "user",
+                        s->user.c_str(), iniPath.c_str());
     if (!s->pubkeyfile.empty())
-        WritePrivateProfileStringA(section.c_str(), "pubkeyfile",
-                                    s->pubkeyfile.c_str(), iniPath.c_str());
+        IniWriteString(section.c_str(), "pubkeyfile",
+                        s->pubkeyfile.c_str(), iniPath.c_str());
     if (!s->privkeyfile.empty())
-        WritePrivateProfileStringA(section.c_str(), "privkeyfile",
-                                    s->privkeyfile.c_str(), iniPath.c_str());
+        IniWriteString(section.c_str(), "privkeyfile",
+                        s->privkeyfile.c_str(), iniPath.c_str());
     if (s->useagent)
-        WritePrivateProfileStringA(section.c_str(), "useagent",
-                                    "1", iniPath.c_str());
+        IniWriteString(section.c_str(), "useagent",
+                        "1", iniPath.c_str());
 
     // SCP-only transfer mode. Populated by adapters whose source can
     // configure a session for SCP instead of SFTP (WinSCP with
@@ -127,27 +128,27 @@ void WriteSessionSection(const std::string& section,
     // existing scponly flag would need explicit "0", which no adapter
     // currently does.
     if (s->scponly)
-        WritePrivateProfileStringA(section.c_str(), "scponly",
-                                    "1", iniPath.c_str());
+        IniWriteString(section.c_str(), "scponly",
+                        "1", iniPath.c_str());
     if (s->scpfordata)
-        WritePrivateProfileStringA(section.c_str(), "scpfordata",
-                                    "1", iniPath.c_str());
+        IniWriteString(section.c_str(), "scpfordata",
+                        "1", iniPath.c_str());
 
     // Password is stored DPAPI-obfuscated — the same shape sftpplug.ini uses.
     if (!s->password.empty())
-        WritePrivateProfileStringA(section.c_str(), "password",
-                                    s->password.c_str(), iniPath.c_str());
+        IniWriteString(section.c_str(), "password",
+                        s->password.c_str(), iniPath.c_str());
 
     // utf8names / unixlinebreaks are tri-state (-1 = auto, 0 = no, 1 = yes).
     // -1 means "not populated by the adapter" — skip.
     if (s->utf8names == 0 || s->utf8names == 1)
-        WritePrivateProfileStringA(section.c_str(), "utf8",
-                                    s->utf8names == 1 ? "1" : "0",
-                                    iniPath.c_str());
+        IniWriteString(section.c_str(), "utf8",
+                        s->utf8names == 1 ? "1" : "0",
+                        iniPath.c_str());
     if (s->unixlinebreaks == 0 || s->unixlinebreaks == 1)
-        WritePrivateProfileStringA(section.c_str(), "unixlinebreaks",
-                                    s->unixlinebreaks == 1 ? "1" : "0",
-                                    iniPath.c_str());
+        IniWriteString(section.c_str(), "unixlinebreaks",
+                        s->unixlinebreaks == 1 ? "1" : "0",
+                        iniPath.c_str());
 
     // codepage: 0 = not populated. Meaningful only when utf8names == 0;
     // adapters that map LineCodePage-style names write both — utf8names=0
@@ -155,42 +156,42 @@ void WriteSessionSection(const std::string& section,
     if (s->codepage > 0) {
         char cpBuf[16];
         std::snprintf(cpBuf, sizeof(cpBuf), "%d", s->codepage);
-        WritePrivateProfileStringA(section.c_str(), "codepage",
-                                    cpBuf, iniPath.c_str());
+        IniWriteString(section.c_str(), "codepage",
+                        cpBuf, iniPath.c_str());
     }
 
     // scpserver64bit is tri-state (-1 = auto, 0 = no, 1 = yes) and is
     // persisted under the INI key `largefilesupport`. Written explicitly
     // as 0 for SCP-only sessions so the plugin skips the >2 GB shell probe.
     if (s->scpserver64bit == 0 || s->scpserver64bit == 1)
-        WritePrivateProfileStringA(section.c_str(), "largefilesupport",
-                                    s->scpserver64bit == 1 ? "1" : "0",
-                                    iniPath.c_str());
+        IniWriteString(section.c_str(), "largefilesupport",
+                        s->scpserver64bit == 1 ? "1" : "0",
+                        iniPath.c_str());
 
     // Jump host, under the same keys a saved session uses, so connecting,
     // copying and exporting the row all take it along. Written only with a
     // host to go through; the port only when it is not the default 22.
     if (s->use_jump_host && !s->jump_host.empty()) {
-        WritePrivateProfileStringA(section.c_str(), "usejumphost",
-                                    "1", iniPath.c_str());
-        WritePrivateProfileStringA(section.c_str(), "jumphost",
-                                    s->jump_host.c_str(), iniPath.c_str());
+        IniWriteString(section.c_str(), "usejumphost",
+                        "1", iniPath.c_str());
+        IniWriteString(section.c_str(), "jumphost",
+                        s->jump_host.c_str(), iniPath.c_str());
         if (s->jump_port != 0 && s->jump_port != 22)
-            WritePrivateProfileStringA(section.c_str(), "jumpport",
-                                        std::to_string(s->jump_port).c_str(),
-                                        iniPath.c_str());
+            IniWriteString(section.c_str(), "jumpport",
+                            std::to_string(s->jump_port).c_str(),
+                            iniPath.c_str());
         if (!s->jump_user.empty())
-            WritePrivateProfileStringA(section.c_str(), "jumpuser",
-                                        s->jump_user.c_str(), iniPath.c_str());
+            IniWriteString(section.c_str(), "jumpuser",
+                            s->jump_user.c_str(), iniPath.c_str());
         if (!s->jump_pubkeyfile.empty())
-            WritePrivateProfileStringA(section.c_str(), "jumppubkeyfile",
-                                        s->jump_pubkeyfile.c_str(), iniPath.c_str());
+            IniWriteString(section.c_str(), "jumppubkeyfile",
+                            s->jump_pubkeyfile.c_str(), iniPath.c_str());
         if (!s->jump_privkeyfile.empty())
-            WritePrivateProfileStringA(section.c_str(), "jumpprivkeyfile",
-                                        s->jump_privkeyfile.c_str(), iniPath.c_str());
+            IniWriteString(section.c_str(), "jumpprivkeyfile",
+                            s->jump_privkeyfile.c_str(), iniPath.c_str());
         if (s->jump_useagent)
-            WritePrivateProfileStringA(section.c_str(), "jumpuseagent",
-                                        "1", iniPath.c_str());
+            IniWriteString(section.c_str(), "jumpuseagent",
+                            "1", iniPath.c_str());
     }
 }
 
@@ -250,9 +251,9 @@ void ImportCache::Load()
     // reconstruct in-memory refs. Read _source tag inline to remember
     // channel provenance across TC restarts.
     std::vector<char> buf(65536, '\0');
-    const DWORD len = GetPrivateProfileSectionNamesA(buf.data(),
-                                                      static_cast<DWORD>(buf.size()),
-                                                      m_cachePath.c_str());
+    const DWORD len = IniGetSectionNames(buf.data(),
+                                          static_cast<DWORD>(buf.size()),
+                                          m_cachePath.c_str());
     if (len == 0) return;
 
     const char* p = buf.data();
@@ -313,8 +314,8 @@ void ImportCache::EraseChannelLocked(const std::string& sourceId,
     for (const auto& r : m_sessions) {
         if (is_target(r)) {
             const std::string section = SectionName(r.sourceId, channel, r.displayName);
-            WritePrivateProfileStringA(section.c_str(), nullptr, nullptr,
-                                        m_cachePath.c_str());
+            IniWriteString(section.c_str(), nullptr, nullptr,
+                            m_cachePath.c_str());
         }
     }
     m_sessions.erase(
@@ -327,9 +328,9 @@ SessionDependency ImportCache::ReadDependency(const std::string& section,
 {
     SessionDependency out;
     std::array<char, 32> kind{};
-    GetPrivateProfileStringA(section.c_str(), "_blocked", "",
-                              kind.data(), static_cast<DWORD>(kind.size()),
-                              iniPath.c_str());
+    IniGetString(section.c_str(), "_blocked", "",
+                  kind.data(), static_cast<DWORD>(kind.size()),
+                  iniPath.c_str());
     if (!kind[0])
         return out;
 
@@ -341,23 +342,23 @@ SessionDependency ImportCache::ReadDependency(const std::string& section,
         out.kind = SessionDependency::Kind::Bastion;
 
     std::array<char, 512> via{};
-    GetPrivateProfileStringA(section.c_str(), "_blockedvia", "",
-                              via.data(), static_cast<DWORD>(via.size()),
-                              iniPath.c_str());
+    IniGetString(section.c_str(), "_blockedvia", "",
+                  via.data(), static_cast<DWORD>(via.size()),
+                  iniPath.c_str());
     out.detail = via.data();
 
     // Present only when the adapter could describe the proxy in our terms.
     const int proxyType = static_cast<int>(
-        GetPrivateProfileIntA(section.c_str(), "_blockedproxytype", 0, iniPath.c_str()));
+        IniGetInt(section.c_str(), "_blockedproxytype", 0, iniPath.c_str()));
     if (proxyType > 0) {
         std::array<char, 512> server{};
         std::array<char, 512> user{};
-        GetPrivateProfileStringA(section.c_str(), "_blockedproxyserver", "",
-                                  server.data(), static_cast<DWORD>(server.size()),
-                                  iniPath.c_str());
-        GetPrivateProfileStringA(section.c_str(), "_blockedproxyuser", "",
-                                  user.data(), static_cast<DWORD>(user.size()),
-                                  iniPath.c_str());
+        IniGetString(section.c_str(), "_blockedproxyserver", "",
+                      server.data(), static_cast<DWORD>(server.size()),
+                      iniPath.c_str());
+        IniGetString(section.c_str(), "_blockedproxyuser", "",
+                      user.data(), static_cast<DWORD>(user.size()),
+                      iniPath.c_str());
         out.proxyType   = static_cast<Proxy>(proxyType);
         out.proxyServer = server.data();
         out.proxyUser   = user.data();
@@ -384,8 +385,8 @@ void ImportCache::ReplaceChannel(const std::string& sourceId,
         "fingerprint", "jumpfingerprint", "utf8", "unixlinebreaks", "largefilesupport" };
     auto readKey = [this](const std::string& section, const char* key) {
         std::array<char, 512> buf{};
-        GetPrivateProfileStringA(section.c_str(), key, "", buf.data(),
-                                 static_cast<DWORD>(buf.size()), m_cachePath.c_str());
+        IniGetString(section.c_str(), key, "", buf.data(),
+                     static_cast<DWORD>(buf.size()), m_cachePath.c_str());
         return std::string(buf.data());
     };
     std::vector<Learned> learned(newSessions.size());
@@ -421,28 +422,28 @@ void ImportCache::ReplaceChannel(const std::string& sourceId,
             const bool isJumpKey = std::strcmp(key, "jumpfingerprint") == 0;
             if (!(isJumpKey ? sameJump : sameHost) || !readKey(section, key).empty())
                 continue;
-            WritePrivateProfileStringA(section.c_str(), key, value.c_str(), m_cachePath.c_str());
+            IniWriteString(section.c_str(), key, value.c_str(), m_cachePath.c_str());
         }
         if (w.dependency.blocks()) {
-            WritePrivateProfileStringA(section.c_str(), "_blocked",
-                                        DependencyKindTag(w.dependency.kind),
-                                        m_cachePath.c_str());
+            IniWriteString(section.c_str(), "_blocked",
+                            DependencyKindTag(w.dependency.kind),
+                            m_cachePath.c_str());
             if (!w.dependency.detail.empty())
-                WritePrivateProfileStringA(section.c_str(), "_blockedvia",
-                                            w.dependency.detail.c_str(),
-                                            m_cachePath.c_str());
+                IniWriteString(section.c_str(), "_blockedvia",
+                                w.dependency.detail.c_str(),
+                                m_cachePath.c_str());
             if (w.dependency.transferable()) {
                 const std::string type =
                     std::to_string(static_cast<int>(w.dependency.proxyType));
-                WritePrivateProfileStringA(section.c_str(), "_blockedproxytype",
-                                            type.c_str(), m_cachePath.c_str());
-                WritePrivateProfileStringA(section.c_str(), "_blockedproxyserver",
-                                            w.dependency.proxyServer.c_str(),
-                                            m_cachePath.c_str());
+                IniWriteString(section.c_str(), "_blockedproxytype",
+                                type.c_str(), m_cachePath.c_str());
+                IniWriteString(section.c_str(), "_blockedproxyserver",
+                                w.dependency.proxyServer.c_str(),
+                                m_cachePath.c_str());
                 if (!w.dependency.proxyUser.empty())
-                    WritePrivateProfileStringA(section.c_str(), "_blockedproxyuser",
-                                                w.dependency.proxyUser.c_str(),
-                                                m_cachePath.c_str());
+                    IniWriteString(section.c_str(), "_blockedproxyuser",
+                                    w.dependency.proxyUser.c_str(),
+                                    m_cachePath.c_str());
             }
         }
         CachedSessionRef ref;

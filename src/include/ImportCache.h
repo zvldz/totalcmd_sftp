@@ -76,7 +76,7 @@ public:
     // Replace all cached sessions for (sourceId, channel) with `newSessions`.
     // Corresponds to a refresh whose channel result was OkWithSessions.
     // Wipes the affected `[__import.<sourceId>.<channelHash>.*]` sections
-    // then writes the new ones via WritePrivateProfileString.
+    // then writes the new ones via IniWriteString.
     void ReplaceChannel(const std::string& sourceId,
                         const std::string& channel,
                         const std::vector<CacheWriteEntry>& newSessions);
