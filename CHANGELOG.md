@@ -20,6 +20,15 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   exported with F5 and copied back in is now read with its non-English
   characters intact.
 
+### Fixes
+
+- **Imported sessions keep non-English names and paths.** Sessions from
+  SecureCRT, FileZilla and `~/.ssh/config` with Cyrillic (or other
+  non-English) names, hosts or key paths were shown and stored garbled, and
+  a custom import location in such a folder was not read. PuTTY, KiTTY and
+  WinSCP sessions read the same characters correctly too, including
+  locations in folders outside the system codepage.
+
 ## 10.0.2.2 — 2026-11-03
 
 ### Features

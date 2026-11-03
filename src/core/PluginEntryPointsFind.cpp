@@ -543,7 +543,7 @@ static HANDLE BuildImportsSourceListing(const std::string& sourceId,
         static std::unordered_map<std::string, std::string> s_lastStamp;
         std::string stamp = adapter->ChangeStamp();
         for (const auto& path : LoadImportCustomPaths(sourceId.c_str(), inifilename))
-            stamp += adapter->CustomPathStamp(path);
+            stamp += adapter->CustomPathStamp(unicode_util::internal_to_utf8(path));
         if (!stamp.empty()) {
             const auto it = s_lastStamp.find(sourceId);
             if (it == s_lastStamp.end() || it->second != stamp) {

@@ -127,7 +127,7 @@ void FillConnectSettings(const VanDykeFile& file, tConnectSettings* out)
     out->user        = GetString(file, "Username");
     // Same route as the other adapters: expand any %VARS% first, then let
     // the shared helper decide public vs private by extension.
-    AssignImportedKeyFile(ExpandEnvA(GetString(file, "Identity Filename V2")),
+    AssignImportedKeyFile(ExpandEnv(GetString(file, "Identity Filename V2")),
                           out->privkeyfile, out->pubkeyfile);
 
     // "Output Transformer Name" = "UTF-8" is the common modern encoding.
@@ -196,7 +196,7 @@ bool FillJumpFromSession(const std::string& channelRoot,
     if (port != 0 && port <= 0xFFFF)
         out->jump_port = static_cast<unsigned short>(port);
     out->jump_user = GetString(jump, "Username");
-    AssignImportedKeyFile(ExpandEnvA(GetString(jump, "Identity Filename V2")),
+    AssignImportedKeyFile(ExpandEnv(GetString(jump, "Identity Filename V2")),
                           out->jump_privkeyfile, out->jump_pubkeyfile);
     return true;
 }

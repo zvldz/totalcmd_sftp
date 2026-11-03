@@ -8,6 +8,7 @@
 #include <windows.h>
 
 #include "ImportIoUtil.h"
+#include "UnicodeHelpers.h"
 
 #include <array>
 #include <cctype>
@@ -23,15 +24,16 @@ namespace {
 // This name is fixed by KiTTY itself and does not vary between versions.
 constexpr const char* kSessionsDirName = "Sessions";
 
-bool PathIsDirectory(const std::string& path) noexcept
+// Paths in this adapter are UTF-8, like every string an adapter handles.
+bool PathIsDirectory(const std::string& path)
 {
-    const DWORD a = GetFileAttributesA(path.c_str());
+    const DWORD a = GetFileAttributesW(Utf8PathToWide(path).c_str());
     return a != INVALID_FILE_ATTRIBUTES && (a & FILE_ATTRIBUTE_DIRECTORY);
 }
 
-bool PathIsFile(const std::string& path) noexcept
+bool PathIsFile(const std::string& path)
 {
-    const DWORD a = GetFileAttributesA(path.c_str());
+    const DWORD a = GetFileAttributesW(Utf8PathToWide(path).c_str());
     return a != INVALID_FILE_ATTRIBUTES && !(a & FILE_ATTRIBUTE_DIRECTORY);
 }
 
@@ -56,14 +58,15 @@ std::string JoinPath(const std::string& a, const char* b)
 // can rely on the last-slash rule. Empty lines and lines without a '\'
 // separator are silently skipped.
 //
-// Value is returned URL-decoded. Missing key → false, no `out` write.
+// Value is returned URL-decoded, in UTF-8. Missing key → false, no `out`
+// write.
 // -------------------------------------------------------------------------
 bool ReadKittyString(const std::string& filePath,
                      const char* key,
                      std::string& out)
 {
-    HANDLE h = CreateFileA(filePath.c_str(), GENERIC_READ, FILE_SHARE_READ,
-                            nullptr, OPEN_EXISTING, 0, nullptr);
+    HANDLE h = CreateFileW(Utf8PathToWide(filePath).c_str(), GENERIC_READ, FILE_SHARE_READ,
+                           nullptr, OPEN_EXISTING, 0, nullptr);
     if (h == INVALID_HANDLE_VALUE) return false;
 
     LARGE_INTEGER sz{};
@@ -102,7 +105,7 @@ bool ReadKittyString(const std::string& filePath,
         const size_t lastSep = line.rfind('\\');
         if (lastSep <= firstSep) continue;
 
-        out = PuttyUrlDecode(line.substr(firstSep + 1, lastSep - firstSep - 1));
+        out = DecodedNameToUtf8(PuttyUrlDecode(line.substr(firstSep + 1, lastSep - firstSep - 1)));
         return true;
     }
     return false;
@@ -135,7 +138,7 @@ constexpr const char* kProbeSuffix = "\\KiTTY\\Sessions";
 
 std::string TryEnvProbe(const char* envVarPercent)
 {
-    const std::string base = ExpandEnvA(envVarPercent);
+    const std::string base = ExpandEnv(envVarPercent);
     // ExpandEnv leaves `%FOO%` untouched when FOO is not set — reject that.
     if (base.empty() || base == envVarPercent) return {};
     const std::string full = base + kProbeSuffix;
@@ -152,27 +155,20 @@ std::string TryHkcrProbe()
     LONG rc = RegOpenKeyExA(HKEY_CLASSES_ROOT, ".kitty", 0, KEY_READ, &key);
     if (rc != ERROR_SUCCESS) return {};
 
-    std::array<char, 256> progId{};
-    DWORD progIdBytes = static_cast<DWORD>(progId.size());
-    DWORD type = 0;
-    rc = RegQueryValueExA(key, nullptr, nullptr, &type,
-                           reinterpret_cast<LPBYTE>(progId.data()), &progIdBytes);
+    std::string progId;
+    const bool gotProgId = ReadRegString(key, "", progId);
     RegCloseKey(key);
-    if (rc != ERROR_SUCCESS || type != REG_SZ || progId[0] == 0) return {};
+    if (!gotProgId) return {};
 
-    const std::string cmdKey = std::string(progId.data()) + "\\shell\\open\\command";
-    rc = RegOpenKeyExA(HKEY_CLASSES_ROOT, cmdKey.c_str(), 0, KEY_READ, &key);
+    const std::string cmdKey = progId + "\\shell\\open\\command";
+    rc = RegOpenKeyExW(HKEY_CLASSES_ROOT, Utf8PathToWide(cmdKey).c_str(), 0, KEY_READ, &key);
     if (rc != ERROR_SUCCESS) return {};
 
-    std::array<char, 1024> cmd{};
-    DWORD cmdBytes = static_cast<DWORD>(cmd.size());
-    rc = RegQueryValueExA(key, nullptr, nullptr, &type,
-                           reinterpret_cast<LPBYTE>(cmd.data()), &cmdBytes);
+    std::string handler;
+    const bool gotHandler = ReadRegString(key, "", handler);
     RegCloseKey(key);
-    if (rc != ERROR_SUCCESS || (type != REG_SZ && type != REG_EXPAND_SZ)) return {};
-
-    std::string handler = cmd.data();
-    if (type == REG_EXPAND_SZ) handler = ExpandEnvA(handler);
+    if (!gotHandler) return {};
+    handler = ExpandEnv(handler);
 
     // Extract exe path: quoted form `"C:\Path\kitty.exe" "%1"` or bare form
     // `C:\Path\kitty.exe %1`.
@@ -239,8 +235,8 @@ EnumerationResult EnumerateSessionsDir(const std::string& dir,
     }
 
     const std::string pattern = JoinPath(dir, "*");
-    WIN32_FIND_DATAA fd{};
-    HANDLE hFind = FindFirstFileA(pattern.c_str(), &fd);
+    WIN32_FIND_DATAW fd{};
+    HANDLE hFind = FindFirstFileW(Utf8PathToWide(pattern).c_str(), &fd);
     if (hFind == INVALID_HANDLE_VALUE) {
         r.status = EnumerationStatus::OkEmpty;
         return r;
@@ -249,7 +245,7 @@ EnumerationResult EnumerateSessionsDir(const std::string& dir,
     int filtered = 0;
     do {
         if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
-        const std::string encName = fd.cFileName;
+        const std::string encName = unicode_util::wstring_to_utf8(fd.cFileName);
         if (encName.empty() || encName == "." || encName == "..") continue;
         if (_stricmp(encName.c_str(), "Default%20Settings") == 0) { ++filtered; continue; }
 
@@ -259,10 +255,10 @@ EnumerationResult EnumerateSessionsDir(const std::string& dir,
         if (_stricmp(proto.c_str(), "ssh") != 0) { ++filtered; continue; }
 
         ExternalSessionEntry e;
-        e.displayName  = PuttyUrlDecode(encName);
+        e.displayName  = DecodedNameToUtf8(PuttyUrlDecode(encName));
         e.sourceOrigin = sourceOrigin;
         r.sessions.push_back(std::move(e));
-    } while (FindNextFileA(hFind, &fd));
+    } while (FindNextFileW(hFind, &fd));
     FindClose(hFind);
 
     SFTP_LOG("KITTY", "EnumerateSessionsDir dir='%s' sessions=%zu filtered=%d",
@@ -317,19 +313,15 @@ std::string KittyAdapter::ChangeStamp() const
 {
     const std::string dir = ResolveStandardSessionsDir();
     if (dir.empty()) return {};
-    std::wstring wide(dir.size() + 1, L'\0');
-    const int n = MultiByteToWideChar(CP_ACP, 0, dir.c_str(), -1, wide.data(), static_cast<int>(wide.size()));
-    if (n <= 0) return {};
-    wide.resize(static_cast<size_t>(n - 1));
-    return FolderChangeStamp(wide);
+    return FolderChangeStamp(Utf8PathToWide(dir));
 }
 
 std::string KittyAdapter::CustomPathStamp(const std::string& path) const
 {
     // The picked folder may be the install root; the sessions sit below it.
     const std::string dir = NormalizeCustomPath(path);
-    return dir.empty() ? FileChangeStamp({ AnsiPathToWide(path) })
-                       : FolderChangeStamp(AnsiPathToWide(dir));
+    return dir.empty() ? FileChangeStamp({ Utf8PathToWide(path) })
+                       : FolderChangeStamp(Utf8PathToWide(dir));
 }
 
 EnumerationResult KittyAdapter::EnumerateStandard()
@@ -364,7 +356,14 @@ bool KittyAdapter::LoadSettings(const ExternalSessionEntry& entry,
     }
     if (dir.empty()) return false;
 
-    const std::string filePath = JoinPath(dir, PuttyUrlEncode(entry.displayName).c_str());
+    // KiTTY encodes the file name from the system codepage; a UTF-8 spelling
+    // is tried first in case a copy came from elsewhere.
+    std::string filePath = JoinPath(dir, PuttyUrlEncode(entry.displayName).c_str());
+    if (!PathIsFile(filePath)) {
+        const std::string acpName = unicode_util::wide_to_narrow(
+            unicode_util::utf8_to_wstring(entry.displayName), CP_ACP);
+        filePath = JoinPath(dir, PuttyUrlEncode(acpName).c_str());
+    }
     if (!PathIsFile(filePath)) {
         SFTP_LOG("KITTY", "LoadSettings: file missing '%s'", filePath.c_str());
         return false;
@@ -387,7 +386,7 @@ bool KittyAdapter::LoadSettings(const ExternalSessionEntry& entry,
     std::string userName, keyFile, lineCodePage;
     ReadKittyString(filePath, "UserName", userName);
     if (ReadKittyString(filePath, "PublicKeyFile", keyFile))
-        keyFile = ExpandEnvA(keyFile);
+        keyFile = ExpandEnv(keyFile);
     ReadKittyString(filePath, "LineCodePage", lineCodePage);
 
     DWORD useAgent = 0;

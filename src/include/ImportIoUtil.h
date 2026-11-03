@@ -46,11 +46,16 @@ std::string FolderChangeStamp(const std::wstring& root);
 // time moves when one of its values is written, which is how PuTTY and
 // WinSCP store an edited session.
 std::string RegistryChangeStamp(const char* subKey);
-// A user-supplied path as the pickers deliver it (ANSI), widened.
-std::wstring AnsiPathToWide(const std::string& path);
+// Import adapters work in UTF-8: the paths they are given, the strings they
+// return. A path in that form, widened.
+std::wstring Utf8PathToWide(const std::string& path);
+
+// A name after PuttyUrlDecode: PuTTY writes the bytes of the system codepage,
+// WinSCP writes UTF-8. Valid UTF-8 is kept, anything else is read as CP_ACP.
+std::string DecodedNameToUtf8(const std::string& bytes);
 
 // Modern shell folder picker. `title` and `initialPath` are ANSI (CP_ACP);
-// the returned `outPath` is ANSI. Returns false if the user cancelled or the
+// the returned `outPath` is an internal string, as custom paths are stored. Returns false if the user cancelled or the
 // selection could not be resolved to a filesystem path (e.g. namespace-only).
 bool BrowseForFolder(HWND               owner,
                      const char*        title,
@@ -114,16 +119,16 @@ std::string PuttyUrlEncode(const std::string& raw);
 // Hex nibble to int. Returns -1 on non-hex input.
 int  HexNibble(char c) noexcept;
 
-// REG_SZ / REG_EXPAND_SZ reader that trims trailing NULs. Returns false
-// when the value is absent, wrong-typed, or empty.
+// REG_SZ / REG_EXPAND_SZ reader that trims trailing NULs, result in UTF-8.
+// Returns false when the value is absent, wrong-typed, or empty.
 bool ReadRegString(HKEY key, const char* valueName, std::string& out);
 
 // REG_DWORD reader. Returns false when the value is absent or wrong-typed.
 bool ReadRegDword(HKEY key, const char* valueName, DWORD& out) noexcept;
 
-// ExpandEnvironmentStrings wrapper that returns the input unchanged if
-// expansion fails or the input is empty.
-std::string ExpandEnvA(const std::string& raw);
+// ExpandEnvironmentStrings wrapper, UTF-8 in and out, that returns the input
+// unchanged if expansion fails or the input is empty.
+std::string ExpandEnv(const std::string& raw);
 
 // FNV-1a 32-bit hash. Used for channel-tag hashing in the import cache and
 // for the virtual-session alias suffix.

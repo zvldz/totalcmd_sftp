@@ -1,10 +1,12 @@
 #include "PuttyAdapter.h"
 #include "ImportIoUtil.h"
 #include "SftpClient.h"
+#include "UnicodeHelpers.h"
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
+#include <algorithm>
 #include <array>
 #include <cctype>
 #include <cstdio>
@@ -27,9 +29,9 @@ constexpr const char* kPuttySessionsRoot = "Software\\SimonTatham\\PuTTY\\Sessio
 // ANSI. BOM detection first, then CP_ACP fallback.
 bool ReadRegFileAsUtf8(const std::string& path, std::string& outUtf8)
 {
-    HANDLE h = CreateFileA(path.c_str(), GENERIC_READ,
-                            FILE_SHARE_READ, nullptr,
-                            OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    HANDLE h = CreateFileW(Utf8PathToWide(path).c_str(), GENERIC_READ,
+                           FILE_SHARE_READ, nullptr,
+                           OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (h == INVALID_HANDLE_VALUE) return false;
 
     LARGE_INTEGER sz{};
@@ -217,15 +219,47 @@ struct JumpSessionFields {
     DWORD       port = 0, proxyMethod = 0;
 };
 
+// A session name in the UTF-8 the adapter works in, back to the encoded
+// subkey it came from. PuTTY encodes the bytes of the system codepage, an
+// export may carry UTF-8 bytes, so both spellings are candidates.
+std::vector<std::string> SubKeyNames(const std::string& utf8Name)
+{
+    std::vector<std::string> out{ PuttyUrlEncode(utf8Name) };
+    const std::string acpKey = PuttyUrlEncode(unicode_util::wide_to_narrow(
+        unicode_util::utf8_to_wstring(utf8Name), CP_ACP));
+    if (acpKey != out.front())
+        out.push_back(acpKey);
+    return out;
+}
+
+// The session's registry key, opened under whichever candidate name exists.
+HKEY OpenSessionKey(const std::string& utf8Name)
+{
+    for (const auto& name : SubKeyNames(utf8Name)) {
+        const std::string subKey = std::string(kPuttySessionsRoot) + "\\" + name;
+        HKEY key = nullptr;
+        if (RegOpenKeyExA(HKEY_CURRENT_USER, subKey.c_str(), 0, KEY_READ, &key) == ERROR_SUCCESS)
+            return key;
+    }
+    return nullptr;
+}
+
+// The candidate name a parsed .reg file holds the session under, or empty.
+std::string FindRegFileSession(const RegFileParsed& parsed, const std::string& utf8Name)
+{
+    for (const auto& name : SubKeyNames(utf8Name))
+        if (std::find(parsed.sessions.begin(), parsed.sessions.end(), name) != parsed.sessions.end())
+            return name;
+    return {};
+}
+
 bool ReadJumpSession(const std::string& sourceOrigin,
                      const std::string& name,
                      JumpSessionFields& f)
 {
-    const std::string subKeyName = PuttyUrlEncode(name);
     if (sourceOrigin == "standard") {
-        const std::string subKey = std::string(kPuttySessionsRoot) + "\\" + subKeyName;
-        HKEY key = nullptr;
-        if (RegOpenKeyExA(HKEY_CURRENT_USER, subKey.c_str(), 0, KEY_READ, &key) != ERROR_SUCCESS)
+        HKEY key = OpenSessionKey(name);
+        if (!key)
             return false;
         ReadRegString(key, "HostName", f.host);
         ReadRegDword(key, "PortNumber", f.port);
@@ -239,6 +273,9 @@ bool ReadJumpSession(const std::string& sourceOrigin,
             return false;
         RegFileParsed parsed;
         ParseRegFile(text, parsed);
+        const std::string subKeyName = FindRegFileSession(parsed, name);
+        if (subKeyName.empty())
+            return false;
         const std::string prefix = subKeyName + "::";
         if (auto it = parsed.strings.find(prefix + "HostName"); it != parsed.strings.end())
             f.host = it->second;
@@ -253,7 +290,7 @@ bool ReadJumpSession(const std::string& sourceOrigin,
     }
     f.host    = PuttyUrlDecode(f.host);
     f.user    = PuttyUrlDecode(f.user);
-    f.keyFile = ExpandEnvA(PuttyUrlDecode(f.keyFile));
+    f.keyFile = ExpandEnv(PuttyUrlDecode(f.keyFile));
     return !f.host.empty();
 }
 
@@ -276,7 +313,7 @@ std::string PuttyAdapter::ChangeStamp() const
 
 std::string PuttyAdapter::CustomPathStamp(const std::string& path) const
 {
-    return FileChangeStamp({ AnsiPathToWide(path) });
+    return FileChangeStamp({ Utf8PathToWide(path) });
 }
 
 EnumerationResult PuttyAdapter::EnumerateStandard()
@@ -310,7 +347,7 @@ EnumerationResult PuttyAdapter::EnumerateStandard()
             continue;
 
         ExternalSessionEntry e;
-        e.displayName  = PuttyUrlDecode(std::string(nameBuf.data(), nameLen));
+        e.displayName  = DecodedNameToUtf8(PuttyUrlDecode(std::string(nameBuf.data(), nameLen)));
         e.sourceOrigin = "standard";
         r.sessions.push_back(std::move(e));
     }
@@ -344,7 +381,7 @@ EnumerationResult PuttyAdapter::EnumerateCustomPath(const std::string& path)
             continue;
 
         ExternalSessionEntry e;
-        e.displayName  = PuttyUrlDecode(sessKeyName);
+        e.displayName  = DecodedNameToUtf8(PuttyUrlDecode(sessKeyName));
         e.sourceOrigin = path;   // literal file path — see LoadSettings
         r.sessions.push_back(std::move(e));
     }
@@ -361,11 +398,6 @@ bool PuttyAdapter::LoadSettings(const ExternalSessionEntry& entry,
 {
     if (!out) return false;
 
-    // Round-trip the displayName back through URL encoding to hit the
-    // exact subkey PuTTY stored it under — the same encoding scheme is
-    // used both in the registry and in .reg export files.
-    const std::string subKeyName = PuttyUrlEncode(entry.displayName);
-
     // Field values, populated from whichever channel this entry came
     // from. Empty string / zero here means "field not present".
     std::string host, userName, keyFile, lineCodePage, proxyHost, proxyUser;
@@ -376,12 +408,8 @@ bool PuttyAdapter::LoadSettings(const ExternalSessionEntry& entry,
     if (entry.sourceOrigin == "standard") {
         // Standard channel: fields live under
         // HKCU\Software\SimonTatham\PuTTY\Sessions\<encoded name>.
-        const std::string subKey =
-            std::string(kPuttySessionsRoot) + "\\" + subKeyName;
-        HKEY key = nullptr;
-        LONG rc = RegOpenKeyExA(HKEY_CURRENT_USER, subKey.c_str(),
-                                 0, KEY_READ, &key);
-        if (rc != ERROR_SUCCESS) return false;
+        HKEY key = OpenSessionKey(entry.displayName);
+        if (!key) return false;
 
         if (!ReadRegString(key, "HostName", host) || host.empty()) {
             RegCloseKey(key);
@@ -398,7 +426,7 @@ bool PuttyAdapter::LoadSettings(const ExternalSessionEntry& entry,
             ReadRegDword(key, "AuthAgent", useAgent);
 
         if (ReadRegString(key, "PublicKeyFile", keyFile))
-            keyFile = ExpandEnvA(PuttyUrlDecode(keyFile));
+            keyFile = ExpandEnv(PuttyUrlDecode(keyFile));
 
         ReadRegString(key, "LineCodePage", lineCodePage);
         hasEnterSendsCrLf = ReadRegDword(key, "EnterSendsCrLf", enterSendsCrLf);
@@ -421,6 +449,8 @@ bool PuttyAdapter::LoadSettings(const ExternalSessionEntry& entry,
         RegFileParsed parsed;
         ParseRegFile(text, parsed);
 
+        const std::string subKeyName = FindRegFileSession(parsed, entry.displayName);
+        if (subKeyName.empty()) return false;
         const std::string prefix = subKeyName + "::";
         auto pickString = [&](const char* name, std::string& out_) {
             auto it = parsed.strings.find(prefix + name);
@@ -450,7 +480,7 @@ bool PuttyAdapter::LoadSettings(const ExternalSessionEntry& entry,
             pickDword("AuthAgent", useAgent, hadAgent);
 
         pickString("PublicKeyFile", keyFile);
-        keyFile = ExpandEnvA(PuttyUrlDecode(keyFile));
+        keyFile = ExpandEnv(PuttyUrlDecode(keyFile));
 
         pickString("LineCodePage", lineCodePage);
         pickDword("EnterSendsCrLf", enterSendsCrLf, hasEnterSendsCrLf);

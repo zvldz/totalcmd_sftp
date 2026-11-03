@@ -50,26 +50,6 @@ std::string WideToUtf8(const std::wstring& s)
     return out;
 }
 
-// The plugin keeps file paths in the ANSI code page, as the other adapters do.
-std::string Utf8ToAnsi(const std::string& s)
-{
-    const std::wstring w = Utf8ToWide(s);
-    const int n = WideCharToMultiByte(CP_ACP, 0, w.c_str(), -1, nullptr, 0, nullptr, nullptr);
-    if (n <= 0) return {};
-    std::string out(static_cast<size_t>(n - 1), '\0');
-    WideCharToMultiByte(CP_ACP, 0, w.c_str(), -1, out.data(), n, nullptr, nullptr);
-    return out;
-}
-
-std::wstring AnsiToWide(const std::string& s)
-{
-    const int n = MultiByteToWideChar(CP_ACP, 0, s.c_str(), -1, nullptr, 0);
-    if (n <= 0) return {};
-    std::wstring out(static_cast<size_t>(n - 1), L'\0');
-    MultiByteToWideChar(CP_ACP, 0, s.c_str(), -1, out.data(), n);
-    return out;
-}
-
 // %USERPROFILE%, UTF-8. `~` and %d stand for it.
 std::string HomeDir()
 {
@@ -331,7 +311,7 @@ bool IsNone(const std::string& v)
 
 std::wstring ChannelPath(const std::string& sourceOrigin)
 {
-    return sourceOrigin == "standard" ? StandardConfigPath() : AnsiToWide(sourceOrigin);
+    return sourceOrigin == "standard" ? StandardConfigPath() : Utf8ToWide(sourceOrigin);
 }
 
 EnumerationResult EnumerateFile(const std::wstring& path, const std::string& sourceOrigin)
@@ -388,7 +368,7 @@ std::string OpenSshAdapter::CustomPathStamp(const std::string& path) const
 {
     std::vector<ConfigLine> lines;
     VisitedFiles visited;
-    ParseFile(AnsiToWide(path), lines, 0, &visited);
+    ParseFile(Utf8ToWide(path), lines, 0, &visited);
     return FileChangeStamp(visited);
 }
 
@@ -402,7 +382,7 @@ EnumerationResult OpenSshAdapter::EnumerateStandard()
 
 EnumerationResult OpenSshAdapter::EnumerateCustomPath(const std::string& path)
 {
-    EnumerationResult r = EnumerateFile(AnsiToWide(path), path);
+    EnumerationResult r = EnumerateFile(Utf8ToWide(path), path);
     SFTP_LOG("OPENSSH", "EnumerateCustomPath: status=%d hosts=%zu path='%s'",
              static_cast<int>(r.status), r.sessions.size(), path.c_str());
     return r;
@@ -435,7 +415,7 @@ bool OpenSshAdapter::LoadSettings(const ExternalSessionEntry& entry,
     if (!c.identityFile.empty()) {
         std::string key = ExpandTokens(c.identityFile, host, user);
         std::replace(key.begin(), key.end(), '/', '\\');
-        AssignImportedKeyFile(Utf8ToAnsi(key), out->privkeyfile, out->pubkeyfile);
+        AssignImportedKeyFile(key, out->privkeyfile, out->pubkeyfile);
     }
 
     // A command in front of the host is nothing the plugin can run.
@@ -490,7 +470,7 @@ bool OpenSshAdapter::LoadSettings(const ExternalSessionEntry& entry,
         if (!j.identityFile.empty()) {
             std::string key = ExpandTokens(j.identityFile, jumpHost, jumpUser);
             std::replace(key.begin(), key.end(), '/', '\\');
-            AssignImportedKeyFile(Utf8ToAnsi(key), out->jump_privkeyfile, out->jump_pubkeyfile);
+            AssignImportedKeyFile(key, out->jump_privkeyfile, out->jump_pubkeyfile);
         }
     }
 

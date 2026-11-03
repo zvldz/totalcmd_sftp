@@ -492,7 +492,7 @@ std::string FileZillaAdapter::ChangeStamp() const
 
 std::string FileZillaAdapter::CustomPathStamp(const std::string& path) const
 {
-    const std::wstring p = AnsiPathToWide(path);
+    const std::wstring p = Utf8PathToWide(path);
     const size_t slash = p.find_last_of(L'\\');
     if (slash == std::wstring::npos) return FileChangeStamp({ p });
     return FileChangeStamp({ p, p.substr(0, slash + 1) + L"filezilla.xml" });
@@ -515,18 +515,12 @@ EnumerationResult FileZillaAdapter::EnumerateStandard()
 
 EnumerationResult FileZillaAdapter::EnumerateCustomPath(const std::string& path)
 {
-    // The picker delivers an ANSI path — round-trip through UTF-8→wide so
-    // non-ASCII directory names in the user's chosen file survive.
-    std::wstring wide(MAX_PATH, L'\0');
-    const int n = MultiByteToWideChar(CP_ACP, 0, path.c_str(),
-                                        static_cast<int>(path.size()),
-                                        wide.data(), static_cast<int>(wide.size()));
-    if (n <= 0) {
+    const std::wstring wide = Utf8PathToWide(path);
+    if (wide.empty()) {
         EnumerationResult r;
         r.status = EnumerationStatus::Unreachable;
         return r;
     }
-    wide.resize(n);
 
     EnumerationResult r = EnumerateFile(wide, path);
     SFTP_LOG("FILEZILLA", "EnumerateCustomPath done: status=%d sessions=%zu path='%s'",
@@ -598,15 +592,7 @@ bool FileZillaAdapter::LoadSettings(const ExternalSessionEntry& entry,
     if (entry.sourceOrigin == "standard") {
         xmlPath = GetStandardSitemanagerPath();
     } else {
-        std::wstring wide(MAX_PATH, L'\0');
-        const int n = MultiByteToWideChar(CP_ACP, 0,
-                                            entry.sourceOrigin.c_str(),
-                                            static_cast<int>(entry.sourceOrigin.size()),
-                                            wide.data(),
-                                            static_cast<int>(wide.size()));
-        if (n <= 0) return false;
-        wide.resize(n);
-        xmlPath = std::move(wide);
+        xmlPath = Utf8PathToWide(entry.sourceOrigin);
     }
     if (xmlPath.empty()) return false;
 
@@ -652,7 +638,7 @@ bool FileZillaAdapter::LoadSettings(const ExternalSessionEntry& entry,
 
     // <Keyfile> holds the private-key path for LogonType 4 (Key file).
     // Absent for any other LogonType.
-    std::string keyFile = ExpandEnvA(ChildText(*srv, "Keyfile"));
+    std::string keyFile = ExpandEnv(ChildText(*srv, "Keyfile"));
     AssignImportedKeyFile(keyFile, out->privkeyfile, out->pubkeyfile);
 
     // <EncodingType>: "Auto" → leave defaults; "UTF-8" → utf8=1;

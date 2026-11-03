@@ -1,6 +1,7 @@
 #include "ImportIoUtil.h"
 #include "IniFile.h"
 #include "SftpClient.h"
+#include "UnicodeHelpers.h"
 
 #include <commdlg.h>
 #include <shlobj.h>
@@ -300,13 +301,18 @@ std::string FolderChangeStamp(const std::wstring& root)
     return stamp;
 }
 
-std::wstring AnsiPathToWide(const std::string& path)
+std::wstring Utf8PathToWide(const std::string& path)
 {
-    const int n = MultiByteToWideChar(CP_ACP, 0, path.c_str(), -1, nullptr, 0);
-    if (n <= 0) return {};
-    std::wstring out(static_cast<size_t>(n - 1), L'\0');
-    MultiByteToWideChar(CP_ACP, 0, path.c_str(), -1, out.data(), n);
-    return out;
+    return unicode_util::utf8_to_wstring(path);
+}
+
+std::string DecodedNameToUtf8(const std::string& bytes)
+{
+    if (bytes.empty() ||
+        MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, bytes.data(),
+                            static_cast<int>(bytes.size()), nullptr, 0) > 0)
+        return bytes;
+    return unicode_util::wstring_to_utf8(unicode_util::narrow_to_wide(bytes, CP_ACP));
 }
 
 std::string RegistryChangeStamp(const char* subKey)
@@ -403,10 +409,7 @@ bool BrowseForFile(HWND               owner,
 
     if (!GetOpenFileNameW(&ofn)) return false;
 
-    char narrow[MAX_PATH * 4] = {};
-    WideCharToMultiByte(CP_ACP, 0, wFile, -1,
-                         narrow, sizeof(narrow), nullptr, nullptr);
-    outPath.assign(narrow);
+    outPath = unicode_util::wide_to_internal(wFile);
     return !outPath.empty();
 }
 
@@ -440,10 +443,7 @@ bool BrowseForFolder(HWND               owner,
     CoTaskMemFree(pidl);
     if (!got) return false;
 
-    char narrow[MAX_PATH * 4] = {};
-    WideCharToMultiByte(CP_ACP, 0, wpath, -1,
-                         narrow, sizeof(narrow), nullptr, nullptr);
-    outPath.assign(narrow);
+    outPath = unicode_util::wide_to_internal(wpath);
     return !outPath.empty();
 }
 
@@ -519,20 +519,21 @@ std::string PuttyUrlEncode(const std::string& raw)
 
 bool ReadRegString(HKEY key, const char* valueName, std::string& out)
 {
+    const std::wstring name = unicode_util::narrow_to_wide(valueName ? valueName : "", CP_ACP);
     DWORD type = 0;
     DWORD bytes = 0;
-    LONG rc = RegQueryValueExA(key, valueName, nullptr, &type, nullptr, &bytes);
+    LONG rc = RegQueryValueExW(key, name.c_str(), nullptr, &type, nullptr, &bytes);
     if (rc != ERROR_SUCCESS ||
         (type != REG_SZ && type != REG_EXPAND_SZ) ||
         bytes == 0)
         return false;
-    std::string buffer(bytes, '\0');
-    rc = RegQueryValueExA(key, valueName, nullptr, &type,
-                           reinterpret_cast<LPBYTE>(buffer.data()), &bytes);
+    std::wstring buffer(bytes / sizeof(wchar_t) + 1, L'\0');
+    rc = RegQueryValueExW(key, name.c_str(), nullptr, &type,
+                          reinterpret_cast<LPBYTE>(buffer.data()), &bytes);
     if (rc != ERROR_SUCCESS) return false;
-    while (!buffer.empty() && buffer.back() == '\0')
+    while (!buffer.empty() && buffer.back() == L'\0')
         buffer.pop_back();
-    out = std::move(buffer);
+    out = unicode_util::wstring_to_utf8(buffer);
     return !out.empty();
 }
 
@@ -548,23 +549,24 @@ bool ReadRegDword(HKEY key, const char* valueName, DWORD& out) noexcept
     return true;
 }
 
-std::string ExpandEnvA(const std::string& raw)
+std::string ExpandEnv(const std::string& raw)
 {
     if (raw.empty()) return raw;
-    std::string expanded(MAX_PATH, '\0');
-    DWORD len = ExpandEnvironmentStringsA(raw.c_str(), expanded.data(),
-                                           static_cast<DWORD>(expanded.size()));
+    const std::wstring wraw = unicode_util::utf8_to_wstring(raw);
+    std::wstring expanded(MAX_PATH, L'\0');
+    DWORD len = ExpandEnvironmentStringsW(wraw.c_str(), expanded.data(),
+                                          static_cast<DWORD>(expanded.size()));
     // Too small a buffer comes back with the size it wants, so one retry
     // always fits. Without it a long path is returned with its %VARS%
     // intact and fails later, where the cause is no longer visible.
     if (len > expanded.size()) {
-        expanded.assign(len, '\0');
-        len = ExpandEnvironmentStringsA(raw.c_str(), expanded.data(),
+        expanded.assign(len, L'\0');
+        len = ExpandEnvironmentStringsW(wraw.c_str(), expanded.data(),
                                         static_cast<DWORD>(expanded.size()));
     }
     if (len == 0 || len > expanded.size()) return raw;
     expanded.resize(len - 1);
-    return expanded;
+    return unicode_util::wstring_to_utf8(expanded);
 }
 
 void SecureWipe(std::string& s) noexcept

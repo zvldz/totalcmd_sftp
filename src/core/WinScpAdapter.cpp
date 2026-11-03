@@ -6,6 +6,7 @@
 #include <windows.h>
 
 #include "ImportIoUtil.h"
+#include "UnicodeHelpers.h"
 
 #include <array>
 #include <cctype>
@@ -63,14 +64,17 @@ std::string UrlEncode(const std::string& raw)
 
 // GetPrivateProfileString wrapper that returns "" when the key is missing
 // (Win32 default_value semantics) so callers can test empty-string as absent.
+// WinSCP.ini is WinSCP's file, so the Windows profile API reads it; path,
+// section and result are UTF-8 like everything else in the adapter.
 std::string ReadIniString(const std::string& iniPath, const std::string& section,
                           const char* key)
 {
-    std::array<char, 4096> buf{};
-    GetPrivateProfileStringA(section.c_str(), key, "",
+    std::array<wchar_t, 4096> buf{};
+    GetPrivateProfileStringW(unicode_util::utf8_to_wstring(section).c_str(),
+        unicode_util::utf8_to_wstring(key).c_str(), L"",
         buf.data(), static_cast<DWORD>(buf.size() - 1),
-        iniPath.c_str());
-    return std::string(buf.data());
+        Utf8PathToWide(iniPath).c_str());
+    return unicode_util::wstring_to_utf8(buf.data());
 }
 
 // GetPrivateProfileInt with default -1 so callers can distinguish "absent"
@@ -78,7 +82,22 @@ std::string ReadIniString(const std::string& iniPath, const std::string& section
 int ReadIniDword(const std::string& iniPath, const std::string& section,
                   const char* key)
 {
-    return GetPrivateProfileIntA(section.c_str(), key, -1, iniPath.c_str());
+    return GetPrivateProfileIntW(unicode_util::utf8_to_wstring(section).c_str(),
+        unicode_util::utf8_to_wstring(key).c_str(), -1,
+        Utf8PathToWide(iniPath).c_str());
+}
+
+// A session name in UTF-8 back to the encoded name it is stored under.
+// WinSCP encodes UTF-8 bytes; an old ANSI configuration encodes the system
+// codepage, so both spellings are candidates.
+std::vector<std::string> SubKeyNames(const std::string& utf8Name)
+{
+    std::vector<std::string> out{ UrlEncode(utf8Name) };
+    const std::string acpKey = UrlEncode(unicode_util::wide_to_narrow(
+        unicode_util::utf8_to_wstring(utf8Name), CP_ACP));
+    if (acpKey != out.front())
+        out.push_back(acpKey);
+    return out;
 }
 
 // FSProtocol numeric enum stored in WinSCP session data:
@@ -121,7 +140,7 @@ std::string WinScpAdapter::ChangeStamp() const
 
 std::string WinScpAdapter::CustomPathStamp(const std::string& path) const
 {
-    return FileChangeStamp({ AnsiPathToWide(path) });
+    return FileChangeStamp({ Utf8PathToWide(path) });
 }
 
 EnumerationResult WinScpAdapter::EnumerateStandard()
@@ -156,7 +175,7 @@ EnumerationResult WinScpAdapter::EnumerateStandard()
             _stricmp(nameBuf.data(), "Workspaces")         == 0) { ++filtered; continue; }
 
         ExternalSessionEntry e;
-        e.displayName  = PuttyUrlDecode(std::string(nameBuf.data(), nameLen));
+        e.displayName  = DecodedNameToUtf8(PuttyUrlDecode(std::string(nameBuf.data(), nameLen)));
         e.sourceOrigin = "standard";
         r.sessions.push_back(std::move(e));
     }
@@ -178,7 +197,7 @@ EnumerationResult WinScpAdapter::EnumerateCustomPath(const std::string& path)
     // but reject unreadable paths (missing file, protected folder)
     // upfront so the channel reports Unreachable rather than the caller
     // getting a mysterious OkEmpty.
-    const DWORD attrs = GetFileAttributesA(path.c_str());
+    const DWORD attrs = GetFileAttributesW(Utf8PathToWide(path).c_str());
     if (attrs == INVALID_FILE_ATTRIBUTES || (attrs & FILE_ATTRIBUTE_DIRECTORY)) {
         r.status = EnumerationStatus::Unreachable;
         return r;
@@ -188,21 +207,21 @@ EnumerationResult WinScpAdapter::EnumerateCustomPath(const std::string& path)
     // "Sessions\<name>". GetPrivateProfileSectionNames returns a
     // double-NUL-terminated block; ~64 KB is enough for a portable
     // config with hundreds of sessions.
-    std::array<char, 65536> sectBuf{};
-    const DWORD gotLen = GetPrivateProfileSectionNamesA(
+    std::vector<wchar_t> sectBuf(65536);
+    const DWORD gotLen = GetPrivateProfileSectionNamesW(
         sectBuf.data(),
         static_cast<DWORD>(sectBuf.size() - 1),
-        path.c_str());
+        Utf8PathToWide(path).c_str());
     if (gotLen == 0) {
         r.status = EnumerationStatus::OkEmpty;
         return r;
     }
 
     const size_t prefixLen = std::strlen(kIniSessionsPrefix);
-    const char* p = sectBuf.data();
+    const wchar_t* p = sectBuf.data();
     while (*p) {
-        const std::string section(p);
-        p += section.size() + 1;
+        const std::string section = unicode_util::wstring_to_utf8(p);
+        p += wcslen(p) + 1;
 
         if (section.size() <= prefixLen) continue;
         if (_strnicmp(section.c_str(), kIniSessionsPrefix, prefixLen) != 0)
@@ -219,7 +238,7 @@ EnumerationResult WinScpAdapter::EnumerateCustomPath(const std::string& path)
             continue;
 
         ExternalSessionEntry e;
-        e.displayName  = PuttyUrlDecode(keyName);
+        e.displayName  = DecodedNameToUtf8(PuttyUrlDecode(keyName));
         e.sourceOrigin = path;
         r.sessions.push_back(std::move(e));
     }
@@ -236,7 +255,6 @@ bool WinScpAdapter::LoadSettings(const ExternalSessionEntry& entry,
 {
     if (!out) return false;
 
-    const std::string subKeyName = UrlEncode(entry.displayName);
     SFTP_LOG("WINSCP", "LoadSettings display='%s'", entry.displayName.c_str());
 
     std::string host, userName, keyFile;
@@ -248,12 +266,14 @@ bool WinScpAdapter::LoadSettings(const ExternalSessionEntry& entry,
     DWORD tunnel = 0, tunnelPort = 0, proxyMethod = 0;
 
     if (entry.sourceOrigin == "standard") {
-        const std::string subKey =
-            std::string(kWinScpSessionsRoot) + "\\" + subKeyName;
         HKEY key = nullptr;
-        LONG rc = RegOpenKeyExA(HKEY_CURRENT_USER, subKey.c_str(),
-                                 0, KEY_READ, &key);
-        if (rc != ERROR_SUCCESS) return false;
+        for (const auto& name : SubKeyNames(entry.displayName)) {
+            const std::string subKey = std::string(kWinScpSessionsRoot) + "\\" + name;
+            if (RegOpenKeyExA(HKEY_CURRENT_USER, subKey.c_str(), 0, KEY_READ, &key) == ERROR_SUCCESS)
+                break;
+            key = nullptr;
+        }
+        if (!key) return false;
 
         if (!ReadRegString(key, "HostName", host) || host.empty()) {
             RegCloseKey(key);
@@ -270,7 +290,7 @@ bool WinScpAdapter::LoadSettings(const ExternalSessionEntry& entry,
             ReadRegDword(key, "AuthAgent", useAgent);
 
         if (ReadRegString(key, "PublicKeyFile", keyFile))
-            keyFile = ExpandEnvA(PuttyUrlDecode(keyFile));
+            keyFile = ExpandEnv(PuttyUrlDecode(keyFile));
 
         hasFsProto = ReadRegDword(key, "FSProtocol", fsProtoRaw);
 
@@ -302,8 +322,13 @@ bool WinScpAdapter::LoadSettings(const ExternalSessionEntry& entry,
     } else {
         // Portable channel: sourceOrigin is the literal WinSCP.ini path.
         // Section name is `Sessions\<encoded>`.
-        const std::string section = std::string(kIniSessionsPrefix) + subKeyName;
-        host = PuttyUrlDecode(ReadIniString(entry.sourceOrigin, section, "HostName"));
+        std::string section;
+        for (const auto& name : SubKeyNames(entry.displayName)) {
+            section = std::string(kIniSessionsPrefix) + name;
+            host = PuttyUrlDecode(ReadIniString(entry.sourceOrigin, section, "HostName"));
+            if (!host.empty())
+                break;
+        }
         if (host.empty()) return false;
 
         const int portRaw = ReadIniDword(entry.sourceOrigin, section, "PortNumber");
@@ -318,7 +343,7 @@ bool WinScpAdapter::LoadSettings(const ExternalSessionEntry& entry,
             if (auth2 >= 0) useAgent = static_cast<DWORD>(auth2);
         }
 
-        keyFile = ExpandEnvA(PuttyUrlDecode(ReadIniString(entry.sourceOrigin, section, "PublicKeyFile")));
+        keyFile = ExpandEnv(PuttyUrlDecode(ReadIniString(entry.sourceOrigin, section, "PublicKeyFile")));
 
         const int fsRaw = ReadIniDword(entry.sourceOrigin, section, "FSProtocol");
         if (fsRaw >= 0) { fsProtoRaw = static_cast<DWORD>(fsRaw); hasFsProto = true; }
@@ -399,7 +424,7 @@ bool WinScpAdapter::LoadSettings(const ExternalSessionEntry& entry,
             if (tunnelPort > 0 && tunnelPort <= 0xFFFF)
                 out->jump_port = static_cast<unsigned short>(tunnelPort);
             out->jump_user = PuttyUrlDecode(tunnelUser);
-            tunnelKey = ExpandEnvA(PuttyUrlDecode(tunnelKey));
+            tunnelKey = ExpandEnv(PuttyUrlDecode(tunnelKey));
             if (!tunnelKey.empty())
                 AssignImportedKeyFile(tunnelKey, out->jump_privkeyfile, out->jump_pubkeyfile);
         }

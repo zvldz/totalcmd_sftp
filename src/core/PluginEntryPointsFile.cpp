@@ -577,15 +577,29 @@ static int MaterialiseVirtualSession(const std::string& sourceId,
 // The picker itself lives in ImportIoUtil so every future adapter's custom-
 // path enrollment reuses the same modern shell dialog.
 
-// Apply one enumeration result to the cache per the prune rules:
+// Adapters work in UTF-8; what they fill in becomes internal strings here,
+// before it reaches the cache. The password is an encoded blob already.
+static void AdapterStringsToInternal(tConnectSettings& s, sftp::SessionDependency& dep)
+{
+    for (std::string* f : { &s.server, &s.user, &s.pubkeyfile, &s.privkeyfile,
+                            &s.jump_host, &s.jump_user, &s.jump_pubkeyfile,
+                            &s.jump_privkeyfile, &dep.detail, &dep.proxyServer,
+                            &dep.proxyUser })
+        *f = unicode_util::utf8_to_internal(*f);
+}
+
+// Scan one channel of an import source — "standard" or a custom path, an
+// internal string — and apply the result to the cache per the prune rules:
 //   Unreachable    → keep the cached entries (do nothing)
 //   OkEmpty        → prune this channel's cached entries
 //   OkWithSessions → replace this channel's cached entries with the new list
 static void ApplyEnumerationToCache(sftp::IExternalSessionSource* adapter,
                                      const std::string& sourceId,
-                                     const std::string& channelTag,
-                                     sftp::EnumerationResult&& result)
+                                     const std::string& channelTag)
 {
+    sftp::EnumerationResult result = channelTag == "standard"
+        ? adapter->EnumerateStandard()
+        : adapter->EnumerateCustomPath(unicode_util::internal_to_utf8(channelTag));
     switch (result.status) {
         case sftp::EnumerationStatus::Unreachable:
             return;
@@ -604,8 +618,9 @@ static void ApplyEnumerationToCache(sftp::IExternalSessionSource* adapter,
                 sftp::SessionDependency dependency;
                 if (!adapter->LoadSettings(result.sessions[i], &settingsStore[i], &dependency))
                     continue;
+                AdapterStringsToInternal(settingsStore[i], dependency);
                 sftp::CacheWriteEntry w;
-                w.displayName = result.sessions[i].displayName;
+                w.displayName = unicode_util::utf8_to_internal(result.sessions[i].displayName);
                 w.settings    = &settingsStore[i];
                 w.dependency  = std::move(dependency);
                 writes.push_back(std::move(w));
@@ -625,13 +640,10 @@ void RefreshImportSource(const std::string& sourceId)
     auto* adapter = sftp::GetImportSourceRegistry().Find(sourceId.c_str());
     if (!adapter) return;
 
-    ApplyEnumerationToCache(adapter, sourceId, "standard",
-                            adapter->EnumerateStandard());
+    ApplyEnumerationToCache(adapter, sourceId, "standard");
 
-    for (const auto& path : LoadImportCustomPaths(sourceId.c_str(), inifilename)) {
-        ApplyEnumerationToCache(adapter, sourceId, path,
-                                adapter->EnumerateCustomPath(path));
-    }
+    for (const auto& path : LoadImportCustomPaths(sourceId.c_str(), inifilename))
+        ApplyEnumerationToCache(adapter, sourceId, path);
 }
 
 // Length (in wide chars) of the session's displayName once embedded in a
@@ -782,8 +794,7 @@ int WINAPI FsExecuteFileW(HWND MainWin, LPWSTR RemoteName, LPCWSTR Verb)
                             return FS_EXEC_OK;
                         }
                         auto* adapter = pickerAdapter;
-                        ApplyEnumerationToCache(adapter, sourceId, chosen,
-                            adapter->EnumerateCustomPath(chosen));
+                        ApplyEnumerationToCache(adapter, sourceId, chosen);
                         // Symlink back to `[Imports]\<Source>\`.
                         std::wstring target;
                         target += L'\\';

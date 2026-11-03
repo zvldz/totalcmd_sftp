@@ -211,6 +211,17 @@ inline constexpr int kInternalCodepage = CP_ACP;
     return wide_to_narrow(w, kInternalCodepage);
 }
 
+// Import adapters work in UTF-8; their strings cross into the plugin here.
+[[nodiscard]] inline std::string utf8_to_internal(std::string_view s)
+{
+    return wide_to_internal(utf8_to_wstring(s));
+}
+
+[[nodiscard]] inline std::string internal_to_utf8(std::string_view s)
+{
+    return wstring_to_utf8(internal_to_wide(s));
+}
+
 } // namespace unicode_util
 
 // Buffer forms of internal_to_wide / wide_to_internal, in the style of
