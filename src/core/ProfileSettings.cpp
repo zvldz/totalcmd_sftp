@@ -9,6 +9,7 @@
 #include "SftpClient.h"
 #include "SftpInternal.h"
 #include "ConnectionDialog.h"
+#include "IniFile.h"
 #include "ProfileSettings.h"
 
 // Which proxy records exist, in order. Numbering may have holes: deleting a
@@ -20,8 +21,8 @@ std::vector<int> EnumerateProxyNumbers(LPCSTR iniFileName)
 {
     std::vector<int> numbers;
     std::array<char, 8192> sections{};
-    GetPrivateProfileSectionNamesA(sections.data(),
-                                   static_cast<DWORD>(sections.size() - 1), iniFileName);
+    IniGetSectionNames(sections.data(),
+                       static_cast<DWORD>(sections.size() - 1), iniFileName);
     for (const char* p = sections.data(); *p; p += strlen(p) + 1) {
         if (_strnicmp(p, "proxy", 5) != 0)
             continue;
@@ -57,7 +58,7 @@ int NextFreeProxyNr(LPCSTR iniFileName)
     std::array<char, wdirtypemax> name{};
     SERVERHANDLE hdl = FindFirstServer(name.data(), name.size() - 1);
     while (hdl) {
-        const int referenced = static_cast<int>(GetPrivateProfileInt(name.data(), "proxynr", 0, iniFileName));
+        const int referenced = static_cast<int>(IniGetInt(name.data(), "proxynr", 0, iniFileName));
         if (referenced > highest)
             highest = referenced;
         hdl = FindNextServer(hdl, name.data(), name.size() - 1);
@@ -91,17 +92,17 @@ bool LoadProxySettingsFromNr(int proxynr, pConnectSettings ConnectResults, LPCST
     if (proxynr > 0) {
         const std::string proxyentry = proxynr > 1 ? std::format("proxy{}", proxynr) : "proxy";
         ConnectResults->proxytype = sftp::Proxy::notused;
-        int type = GetPrivateProfileInt(proxyentry.data(), "proxytype", -1, iniFileName);
+        int type = IniGetInt(proxyentry.data(), "proxytype", -1, iniFileName);
         if (type >= 0)
             ConnectResults->proxytype = (sftp::Proxy)type;
         std::array<char, MAX_PATH> proxyServer{};
         std::array<char, MAX_PATH> proxyUser{};
-        GetPrivateProfileString(proxyentry.data(), "proxyserver", "", proxyServer.data(), proxyServer.size() - 1, iniFileName);
-        GetPrivateProfileString(proxyentry.data(), "proxyuser", "", proxyUser.data(), proxyUser.size() - 1, iniFileName);
+        IniGetString(proxyentry.data(), "proxyserver", "", proxyServer.data(), proxyServer.size() - 1, iniFileName);
+        IniGetString(proxyentry.data(), "proxyuser", "", proxyUser.data(), proxyUser.size() - 1, iniFileName);
         ConnectResults->proxyserver = proxyServer.data();
         ConnectResults->proxyuser = proxyUser.data();
         std::array<char, 1024> szPassword{};
-        if (GetPrivateProfileString(proxyentry.data(), "proxypassword", "", szPassword.data(), szPassword.size(), iniFileName)) {
+        if (IniGetString(proxyentry.data(), "proxypassword", "", szPassword.data(), szPassword.size(), iniFileName)) {
             std::array<char, MAX_PATH> decPassword{};
             DecryptString(szPassword.data(), decPassword.data(), static_cast<UINT>(decPassword.size()));
             ConnectResults->proxypassword = decPassword.data();
@@ -124,72 +125,72 @@ bool LoadServerSettings(LPCSTR DisplayName, pConnectSettings ConnectResults, LPC
     ConnectResults->DisplayName = DisplayName ? DisplayName : "";
     ConnectResults->IniFileName = iniFileName ? iniFileName : "";
     std::array<char, MAX_PATH> serverBuf{};
-    GetPrivateProfileString(DisplayName, "server", "", serverBuf.data(), serverBuf.size() - 1, iniFileName);
+    IniGetString(DisplayName, "server", "", serverBuf.data(), serverBuf.size() - 1, iniFileName);
     ConnectResults->server = serverBuf.data();
-    ConnectResults->protocoltype=GetPrivateProfileInt(DisplayName, "protocol", 0, iniFileName);
-    ConnectResults->transfermode = GetPrivateProfileInt(DisplayName, "transfermode", 0, iniFileName);
+    ConnectResults->protocoltype=IniGetInt(DisplayName, "protocol", 0, iniFileName);
+    ConnectResults->transfermode = IniGetInt(DisplayName, "transfermode", 0, iniFileName);
     if (ConnectResults->transfermode < 0 || ConnectResults->transfermode > 3)
         ConnectResults->transfermode = 0;
     std::array<char, MAX_PATH> userBuf{};
     std::array<char, MAX_PATH> fingerprintBuf{};
     std::array<char, MAX_PATH> pubKeyBuf{};
     std::array<char, MAX_PATH> privKeyBuf{};
-    GetPrivateProfileString(DisplayName, "user", "", userBuf.data(), userBuf.size() - 1, iniFileName);
-    GetPrivateProfileString(DisplayName, "fingerprint", "", fingerprintBuf.data(), fingerprintBuf.size() - 1, iniFileName);
-    GetPrivateProfileString(DisplayName, "pubkeyfile", "", pubKeyBuf.data(), pubKeyBuf.size() - 1, iniFileName);
-    GetPrivateProfileString(DisplayName, "privkeyfile", "", privKeyBuf.data(), privKeyBuf.size() - 1, iniFileName);
+    IniGetString(DisplayName, "user", "", userBuf.data(), userBuf.size() - 1, iniFileName);
+    IniGetString(DisplayName, "fingerprint", "", fingerprintBuf.data(), fingerprintBuf.size() - 1, iniFileName);
+    IniGetString(DisplayName, "pubkeyfile", "", pubKeyBuf.data(), pubKeyBuf.size() - 1, iniFileName);
+    IniGetString(DisplayName, "privkeyfile", "", privKeyBuf.data(), privKeyBuf.size() - 1, iniFileName);
     ConnectResults->user = userBuf.data();
     ConnectResults->savedfingerprint = fingerprintBuf.data();
     ConnectResults->pubkeyfile = pubKeyBuf.data();
     ConnectResults->privkeyfile = privKeyBuf.data();
-    ConnectResults->useagent = GetPrivateProfileInt(DisplayName, "useagent", 0, iniFileName) != 0;
+    ConnectResults->useagent = IniGetInt(DisplayName, "useagent", 0, iniFileName) != 0;
 
-    GetPrivateProfileString(DisplayName, "filemod", "644", modbuf.data(), modbuf.size() - 1, iniFileName);
+    IniGetString(DisplayName, "filemod", "644", modbuf.data(), modbuf.size() - 1, iniFileName);
     ConnectResults->filemod = strtol(modbuf.data(), nullptr, 8);
-    GetPrivateProfileString(DisplayName, "dirmod", "755", modbuf.data(), modbuf.size() - 1, iniFileName);
+    IniGetString(DisplayName, "dirmod", "755", modbuf.data(), modbuf.size() - 1, iniFileName);
     ConnectResults->dirmod = strtol(modbuf.data(), nullptr, 8);
 
-    ConnectResults->compressed = GetPrivateProfileInt(DisplayName, "compression", 0, iniFileName) != 0;
-    ConnectResults->scpfordata = GetPrivateProfileInt(DisplayName, "scpfordata", 0, iniFileName) != 0;
-    ConnectResults->scponly = GetPrivateProfileInt(DisplayName, "scponly", 0, iniFileName) != 0;
+    ConnectResults->compressed = IniGetInt(DisplayName, "compression", 0, iniFileName) != 0;
+    ConnectResults->scpfordata = IniGetInt(DisplayName, "scpfordata", 0, iniFileName) != 0;
+    ConnectResults->scponly = IniGetInt(DisplayName, "scponly", 0, iniFileName) != 0;
     if (ConnectResults->scponly)
         ConnectResults->scpfordata = true;
-    ConnectResults->shell_transfer_dd = GetPrivateProfileInt(DisplayName, "shelltransfer", 0, iniFileName) != 0;
+    ConnectResults->shell_transfer_dd = IniGetInt(DisplayName, "shelltransfer", 0, iniFileName) != 0;
     ConnectResults->shell_transfer_force =
-        GetPrivateProfileInt(DisplayName, "shelltransferforce",
-                             ConnectResults->shell_transfer_dd ? 1 : 0,
-                             iniFileName) != 0;
+        IniGetInt(DisplayName, "shelltransferforce",
+                  ConnectResults->shell_transfer_dd ? 1 : 0,
+                  iniFileName) != 0;
     ConnectResults->shell_dd_b64only  = false;
-    ConnectResults->php_http_mode = GetPrivateProfileInt(DisplayName, "phphttpmode", 0, iniFileName);
+    ConnectResults->php_http_mode = IniGetInt(DisplayName, "phphttpmode", 0, iniFileName);
     if (ConnectResults->php_http_mode < 0 || ConnectResults->php_http_mode > 2)
         ConnectResults->php_http_mode = 0;
-    ConnectResults->php_chunk_mib = GetPrivateProfileInt(DisplayName, "phpchunkmb", 0, iniFileName);
+    ConnectResults->php_chunk_mib = IniGetInt(DisplayName, "phpchunkmb", 0, iniFileName);
     if (!(ConnectResults->php_chunk_mib == 0 || ConnectResults->php_chunk_mib == 1 ||
           ConnectResults->php_chunk_mib == 2 || ConnectResults->php_chunk_mib == 4 ||
           ConnectResults->php_chunk_mib == 8 || ConnectResults->php_chunk_mib == 16 ||
           ConnectResults->php_chunk_mib == 32 || ConnectResults->php_chunk_mib == 64))
         ConnectResults->php_chunk_mib = 0;
     ConnectResults->php_recommended_chunk_mib = 0;
-    ConnectResults->php_tar = GetPrivateProfileInt(DisplayName, "phptar", 0, iniFileName) != 0;
-    ConnectResults->lan_pair_role = GetPrivateProfileInt(DisplayName, "lanpairrole", 0, iniFileName);
+    ConnectResults->php_tar = IniGetInt(DisplayName, "phptar", 0, iniFileName) != 0;
+    ConnectResults->lan_pair_role = IniGetInt(DisplayName, "lanpairrole", 0, iniFileName);
     if (ConnectResults->lan_pair_role < 0 || ConnectResults->lan_pair_role > 2)
         ConnectResults->lan_pair_role = 0;
     std::array<char, MAX_PATH> lanPeerBuf{};
-    GetPrivateProfileString(DisplayName, "lanpairpeer", "", lanPeerBuf.data(), lanPeerBuf.size() - 1, iniFileName);
+    IniGetString(DisplayName, "lanpairpeer", "", lanPeerBuf.data(), lanPeerBuf.size() - 1, iniFileName);
     ConnectResults->lan_pair_peer = lanPeerBuf.data();
-    ConnectResults->lan_pair_timeout_min = GetPrivateProfileInt(DisplayName, "lanpairtimeout", 0, iniFileName);
+    ConnectResults->lan_pair_timeout_min = IniGetInt(DisplayName, "lanpairtimeout", 0, iniFileName);
     if (ConnectResults->lan_pair_timeout_min < 0)
         ConnectResults->lan_pair_timeout_min = 0;
-    ConnectResults->lan_pair_trusted_installer = GetPrivateProfileInt(DisplayName, "lanparti", 0, iniFileName) != 0;
+    ConnectResults->lan_pair_trusted_installer = IniGetInt(DisplayName, "lanparti", 0, iniFileName) != 0;
     ConnectResults->trycustomlistcommand = 2;
 
-    ConnectResults->detailedlog = GetPrivateProfileInt(DisplayName, "detailedlog", 0, iniFileName) != 0;
-    ConnectResults->utf8names = GetPrivateProfileInt(DisplayName, "utf8", -1, iniFileName);
-    ConnectResults->codepage = GetPrivateProfileInt(DisplayName, "codepage", 0, iniFileName);
-    ConnectResults->unixlinebreaks = GetPrivateProfileInt(DisplayName, "unixlinebreaks", -1, iniFileName);
-    ConnectResults->scpserver64bit = GetPrivateProfileInt(DisplayName, "largefilesupport", -1, iniFileName);
+    ConnectResults->detailedlog = IniGetInt(DisplayName, "detailedlog", 0, iniFileName) != 0;
+    ConnectResults->utf8names = IniGetInt(DisplayName, "utf8", -1, iniFileName);
+    ConnectResults->codepage = IniGetInt(DisplayName, "codepage", 0, iniFileName);
+    ConnectResults->unixlinebreaks = IniGetInt(DisplayName, "unixlinebreaks", -1, iniFileName);
+    ConnectResults->scpserver64bit = IniGetInt(DisplayName, "largefilesupport", -1, iniFileName);
     ConnectResults->password.clear();
-    if (GetPrivateProfileString(DisplayName, "password", "",  szPassword.data(),  szPassword.size(),  iniFileName)) {
+    if (IniGetString(DisplayName, "password", "",  szPassword.data(),  szPassword.size(),  iniFileName)) {
         if (!ConnectResults->useagent) {
             std::array<char, MAX_PATH> decPassword{};
             DecryptString(szPassword.data(), decPassword.data(), static_cast<UINT>(decPassword.size()));
@@ -198,39 +199,39 @@ bool LoadServerSettings(LPCSTR DisplayName, pConnectSettings ConnectResults, LPC
         else if (strcmp(szPassword.data(), "!") == 0)
             ConnectResults->password = "\001";
     }
-    ConnectResults->proxynr = GetPrivateProfileInt(DisplayName, "proxynr", 0, iniFileName);
+    ConnectResults->proxynr = IniGetInt(DisplayName, "proxynr", 0, iniFileName);
 
     LoadProxySettingsFromNr(ConnectResults->proxynr, ConnectResults, iniFileName);
 
     // -----------------------------------------------------------------------
     // Jump host (ProxyJump) settings
     // -----------------------------------------------------------------------
-    ConnectResults->use_jump_host = GetPrivateProfileInt(DisplayName, "usejumphost", 0, iniFileName) != 0;
+    ConnectResults->use_jump_host = IniGetInt(DisplayName, "usejumphost", 0, iniFileName) != 0;
     {
         std::array<char, MAX_PATH> jumpHost{};
         std::array<char, MAX_PATH> jumpUser{};
         std::array<char, MAX_PATH> jumpPub{};
         std::array<char, MAX_PATH> jumpPriv{};
         std::array<char, MAX_PATH> jumpFp{};
-        GetPrivateProfileString(DisplayName, "jumphost",       "", jumpHost.data(),  jumpHost.size() - 1,  iniFileName);
-        GetPrivateProfileString(DisplayName, "jumpuser",       "", jumpUser.data(),  jumpUser.size() - 1,  iniFileName);
-        GetPrivateProfileString(DisplayName, "jumppubkeyfile", "", jumpPub.data(),   jumpPub.size() - 1,   iniFileName);
-        GetPrivateProfileString(DisplayName, "jumpprivkeyfile","", jumpPriv.data(),  jumpPriv.size() - 1,  iniFileName);
-        GetPrivateProfileString(DisplayName, "jumpfingerprint","", jumpFp.data(),    jumpFp.size() - 1,    iniFileName);
+        IniGetString(DisplayName, "jumphost",       "", jumpHost.data(),  jumpHost.size() - 1,  iniFileName);
+        IniGetString(DisplayName, "jumpuser",       "", jumpUser.data(),  jumpUser.size() - 1,  iniFileName);
+        IniGetString(DisplayName, "jumppubkeyfile", "", jumpPub.data(),   jumpPub.size() - 1,   iniFileName);
+        IniGetString(DisplayName, "jumpprivkeyfile","", jumpPriv.data(),  jumpPriv.size() - 1,  iniFileName);
+        IniGetString(DisplayName, "jumpfingerprint","", jumpFp.data(),    jumpFp.size() - 1,    iniFileName);
         ConnectResults->jump_host        = jumpHost.data();
         ConnectResults->jump_user        = jumpUser.data();
         ConnectResults->jump_pubkeyfile  = jumpPub.data();
         ConnectResults->jump_privkeyfile = jumpPriv.data();
         ConnectResults->jump_fingerprint = jumpFp.data();
         ConnectResults->jump_port        = static_cast<unsigned short>(
-            GetPrivateProfileInt(DisplayName, "jumpport", 22, iniFileName));
-        ConnectResults->jump_useagent    = GetPrivateProfileInt(DisplayName, "jumpuseagent", 0, iniFileName) != 0;
+            IniGetInt(DisplayName, "jumpport", 22, iniFileName));
+        ConnectResults->jump_useagent    = IniGetInt(DisplayName, "jumpuseagent", 0, iniFileName) != 0;
         std::array<char, MAX_PATH> jumpSessRef{};
-        GetPrivateProfileString(DisplayName, "jumpsessionref", "", jumpSessRef.data(), jumpSessRef.size() - 1, iniFileName);
+        IniGetString(DisplayName, "jumpsessionref", "", jumpSessRef.data(), jumpSessRef.size() - 1, iniFileName);
         ConnectResults->jump_session_ref  = jumpSessRef.data();
 
         std::array<char, 1024> jumpPass{};
-        if (GetPrivateProfileString(DisplayName, "jumppassword", "", jumpPass.data(), jumpPass.size(), iniFileName)) {
+        if (IniGetString(DisplayName, "jumppassword", "", jumpPass.data(), jumpPass.size(), iniFileName)) {
             std::array<char, MAX_PATH> decJumpPass{};
             DecryptString(jumpPass.data(), decJumpPass.data(), static_cast<UINT>(decJumpPass.size()));
             ConnectResults->jump_password = decJumpPass.data();
@@ -241,9 +242,9 @@ bool LoadServerSettings(LPCSTR DisplayName, pConnectSettings ConnectResults, LPC
 
     ConnectResults->neednewchannel = false;
     std::array<char, MAX_PATH> sendCommandBuf{};
-    GetPrivateProfileString(DisplayName, "sendcommand", "", sendCommandBuf.data(), sendCommandBuf.size() - 1, iniFileName);
+    IniGetString(DisplayName, "sendcommand", "", sendCommandBuf.data(), sendCommandBuf.size() - 1, iniFileName);
     ConnectResults->connectsendcommand = sendCommandBuf.data();
-    ConnectResults->sendcommandmode = GetPrivateProfileInt(DisplayName, "sendcommandmode", 0, iniFileName);
+    ConnectResults->sendcommandmode = IniGetInt(DisplayName, "sendcommandmode", 0, iniFileName);
     return !ConnectResults->server.empty();
 }
 
@@ -253,26 +254,26 @@ void UpdateJumpRefsOnSessionRename(LPCSTR oldName, LPCSTR newName, LPCSTR iniFil
     if (!oldName || !oldName[0] || !iniFileName || !iniFileName[0])
         return;
 
-    // GetPrivateProfileSectionNames returns section names as a
-    // double-null-terminated list. 65535 is the documented hard limit.
+    // IniGetSectionNames returns section names as a double-null-terminated
+    // list; a list longer than the buffer comes back truncated.
     std::array<char, 65535> sectionList{};
-    GetPrivateProfileSectionNamesA(sectionList.data(),
-                                   static_cast<DWORD>(sectionList.size()),
-                                   iniFileName);
+    IniGetSectionNames(sectionList.data(),
+                       static_cast<DWORD>(sectionList.size()),
+                       iniFileName);
 
     char* p = sectionList.data();
     while (p[0]) {
         std::array<char, MAX_PATH> currentRef{};
-        GetPrivateProfileStringA(p, "jumpsessionref", "",
-                                 currentRef.data(),
-                                 static_cast<DWORD>(currentRef.size()),
-                                 iniFileName);
+        IniGetString(p, "jumpsessionref", "",
+                     currentRef.data(),
+                     static_cast<DWORD>(currentRef.size()),
+                     iniFileName);
         if (currentRef[0] && _stricmp(currentRef.data(), oldName) == 0) {
             // Exact match — rewrite (or clear if newName is null/empty).
             if (newName && newName[0])
-                WritePrivateProfileStringA(p, "jumpsessionref", newName, iniFileName);
+                IniWriteString(p, "jumpsessionref", newName, iniFileName);
             else
-                WritePrivateProfileStringA(p, "jumpsessionref", nullptr, iniFileName);
+                IniWriteString(p, "jumpsessionref", nullptr, iniFileName);
         }
         p += strlen(p) + 1;
     }
@@ -288,24 +289,24 @@ void UpdateJumpRefsOnFolderRename(LPCSTR oldPrefix, LPCSTR newPrefix, LPCSTR ini
     const std::string newReplacement = std::string(newPrefix) + "/";
 
     std::array<char, 65535> sectionList{};
-    GetPrivateProfileSectionNamesA(sectionList.data(),
-                                   static_cast<DWORD>(sectionList.size()),
-                                   iniFileName);
+    IniGetSectionNames(sectionList.data(),
+                       static_cast<DWORD>(sectionList.size()),
+                       iniFileName);
 
     char* p = sectionList.data();
     while (p[0]) {
         std::array<char, MAX_PATH> currentRef{};
-        GetPrivateProfileStringA(p, "jumpsessionref", "",
-                                 currentRef.data(),
-                                 static_cast<DWORD>(currentRef.size()),
-                                 iniFileName);
+        IniGetString(p, "jumpsessionref", "",
+                     currentRef.data(),
+                     static_cast<DWORD>(currentRef.size()),
+                     iniFileName);
         const size_t reflen = strlen(currentRef.data());
         if (reflen > oldNeedle.size() &&
             _strnicmp(currentRef.data(), oldNeedle.c_str(), oldNeedle.size()) == 0)
         {
             std::string updated = newReplacement;
             updated.append(currentRef.data() + oldNeedle.size());
-            WritePrivateProfileStringA(p, "jumpsessionref", updated.c_str(), iniFileName);
+            IniWriteString(p, "jumpsessionref", updated.c_str(), iniFileName);
         }
         p += strlen(p) + 1;
     }
@@ -375,9 +376,9 @@ std::vector<std::string> LoadImportCustomPaths(LPCSTR sourceId, LPCSTR iniFileNa
     // Custom paths list can be long; oversize the buffer generously vs
     // MAX_PATH so tens of concatenated paths fit.
     std::array<char, 8192> buf{};
-    GetPrivateProfileStringA(kImportsSection, PathsKey(sourceId).c_str(), "",
-                             buf.data(), static_cast<DWORD>(buf.size() - 1),
-                             iniFileName);
+    IniGetString(kImportsSection, PathsKey(sourceId).c_str(), "",
+                 buf.data(), static_cast<DWORD>(buf.size() - 1),
+                 iniFileName);
     return SplitByPipe(buf.data());
 }
 
@@ -403,7 +404,7 @@ bool SaveImportCustomPath(LPCSTR sourceId, LPCSTR path, LPCSTR iniFileName)
 
     paths.push_back(normalized);
     const std::string joined = JoinByPipe(paths);
-    return WritePrivateProfileStringA(kImportsSection,
+    return IniWriteString(kImportsSection,
         PathsKey(sourceId).c_str(),
         joined.empty() ? nullptr : joined.c_str(),
         iniFileName) != 0;
@@ -427,7 +428,7 @@ bool RemoveImportCustomPath(LPCSTR sourceId, LPCSTR path, LPCSTR iniFileName)
         return false;  // Nothing removed.
 
     const std::string joined = JoinByPipe(paths);
-    return WritePrivateProfileStringA(kImportsSection,
+    return IniWriteString(kImportsSection,
         PathsKey(sourceId).c_str(),
         joined.empty() ? nullptr : joined.c_str(),
         iniFileName) != 0;
