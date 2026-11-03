@@ -16,6 +16,13 @@ extern tLogProcW      LogProcW;
 extern tRequestProc   RequestProc;
 extern tRequestProcW  RequestProcW;
 extern tCryptProc     CryptProc;
+extern tCryptProcW    CryptProcW;
+
+// Total Commander's password store, for internal strings: the wide callback
+// when it was set, else the ANSI one. HaveCryptProc tells whether either is.
+bool HaveCryptProc() noexcept;
+int CryptProcI(int PluginNr, int CryptoNr, int Mode, LPCSTR ConnectionName,
+               LPSTR Password, int maxlen) noexcept;
 
 extern bool CryptCheckPass;
 

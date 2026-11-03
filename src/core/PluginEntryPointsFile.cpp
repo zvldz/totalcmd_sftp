@@ -1057,10 +1057,10 @@ int WINAPI FsExecuteFile(HWND MainWin, LPSTR RemoteName, LPCSTR Verb)
 
 static bool CopyMoveEncryptedPassword(LPCSTR OldName, LPSTR NewName, bool Move)
 {
-    if (!CryptProc)
+    if (!HaveCryptProc())
         return false;
     int mode = Move ? FS_CRYPT_MOVE_PASSWORD : FS_CRYPT_COPY_PASSWORD;
-    int rc = CryptProc(PluginNumber, CryptoNumber, mode, OldName, NewName, 0);
+    int rc = CryptProcI(PluginNumber, CryptoNumber, mode, OldName, NewName, 0);
     return (rc == FS_FILE_OK) ? true : false;
 }
 
@@ -2210,8 +2210,8 @@ BOOL WINAPI FsDeleteFileW(LPCWSTR RemoteName)
                 FsDisconnect(disconnPath.c_str());
             }
             if (DeleteServerFromIniW(r.displayName.c_str(), inifilenameW)) {
-                if (CryptProc)
-                    CryptProc(PluginNumber, CryptoNumber, FS_CRYPT_DELETE_PASSWORD,
+                if (HaveCryptProc())
+                    CryptProcI(PluginNumber, CryptoNumber, FS_CRYPT_DELETE_PASSWORD,
                               const_cast<char*>(r.displayName.c_str()), nullptr, 0);
                 // Clear any jump-host references that pointed at the deleted
                 // session so the by-reference picker doesn't surface them as
@@ -2283,8 +2283,8 @@ BOOL WINAPI FsRemoveDirW(LPCWSTR RemoteName)
                 disconnPath.append("\\").append(name);
                 FsDisconnect(disconnPath.c_str());
                 DeleteServerFromIniW(name.c_str(), inifilenameW);
-                if (CryptProc)
-                    CryptProc(PluginNumber, CryptoNumber, FS_CRYPT_DELETE_PASSWORD,
+                if (HaveCryptProc())
+                    CryptProcI(PluginNumber, CryptoNumber, FS_CRYPT_DELETE_PASSWORD,
                               const_cast<char*>(name.c_str()), nullptr, 0);
                 UpdateJumpRefsOnSessionRename(name.c_str(), nullptr, inifilename);
             }

@@ -42,7 +42,7 @@ void newpassfunc(LIBSSH2_SESSION* /*session*/, LPSTR* newpw, int* newpw_len, LPV
             PassConnectSettings->account_password = newpass.data();
             switch (PassConnectSettings->passSaveMode) {
             case sftp::PassSaveMode::crypt:
-                CryptProc(PluginNumber, CryptoNumber, FS_CRYPT_SAVE_PASSWORD, PassConnectSettings->DisplayName.c_str(), newpass.data(), 0);
+                CryptProcI(PluginNumber, CryptoNumber, FS_CRYPT_SAVE_PASSWORD, PassConnectSettings->DisplayName.c_str(), newpass.data(), 0);
                 break;
             case sftp::PassSaveMode::plain:
                 if (newpass[0] == 0) {

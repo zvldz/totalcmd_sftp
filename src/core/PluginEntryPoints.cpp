@@ -65,6 +65,7 @@ tLogProcW      LogProcW = nullptr;
 tRequestProc   RequestProc = nullptr;
 tRequestProcW  RequestProcW = nullptr;
 tCryptProc     CryptProc = nullptr;
+tCryptProcW    CryptProcW = nullptr;
 static bool g_winsockInitialized = false;
 static LANGID g_configuredUiLangId = 0;
 
@@ -577,7 +578,77 @@ void WINAPI FsSetCryptCallback(tCryptProc pCryptProc, int CryptoNr, int Flags)
         CryptProc = pCryptProc;
         CryptCheckPass = (Flags & FS_CRYPTOPT_MASTERPASS_SET) != 0;
         CryptoNumber = CryptoNr;
+        SFTP_LOG("CRYPT", "FsSetCryptCallback proc=%d nr=%d flags=0x%x", pCryptProc ? 1 : 0, CryptoNr, Flags);
     });
+}
+
+void WINAPI FsSetCryptCallbackW(tCryptProcW pCryptProcW, int CryptoNr, int Flags)
+{
+    sftp::DllExceptionBarrier _barrier;
+    sftp::dll_invoke_void(_barrier, [&] {
+        CryptProcW = pCryptProcW;
+        CryptCheckPass = (Flags & FS_CRYPTOPT_MASTERPASS_SET) != 0;
+        CryptoNumber = CryptoNr;
+        SFTP_LOG("CRYPT", "FsSetCryptCallbackW proc=%d nr=%d flags=0x%x", pCryptProcW ? 1 : 0, CryptoNr, Flags);
+    });
+}
+
+bool HaveCryptProc() noexcept
+{
+    return CryptProcW != nullptr || CryptProc != nullptr;
+}
+
+// The password store keyed by connection name, for internal strings. With
+// FS_CRYPT_COPY/MOVE_PASSWORD `Password` holds the new connection name.
+int CryptProcI(int PluginNr, int CryptoNr, int Mode, LPCSTR ConnectionName,
+               LPSTR Password, int maxlen) noexcept
+{
+    try {
+        const bool loads = Mode == FS_CRYPT_LOAD_PASSWORD || Mode == FS_CRYPT_LOAD_PASSWORD_NO_UI;
+        if (CryptProcW) {
+            const std::wstring name = unicode_util::internal_to_wide(ConnectionName ? ConnectionName : "");
+            std::wstring pass;
+            if (loads)
+                pass.assign(maxlen > 0 ? static_cast<size_t>(maxlen) + 1 : 1, L'\0');
+            else if (Password)
+                pass = unicode_util::internal_to_wide(Password);
+            // What is handed over is passed with its size; a load gets the buffer size.
+            const int wmaxlen = loads || !Password ? maxlen : static_cast<int>(pass.size()) + 1;
+            const int rc = CryptProcW(PluginNr, CryptoNr, Mode, name.c_str(),
+                                      Password || loads ? pass.data() : nullptr, wmaxlen);
+            SFTP_LOG("CRYPT", "CryptProcW mode=%d name='%s' rc=%d", Mode,
+                     ConnectionName ? ConnectionName : "", rc);
+            if (loads && rc == FS_FILE_OK && Password && maxlen > 0)
+                (void)wilcopy(Password, pass.c_str(), static_cast<size_t>(maxlen));
+            SecureZeroMemory(pass.data(), pass.size() * sizeof(wchar_t));
+            return rc;
+        }
+        if (CryptProc) {
+            const auto toAcp = [](LPCSTR s) {
+                return unicode_util::wide_to_narrow(unicode_util::internal_to_wide(s ? s : ""), CP_ACP);
+            };
+            const std::string name = toAcp(ConnectionName);
+            std::string pass;
+            if (loads)
+                pass.assign(maxlen > 0 ? static_cast<size_t>(maxlen) + 1 : 1, '\0');
+            else if (Password)
+                pass = toAcp(Password);
+            const int rc = CryptProc(PluginNr, CryptoNr, Mode, name.c_str(),
+                                     Password || loads ? pass.data() : nullptr, maxlen);
+            SFTP_LOG("CRYPT", "CryptProc mode=%d name='%s' rc=%d", Mode,
+                     ConnectionName ? ConnectionName : "", rc);
+            if (loads && rc == FS_FILE_OK && Password && maxlen > 0) {
+                const std::string back = unicode_util::wide_to_internal(
+                    unicode_util::narrow_to_wide(pass.c_str(), CP_ACP));
+                strncpy_s(Password, static_cast<size_t>(maxlen), back.c_str(), _TRUNCATE);
+            }
+            SecureZeroMemory(pass.data(), pass.size());
+            return rc;
+        }
+    } catch (...) {
+        SFTP_LOG("CRYPT", "CryptProcI mode=%d: exception", Mode);
+    }
+    return FS_FILE_NOTSUPPORTED;
 }
 
 // An ANSI path from TC, in the system codepage, as an internal string.

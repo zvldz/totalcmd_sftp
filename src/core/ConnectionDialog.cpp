@@ -1764,7 +1764,7 @@ INT_PTR WINAPI ProxyDlgProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lPara
         SetDlgItemTextI(hWnd, IDC_PROXYSERVER, ConnectData.proxyserver);
         SetDlgItemTextI(hWnd, IDC_PROXYUSERNAME, ConnectData.proxyuser);
 
-        if (ConnectData.proxypassword == "\001" && CryptProc) {
+        if (ConnectData.proxypassword == "\001" && HaveCryptProc()) {
             std::array<char, 64> proxyentry{};
             if (ctx->proxynr > 1)
                 strlcpy(proxyentry.data(), std::format("proxy{}", ctx->proxynr), proxyentry.size() - 1);
@@ -1774,7 +1774,7 @@ INT_PTR WINAPI ProxyDlgProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lPara
             strlcat(proxyentry.data(), "$$pass", proxyentry.size()-1);
 
             std::array<char, MAX_PATH> proxyPassword{};
-            if (CryptProc(PluginNumber, CryptoNumber, FS_CRYPT_LOAD_PASSWORD_NO_UI, proxyentry.data(), proxyPassword.data(), static_cast<int>(proxyPassword.size() - 1)) == FS_FILE_OK) {
+            if (CryptProcI(PluginNumber, CryptoNumber, FS_CRYPT_LOAD_PASSWORD_NO_UI, proxyentry.data(), proxyPassword.data(), static_cast<int>(proxyPassword.size() - 1)) == FS_FILE_OK) {
                 ConnectData.proxypassword = proxyPassword.data();
                 SetDlgItemTextI(hWnd, IDC_PROXYPASSWORD, ConnectData.proxypassword);
                 CheckDlgButton(hWnd, IDC_CRYPTPASS, BST_CHECKED);
@@ -1785,7 +1785,7 @@ INT_PTR WINAPI ProxyDlgProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lPara
             }
         } else {
             SetDlgItemTextI(hWnd, IDC_PROXYPASSWORD, ConnectData.proxypassword);
-            if (!CryptProc)
+            if (!HaveCryptProc())
                 EnableWindow(GetDlgItem(hWnd, IDC_CRYPTPASS), false);
             else if (ConnectData.proxypassword.empty() && CryptCheckPass)
                 CheckDlgButton(hWnd, IDC_CRYPTPASS, BST_CHECKED);
@@ -1843,11 +1843,11 @@ INT_PTR WINAPI ProxyDlgProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lPara
             if (!IsWindowVisible(GetDlgItem(hWnd, IDC_EDITPASS))) {  // Edit button is hidden.
                 if (ConnectData.proxypassword.empty()) {
                     IniWriteString(proxyentry.data(), "proxypassword", nullptr, ctx->iniFileName);
-                } else if (CryptProc && IsDlgButtonChecked(hWnd, IDC_CRYPTPASS)) {
+                } else if (HaveCryptProc() && IsDlgButtonChecked(hWnd, IDC_CRYPTPASS)) {
                     std::array<char, 64> proxyentry2{};
                     strlcpy(proxyentry2.data(), proxyentry.data(), proxyentry2.size()-1);
                     strlcat(proxyentry2.data(), "$$pass", proxyentry2.size()-1);
-                    bool ok = CryptProc(PluginNumber, CryptoNumber, FS_CRYPT_SAVE_PASSWORD, proxyentry2.data(), const_cast<char*>(ConnectData.proxypassword.c_str()), 0) == FS_FILE_OK;
+                    bool ok = CryptProcI(PluginNumber, CryptoNumber, FS_CRYPT_SAVE_PASSWORD, proxyentry2.data(), const_cast<char*>(ConnectData.proxypassword.c_str()), 0) == FS_FILE_OK;
                     IniWriteString(proxyentry.data(), "proxypassword", ok? "!" : nullptr, ctx->iniFileName);
                     CryptCheckPass = true;
                 } else {
@@ -1902,7 +1902,7 @@ INT_PTR WINAPI ProxyDlgProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lPara
             strlcat(proxyentry.data(), "$$pass", proxyentry.size()-1);
 
             std::array<char, MAX_PATH> proxyPassword{};
-            err = CryptProc(PluginNumber, CryptoNumber, FS_CRYPT_LOAD_PASSWORD, proxyentry.data(), proxyPassword.data(), static_cast<int>(proxyPassword.size() - 1));
+            err = CryptProcI(PluginNumber, CryptoNumber, FS_CRYPT_LOAD_PASSWORD, proxyentry.data(), proxyPassword.data(), static_cast<int>(proxyPassword.size() - 1));
             if (err == FS_FILE_OK) {
                 ConnectData.proxypassword = proxyPassword.data();
                 SetDlgItemTextI(hWnd, IDC_PROXYPASSWORD, ConnectData.proxypassword);
@@ -2137,7 +2137,7 @@ static bool OnJumpButtonCommand(HWND hWnd, pConnectSettings dlgConnectResults)
 
     JumpDialogContext jumpCtx;
     jumpCtx.cs = dlgConnectResults;
-    jumpCtx.hasCryptProc = (CryptProc != nullptr);
+    jumpCtx.hasCryptProc = HaveCryptProc();
 
     ShowLocalizedDialogBoxParam(IDD_JUMPHOST, hWnd, JumpHostDlgProc, (LPARAM)&jumpCtx);
 
@@ -2362,9 +2362,9 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
 
         SendDlgItemMessage(m_hWnd, IDC_TRANSFERMODE, CB_SETCURSEL, max(0, min(3, m_settings->transfermode)), 0);
 
-        if (m_settings->password == "\001" && CryptProc) {
+        if (m_settings->password == "\001" && HaveCryptProc()) {
             std::array<char, MAX_PATH> sessionPassword{};
-            if (CryptProc(PluginNumber, CryptoNumber, FS_CRYPT_LOAD_PASSWORD_NO_UI, dlgDisplayName,
+            if (CryptProcI(PluginNumber, CryptoNumber, FS_CRYPT_LOAD_PASSWORD_NO_UI, dlgDisplayName,
                           sessionPassword.data(), static_cast<int>(sessionPassword.size() - 1)) == FS_FILE_OK) {
                 m_settings->password = sessionPassword.data();
                 SetDlgItemTextI(m_hWnd, IDC_PASSWORD, m_settings->password);
@@ -2376,7 +2376,7 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
             }
         } else {
             SetDlgItemTextI(m_hWnd, IDC_PASSWORD, m_settings->password);
-            if (!CryptProc)
+            if (!HaveCryptProc())
                 EnableWindow(GetDlgItem(m_hWnd, IDC_CRYPTPASS), false);
             else {
                 std::array<char, MAX_PATH> storedPasswordRaw{};
@@ -2810,8 +2810,8 @@ void ConnectionDialog::OnOk()
         if (!IsWindowVisible(GetDlgItem(m_hWnd, IDC_EDITPASS))) {
             if (m_settings->password.empty()) {
                 IniWriteString(targetProfile.data(), "password", nullptr, dlgIniFileName);
-            } else if (CryptProc && IsDlgButtonChecked(m_hWnd, IDC_CRYPTPASS)) {
-                bool ok = CryptProc(PluginNumber, CryptoNumber, FS_CRYPT_SAVE_PASSWORD,
+            } else if (HaveCryptProc() && IsDlgButtonChecked(m_hWnd, IDC_CRYPTPASS)) {
+                bool ok = CryptProcI(PluginNumber, CryptoNumber, FS_CRYPT_SAVE_PASSWORD,
                                     targetProfile.data(),
                                     const_cast<char*>(m_settings->password.c_str()), 0) == FS_FILE_OK;
                 IniWriteString(targetProfile.data(), "password", ok ? "!" : nullptr, dlgIniFileName);
@@ -2985,7 +2985,7 @@ void ConnectionDialog::OnEditPass()
 {
     bool doshow = true;
     std::array<char, MAX_PATH> sessionPassword{};
-    int err = CryptProc(PluginNumber, CryptoNumber, FS_CRYPT_LOAD_PASSWORD,
+    int err = CryptProcI(PluginNumber, CryptoNumber, FS_CRYPT_LOAD_PASSWORD,
                         m_ctx->displayName, sessionPassword.data(),
                         static_cast<int>(sessionPassword.size() - 1));
     if (err == FS_FILE_OK) {
@@ -3086,17 +3086,17 @@ pConnectSettings SftpConnectToServer(LPCSTR DisplayName, LPCSTR inifilename,
         } else {
             ConnectSettings.passSaveMode = sftp::PassSaveMode::plain;
         }
-        if (CryptProc && ConnectSettings.password == "\001") {
+        if (HaveCryptProc() && ConnectSettings.password == "\001") {
             ConnectSettings.passSaveMode = sftp::PassSaveMode::crypt;
             std::array<char, MAX_PATH> passwordBuf{};
-            int rc = CryptProc(PluginNumber, CryptoNumber, FS_CRYPT_LOAD_PASSWORD, DisplayName, passwordBuf.data(), static_cast<int>(passwordBuf.size() - 1));
+            int rc = CryptProcI(PluginNumber, CryptoNumber, FS_CRYPT_LOAD_PASSWORD, DisplayName, passwordBuf.data(), static_cast<int>(passwordBuf.size() - 1));
             if (rc != FS_FILE_OK) {
                 ConnectSettings.feedback->ShowError(LngStrU8(IDS_ERR_LOAD_PASS, "Failed to load password!"));
                 return nullptr;
             }
             ConnectSettings.password = passwordBuf.data();
         }
-        if (CryptProc && ConnectSettings.proxypassword == "\001") {
+        if (HaveCryptProc() && ConnectSettings.proxypassword == "\001") {
             std::array<char, 64> proxyentry{};
             if (ConnectSettings.proxynr > 1)
                 strlcpy(proxyentry.data(), std::format("proxy{}", ConnectSettings.proxynr), proxyentry.size() - 1);
@@ -3105,7 +3105,7 @@ pConnectSettings SftpConnectToServer(LPCSTR DisplayName, LPCSTR inifilename,
 
             strlcat(proxyentry.data(), "$$pass", proxyentry.size()-1);
             std::array<char, MAX_PATH> proxyPasswordBuf{};
-            int rc = CryptProc(PluginNumber, CryptoNumber, FS_CRYPT_LOAD_PASSWORD, proxyentry.data(), proxyPasswordBuf.data(), static_cast<int>(proxyPasswordBuf.size() - 1));
+            int rc = CryptProcI(PluginNumber, CryptoNumber, FS_CRYPT_LOAD_PASSWORD, proxyentry.data(), proxyPasswordBuf.data(), static_cast<int>(proxyPasswordBuf.size() - 1));
             if (rc != FS_FILE_OK) {
                 ConnectSettings.feedback->ShowError(LngStrU8(IDS_ERR_LOAD_PROXY_PASS, "Failed to load proxy password!"));
                 return nullptr;
