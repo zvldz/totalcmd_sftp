@@ -4,6 +4,7 @@
 #include "global.h"
 #include "CoreUtils.h"
 #include "fsplugin.h"
+#include "UnicodeHelpers.h"
 
 #include <intrin.h>
 #include <strsafe.h>
@@ -496,13 +497,14 @@ void ReplaceEnvVars(LPSTR buf, size_t buflen)
         // Extract environment variable name
         const std::string envName = buffer.substr(percentPos + 1, endPos - percentPos - 1);
         
-        // Get environment variable value
-        DWORD envLen = GetEnvironmentVariableA(envName.c_str(), nullptr, 0);
-        if (envLen > 0 && envLen < MAX_PATH) {
-            std::string envValue(envLen, '\0');
-            GetEnvironmentVariableA(envName.c_str(), envValue.data(), envLen);
+        // Get environment variable value; the buffer holds an internal string.
+        const std::wstring envNameW = unicode_util::internal_to_wide(envName);
+        DWORD envLen = GetEnvironmentVariableW(envNameW.c_str(), nullptr, 0);
+        if (envLen > 0 && envLen < 32767) {
+            std::wstring envValue(envLen, L'\0');
+            GetEnvironmentVariableW(envNameW.c_str(), envValue.data(), envLen);
             envValue.pop_back();  // Remove null terminator from string
-            result += envValue;
+            result += unicode_util::wide_to_internal(envValue);
         }
         
         pos = endPos + 1;

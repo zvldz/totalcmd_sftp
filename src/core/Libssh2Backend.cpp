@@ -424,12 +424,14 @@ int Libssh2Session::userauthPassword(const char* user, unsigned ulen,
                                         changeCb);
 }
 
-int Libssh2Session::userauthPubkeyFromFile(const char* user, unsigned ulen,
-                                            const char* pub, const char* priv,
-                                            const char* passphrase)
+int Libssh2Session::userauthPubkeyFromMemory(const char* user, unsigned ulen,
+                                              const char* pub, size_t publen,
+                                              const char* priv, size_t privlen,
+                                              const char* passphrase)
 {
-    return libssh2_userauth_publickey_fromfile_ex(session_, user, ulen,
-                                                   pub, priv, passphrase);
+    return libssh2_userauth_publickey_frommemory(session_, user, ulen,
+                                                 pub, publen, priv, privlen,
+                                                 passphrase);
 }
 
 int Libssh2Session::userauthKeyboardInteractive(

@@ -123,9 +123,12 @@ struct ISshSession {
     virtual int userauthPassword(const char* user, unsigned ulen,
                                  const char* pass, unsigned plen,
                                  LIBSSH2_PASSWD_CHANGEREQ_FUNC((*changeCb))) = 0;
-    virtual int userauthPubkeyFromFile(const char* user, unsigned ulen,
-                                       const char* pub, const char* priv,
-                                       const char* passphrase) = 0;
+    // Key file contents, read by the caller; an empty public key is derived
+    // from the private one.
+    virtual int userauthPubkeyFromMemory(const char* user, unsigned ulen,
+                                         const char* pub, size_t publen,
+                                         const char* priv, size_t privlen,
+                                         const char* passphrase) = 0;
     virtual int userauthKeyboardInteractive(
         const char* user, unsigned ulen,
         LIBSSH2_USERAUTH_KBDINT_RESPONSE_FUNC((*responseCb))) = 0;

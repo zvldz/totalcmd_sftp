@@ -129,9 +129,10 @@ public:
     int userauthPassword(const char* user, unsigned ulen,
                          const char* pass, unsigned plen,
                          LIBSSH2_PASSWD_CHANGEREQ_FUNC((*changeCb))) override;
-    int userauthPubkeyFromFile(const char* user, unsigned ulen,
-                               const char* pub, const char* priv,
-                               const char* passphrase) override;
+    int userauthPubkeyFromMemory(const char* user, unsigned ulen,
+                                 const char* pub, size_t publen,
+                                 const char* priv, size_t privlen,
+                                 const char* passphrase) override;
     int userauthKeyboardInteractive(
         const char* user, unsigned ulen,
         LIBSSH2_USERAUTH_KBDINT_RESPONSE_FUNC((*responseCb))) override;

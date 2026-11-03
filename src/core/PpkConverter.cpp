@@ -13,6 +13,7 @@
 #include "global.h"
 #include "PpkConverter.h"
 #include "CoreUtils.h"
+#include "UnicodeHelpers.h"
 #include <bcrypt.h>
 #include <argon2.h>
 #include <vector>
@@ -186,8 +187,8 @@ static bool ParsePpkFile(const char* path, PpkData& ppk)
 {
     PPK_LOG("Parsing PPK file: %s", path);
 
-    HANDLE hf = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ, nullptr,
-                            OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    HANDLE hf = CreateFileW(unicode_util::internal_to_wide(path).c_str(), GENERIC_READ,
+                            FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (hf == INVALID_HANDLE_VALUE) {
         DWORD err = GetLastError();
         PPK_LOG_ERROR("Cannot open file: %s, error=%lu", path, err);
@@ -935,47 +936,31 @@ static bool BuildOpenSshEd25519(const PpkData& ppk,
     return true;
 }
 
-static bool WritePem(const char* path, const char* label, const std::vector<uint8_t>& data)
+static void SecureWipeString(std::string& s) noexcept
+{
+    if (!s.empty())
+        SecureZeroMemory(s.data(), s.size());
+    s.clear();
+}
+
+// The key as PEM text: base64 body in 70-column lines between the armour.
+static bool BuildPem(const char* label, const std::vector<uint8_t>& data, std::string& out)
 {
     const size_t maxB64 = data.size() * 2 + 16;
     std::vector<char> b64(maxB64, '\0');
     int b64Len = MimeEncodeData(data.data(), data.size(), b64.data(), maxB64);
     if (b64Len <= 0) return false;
 
-    HANDLE hf = CreateFileA(path, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
-                            FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (hf == INVALID_HANDLE_VALUE) return false;
-
-    bool ok = true;
-    auto Write = [&](const void* p, DWORD n) {
-        if (!ok) return;
-        DWORD w = 0;
-        ok = (WriteFile(hf, p, n, &w, nullptr) != FALSE) && (w == n);
-    };
-
-    std::array<char, 96> hdr{};
-    std::array<char, 96> ftr{};
-    snprintf(hdr.data(), hdr.size(), "-----BEGIN %s-----\n", label);
-    snprintf(ftr.data(), ftr.size(), "\n-----END %s-----\n", label);
-    Write(hdr.data(), static_cast<DWORD>(strlen(hdr.data())));
-
-    const char* p = b64.data();
-    int remaining = b64Len;
-    bool first = true;
-    while (ok && remaining > 0) {
-        if (!first) Write("\n", 1);
-        first = false;
-        int lineLen = min(70, remaining);
-        Write(p, static_cast<DWORD>(lineLen));
-        p += lineLen;
-        remaining -= lineLen;
+    out.clear();
+    out.reserve(static_cast<size_t>(b64Len) + static_cast<size_t>(b64Len) / 70 + 96);
+    out.append("-----BEGIN ").append(label).append("-----\n");
+    for (int pos = 0; pos < b64Len; pos += 70) {
+        if (pos) out.push_back('\n');
+        out.append(b64.data() + pos, static_cast<size_t>(min(70, b64Len - pos)));
     }
-
-    Write(ftr.data(), static_cast<DWORD>(strlen(ftr.data())));
-
-    CloseHandle(hf);
-    if (!ok) DeleteFileA(path);
-    return ok;
+    out.append("\n-----END ").append(label).append("-----\n");
+    SecureZeroMemory(b64.data(), b64.size());
+    return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -983,8 +968,7 @@ static bool WritePem(const char* path, const char* label, const std::vector<uint
 // ---------------------------------------------------------------------------
 
 static bool ConvertPpkToOpenSshImpl(const char* ppkPath, const char* passphrase,
-                                    char* outPemPath, size_t outPemPathLen,
-                                    PpkConvertError& err)
+                                    std::string& outPem, PpkConvertError& err)
 {
     PpkData ppk;
     if (!ParsePpkFile(ppkPath, ppk)) {
@@ -1127,60 +1111,39 @@ static bool ConvertPpkToOpenSshImpl(const char* ppkPath, const char* passphrase,
         return false;
     }
 
-    std::array<char, MAX_PATH> tempDir{};
-    if (!GetTempPathA(static_cast<DWORD>(tempDir.size() - 1), tempDir.data())) {
-        err = PpkConvertError::io_error;
+    PPK_LOG("Building PEM in memory: label=%s derSize=%zu", pemLabel, pemDer.size());
+    const bool built = BuildPem(pemLabel, pemDer, outPem);
+    SecureZeroMemory(pemDer.data(), pemDer.size());
+    if (!built) {
+        PPK_LOG_ERROR("BuildPem failed");
+        err = PpkConvertError::internal_error;
         return false;
     }
-
-    std::array<char, MAX_PATH> tempBase{};
-    if (!GetTempFileNameA(tempDir.data(), "spp", 0, tempBase.data())) {
-        err = PpkConvertError::io_error;
-        return false;
-    }
-    DeleteFileA(tempBase.data());
-
-    strlcpy(outPemPath, tempBase.data(), outPemPathLen - 1);
-    strlcat(outPemPath, ".pem", outPemPathLen - 1);
-
-    PPK_LOG("Writing PEM file: %s label=%s derSize=%zu", outPemPath, pemLabel, pemDer.size());
-    if (!WritePem(outPemPath, pemLabel, pemDer)) {
-        PPK_LOG_ERROR("WritePem failed");
-        outPemPath[0] = '\0';
-        err = PpkConvertError::io_error;
-        return false;
-    }
-    PPK_LOG("PEM file written successfully");
 
     err = PpkConvertError::ok;
     return true;
 }
 
 bool ConvertPpkToOpenSsh(const char* ppkPath, const char* passphrase,
-                         char* outPemPath, size_t outPemPathLen,
-                         PpkConvertError* outError) noexcept
+                         std::string& outPem, PpkConvertError* outError) noexcept
 {
     if (outError) *outError = PpkConvertError::internal_error;
-    if (!ppkPath || !outPemPath || outPemPathLen == 0) {
+    SecureWipeString(outPem);
+    if (!ppkPath) {
         if (outError) *outError = PpkConvertError::invalid_format;
         return false;
     }
-    outPemPath[0] = '\0';
     try {
         PpkConvertError err = PpkConvertError::internal_error;
-        bool ok = ConvertPpkToOpenSshImpl(ppkPath, passphrase, outPemPath, outPemPathLen, err);
+        bool ok = ConvertPpkToOpenSshImpl(ppkPath, passphrase, outPem, err);
+        if (!ok)
+            SecureWipeString(outPem);
         if (outError) *outError = err;
         return ok;
     } catch (...) {
-        outPemPath[0] = '\0';
+        SecureWipeString(outPem);
         if (outError) *outError = PpkConvertError::internal_error;
         return false;
     }
-}
-
-bool ConvertPpkV2ToOpenSsh(const char* ppkPath, const char* passphrase,
-                           char* outPemPath, size_t outPemPathLen) noexcept
-{
-    return ConvertPpkToOpenSsh(ppkPath, passphrase, outPemPath, outPemPathLen, nullptr);
 }
 

@@ -1,6 +1,7 @@
 #pragma once
 #include <windows.h>
 #include <stddef.h>
+#include <string>
 
 // Native PuTTY PPK -> temporary PEM converter for libssh2_userauth_publickey_fromfile.
 // Supports PPK v2 and v3.
@@ -21,15 +22,11 @@ enum class PpkConvertError : int {
     internal_error,
 };
 
-// Converts a PPK file to a temporary PEM private key file.
+// Converts a PPK file to an unencrypted private key in PEM / OpenSSH form,
+// in memory only — it never touches the disk. The caller wipes `outPem`
+// after use.
+// ppkPath: internal string.
 // passphrase: passphrase for encrypted keys (null/empty for unencrypted keys).
-// outPemPath: caller buffer for temp output path.
 // outError: optional detailed status.
-// On success caller must delete output file with DeleteFileA.
 bool ConvertPpkToOpenSsh(const char* ppkPath, const char* passphrase,
-                         char* outPemPath, size_t outPemPathLen,
-                         PpkConvertError* outError) noexcept;
-
-// Backward-compatible wrapper.
-bool ConvertPpkV2ToOpenSsh(const char* ppkPath, const char* passphrase,
-                           char* outPemPath, size_t outPemPathLen) noexcept;
+                         std::string& outPem, PpkConvertError* outError) noexcept;

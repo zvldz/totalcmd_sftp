@@ -22,6 +22,11 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 
 ### Fixes
 
+- **A PuTTY key is no longer written to disk unencrypted.** To log in with
+  a `.ppk` key the plugin used to convert it into a temporary PEM file in
+  `%TEMP%` and delete it afterwards — a crash in between left the decrypted
+  private key there. The key is now converted and handed to the SSH library
+  in memory only, and every key file is read the same way.
 - **Imported sessions keep non-English names and paths.** Sessions from
   SecureCRT, FileZilla and `~/.ssh/config` with Cyrillic (or other
   non-English) names, hosts or key paths were shown and stored garbled, and

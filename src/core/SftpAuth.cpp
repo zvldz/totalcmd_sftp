@@ -186,8 +186,8 @@ bool KeyFileHoldsPrivateKey(const std::string& path, const std::string& user)
     strlcpy(expanded.data(), path.c_str(), expanded.size() - 1);
     ExpandAuthPath(expanded.data(), expanded.size(), user.c_str());
 
-    handle_util::FileHandle hf(CreateFileA(expanded.data(), GENERIC_READ,
-        FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
+    handle_util::FileHandle hf(CreateFileW(unicode_util::internal_to_wide(expanded.data()).c_str(),
+        GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
         FILE_ATTRIBUTE_NORMAL, nullptr));
     if (!hf)
         return false;
@@ -211,7 +211,8 @@ static bool DetectPrivateKeyEncrypted(LPCSTR privkeyfile, bool* outEncrypted)
 
     DWORD dwShareMode = FILE_SHARE_READ | FILE_SHARE_WRITE;
     DWORD dwFlags = FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN;
-    handle_util::FileHandle hf(CreateFileA(privkeyfile, GENERIC_READ, dwShareMode, nullptr, OPEN_EXISTING, dwFlags, nullptr));
+    handle_util::FileHandle hf(CreateFileW(unicode_util::internal_to_wide(privkeyfile).c_str(),
+        GENERIC_READ, dwShareMode, nullptr, OPEN_EXISTING, dwFlags, nullptr));
     if (!hf)
         return false;
 
@@ -264,30 +265,53 @@ static void BuildUserAtServerTitle(char* out, size_t outLen, int prefixResId,
     strlcat(out, host ? host : "", outLen - 1);
 }
 
+// The whole key file at `path` (an internal string). Key files are small;
+// anything past 1 MB is not one.
+static bool ReadKeyFile(const char* path, std::string& out)
+{
+    handle_util::FileHandle hf(CreateFileW(unicode_util::internal_to_wide(path).c_str(),
+        GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, nullptr));
+    if (!hf)
+        return false;
+    LARGE_INTEGER size{};
+    if (!GetFileSizeEx(hf.get(), &size) || size.QuadPart <= 0 || size.QuadPart > 1024 * 1024)
+        return false;
+    out.assign(static_cast<size_t>(size.QuadPart), '\0');
+    DWORD got = 0;
+    if (!ReadFile(hf.get(), out.data(), static_cast<DWORD>(out.size()), &got, nullptr)) {
+        SecureZeroMemory(out.data(), out.size());
+        out.clear();
+        return false;
+    }
+    out.resize(got);
+    return !out.empty();
+}
+
+// A PuTTY key is converted in memory into `outConvertedPem`; its public half
+// is then derived from it, so the public key file is dropped.
 static bool PreparePrivateKeyForAuth(
     LPCSTR user,
     LPCSTR host,
     std::string& keyPassphrase,
-    char* ioPrivKeyFile,
-    size_t privKeyLen,
+    const char* privKeyFile,
     char** ioPubKeyPtr,
-    bool* outRemoveConvertedPrivateKey,
-    char* outConvertedPrivateKey,
-    size_t convertedLen,
+    bool* outConverted,
+    std::string& outConvertedPem,
     char* ioPromptBuf,
     size_t ioPromptBufLen)
 {
-    if (!ioPrivKeyFile || !ioPubKeyPtr || !outRemoveConvertedPrivateKey || !outConvertedPrivateKey || !ioPromptBuf)
+    if (!privKeyFile || !ioPubKeyPtr || !outConverted || !ioPromptBuf)
         return false;
-    if (!EndsWithNoCase(ioPrivKeyFile, ".ppk"))
+    if (!EndsWithNoCase(privKeyFile, ".ppk"))
         return true;
 
     const char* ppkPass = keyPassphrase.c_str();
     PpkConvertError convErr = PpkConvertError::internal_error;
     ShowStatusId(IDS_LOG_PPK_CONVERTING, nullptr, true);
-    bool converted = ConvertPpkToOpenSsh(ioPrivKeyFile, ppkPass, outConvertedPrivateKey, convertedLen - 1, &convErr);
+    bool converted = ConvertPpkToOpenSsh(privKeyFile, ppkPass, outConvertedPem, &convErr);
     const std::string convStatus = std::format("PPK conv: {}, err={}", converted, static_cast<int>(convErr));
-    AUTH_LOG("PPK conversion: converted=%d, convErr=%d, pemPath=%s", converted, convErr, outConvertedPrivateKey);
+    AUTH_LOG("PPK conversion: converted=%d, convErr=%d", converted, convErr);
     ShowStatus(convStatus.c_str());
 
     if (!converted && (convErr == PpkConvertError::passphrase_required ||
@@ -299,7 +323,7 @@ static bool PreparePrivateKeyForAuth(
         LoadStr(ioPromptBuf, ioPromptBufLen, IDS_KEYPASSPHRASE);
         BuildUserAtServerTitle(title.data(), title.size(), IDS_PASSPHRASE, user, host);
         if (RequestProcI(PluginNumber, RT_Password, title.data(), ioPromptBuf, ppkPassBuf.data(), ppkPassBuf.size() - 1)) {
-            converted = ConvertPpkToOpenSsh(ioPrivKeyFile, ppkPassBuf.data(), outConvertedPrivateKey, convertedLen - 1, &convErr);
+            converted = ConvertPpkToOpenSsh(privKeyFile, ppkPassBuf.data(), outConvertedPem, &convErr);
             // This prompt is only reached once the passphrase already held
             // failed to open the key, so a conversion that succeeds here
             // replaces it: what opened the key outranks what was assumed.
@@ -314,16 +338,13 @@ static bool PreparePrivateKeyForAuth(
         return false;
     }
 
-    strlcpy(ioPrivKeyFile, outConvertedPrivateKey, privKeyLen - 1);
     *ioPubKeyPtr = nullptr;
-    *outRemoveConvertedPrivateKey = true;
+    *outConverted = true;
     return true;
 }
 
 static bool ValidatePublicKeyFileIfPresent(
     char* pubkeyfileptr,
-    LPCSTR convertedPrivateKey,
-    bool removeConvertedPrivateKey,
     LPCSTR pubkeyfile,
     DWORD dwShareMode,
     DWORD dwFlags)
@@ -333,10 +354,9 @@ static bool ValidatePublicKeyFileIfPresent(
 
     DWORD dataread = 0;
     std::array<char, 1024> filebuf{};
-    handle_util::FileHandle hf(CreateFileA(pubkeyfile, GENERIC_READ, dwShareMode, nullptr, OPEN_EXISTING, dwFlags, nullptr));
+    handle_util::FileHandle hf(CreateFileW(unicode_util::internal_to_wide(pubkeyfile).c_str(),
+        GENERIC_READ, dwShareMode, nullptr, OPEN_EXISTING, dwFlags, nullptr));
     if (!hf) {
-        if (removeConvertedPrivateKey)
-            DeleteFileA(convertedPrivateKey);
         ShowStatusId(IDS_ERR_LOAD_PUBKEY, pubkeyfile, true);
         return false;
     }
@@ -348,8 +368,6 @@ static bool ValidatePublicKeyFileIfPresent(
             _strnicmp(filebuf.data(), "-----BEGIN RSA PRIVATE KEY-----", 31) != 0 &&
             _strnicmp(filebuf.data(), "-----BEGIN EC PRIVATE KEY-----", 30) != 0)
         {
-            if (removeConvertedPrivateKey)
-                DeleteFileA(convertedPrivateKey);
             ShowStatusId(IDS_ERR_PUBKEY_WRONG_FORMAT, nullptr, true);
             return false;
         }
@@ -465,12 +483,17 @@ int SftpAuthPubKeyOn(const SshAuthTarget& target, LPCSTR progressbuf, int progre
     std::array<char, 256> passphrase{};
     std::array<char, MAX_PATH> pubkeyfile{};
     std::array<char, MAX_PATH> privkeyfile{};
-    std::array<char, MAX_PATH> convertedPrivateKey{};
-    bool removeConvertedPrivateKey = false;
+    bool convertedPpk = false;
+    std::string convertedPem;     // a PuTTY key converted in memory
+    std::string privData;         // what goes to libssh2
+    std::string pubData;
     char* pubkeyfileptr = pubkeyfile.data();
     auto cleanupConvertedIfNeeded = [&]() {
-        if (removeConvertedPrivateKey)
-            DeleteFileA(convertedPrivateKey.data());
+        for (std::string* k : { &convertedPem, &privData, &pubData }) {
+            if (!k->empty())
+                SecureZeroMemory(k->data(), k->size());
+            k->clear();
+        }
     };
     auto clearPassphrase = [&]() {
         SecureZeroMemory(passphrase.data(), passphrase.size());
@@ -490,27 +513,29 @@ int SftpAuthPubKeyOn(const SshAuthTarget& target, LPCSTR progressbuf, int progre
     ExpandAuthPath(pubkeyfile.data(), pubkeyfile.size(), target.user.c_str());
     strlcpy(privkeyfile.data(), target.privkeyfile.c_str(), privkeyfile.size()-1);
     ExpandAuthPath(privkeyfile.data(), privkeyfile.size(), target.user.c_str());
-    convertedPrivateKey[0] = 0;
 
     AUTH_LOG("After expand: privkeyfile=%s", privkeyfile.data());
     AUTH_LOG("After expand: pubkeyfile=%s", pubkeyfile.data());
-    AUTH_LOG("privkeyfile exists=%d", GetFileAttributesA(privkeyfile.data()) != INVALID_FILE_ATTRIBUTES);
+    const auto keyFileExists = [](const char* p) {
+        return GetFileAttributesW(unicode_util::internal_to_wide(p).c_str()) != INVALID_FILE_ATTRIBUTES;
+    };
+    AUTH_LOG("privkeyfile exists=%d", keyFileExists(privkeyfile.data()));
 
     // Fail-fast on explicit key paths that do not exist.
-    if (privkeyfile.data()[0] && GetFileAttributesA(privkeyfile.data()) == INVALID_FILE_ATTRIBUTES) {
+    if (privkeyfile.data()[0] && !keyFileExists(privkeyfile.data())) {
         ShowStatusId(IDS_ERR_LOAD_PRIVKEY, privkeyfile.data(), true);
         clearPassphrase();
         return -LIBSSH2_ERROR_FILE;
     }
-    if (pubkeyfileptr && pubkeyfile.data()[0] && GetFileAttributesA(pubkeyfile.data()) == INVALID_FILE_ATTRIBUTES) {
+    if (pubkeyfileptr && pubkeyfile.data()[0] && !keyFileExists(pubkeyfile.data())) {
         ShowStatusId(IDS_ERR_LOAD_PUBKEY, pubkeyfile.data(), true);
         clearPassphrase();
         return -LIBSSH2_ERROR_FILE;
     }
 
     if (!PreparePrivateKeyForAuth(target.user.c_str(), target.host.c_str(), *target.keyPassphrase,
-                                  privkeyfile.data(), privkeyfile.size(), &pubkeyfileptr,
-                                  &removeConvertedPrivateKey, convertedPrivateKey.data(), convertedPrivateKey.size(),
+                                  privkeyfile.data(), &pubkeyfileptr,
+                                  &convertedPpk, convertedPem,
                                   buf.data(), buf.size())) {
         clearPassphrase();
         return -LIBSSH2_ERROR_FILE;
@@ -520,7 +545,7 @@ int SftpAuthPubKeyOn(const SshAuthTarget& target, LPCSTR progressbuf, int progre
     // verify that we have a valid public key file (optional when private key is enough)
     DWORD dwShareMode = FILE_SHARE_READ | FILE_SHARE_WRITE;
     DWORD dwFlags = FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN;
-    if (!ValidatePublicKeyFileIfPresent(pubkeyfileptr, convertedPrivateKey.data(), removeConvertedPrivateKey, pubkeyfile.data(), dwShareMode, dwFlags))
+    if (!ValidatePublicKeyFileIfPresent(pubkeyfileptr, pubkeyfile.data(), dwShareMode, dwFlags))
     {
         clearPassphrase();
         return -LIBSSH2_ERROR_FILE;
@@ -529,7 +554,7 @@ int SftpAuthPubKeyOn(const SshAuthTarget& target, LPCSTR progressbuf, int progre
     // Skip passphrase prompt for unencrypted keys.
     // Converted PPK output PEM is unencrypted.
     bool isencrypted = true;  // Assume encrypted by default
-    bool skipEncryptionCheck = removeConvertedPrivateKey;  // Converted PPK -> skip check, we know it's unencrypted
+    bool skipEncryptionCheck = convertedPpk;  // Converted PPK -> skip check, we know it's unencrypted
     
     if (!skipEncryptionCheck) {
         if (!DetectPrivateKeyEncrypted(privkeyfile.data(), &isencrypted)) {
@@ -564,24 +589,39 @@ int SftpAuthPubKeyOn(const SshAuthTarget& target, LPCSTR progressbuf, int progre
 
     ShowStatusId(IDS_AUTH_PUBKEY_FOR, target.user.c_str(), true);
 
-    // libssh2's userauth_publickey_fromfile treats a non-NULL publickey arg as
-    // a path to read; an empty string makes it call fopen("") and bail with
-    // LIBSSH2_ERROR_FILE. We must hand it NULL when the user left the field
-    // blank (so OpenSSL backend derives the public key from the private one)
-    // or pointed both fields at the same file.
+    // No public key when the user left the field blank or pointed both
+    // fields at the same file: libssh2 then derives it from the private one.
     if (pubkeyfileptr && (pubkeyfile.data()[0] == 0 ||
                           _stricmp(pubkeyfile.data(), privkeyfile.data()) == 0))
         pubkeyfileptr = nullptr;
 
+    // The key files are read here and handed to libssh2 in memory: its own
+    // file reading goes through fopen, which takes ANSI paths only.
+    if (convertedPpk)
+        privData.swap(convertedPem);
+    else if (!ReadKeyFile(privkeyfile.data(), privData)) {
+        ShowStatusId(IDS_ERR_LOAD_PRIVKEY, privkeyfile.data(), true);
+        cleanupConvertedIfNeeded();
+        clearPassphrase();
+        return -LIBSSH2_ERROR_FILE;
+    }
+    if (pubkeyfileptr && !ReadKeyFile(pubkeyfile.data(), pubData)) {
+        ShowStatusId(IDS_ERR_LOAD_PUBKEY, pubkeyfile.data(), true);
+        cleanupConvertedIfNeeded();
+        clearPassphrase();
+        return -LIBSSH2_ERROR_FILE;
+    }
+
     LoadStr(buf, IDS_AUTH_PUBKEY);
     int auth;
     const char* passphrasePtr = isencrypted ? passphrase.data() : nullptr;
-    AUTH_LOG("Calling userauthPubkeyFromFile: priv=%s pub=%s passphrase=%s",
-             privkeyfile.data(),
+    AUTH_LOG("Calling userauthPubkeyFromMemory: priv=%s pub=%s passphrase=%s",
+             convertedPpk ? "(converted PPK)" : privkeyfile.data(),
              pubkeyfileptr ? pubkeyfileptr : "(null)",
              passphrasePtr ? "(set)" : "(null)");
     SYSTICKS authStart = get_sys_ticks();
-    while ((auth = target.session->userauthPubkeyFromFile(target.user.c_str(), (unsigned)target.user.size(), pubkeyfileptr, privkeyfile.data(), passphrasePtr)) == LIBSSH2_ERROR_EAGAIN) {
+    while ((auth = target.session->userauthPubkeyFromMemory(target.user.c_str(), (unsigned)target.user.size(),
+                pubData.data(), pubData.size(), privData.data(), privData.size(), passphrasePtr)) == LIBSSH2_ERROR_EAGAIN) {
         if (ProgressLoop(buf.data(), progress, progress + 10, ploop, plasttime))
             break;
         if (get_ticks_between(authStart) > SSH_AUTH_STAGE_TIMEOUT_MS) {
@@ -591,13 +631,13 @@ int SftpAuthPubKeyOn(const SshAuthTarget& target, LPCSTR progressbuf, int progre
         }
         if (target.waitIo) target.waitIo();
     }
-    AUTH_LOG("userauthPubkeyFromFile result=%d", auth);
+    AUTH_LOG("userauthPubkeyFromMemory result=%d", auth);
     if (auth) {
         cleanupConvertedIfNeeded();
         char* errMsg = nullptr;
         int errLen = 0;
         target.session->lastError(&errMsg, &errLen, false);
-        SftpLogLastError("libssh2_userauth_publickey_fromfile: ", auth);
+        SftpLogLastError("libssh2_userauth_publickey_frommemory: ", auth);
         std::array<char, 1024> loadedMsg{};
         LoadStr(loadedMsg, IDS_ERR_AUTH_PUBKEY);
         std::string uiMsg;
