@@ -75,7 +75,7 @@
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <AdditionalIncludeDirectories>..\src\include;..\src\lib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>_DEBUG;SFTP_ALLINONE;LIBSSH2_OPENSSL;LIBSSH2_STATIC;LIBSSH2_API=;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;LIBSSH2_OPENSSL;LIBSSH2_STATIC;LIBSSH2_API=;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <ConformanceMode>true</ConformanceMode>
@@ -102,7 +102,7 @@
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <AdditionalIncludeDirectories>..\src\include;..\src\lib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>NDEBUG;SFTP_ALLINONE;LIBSSH2_OPENSSL;LIBSSH2_STATIC;LIBSSH2_API=;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;LIBSSH2_OPENSSL;LIBSSH2_STATIC;LIBSSH2_API=;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <ConformanceMode>true</ConformanceMode>
@@ -196,7 +196,6 @@
     <ClCompile Include="..\src\core\PluginHelp.cpp" />
     <ClCompile Include="..\src\core\SshSessionInit.cpp" />
     <ClCompile Include="..\src\core\ConnectionAuth.cpp" />
-    <ClCompile Include="..\src\core\SshLibraryLoader.cpp" />
     <ClCompile Include="..\src\core\LanPair.cpp" />
     <ClCompile Include="..\src\core\LanPairSession.cpp" />
     <ClCompile Include="..\src\core\TrustedInstallerToken.cpp" />
@@ -233,7 +232,6 @@
     <ClInclude Include="..\src\include\LngLoader.h" />
     <ClInclude Include="..\src\include\DialogLayout.h" />
     <ClInclude Include="..\src\include\DllExceptionBarrier.h" />
-    <ClInclude Include="..\src\include\SshDynFunctions.h" />
     <ClInclude Include="..\src\include\CoreUtils.h" />
     <ClInclude Include="..\src\include\PpkConverter.h" />
     <ClInclude Include="..\src\include\IUserFeedback.h" />
@@ -254,7 +252,6 @@
     <ClInclude Include="..\src\include\JumpHostConnection.h" />
     <ClInclude Include="..\src\include\SshSessionInit.h" />
     <ClInclude Include="..\src\include\ConnectionAuth.h" />
-    <ClInclude Include="..\src\include\SshLibraryLoader.h" />
     <ClInclude Include="..\src\include\LanPair.h" />
     <ClInclude Include="..\src\include\LanPairSession.h" />
     <ClInclude Include="..\src\include\TrustedInstallerToken.h" />

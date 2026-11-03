@@ -154,7 +154,6 @@
 239=DOS-LATIN1 (850)
 240=Cirill KOI8-R (20866)
 241=Egyéb (kézi megadás)
-242=A libssh2.dll könyvtár túl régi a Pageant funkcióhoz!\nA minimálisan szükséges verzió: %s.
 243=Hiba az SSH-ügynökhöz (Pageant) való csatlakozáskor!\nElhelyezhet egy pageant.lnk nevű parancsikont a beépülő modul könyvtárában a Pageant elindításához, pl. a következőre mutatva:\nc:\\path\\pageant.exe keyfilename
 244=Hiba az SSH-ügynöktől való azonosság lekérésekor!
 245=Az ügynökön keresztüli hitelesítés sikertelen!
@@ -273,7 +272,6 @@
 352=A felhasználó jelszó nélkül hitelesített.
 353=A billentyűzetes interaktív hitelesítés túllépte az időkorlátot.
 354=A jelszavas hitelesítés túllépte az időkorlátot.
-355=SSH-könyvtár betöltése...
 356=LAN Pair: partner keresése felderítéssel...
 357=LAN Pair: kapcsolódva.
 358=PHP Agent mód

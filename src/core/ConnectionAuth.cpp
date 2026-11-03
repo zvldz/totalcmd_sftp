@@ -97,8 +97,7 @@ int PerformAuthentication(
     int& progress,
     int& loop,
     SYSTICKS& lasttime,
-    char* progressbuf,
-    bool agentAvailable)
+    char* progressbuf)
 {
     std::array<char, 1024> buf{};
     char* userauthlist = nullptr;
@@ -184,7 +183,7 @@ int PerformAuthentication(
     int auth = 0;
     if (ConnectSettings->session->userauthAuthenticated()) {
         ShowStatusId(IDS_LOG_AUTH_NO_PASSWORD, nullptr, true);
-    } else if ((auth_pw & SSH_AUTH_PUBKEY) && ConnectSettings->useagent && agentAvailable) {
+    } else if ((auth_pw & SSH_AUTH_PUBKEY) && ConnectSettings->useagent) {
         progress = 65;
         int rc = SftpAuthPageant(ConnectSettings, progressbuf, progress, &loop, &lasttime, &auth_pw);
         auth = (rc < 0) ? LIBSSH2_ERROR_AGENT_PROTOCOL : 0;

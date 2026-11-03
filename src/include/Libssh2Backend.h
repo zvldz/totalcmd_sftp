@@ -1,7 +1,5 @@
 #pragma once
-// Libssh2Backend.h — Concrete ISshBackend adapter for libssh2.
-// In SFTP_ALLINONE mode: calls libssh2 directly.
-// In dynamic mode: calls through existing function pointers.
+// Libssh2Backend.h — Concrete ISshBackend adapter for libssh2 (statically linked).
 
 #include "ISshBackend.h"
 

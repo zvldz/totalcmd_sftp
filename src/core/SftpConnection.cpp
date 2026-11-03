@@ -38,16 +38,12 @@
 #include "SshSessionInit.h"
 #include "PluginEntryPointsInternal.h"
 #include "ConnectionAuth.h"
-#include "SshLibraryLoader.h"
 #include "LanPairSession.h"
 #include "TrustedInstallerToken.h"
 #include "JumpHostConnection.h"
 
 #pragma comment(lib, "Crypt32.lib")
 #pragma comment(lib, "bcrypt.lib")
-
-// SFTP_ALLINONE: Linker resolves libssh2 functions directly.
-// No dynamic LoadLibrary calls needed.
 
 #define CONN_LOG(fmt, ...) SFTP_LOG("CONN", fmt, ##__VA_ARGS__)
 
@@ -587,20 +583,6 @@ int SftpConnect(pConnectSettings ConnectSettings)
         return SFTP_OK;
     }
 
-    if (!LoadSSHLib())
-        return SFTP_FAILED;
-    if (!loadAgent && ConnectSettings->useagent) {
-        std::array<char, 128> msgTemplate{};
-        LoadStr(msgTemplate, IDS_SSH2_TOO_OLD);
-        std::string msg = msgTemplate.data();
-        auto pos = msg.find("%s");
-        if (pos != std::string::npos)
-            msg.replace(pos, 2, LIBSSH2_VERSION);
-        if (ConnectSettings->feedback) {
-            ConnectSettings->feedback->ShowError(msg.c_str());
-        }
-        return SFTP_FAILED;
-    }
     std::array<char, 1024> buf{};
     std::array<char, 250> connecttoserver{};
     std::array<char, 250> progressbuf{};
@@ -721,7 +703,7 @@ int SftpConnect(pConnectSettings ConnectSettings)
     if (!EnsureUserNameIfMissing(ConnectSettings))
         return fail(-110);
 
-    hr = PerformAuthentication(ConnectSettings, progress, loop, lasttime, progressbuf.data(), loadAgent);
+    hr = PerformAuthentication(ConnectSettings, progress, loop, lasttime, progressbuf.data());
     if (hr != 0) return fail(hr);
 
     ShowStatusId(IDS_LOG_POST_AUTH_INIT, nullptr, true);

@@ -154,7 +154,6 @@
 239=DOS-LATIN1 (850)
 240=Cyrilice KOI8-R (20866)
 241=Jiné (zadat ručně)
-242=Knihovna libssh2.dll je příliš stará pro funkci Pageant!\nMinimální požadovaná verze je %s.
 243=Chyba připojení k agentovi SSH (Pageant)!\nMůžete umístit soubor odkazu s názvem pageant.lnk do adresáře zásuvného modulu, abyste spustili Pageant, např. odkazující na\nc:\\path\\pageant.exe keyfilename
 244=Chyba při načítání identity od agenta SSH!
 245=Ověřování agentem se nezdařilo!
@@ -273,7 +272,6 @@
 352=Uživatel byl ověřen bez hesla.
 353=Časový limit interaktivního ověřování klávesnicí vypršel.
 354=Časový limit ověřování heslem vypršel.
-355=Načítání knihovny SSH...
 356=LAN Pair: vyhledávání partnera pomocí zjišťování...
 357=LAN Pair: připojeno.
 358=Režim PHP Agent

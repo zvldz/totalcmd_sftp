@@ -154,7 +154,6 @@
 239=DOS-LATIN1 (850)
 240=Chirilică KOI8-R (20866)
 241=Altele (introduceți manual)
-242=Biblioteca libssh2.dll este prea veche pentru funcția Pageant!\nVersiunea minimă necesară este %s.
 243=Eroare la conectarea la agentul SSH (Pageant)!\nPuteți plasa un fișier de scurtătură numit pageant.lnk în directorul pluginului pentru a lansa Pageant, de ex. indicând spre\nc:\\path\\pageant.exe keyfilename
 244=Eroare la preluarea identității de la agentul SSH!
 245=Autentificarea prin agent a eșuat!
@@ -273,7 +272,6 @@
 352=Utilizator autentificat fără parolă.
 353=Timp depășit la autentificarea interactivă prin tastatură.
 354=Timp depășit la autentificarea prin parolă.
-355=Se încarcă biblioteca SSH...
 356=LAN Pair: localizare partener prin descoperire...
 357=LAN Pair: conectat.
 358=Mod PHP Agent

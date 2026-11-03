@@ -434,19 +434,6 @@ int SftpAuthPageantOn(const SshAuthTarget& target, LPCSTR progressbuf, int progr
             }
             if (target.waitIo) target.waitIo();
         }
-#ifndef SFTP_ALLINONE
-        // NOTE: LIBSSH2_ERROR_REQUIRE_KEYBOARD / REQUIRE_PASSWORD are non-standard error codes
-        // provided by the local libssh2 fork to signal mid-auth method switching.
-        // A caller with no interest in the remaining methods passes null.
-        if (auth == LIBSSH2_ERROR_REQUIRE_KEYBOARD) {
-            if (auth_pw) *auth_pw = SSH_AUTH_KEYBOARD;
-            return finish(SSH_AUTH_KEYBOARD);
-        }
-        if (auth == LIBSSH2_ERROR_REQUIRE_PASSWORD) {
-            if (auth_pw) *auth_pw = SSH_AUTH_PASSWORD;
-            return finish(SSH_AUTH_PASSWORD);
-        }
-#endif
         if (auth == 0)
             return finish(0);   /* OK */
         prev_identity = identity;
@@ -604,18 +591,6 @@ int SftpAuthPubKeyOn(const SshAuthTarget& target, LPCSTR progressbuf, int progre
         if (target.waitIo) target.waitIo();
     }
     AUTH_LOG("userauthPubkeyFromFile result=%d", auth);
-#ifndef SFTP_ALLINONE
-        // NOTE: LIBSSH2_ERROR_REQUIRE_KEYBOARD / REQUIRE_PASSWORD are non-standard error codes
-        // provided by the local libssh2 fork to signal mid-auth method switching.
-        if (auth == LIBSSH2_ERROR_REQUIRE_KEYBOARD) {
-            if (auth_pw) *auth_pw = SSH_AUTH_KEYBOARD;
-            return SSH_AUTH_KEYBOARD;
-        }
-        if (auth == LIBSSH2_ERROR_REQUIRE_PASSWORD) {
-            if (auth_pw) *auth_pw = SSH_AUTH_PASSWORD;
-            return SSH_AUTH_PASSWORD;
-        }
-#endif
     if (auth) {
         cleanupConvertedIfNeeded();
         char* errMsg = nullptr;

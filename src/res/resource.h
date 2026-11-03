@@ -109,7 +109,6 @@
 #define IDS_850                         239
 #define IDS_20866                       240
 #define IDS_OTHER                       241
-#define IDS_SSH2_TOO_OLD                242
 #define IDS_AGENT_CONNECTERROR          243
 #define IDS_AGENT_REQUESTIDENTITIES     244
 #define IDS_AGENT_AUTHFAILED            245
@@ -404,7 +403,6 @@
 #define IDS_LOG_AUTH_NO_PASSWORD        352
 #define IDS_LOG_KBD_AUTH_TIMEOUT        353
 #define IDS_LOG_PASS_AUTH_TIMEOUT       354
-#define IDS_LOG_LOADING_SSH_LIB         355
 #define IDS_LOG_LAN_DISCOVER            356
 #define IDS_LOG_LAN_CONNECTED           357
 #define IDS_LOG_PHP_AGENT_MODE          358

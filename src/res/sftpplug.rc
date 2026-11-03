@@ -480,7 +480,6 @@ BEGIN
     IDS_LOG_AUTH_NO_PASSWORD "User authenticated without password."
     IDS_LOG_KBD_AUTH_TIMEOUT "Keyboard-interactive auth timed out."
     IDS_LOG_PASS_AUTH_TIMEOUT "Password authentication timed out."
-    IDS_LOG_LOADING_SSH_LIB "Loading SSH Library..."
     IDS_LOG_LAN_DISCOVER    "LAN Pair: locating peer via discovery..."
     IDS_LOG_LAN_CONNECTED   "LAN Pair: connected."
     IDS_LOG_PHP_AGENT_MODE  "PHP Agent mode"
@@ -698,7 +697,6 @@ STRINGTABLE
 BEGIN
     IDS_20866               "Cyrillic KOI8-R (20866)"
     IDS_OTHER               "Other (enter manually)"
-    IDS_SSH2_TOO_OLD        "Library libssh2.dll is too old for Pageant functions!\nMinimum required version is %s."
     IDS_AGENT_CONNECTERROR  "Failure connecting to ssh-agent (Pageant)!\nYou can put a link file named pageant.lnk in the plugin directory to launch pageant, e.g. pointing to\nc:\\path\\pageant.exe keyfilename"
     IDS_AGENT_REQUESTIDENTITIES 
                             "Failure requesting identities from ssh-agent!"

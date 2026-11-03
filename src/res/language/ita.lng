@@ -154,7 +154,6 @@
 239=DOS-LATIN1 (850)
 240=Cirillico KOI8-R (20866)
 241=Altro (inserire manualmente)
-242=La libreria libssh2.dll è troppo vecchia per le funzioni Pageant!\nVersione minima richiesta: %s.
 243=Errore di connessione all'agente SSH (Pageant)!\nÈ possibile inserire un file di collegamento pageant.lnk nella directory del plugin per avviare Pageant, ad es. che punta a\nc:\\path\\pageant.exe keyfilename
 244=Errore nel richiedere identità all'agente SSH!
 245=Autenticazione tramite agente non riuscita!
@@ -273,7 +272,6 @@
 352=Utente autenticato senza password.
 353=Timeout nell'autenticazione interattiva da tastiera.
 354=Timeout nell'autenticazione tramite password.
-355=Caricamento della libreria SSH...
 356=LAN Pair: ricerca del peer tramite scoperta...
 357=LAN Pair: connesso.
 358=Modalità PHP Agent

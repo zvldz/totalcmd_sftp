@@ -431,7 +431,7 @@ static bool AuthJumpHost(
     authTarget.waitIo      = [jmpSock]() { IsSocketReadable(jmpSock); };
 
     // --- 1. Agent auth ---
-    if (jump.useagent && loadAgent) {
+    if (jump.useagent) {
         ShowStatusId(IDS_LOG_JUMP_AGENT_TRY, nullptr, true);
         if (SftpAuthPageantOn(authTarget, "Jump host: agent auth...",
                               progress, &loop, &lasttime, nullptr) == 0) {

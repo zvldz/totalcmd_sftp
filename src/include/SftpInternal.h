@@ -28,20 +28,6 @@ inline bool IsLanPairTransport(const pConnectSettings cs) noexcept
 }
 
 // ---------------------------------------------------------------------------
-// Dynamic libssh2 function pointers (non-ALLINONE build)
-// In SFTP_ALLINONE mode the linker resolves them directly; in dynamic mode
-// SftpConnection.cpp holds the pointer variables and every other TU needs
-// extern declarations.
-// ---------------------------------------------------------------------------
-#ifndef SFTP_ALLINONE
-#define FUNCDEF(r, f, p)  typedef r (*t##f) p; extern t##f f;
-#define FUNCDEF2(r, f, p) typedef r (*t##f) p; extern t##f f;
-#include "SshDynFunctions.h"
-#undef FUNCDEF2
-#undef FUNCDEF
-#endif
-
-// ---------------------------------------------------------------------------
 // SCP compile-time feature flags (defined in SftpConnection.cpp)
 // ---------------------------------------------------------------------------
 extern const bool SSH_ScpNo2GBLimit;
@@ -84,8 +70,6 @@ inline constexpr int8_t AUTODETECT_PENDING = -1;
 // ---------------------------------------------------------------------------
 // Globals defined in SftpConnection.cpp
 // ---------------------------------------------------------------------------
-extern bool          loadOK;
-extern bool          loadAgent;
 extern pConnectSettings gConnectResults;
 extern LPCSTR        gDisplayName;
 extern LPCSTR        gIniFileName;

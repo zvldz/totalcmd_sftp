@@ -154,7 +154,6 @@
 239=DOS-LATIN1 (850)
 240=Cyrillisch KOI8-R (20866)
 241=Overige (handmatig invoeren)
-242=De bibliotheek libssh2.dll is te oud voor de Pageant-functie!\nDe minimaal vereiste versie is %s.
 243=Fout bij verbinden met SSH-agent (Pageant)!\nU kunt een snelkoppelingsbestand met de naam pageant.lnk in de plug-inmap plaatsen om Pageant te starten, bijv. verwijzend naar\nc:\\path\\pageant.exe keyfilename
 244=Fout bij ophalen van identiteit van SSH-agent!
 245=Verificatie via agent mislukt!
@@ -273,7 +272,6 @@
 352=Gebruiker zonder wachtwoord geverifieerd.
 353=Time-out bij interactieve toetsenbordverificatie.
 354=Time-out bij wachtwoordverificatie.
-355=SSH-bibliotheek laden...
 356=LAN Pair: zoeken naar peer via detectie...
 357=LAN Pair: verbonden.
 358=PHP Agent-modus

@@ -166,9 +166,6 @@
     <ClCompile Include="..\src\core\ConnectionAuth.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\core\SshLibraryLoader.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="..\src\core\LanPair.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -227,9 +224,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\src\include\fsplugin.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="..\src\include\SshDynFunctions.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\src\res\resource.h">
@@ -338,9 +332,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\src\include\ConnectionAuth.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="..\src\include\SshLibraryLoader.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\src\include\LanPair.h">
