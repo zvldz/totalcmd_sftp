@@ -16,6 +16,7 @@
 #include "ITransportStream.h"
 #include "SshSessionInit.h"
 #include "IniFile.h"
+#include "UnicodeHelpers.h"
 
 static LPVOID session_alloc(size_t count, LPVOID* /*abstract*/)
 {
@@ -81,7 +82,7 @@ int InitializeSshSession(
     std::array<char, 1024> buf{};
     progress = 30; // PROG_SESSION_INIT
     LoadStr(buf, IDS_INITSSH2);
-    if (ProgressProc(PluginNumber, buf.data(), "-", progress))
+    if (ProgressProcI(PluginNumber, buf.data(), "-", progress))
         return -50;
 
     if (!backend)
@@ -90,7 +91,7 @@ int InitializeSshSession(
         auto sessionPtr = backend->createSession(session_alloc, session_free, session_realloc, ConnectSettings);
         if (!sessionPtr) {
             ShowErrorId(IDS_ERR_INIT_SSH2);
-            if (LogProc) LogProc(PluginNumber, MSGTYPE_IMPORTANTERROR, "SFTP: SSH library session init failed");
+            LogProcI(PluginNumber, MSGTYPE_IMPORTANTERROR, "SFTP: SSH library session init failed");
             return -60;
         }
         ConnectSettings->session = std::move(sessionPtr);
@@ -153,9 +154,9 @@ int InitializeSshSession(
                  ConnectSettings->session->lastErrno(),
                  errmsg ? errmsg : "(no details)");
         ShowErrorId(IDS_ERR_SSH_SESSION, errmsg);
-        if (LogProc) {
+        if (LogProc || LogProcW) {
             const std::string msg = std::format("SFTP: SSH handshake failed: {}", errmsg ? errmsg : "(no details)");
-            LogProc(PluginNumber, MSGTYPE_IMPORTANTERROR, msg.c_str());
+            LogProcI(PluginNumber, MSGTYPE_IMPORTANTERROR, msg.c_str());
         }
         return -70;
     }

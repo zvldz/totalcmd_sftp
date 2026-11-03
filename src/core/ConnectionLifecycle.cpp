@@ -7,6 +7,7 @@
 #include "fsplugin.h"
 #include "res/resource.h"
 #include "ConnectionLifecycle.h"
+#include "UnicodeHelpers.h"
 
 bool ValidateConnectState(pConnectSettings cs, int* outErrorCode)
 {
@@ -63,7 +64,7 @@ bool EnsureUserNameIfMissing(pConnectSettings cs)
     LoadStr(titleLoaded, IDS_USERNAME_FOR);
     const std::string title = std::string(titleLoaded.data()) + cs->server;
     std::array<char, MAX_PATH> userBuf{};
-    if (!RequestProc(PluginNumber, RT_UserName, title.c_str(), nullptr, userBuf.data(), static_cast<int>(userBuf.size() - 1)))
+    if (!RequestProcI(PluginNumber, RT_UserName, title.c_str(), nullptr, userBuf.data(), static_cast<int>(userBuf.size() - 1)))
         return false;
     cs->user = userBuf.data();
     return true;

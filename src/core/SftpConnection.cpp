@@ -154,7 +154,7 @@ bool ProgressLoop(LPCSTR progresstext, int start, int end, int * loopval, SYSTIC
         (*loopval)++;
         if (*loopval < start || *loopval > end)
             *loopval = start;
-        return ProgressProc(PluginNumber, progresstext, "-", *loopval) != 0;    // "-" = no target file (TC plugin API convention)
+        return ProgressProcI(PluginNumber, progresstext, "-", *loopval) != 0;    // "-" = no target file (TC plugin API convention)
     }
     return false;
 }
@@ -167,7 +167,7 @@ void SftpLogLastError(LPCSTR errtext, int errnr)
     
     // Formatting: "text: error_number"
     snprintf(errbuf.data(), errbuf.size(), "%s %d", errtext ? errtext : "libssh2", errnr);
-    LogProc(PluginNumber, MSGTYPE_IMPORTANTERROR, errbuf.data());
+    LogProcI(PluginNumber, MSGTYPE_IMPORTANTERROR, errbuf.data());
 }
 
 void ShowMessageIdEx(int errorid, LPCSTR p1, int p2, bool silent)
@@ -188,7 +188,7 @@ void ShowMessageIdEx(int errorid, LPCSTR p1, int p2, bool silent)
     }
     ShowStatus(msg.c_str());  // log it
     if (!silent)
-        RequestProc(PluginNumber, RT_MsgOK, "SFTP Error", msg.c_str(), nullptr, 0);
+        RequestProcI(PluginNumber, RT_MsgOK, "SFTP Error", msg.c_str(), nullptr, 0);
 }
 
 void ShowStatusId(int errorid, bool silent, int value)
@@ -209,7 +209,7 @@ void ShowErrorId(int errorid, LPCSTR suffix)
 void ShowError(LPCSTR error)
 {
     ShowStatus(error);  // log it
-    RequestProc(PluginNumber, RT_MsgOK, "SFTP Error", error, nullptr, 0);
+    RequestProcI(PluginNumber, RT_MsgOK, "SFTP Error", error, nullptr, 0);
 }
 
 
@@ -602,7 +602,7 @@ int SftpConnect(pConnectSettings ConnectSettings)
             return precheckCode;
     }
 
-    if (ProgressProc(PluginNumber, "Connecting...", "-", progress))
+    if (ProgressProcI(PluginNumber, "Connecting...", "-", progress))
         return fail(-9);
 
     if (!ResolveConnectEndpoint(ConnectSettings, connecttoserver.data(), connecttoserver.size(), &connecttoport)) {
@@ -694,7 +694,7 @@ int SftpConnect(pConnectSettings ConnectSettings)
 
     progress = PROG_AUTH_START;
     LoadStr(buf, IDS_SSH_LOGIN);
-    if (ProgressProc(PluginNumber, buf.data(), "-", progress))
+    if (ProgressProcI(PluginNumber, buf.data(), "-", progress))
         return fail(-80);
 
     hr = VerifyServerFingerprint(ConnectSettings);
@@ -725,7 +725,7 @@ int SftpConnect(pConnectSettings ConnectSettings)
     progress = PROG_DONE;
 
     LoadStr(buf, IDS_GET_DIRECTORY);
-    if (ProgressProc(PluginNumber, buf.data(), "-", progress))
+    if (ProgressProcI(PluginNumber, buf.data(), "-", progress))
         return fail(SFTP_FAILED);
 
     CONN_LOG("SftpConnect success");

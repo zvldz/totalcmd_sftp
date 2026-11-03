@@ -15,6 +15,7 @@
 #include "UtfConversion.h"
 #include "SftpInternal.h"
 #include "PpkConverter.h"
+#include "UnicodeHelpers.h"
 
 #define AUTH_LOG(fmt, ...) SFTP_LOG("AUTH", fmt, ##__VA_ARGS__)
 
@@ -106,7 +107,7 @@ void kbd_callback(LPCSTR name, int name_len,
             retbuf[0] = 0;
 
             ShowStatusId(IDS_LOG_REQUEST_PASS, nullptr, true);
-            if (RequestProc(PluginNumber, RT_Password, title.c_str(), promptMsg.c_str(), retbuf.data(), retbuf.size()-1)) {
+            if (RequestProcI(PluginNumber, RT_Password, title.c_str(), promptMsg.c_str(), retbuf.data(), retbuf.size()-1)) {
                 responses[i].text = _strdup(retbuf.data());
                 responses[i].length = (unsigned int)strlen(retbuf.data());
                 // Remember the password for background transfers and
@@ -297,7 +298,7 @@ static bool PreparePrivateKeyForAuth(
         ppkPassBuf[0] = 0;
         LoadStr(ioPromptBuf, ioPromptBufLen, IDS_KEYPASSPHRASE);
         BuildUserAtServerTitle(title.data(), title.size(), IDS_PASSPHRASE, user, host);
-        if (RequestProc(PluginNumber, RT_Password, title.data(), ioPromptBuf, ppkPassBuf.data(), ppkPassBuf.size() - 1)) {
+        if (RequestProcI(PluginNumber, RT_Password, title.data(), ioPromptBuf, ppkPassBuf.data(), ppkPassBuf.size() - 1)) {
             converted = ConvertPpkToOpenSsh(ioPrivKeyFile, ppkPassBuf.data(), outConvertedPrivateKey, convertedLen - 1, &convErr);
             // This prompt is only reached once the passphrase already held
             // failed to open the key, so a conversion that succeeds here
@@ -478,7 +479,7 @@ int SftpAuthPubKeyOn(const SshAuthTarget& target, LPCSTR progressbuf, int progre
     AUTH_LOG("=== SftpAuthPubKey START (host=%s) ===", target.host.c_str());
     // Check if LogProc is available
     extern tLogProc LogProc;
-    if (LogProc) LogProc(PluginNumber, MSGTYPE_DETAILS, "=== SftpAuthPubKey ===");
+    LogProcI(PluginNumber, MSGTYPE_DETAILS, "=== SftpAuthPubKey ===");
     AUTH_LOG("privkeyfile=%s", target.privkeyfile.c_str());
     AUTH_LOG("pubkeyfile=%s", target.pubkeyfile.c_str());
     AUTH_LOG("password_empty=%d", target.password->empty() ? 1 : 0);
@@ -555,7 +556,7 @@ int SftpAuthPubKeyOn(const SshAuthTarget& target, LPCSTR progressbuf, int progre
             strlcpy(passphrase.data(), target.keyPassphrase->c_str(), passphrase.size()-1);
         } else {
             AUTH_LOG("No stored passphrase, requesting from user");
-            RequestProc(PluginNumber, RT_Password, title.data(), buf.data(), passphrase.data(), passphrase.size()-1);
+            RequestProcI(PluginNumber, RT_Password, title.data(), buf.data(), passphrase.data(), passphrase.size()-1);
         }
     } else {
         AUTH_LOG("Key is NOT encrypted, no passphrase needed");

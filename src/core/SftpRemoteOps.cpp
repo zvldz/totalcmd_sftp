@@ -520,7 +520,7 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
 
         int delta = get_ticks_between(cs->findstarttime);
         if (delta > kSftpProgressStartMs && aborttime == -1) {
-            if (ProgressProc(PluginNumber, dirStr.c_str(), "temp", (delta / kSftpProgressDivMs) % 100))
+            if (ProgressProcI(PluginNumber, dirStr.c_str(), "temp", (delta / kSftpProgressDivMs) % 100))
                 aborttime = get_sys_ticks() + kSftpAbortGraceMs;
         }
         // Periodic progress log so we see whether the loop is actually spinning
@@ -577,7 +577,7 @@ int SftpFindNextFileW(pConnectSettings cs, LPVOID davdataptr, LPWIN32_FIND_DATAW
                                      longentry.data(), longentry.size(), &file)) == LIBSSH2_ERROR_EAGAIN) {
         int delta = get_ticks_between(cs->findstarttime);
         if (delta > kSftpProgressStartMs && aborttime == -1) {
-            if (ProgressProc(PluginNumber, "dir", "temp", (delta / kSftpProgressDivMs) % 100))
+            if (ProgressProcI(PluginNumber, "dir", "temp", (delta / kSftpProgressDivMs) % 100))
                 aborttime = get_sys_ticks() + kSftpAbortGraceMs;
         }
         delta = get_ticks_between(aborttime);
@@ -694,7 +694,7 @@ int SftpFindClose(pConnectSettings cs, LPVOID davdataptr)
     while (dirhandle->close() == LIBSSH2_ERROR_EAGAIN) {
         int delta = get_ticks_between(cs->findstarttime);
         if (delta > kSftpProgressStartMs && aborttime == -1) {
-            if (ProgressProc(PluginNumber, "close dir", "temp", (delta / kSftpProgressDivMs) % 100))
+            if (ProgressProcI(PluginNumber, "close dir", "temp", (delta / kSftpProgressDivMs) % 100))
                 aborttime = get_sys_ticks() + kSftpAbortGraceMs;
         }
         delta = get_ticks_between(aborttime);

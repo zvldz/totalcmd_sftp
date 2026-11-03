@@ -2657,7 +2657,7 @@ void ConnectionDialog::OnOk()
                 if (cbline >= 0 && cbline < kCodepageListCount) {
                     cp = codepagelist[cbline];
                     if (cp == -3) {
-                        if (RequestProc(PluginNumber, RT_Other, "Code page", "Code page (e.g. 28591):",
+                        if (RequestProcI(PluginNumber, RT_Other, "Code page", "Code page (e.g. 28591):",
                                         strbuf.data(), strbuf.size() - 1))
                             cp = atoi(strbuf.data());
                     } else if (cp == -4) {
@@ -3040,7 +3040,7 @@ bool ShowConnectDialog(pConnectSettings ConnectSettings, LPCSTR DisplayName, LPC
                 std::string titleStr = WideToUtf8(titleW.empty() ? L"Proxy password for " : titleW);
                 titleStr += ConnectSettings->proxyuser;
                 std::array<char, MAX_PATH> proxyPassword{};
-                if (!RequestProc(PluginNumber, RT_PasswordFirewall, titleStr.c_str(), titleStr.c_str(), proxyPassword.data(), static_cast<int>(proxyPassword.size() - 1)))
+                if (!RequestProcI(PluginNumber, RT_PasswordFirewall, titleStr.c_str(), titleStr.c_str(), proxyPassword.data(), static_cast<int>(proxyPassword.size() - 1)))
                     return false;
                 ConnectSettings->proxypassword = proxyPassword.data();
             }
@@ -3149,7 +3149,7 @@ pConnectSettings SftpConnectToServer(LPCSTR DisplayName, LPCSTR inifilename,
             ConnectSettings.server = serverBuf.data();
         }
 
-        if (ProgressProc(PluginNumber, DisplayName, "temp", 0)) {
+        if (ProgressProcI(PluginNumber, DisplayName, "temp", 0)) {
             return nullptr;
         }
 
@@ -3183,7 +3183,7 @@ pConnectSettings SftpConnectToServer(LPCSTR DisplayName, LPCSTR inifilename,
             connbuf.append(announceName);
             if (!loggingAliasName)
                 std::replace(connbuf.begin(), connbuf.end(), '/', '\\');
-            LogProc(PluginNumber, MSGTYPE_CONNECT, connbuf.c_str());
+            LogProcI(PluginNumber, MSGTYPE_CONNECT, connbuf.c_str());
 
             // Move the connected settings to the heap ? unique_ptrs transfer ownership.
             // Critical: SftpConnect() called createSession() with the LOCAL

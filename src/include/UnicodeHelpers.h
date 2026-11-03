@@ -67,6 +67,14 @@ int ProgressProcT(int PluginNr, LPCWSTR SourceName, LPCWSTR TargetName, int Perc
 void LogProcT(int PluginNr, int MsgType, LPCWSTR LogString) noexcept;
 bool RequestProcT(int PluginNr, int RequestType, LPCWSTR CustomTitle, LPCWSTR CustomText, LPWSTR ReturnedText, size_t maxlen) noexcept;
 
+// The callbacks for internal strings (see kInternalCodepage): wide callback
+// when available, ANSI in the system codepage otherwise. Same arguments and
+// results as Total Commander's ANSI callbacks.
+int ProgressProcI(int PluginNr, LPCSTR SourceName, LPCSTR TargetName, int PercentDone) noexcept;
+void LogProcI(int PluginNr, int MsgType, LPCSTR LogString) noexcept;
+BOOL RequestProcI(int PluginNr, int RequestType, LPCSTR CustomTitle, LPCSTR CustomText,
+                  LPSTR ReturnedText, int maxlen) noexcept;
+
 // File operations with Unicode support
 BOOL CopyFileT(LPCWSTR lpExistingFileName, LPCWSTR lpNewFileName, BOOL bFailIfExists) noexcept;
 BOOL CreateDirectoryT(LPCWSTR lpPathName, LPSECURITY_ATTRIBUTES lpSecurityAttributes) noexcept;
@@ -194,13 +202,7 @@ namespace unicode_util {
 // Helper for WIN32_FIND_DATA conversion - returns wide version
 [[nodiscard]] WIN32_FIND_DATAW convert_find_data_to_wide(const WIN32_FIND_DATAA& findA);
 
-// Codepage of the plugin's internal narrow strings: session names and folder
-// prefixes, the TC paths that carry them, values of the plugin's own INI
-// files. Every conversion between those and wide text goes through the two
-// functions below. File system paths handed to ANSI WinAPI calls are not
-// internal strings and keep CP_ACP.
-inline constexpr int kInternalCodepage = CP_ACP;
-
+// Internal strings (kInternalCodepage, CoreUtils.h) to and from wide text.
 [[nodiscard]] inline std::wstring internal_to_wide(std::string_view s)
 {
     return narrow_to_wide(s, kInternalCodepage);

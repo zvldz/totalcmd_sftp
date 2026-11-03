@@ -74,7 +74,7 @@ bool AskUserYesNo(pConnectSettings cs, LPCSTR title, LPCSTR message)
 {
     if (cs && cs->feedback)
         return cs->feedback->AskYesNo(message ? message : "", title ? title : "SFTP");
-    return RequestProc(PluginNumber, RT_MsgYesNo, title ? title : "SFTP", message ? message : "", nullptr, 0) != 0;
+    return RequestProcI(PluginNumber, RT_MsgYesNo, title ? title : "SFTP", message ? message : "", nullptr, 0) != 0;
 }
 
 std::string ToRemotePathA(pConnectSettings cs, LPCWSTR pathW)

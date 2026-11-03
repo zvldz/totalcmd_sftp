@@ -12,6 +12,7 @@
 #include "ConnectionAuth.h"
 #include "IniFile.h"
 #include "res/resource.h"
+#include "UnicodeHelpers.h"
 
 extern "C"
 void newpassfunc(LIBSSH2_SESSION* /*session*/, LPSTR* newpw, int* newpw_len, LPVOID* abstract)
@@ -27,7 +28,7 @@ void newpassfunc(LIBSSH2_SESSION* /*session*/, LPSTR* newpw, int* newpw_len, LPV
         *newpw = nullptr;
     if (newpw_len)
         *newpw_len = 0;
-    if (RequestProc(PluginNumber, RT_Password, title.data(), buf1.data(), newpass.data(), newpass.size()-1)) {
+    if (RequestProcI(PluginNumber, RT_Password, title.data(), buf1.data(), newpass.data(), newpass.size()-1)) {
         size_t bufsize = strlen(newpass.data()) + 1;
         *newpw = static_cast<char*>(malloc(bufsize));
         if (!*newpw)
@@ -70,7 +71,7 @@ int NegotiateProxy(
     progress = 20; // PROG_SOCKET_CONNECT
     std::array<char, 250> progressbuf{};
     LoadStr(progressbuf, IDS_PROXY_CONNECT);
-    if (ProgressProc(PluginNumber, progressbuf.data(), "-", progress))
+    if (ProgressProcI(PluginNumber, progressbuf.data(), "-", progress))
         return -40;
 
     int hr = 0;
@@ -192,14 +193,14 @@ int PerformAuthentication(
         ShowStatus(status.c_str());
     } else if ((auth_pw & SSH_AUTH_PUBKEY) && ConnectSettings->privkeyfile[0]) {
         progress = 65;
-        if (LogProc) LogProc(PluginNumber, MSGTYPE_DETAILS, "=== Calling SftpAuthPubKey ===");
+        LogProcI(PluginNumber, MSGTYPE_DETAILS, "=== Calling SftpAuthPubKey ===");
         int rc = SftpAuthPubKey(ConnectSettings, progressbuf, progress, &loop, &lasttime, &auth_pw);
         auth = (rc < 0) ? LIBSSH2_ERROR_FILE : 0;
         if (rc == -LIBSSH2_ERROR_FILE) {
             SFTP_LOG("CONN", "Public-key auth aborted due to local key file error.");
             return SFTP_FAILED;
         }
-        if (LogProc) LogProc(PluginNumber, MSGTYPE_DETAILS, "=== SftpAuthPubKey returned ===");
+        LogProcI(PluginNumber, MSGTYPE_DETAILS, "=== SftpAuthPubKey returned ===");
         const std::string status = std::format("PubKey: rc={} auth={} pw=0x{:x}", rc, auth, auth_pw);
         ShowStatus(status.c_str());
     } else {
@@ -213,10 +214,10 @@ int PerformAuthentication(
         auth_pw &= ~SSH_AUTH_PUBKEY;
     }
 
-    if (LogProc) LogProc(PluginNumber, MSGTYPE_DETAILS, "=== Auth section done ===");
+    LogProcI(PluginNumber, MSGTYPE_DETAILS, "=== Auth section done ===");
     progress = 70; // PROG_AUTH_DONE
     if (auth != 0 || (auth_pw & SSH_AUTH_PUBKEY) == 0) {
-        if (LogProc) LogProc(PluginNumber, MSGTYPE_DETAILS, "Trying password/keyboard auth fallback");
+        LogProcI(PluginNumber, MSGTYPE_DETAILS, "Trying password/keyboard auth fallback");
         const bool canKeyboardAuth = (auth_pw & SSH_AUTH_KEYBOARD) != 0;
         const bool canPasswordAuth = (auth_pw & SSH_AUTH_PASSWORD) != 0;
         // If the probe was done and confirmed password auth, try it first to avoid
@@ -264,7 +265,7 @@ int PerformAuthentication(
                     ConnectSettings->feedback->RequestText(title, "", passphrase, true);
                 } else {
                     std::array<char, 256> tmpBuf{};
-                    RequestProc(PluginNumber, RT_Password, title.c_str(), nullptr, tmpBuf.data(), tmpBuf.size()-1);
+                    RequestProcI(PluginNumber, RT_Password, title.c_str(), nullptr, tmpBuf.data(), tmpBuf.size()-1);
                     passphrase = tmpBuf.data();
                 }
             }
@@ -341,10 +342,10 @@ int PerformAuthentication(
     SFTP_LOG("CONN", "%s", authLog.c_str());
 
     if (auth) {
-        if (LogProc) {
+        if (LogProc || LogProcW) {
             const std::string msg = std::format("SFTP: Authentication failed for '{}@{}'",
                 ConnectSettings->user, ConnectSettings->server);
-            LogProc(PluginNumber, MSGTYPE_IMPORTANTERROR, msg.c_str());
+            LogProcI(PluginNumber, MSGTYPE_IMPORTANTERROR, msg.c_str());
         }
         SFTP_LOG("CONN", "Auth failed, returning SFTP_FAILED");
         return SFTP_FAILED;

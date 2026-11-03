@@ -10,10 +10,13 @@
 #include <cwchar>
 #include <array>
 
-// External callback functions (defined in FileSystemPlugin.cpp)
+// External callback functions (defined in PluginEntryPoints.cpp)
 extern tProgressProcW ProgressProcW;
 extern tLogProcW      LogProcW;
 extern tRequestProcW  RequestProcW;
+extern tProgressProc  ProgressProc;
+extern tLogProc       LogProc;
+extern tRequestProc   RequestProc;
 
 // ============================================================================
 // String Conversion Functions
@@ -248,10 +251,110 @@ void LogProcT(int PluginNr, int MsgType, LPCWSTR LogString) noexcept
 {
     if (LogProcW) {
         LogProcW(PluginNr, MsgType, LogString);
+    } else if (LogProc) {
+        try {
+            LogProc(PluginNr, MsgType,
+                    unicode_util::wide_to_narrow(LogString ? LogString : L"", CP_ACP).c_str());
+        } catch (...) {
+        }
     }
 }
 
-bool RequestProcT(int PluginNr, int RequestType, LPCWSTR CustomTitle, LPCWSTR CustomText, 
+// Internal-string forms of the three callbacks: the wide callback when Total
+// Commander supplied one, otherwise the ANSI one in the system codepage.
+namespace {
+
+std::string InternalToAcp(LPCSTR s)
+{
+    return unicode_util::wide_to_narrow(unicode_util::internal_to_wide(s ? s : ""), CP_ACP);
+}
+
+std::string AcpToInternal(LPCSTR s)
+{
+    return unicode_util::wide_to_internal(unicode_util::narrow_to_wide(s ? s : "", CP_ACP));
+}
+
+} // namespace
+
+int ProgressProcI(int PluginNr, LPCSTR SourceName, LPCSTR TargetName, int PercentDone) noexcept
+{
+    try {
+        if (ProgressProcW) {
+            const std::wstring src = unicode_util::internal_to_wide(SourceName ? SourceName : "");
+            const std::wstring dst = unicode_util::internal_to_wide(TargetName ? TargetName : "");
+            return ProgressProcW(PluginNr, SourceName ? src.c_str() : nullptr,
+                                 TargetName ? dst.c_str() : nullptr, PercentDone);
+        }
+        if (ProgressProc) {
+            const std::string src = InternalToAcp(SourceName);
+            const std::string dst = InternalToAcp(TargetName);
+            return ProgressProc(PluginNr, SourceName ? src.c_str() : nullptr,
+                                TargetName ? dst.c_str() : nullptr, PercentDone);
+        }
+    } catch (...) {
+    }
+    return 0;
+}
+
+void LogProcI(int PluginNr, int MsgType, LPCSTR LogString) noexcept
+{
+    try {
+        if (LogProcW)
+            LogProcW(PluginNr, MsgType, unicode_util::internal_to_wide(LogString ? LogString : "").c_str());
+        else if (LogProc)
+            LogProc(PluginNr, MsgType, InternalToAcp(LogString).c_str());
+    } catch (...) {
+    }
+}
+
+// `ReturnedText` comes in with the default answer and goes out with the
+// user's, both internal strings of at most `maxlen` characters.
+BOOL RequestProcI(int PluginNr, int RequestType, LPCSTR CustomTitle, LPCSTR CustomText,
+                  LPSTR ReturnedText, int maxlen) noexcept
+{
+    try {
+        if (RequestProcW) {
+            const std::wstring title = unicode_util::internal_to_wide(CustomTitle ? CustomTitle : "");
+            const std::wstring text  = unicode_util::internal_to_wide(CustomText ? CustomText : "");
+            std::wstring answer;
+            if (ReturnedText && maxlen > 0) {
+                answer = unicode_util::internal_to_wide(ReturnedText);
+                answer.resize(static_cast<size_t>(maxlen) + 1, L'\0');
+            }
+            const BOOL ok = RequestProcW(PluginNr, RequestType,
+                                         CustomTitle ? title.c_str() : nullptr,
+                                         CustomText ? text.c_str() : nullptr,
+                                         ReturnedText && maxlen > 0 ? answer.data() : nullptr, maxlen);
+            if (ok && ReturnedText && maxlen > 0)
+                (void)wilcopy(ReturnedText, answer.c_str(), static_cast<size_t>(maxlen));
+            SecureZeroMemory(answer.data(), answer.size() * sizeof(wchar_t));
+            return ok;
+        }
+        if (RequestProc) {
+            const std::string title = InternalToAcp(CustomTitle);
+            const std::string text  = InternalToAcp(CustomText);
+            std::string answer;
+            if (ReturnedText && maxlen > 0) {
+                answer = InternalToAcp(ReturnedText);
+                answer.resize(static_cast<size_t>(maxlen) + 1, '\0');
+            }
+            const BOOL ok = RequestProc(PluginNr, RequestType,
+                                        CustomTitle ? title.c_str() : nullptr,
+                                        CustomText ? text.c_str() : nullptr,
+                                        ReturnedText && maxlen > 0 ? answer.data() : nullptr, maxlen);
+            if (ok && ReturnedText && maxlen > 0) {
+                const std::string back = AcpToInternal(answer.c_str());
+                strncpy_s(ReturnedText, static_cast<size_t>(maxlen), back.c_str(), _TRUNCATE);
+            }
+            SecureZeroMemory(answer.data(), answer.size());
+            return ok;
+        }
+    } catch (...) {
+    }
+    return FALSE;
+}
+
+bool RequestProcT(int PluginNr, int RequestType, LPCWSTR CustomTitle, LPCWSTR CustomText,
                   LPWSTR ReturnedText, size_t maxlen) noexcept
 {
     if (RequestProcW) {

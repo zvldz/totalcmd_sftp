@@ -9,6 +9,7 @@
 #include "CoreUtils.h"
 #include "res/resource.h"
 #include "ConnectionNetwork.h"
+#include "UnicodeHelpers.h"
 
 int EstablishSocketConnection(pConnectSettings ConnectSettings, LPCSTR connecttoserver, unsigned short connecttoport, int& progress, int& loop, SYSTICKS& lasttime)
 {
@@ -31,9 +32,9 @@ int EstablishSocketConnection(pConnectSettings ConnectSettings, LPCSTR connectto
     struct addrinfo* res = nullptr;
     if (getaddrinfo(connecttoserver, portStr.c_str(), &hints, &res) != 0) {
         ShowErrorId(IDS_ERR_GETADDRINFO);
-        if (LogProc) {
+        if (LogProc || LogProcW) {
             const std::string msg = std::format("SFTP: DNS lookup failed for '{}' (WSA error {})", connecttoserver, WSAGetLastError());
-            LogProc(PluginNumber, MSGTYPE_IMPORTANTERROR, msg.c_str());
+            LogProcI(PluginNumber, MSGTYPE_IMPORTANTERROR, msg.c_str());
         }
         return -20;
     }
@@ -76,9 +77,9 @@ int EstablishSocketConnection(pConnectSettings ConnectSettings, LPCSTR connectto
             ShowErrorId(IDS_ERR_PROXYCONNECT);
         else
             ShowErrorId(IDS_ERR_SERVERCONNECT);
-        if (LogProc) {
+        if (LogProc || LogProcW) {
             const std::string msg = std::format("SFTP: TCP connect failed to '{}:{}' (WSA error {})", connecttoserver, connecttoport, WSAGetLastError());
-            LogProc(PluginNumber, MSGTYPE_IMPORTANTERROR, msg.c_str());
+            LogProcI(PluginNumber, MSGTYPE_IMPORTANTERROR, msg.c_str());
         }
         return -30;
     }
@@ -126,9 +127,9 @@ bool InitializeSftpSubsystemIfNeeded(pConnectSettings ConnectSettings, int progr
         // session has a mode for exactly that; say so rather than leave a
         // bare "could not initialise".
         ShowErrorId(IDS_ERR_NO_SFTP_HINT);
-        if (LogProc) {
+        if (LogProc || LogProcW) {
             const std::string msg = std::format("SFTP: SFTP subsystem init failed: {}", errmsg ? errmsg : "(no details)");
-            LogProc(PluginNumber, MSGTYPE_IMPORTANTERROR, msg.c_str());
+            LogProcI(PluginNumber, MSGTYPE_IMPORTANTERROR, msg.c_str());
         }
         return false;
     }

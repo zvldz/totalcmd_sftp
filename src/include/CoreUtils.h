@@ -20,19 +20,32 @@ extern HINSTANCE hinst; // defined in PluginEntryPoints.cpp
 
 #include "LngLoader.h"
 
+namespace unicode_util {
+// Codepage of the plugin's internal narrow strings: session names and folder
+// prefixes, the TC paths that carry them, values of the plugin's own INI
+// files, messages. Conversions go through the helpers in UnicodeHelpers.h.
+// File system paths handed to ANSI WinAPI calls are not internal strings and
+// keep CP_ACP.
+inline constexpr int kInternalCodepage = CP_ACP;
+}
+
 namespace detail {
+// The translation (UTF-8 .lng) or the built-in RC string, as an internal string.
 inline int LoadStrInto(char* dest, int maxChars, UINT id)
 {
     if (maxChars <= 0) return 0;
     const char* lngStr = LngGetString(id);
+    wchar_t wbuf[2048];
+    const int wn = lngStr ? MultiByteToWideChar(CP_UTF8, 0, lngStr, -1, wbuf, 2048)
+                          : LoadStringW(hinst, id, wbuf, 2048);
+    if (wn > 0) {
+        if (!lngStr)
+            wbuf[wn < 2048 ? wn : 2047] = 0;
+        const int an = WideCharToMultiByte(unicode_util::kInternalCodepage, 0, wbuf, -1,
+                                           dest, maxChars, nullptr, nullptr);
+        if (an > 0) return an - 1;
+    }
     if (lngStr) {
-        // LNG files are UTF-8; convert to ACP so ANSI TC APIs (LogProc, ProgressProc) display correctly
-        wchar_t wbuf[2048];
-        int wn = MultiByteToWideChar(CP_UTF8, 0, lngStr, -1, wbuf, 2048);
-        if (wn > 0) {
-            int an = WideCharToMultiByte(CP_ACP, 0, wbuf, -1, dest, maxChars, nullptr, nullptr);
-            if (an > 0) return an - 1;
-        }
         strncpy_s(dest, static_cast<size_t>(maxChars) + 1, lngStr, _TRUNCATE);
         return static_cast<int>(strnlen(dest, static_cast<size_t>(maxChars)));
     }

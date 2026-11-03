@@ -22,6 +22,7 @@
 #include "SshSessionInit.h"    // host key fingerprints
 #include "IniFile.h"
 #include "res/resource.h"
+#include "UnicodeHelpers.h"
 
 #include <libssh2/libssh2.h>
 #include <libssh2/libssh2_sftp.h>
@@ -461,7 +462,7 @@ static bool AuthJumpHost(
             std::array<char, 256> buf{};
             const std::string title = std::format("Jump host password for {}@{}", jump.user, jump.host);
             ShowStatusId(IDS_LOG_REQUEST_PASS, nullptr, true);
-            if (RequestProc(PluginNumber, RT_Password, title.c_str(), nullptr, buf.data(), buf.size() - 1))
+            if (RequestProcI(PluginNumber, RT_Password, title.c_str(), nullptr, buf.data(), buf.size() - 1))
                 cs->jump_entered_password = buf.data();
         }
         jump.password = cs->jump_entered_password;

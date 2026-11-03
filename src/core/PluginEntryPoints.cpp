@@ -330,8 +330,8 @@ static bool MessageLoop(pConnectSettings ConnectSettings) noexcept
             aborted = (0 != ProgressProcW(PluginNumber, src, dst, ConnectSettings->lastpercent));
         else if (ProgressProc) {
             std::array<char, wdirtypemax> srcA{}, dstA{};
-            if (src) walcopyCP(ConnectSettings->codepage, srcA.data(), src, srcA.size()-1);
-            if (dst) walcopyCP(ConnectSettings->codepage, dstA.data(), dst, dstA.size()-1);
+            if (src) walcopy(srcA.data(), src, srcA.size()-1);
+            if (dst) walcopy(dstA.data(), dst, dstA.size()-1);
             aborted = (0 != ProgressProc(PluginNumber, src ? srcA.data() : nullptr, dst ? dstA.data() : nullptr, ConnectSettings->lastpercent));
         }
         // Allow cancellation with Escape when no progress dialog is shown.
@@ -353,7 +353,7 @@ void LogMsg(LPCSTR fmt, ...) noexcept
     } else {
         buf[static_cast<size_t>(len)] = 0;
     }
-    LogProc(PluginNumber, MSGTYPE_DETAILS, buf.data());
+    LogProcI(PluginNumber, MSGTYPE_DETAILS, buf.data());
 }
 
 // Thread-local "current session" for ShowStatus prefix. Set via
@@ -369,12 +369,6 @@ std::wstring SessionPrefixW(const tConnectSettings* cs)
     const std::string& name = !cs->DisplayName.empty() ? cs->DisplayName : cs->server;
     if (name.empty()) return {};
     return L"[" + unicode_util::internal_to_wide(name) + L"] ";
-}
-
-// The same for TC's ANSI log callback, which takes the system codepage.
-std::string SessionPrefixA(const tConnectSettings* cs)
-{
-    return unicode_util::wide_to_narrow(SessionPrefixW(cs), CP_ACP);
 }
 } // namespace
 
@@ -394,18 +388,12 @@ const tConnectSettings* GetCurrentSession() noexcept
     return g_currentSession;
 }
 
+// `status` is an internal string.
 void ShowStatus(LPCSTR status) noexcept
 {
-    if (!LogProc) return;
-    const std::string prefix = SessionPrefixA(g_currentSession);
-    if (prefix.empty()) {
-        LogProc(PluginNumber, MSGTYPE_DETAILS, status);
-    } else {
-        std::string full;
-        full.reserve(prefix.size() + (status ? strlen(status) : 0));
-        full.append(prefix);
-        if (status) full.append(status);
-        LogProc(PluginNumber, MSGTYPE_DETAILS, full.c_str());
+    try {
+        ShowStatusW(unicode_util::internal_to_wide(status ? status : "").c_str());
+    } catch (...) {
     }
 }
 
@@ -631,7 +619,7 @@ static BOOL DisconnectPath(const std::string& root)
         // idempotent for a double-close (removed==0).
         std::string connBuf = "DISCONNECT \\";
         connBuf += displayName;
-        LogProc(PluginNumber, MSGTYPE_DISCONNECT, connBuf.c_str());
+        LogProcI(PluginNumber, MSGTYPE_DISCONNECT, connBuf.c_str());
 
         const size_t removed = DisconnectServerByName(displayName.c_str());
         SFTP_LOG("DISCONNECT", "  DisconnectServerByName removed=%zu", removed);

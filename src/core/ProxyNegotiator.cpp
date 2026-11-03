@@ -9,6 +9,7 @@
 #include "CoreUtils.h"
 #include "SftpInternal.h"
 #include "ProxyNegotiator.h"
+#include "UnicodeHelpers.h"
 
 // Helpers implemented in SftpConnection.cpp
 void ShowErrorId(int errorid, LPCSTR suffix);
@@ -53,7 +54,7 @@ int SftpConnectProxyHttp(pConnectSettings ConnectSettings, LPCSTR progressbuf, i
         strlcat(title.data(), proxyServer, title.size()-1);
         LoadStr(buf1, IDS_PROXY_PASSWORD);
         if (passphrase[0] == 0)
-            RequestProc(PluginNumber, RT_Password, title.data(), buf1.data(), passphrase.data(), passphrase.size()-1);
+            RequestProcI(PluginNumber, RT_Password, title.data(), buf1.data(), passphrase.data(), passphrase.size()-1);
 
         strlcpy(buf1.data(), proxyUser, buf1.size()-1);
         strlcat(buf1.data(), ":", buf1.size()-1);
