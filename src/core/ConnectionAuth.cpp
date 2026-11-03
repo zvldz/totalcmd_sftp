@@ -42,8 +42,11 @@ void newpassfunc(LIBSSH2_SESSION* /*session*/, LPSTR* newpw, int* newpw_len, LPV
             PassConnectSettings->account_password = newpass.data();
             switch (PassConnectSettings->passSaveMode) {
             case sftp::PassSaveMode::crypt:
-                CryptProcI(PluginNumber, CryptoNumber, FS_CRYPT_SAVE_PASSWORD, PassConnectSettings->DisplayName.c_str(), newpass.data(), 0);
-                break;
+                if (CryptProcI(PluginNumber, CryptoNumber, FS_CRYPT_SAVE_PASSWORD, PassConnectSettings->DisplayName.c_str(), newpass.data(), 0) == FS_FILE_OK)
+                    break;
+                // The store refused: keep the new password in the INI, as
+                // the connection dialog does, rather than losing it.
+                [[fallthrough]];
             case sftp::PassSaveMode::plain:
                 if (newpass[0] == 0) {
                     IniWriteString(PassConnectSettings->DisplayName.c_str(), "password", nullptr, PassConnectSettings->IniFileName.c_str());

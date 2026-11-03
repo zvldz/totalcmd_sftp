@@ -787,6 +787,7 @@ BEGIN
     IDS_PROP_LBL_MODIFIED   "Last modified:"
     IDS_PROP_GRP_RAW        "Server's stat reply"
     IDS_PROP_NO_STAT        "The server ran no stat command. What the SFTP protocol reports:"
+    IDS_CRYPT_SAVE_FAILED   "Total Commander could not save the password in its password store (write error). It was saved in the plugin's settings instead, without the master password."
     IDS_DLG_LANPAIR_GROUP   " LAN Pair Session: "
     IDS_DLG_FILEMOD         "New files (Upload):"
     IDS_DLG_DIRMOD          "New folders:"

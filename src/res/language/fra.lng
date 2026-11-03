@@ -383,6 +383,7 @@
 12135=Dernière modification :
 12136=Réponse de stat sur le serveur
 12137=Le serveur n'a exécuté aucune commande stat. Ce qu'indique le protocole SFTP :
+12138=Total Commander n'a pas pu enregistrer le mot de passe dans son coffre (erreur d'écriture). Il a été enregistré dans les paramètres du plugin, sans le mot de passe principal.
 12089=SFTP
 12104=(manuel)
 12105= (introuvable)

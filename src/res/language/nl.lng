@@ -382,6 +382,7 @@
 12135=Laatst gewijzigd:
 12136=Antwoord van stat op de server
 12137=De server heeft geen stat-opdracht uitgevoerd. Wat het SFTP-protocol meldt:
+12138=Total Commander kon het wachtwoord niet in zijn wachtwoordopslag bewaren (schrijffout). Het is in de plugin-instellingen opgeslagen, zonder hoofdwachtwoord.
 12089=SFTP
 12104=(handmatig)
 12105= (ontbreekt)

@@ -550,6 +550,7 @@
 #define IDS_PROP_LBL_MODIFIED           12135
 #define IDS_PROP_GRP_RAW                12136
 #define IDS_PROP_NO_STAT                12137  // raw box: no stat command, SFTP attributes shown instead
+#define IDS_CRYPT_SAVE_FAILED           12138  // TC password store refused a save; stored plainly instead
 
 // Next default values for new objects
 //

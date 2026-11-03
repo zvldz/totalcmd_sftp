@@ -382,6 +382,7 @@
 12135=Poslední změna:
 12136=Odpověď příkazu stat na serveru
 12137=Server nespustil příkaz stat. Co hlásí protokol SFTP:
+12138=Total Commander nemohl uložit heslo do svého úložiště hesel (chyba zápisu). Heslo bylo uloženo v nastavení pluginu, bez hlavního hesla.
 12089=SFTP
 12104=(ručně)
 12105= (chybí)

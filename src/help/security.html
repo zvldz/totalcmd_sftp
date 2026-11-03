@@ -23,7 +23,15 @@
   <li>All decrypted password buffers are zeroed from memory (<code>SecureZeroMemory</code>) immediately after use.</li>
   <li>Jump Host credentials are stored and encrypted separately from target-host credentials.</li>
   <li>The PHP Agent PSK is stored as a salted SHA-256 hash inside <code>sftp.php</code> — the raw secret is not written to disk on the server.</li>
+  <li>A PuTTY <code>.ppk</code> key is converted for the SSH library in memory only; the decrypted key is never written to disk.</li>
 </ul>
+
+<h3>Master password not remembered</h3>
+<p>Total Commander keeps passwords protected by the master password, and the master password itself, in its own file <code>wcx_ftp.ini</code>, next to <code>wincmd.ini</code>. When Total Commander is installed in <code>Program Files</code> and keeps its settings there too, it may be unable to create that file: the master password then lasts only until Total Commander is closed, and saving a session password with "Protect password with password manager" fails. The plugin reports that and stores the password encrypted in <code>sftpplug.ini</code> instead.</p>
+<p>To fix it, create <code>wcx_ftp.ini</code> in the Total Commander folder and give your Windows account write access to it — from an administrator PowerShell:</p>
+<pre>New-Item "C:\Program Files\Total Commander\wcx_ftp.ini" -ItemType File
+icacls "C:\Program Files\Total Commander\wcx_ftp.ini" /grant "${env:USERNAME}:F"</pre>
+<p>Or let Total Commander keep its settings in <code>%APPDATA%\GHISLER</code>, where it can write.</p>
 
 <h2>SSH host identity verification</h2>
 <ul>

@@ -458,6 +458,40 @@ static UINT GetDlgItemTextI(HWND hWnd, int nIDDlgItem, std::string& out, size_t 
     return len;
 }
 
+// Writes `password` for `key` in `section`: into Total Commander's password
+// store when `useStore` (the INI then holds "!"), otherwise encrypted into
+// the INI. A store that refuses — TC cannot write wcx_ftp.ini when its
+// settings sit in a read-only folder — is reported, and the password goes
+// into the INI rather than being lost.
+static void SavePasswordSetting(HWND hWnd, const char* section, const char* key,
+                                const char* storeName, const std::string& password,
+                                bool useStore, const char* iniFileName)
+{
+    if (password.empty()) {
+        IniWriteString(section, key, nullptr, iniFileName);
+        return;
+    }
+    if (useStore) {
+        std::string copy = password;
+        const bool ok = CryptProcI(PluginNumber, CryptoNumber, FS_CRYPT_SAVE_PASSWORD,
+                                   storeName, copy.data(), 0) == FS_FILE_OK;
+        SecureZeroMemory(copy.data(), copy.size());
+        if (ok) {
+            IniWriteString(section, key, "!", iniFileName);
+            CryptCheckPass = true;
+            return;
+        }
+        const std::wstring text = unicode_util::utf8_to_wstring(LngStrU8(IDS_CRYPT_SAVE_FAILED,
+            "Total Commander could not save the password in its password store "
+            "(write error). It was saved in the plugin's settings instead, "
+            "without the master password."));
+        MessageBoxW(hWnd, text.c_str(), L"SFTP", MB_OK | MB_ICONWARNING);
+    }
+    std::array<char, 1024> encrypted{};
+    EncryptString(password.c_str(), encrypted.data(), static_cast<UINT>(encrypted.size()));
+    IniWriteString(section, key, encrypted.data(), iniFileName);
+}
+
 static BOOL IniWriteString(const char* section, const char* key, const std::string& value, const char* fileName)
 {
     return ::IniWriteString(section, key, value.c_str(), fileName);
@@ -1839,21 +1873,12 @@ INT_PTR WINAPI ProxyDlgProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lPara
             LPSTR proxy_str = (ConnectData.proxytype == sftp::Proxy::notused) ? nullptr : buf.data();
             IniWriteString(proxyentry.data(), "proxytype", proxy_str, ctx->iniFileName);
 
-            std::array<char, 1024> szEncryptedPassword{};
             if (!IsWindowVisible(GetDlgItem(hWnd, IDC_EDITPASS))) {  // Edit button is hidden.
-                if (ConnectData.proxypassword.empty()) {
-                    IniWriteString(proxyentry.data(), "proxypassword", nullptr, ctx->iniFileName);
-                } else if (HaveCryptProc() && IsDlgButtonChecked(hWnd, IDC_CRYPTPASS)) {
-                    std::array<char, 64> proxyentry2{};
-                    strlcpy(proxyentry2.data(), proxyentry.data(), proxyentry2.size()-1);
-                    strlcat(proxyentry2.data(), "$$pass", proxyentry2.size()-1);
-                    bool ok = CryptProcI(PluginNumber, CryptoNumber, FS_CRYPT_SAVE_PASSWORD, proxyentry2.data(), const_cast<char*>(ConnectData.proxypassword.c_str()), 0) == FS_FILE_OK;
-                    IniWriteString(proxyentry.data(), "proxypassword", ok? "!" : nullptr, ctx->iniFileName);
-                    CryptCheckPass = true;
-                } else {
-                    EncryptString(ConnectData.proxypassword.c_str(), szEncryptedPassword.data(), static_cast<UINT>(szEncryptedPassword.size()));
-                    IniWriteString(proxyentry.data(), "proxypassword", szEncryptedPassword.data(), ctx->iniFileName);
-                }
+                const std::string storeName = std::string(proxyentry.data()) + "$$pass";
+                SavePasswordSetting(hWnd, proxyentry.data(), "proxypassword", storeName.c_str(),
+                                    ConnectData.proxypassword,
+                                    HaveCryptProc() && IsDlgButtonChecked(hWnd, IDC_CRYPTPASS),
+                                    ctx->iniFileName);
             }
             
             EndDialog(hWnd, IDOK);
@@ -2806,21 +2831,11 @@ void ConnectionDialog::OnOk()
         _itoa_s(m_settings->proxynr, buf.data(), buf.size(), 10);
         IniWriteString(targetProfile.data(), TEXT("proxynr"), buf.data(), dlgIniFileName);
 
-        std::array<char, 1024> szEncryptedPassword{};
         if (!IsWindowVisible(GetDlgItem(m_hWnd, IDC_EDITPASS))) {
-            if (m_settings->password.empty()) {
-                IniWriteString(targetProfile.data(), "password", nullptr, dlgIniFileName);
-            } else if (HaveCryptProc() && IsDlgButtonChecked(m_hWnd, IDC_CRYPTPASS)) {
-                bool ok = CryptProcI(PluginNumber, CryptoNumber, FS_CRYPT_SAVE_PASSWORD,
-                                    targetProfile.data(),
-                                    const_cast<char*>(m_settings->password.c_str()), 0) == FS_FILE_OK;
-                IniWriteString(targetProfile.data(), "password", ok ? "!" : nullptr, dlgIniFileName);
-                CryptCheckPass = true;
-            } else {
-                EncryptString(m_settings->password.c_str(), szEncryptedPassword.data(),
-                              static_cast<UINT>(szEncryptedPassword.size()));
-                IniWriteString(targetProfile.data(), "password", szEncryptedPassword.data(), dlgIniFileName);
-            }
+            SavePasswordSetting(m_hWnd, targetProfile.data(), "password", targetProfile.data(),
+                                m_settings->password,
+                                HaveCryptProc() && IsDlgButtonChecked(m_hWnd, IDC_CRYPTPASS),
+                                dlgIniFileName);
         }
 
         // Refresh TC panel when a new session is created or an existing one is renamed

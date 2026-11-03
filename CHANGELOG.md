@@ -22,6 +22,12 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 
 ### Fixes
 
+- **A password the master password could not store is kept.** When Total
+  Commander refused to save a session or proxy password in its password
+  store — it cannot create `wcx_ftp.ini` when it keeps its settings in a
+  read-only `Program Files` folder — the plugin dropped the password
+  silently. It now says so and stores the password encrypted in
+  `sftpplug.ini`. The help page on security describes the cause and fix.
 - **A PuTTY key is no longer written to disk unencrypted.** To log in with
   a `.ppk` key the plugin used to convert it into a temporary PEM file in
   `%TEMP%` and delete it afterwards — a crash in between left the decrypted
