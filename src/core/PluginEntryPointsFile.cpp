@@ -421,8 +421,7 @@ static std::optional<int> TryImportSessionFromUpload(
 
 // Enumerate every INI section name in `iniFileNameW` and return the ones
 // that live under `folderPrefix + '/'` — i.e. saved sessions organised
-// beneath a folder. ANSI names (via CP_ACP conversion) match the on-disk
-// section-name storage convention used everywhere else in this file. Used
+// beneath a folder, as internal strings like every session name. Used
 // by folder-rename (F6 on a folder) and folder-delete (F8 on a folder);
 // both first collect the affected session list, then mutate the INI.
 static std::vector<std::string> CollectSessionsUnderFolder(
@@ -436,15 +435,11 @@ static std::vector<std::string> CollectSessionsUnderFolder(
     const std::string needle = folderPrefix + "/";
     wchar_t* wp = serverlist.data();
     while (wp[0]) {
-        std::array<char, MAX_PATH> sectionA{};
-        WideCharToMultiByte(CP_ACP, 0, wp, -1, sectionA.data(),
-                             static_cast<int>(sectionA.size()),
-                             nullptr, nullptr);
-        const size_t len = strlen(sectionA.data());
-        if (len > needle.size() &&
-            _strnicmp(sectionA.data(), needle.c_str(), needle.size()) == 0)
+        std::string section = unicode_util::wide_to_internal(wp);
+        if (section.size() > needle.size() &&
+            _strnicmp(section.c_str(), needle.c_str(), needle.size()) == 0)
         {
-            out.emplace_back(sectionA.data(), len);
+            out.push_back(std::move(section));
         }
         wp += wcslen(wp) + 1;
     }
@@ -646,10 +641,7 @@ void RefreshImportSource(const std::string& sourceId)
 // be wrong for folder-nested sessions like "\\folder\\session\\subpath").
 static size_t SessionPrefixWideLen(const std::string& displayName) noexcept
 {
-    if (displayName.empty()) return 0;
-    const int wlen = MultiByteToWideChar(CP_ACP, 0, displayName.c_str(), -1,
-                                          nullptr, 0);
-    return wlen > 1 ? static_cast<size_t>(wlen - 1) : 0;
+    return unicode_util::internal_to_wide(displayName).size();
 }
 
 int WINAPI FsExecuteFileW(HWND MainWin, LPWSTR RemoteName, LPCWSTR Verb)
@@ -737,7 +729,7 @@ int WINAPI FsExecuteFileW(HWND MainWin, LPWSTR RemoteName, LPCWSTR Verb)
                             target += L'\\';
                             target += kImportsFolderW;
                             target += L'\\';
-                            target += unicode_util::narrow_to_wide(adapter->FolderName());
+                            target += unicode_util::internal_to_wide(adapter->FolderName());
                             wcslcpy(RemoteName, target.c_str(), wdirtypemax - 1);
                             return FS_EXEC_SYMLINK;
                         }
@@ -797,7 +789,7 @@ int WINAPI FsExecuteFileW(HWND MainWin, LPWSTR RemoteName, LPCWSTR Verb)
                         target += L'\\';
                         target += kImportsFolderW;
                         target += L'\\';
-                        target += unicode_util::narrow_to_wide(adapter->FolderName());
+                        target += unicode_util::internal_to_wide(adapter->FolderName());
                         wcslcpy(RemoteName, target.c_str(), wdirtypemax - 1);
                         return FS_EXEC_SYMLINK;
                     }
@@ -858,7 +850,7 @@ int WINAPI FsExecuteFileW(HWND MainWin, LPWSTR RemoteName, LPCWSTR Verb)
                         {sourceId, cacheSection, subPath});
 
                     std::wstring target = L"\\";
-                    target += unicode_util::narrow_to_wide(aliasName);
+                    target += unicode_util::internal_to_wide(aliasName);
                     wcslcpy(RemoteName, target.c_str(), wdirtypemax - 1);
                     return FS_EXEC_SYMLINK;
                 }
@@ -929,10 +921,8 @@ int WINAPI FsExecuteFileW(HWND MainWin, LPWSTR RemoteName, LPCWSTR Verb)
                 } else {
                     // Convert the (potentially slash-separated) DisplayName to wide
                     // and read the session's base path from INI without connecting.
-                    std::array<wchar_t, wdirtypemax> displayNameW{};
-                    MultiByteToWideChar(CP_ACP, 0, r.displayName.c_str(), -1,
-                                        displayNameW.data(), static_cast<int>(displayNameW.size()));
-                    SftpGetServerBasePathW(displayNameW.data(), p, pmaxlen, inifilename);
+                    const std::wstring displayNameW = unicode_util::internal_to_wide(r.displayName);
+                    SftpGetServerBasePathW(displayNameW.c_str(), p, pmaxlen, inifilename);
                 }
                 if (p[0] == 0)
                     wcslcat(RemoteName, L"/", wdirtypemax-1);

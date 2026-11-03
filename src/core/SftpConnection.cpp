@@ -736,7 +736,7 @@ void SftpGetServerBasePathW(LPCWSTR DisplayName, LPWSTR RelativePath, size_t max
 {
     std::array<char, MAX_PATH> displayNameA{};
     std::array<char, MAX_PATH> server{};
-    walcopy(displayNameA.data(), DisplayName, displayNameA.size() - 1);
+    wilcopy(displayNameA.data(), DisplayName, displayNameA.size() - 1);
     IniGetString(displayNameA.data(), "server", "", server.data(), server.size() - 1, inifilename);
     // LAN Pair and PHP Agent: base path is always root. A PHP Agent server is
     // a URL whose path names the script, not a start folder.
@@ -753,7 +753,7 @@ void SftpGetServerBasePathW(LPCWSTR DisplayName, LPWSTR RelativePath, size_t max
     ReplaceBackslashBySlash(server.data());
     char* p = strchr(server.data(), '/');
     if (p)
-        awlcopy(RelativePath, p, maxlen);
+        iwlcopy(RelativePath, p, maxlen);
     else
         wcslcpy(RelativePath, L"/", maxlen);
 }
