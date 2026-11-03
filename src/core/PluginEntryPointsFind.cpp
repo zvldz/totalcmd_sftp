@@ -587,7 +587,7 @@ static HANDLE BuildImportsSourceListing(const std::string& sourceId,
 
         // [Manage custom locations] appears only when the user has
         // configured at least one custom path for this source. Reading the
-        // list here is cheap (single GetPrivateProfileString) and TC calls
+        // list here is cheap (single IniGetString) and TC calls
         // this once per FsFindFirst.
         const auto customPaths = hasCustomPicker
             ? LoadImportCustomPaths(sourceId.c_str(), inifilename)

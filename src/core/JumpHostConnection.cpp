@@ -20,6 +20,7 @@
 #include "CoreUtils.h"
 #include "ProfileSettings.h"   // LoadServerSettings, for the session-reference case
 #include "SshSessionInit.h"    // host key fingerprints
+#include "IniFile.h"
 #include "res/resource.h"
 
 #include <libssh2/libssh2.h>
@@ -321,7 +322,7 @@ static bool VerifyJumpFingerprint(
     // never found again and the prompt returns on every connect.
     auto store = [&](const std::string& value) {
         if (!jump.fingerprintSection.empty() && !jump.fingerprintKey.empty()) {
-            WritePrivateProfileString(
+            IniWriteString(
                 jump.fingerprintSection.c_str(), jump.fingerprintKey.c_str(),
                 value.c_str(), cs->IniFileName.c_str());
         }

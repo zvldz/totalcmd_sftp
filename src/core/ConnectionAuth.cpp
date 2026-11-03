@@ -10,6 +10,7 @@
 #include "IUserFeedback.h"
 #include "AuthMethodParser.h"
 #include "ConnectionAuth.h"
+#include "IniFile.h"
 #include "res/resource.h"
 
 extern "C"
@@ -44,11 +45,11 @@ void newpassfunc(LIBSSH2_SESSION* /*session*/, LPSTR* newpw, int* newpw_len, LPV
                 break;
             case sftp::PassSaveMode::plain:
                 if (newpass[0] == 0) {
-                    WritePrivateProfileString(PassConnectSettings->DisplayName.c_str(), "password", nullptr, PassConnectSettings->IniFileName.c_str());
+                    IniWriteString(PassConnectSettings->DisplayName.c_str(), "password", nullptr, PassConnectSettings->IniFileName.c_str());
                 } else {
                     std::array<char, 1024> szEncryptedPassword{};
                     EncryptString(newpass.data(), szEncryptedPassword.data(), szEncryptedPassword.size());
-                    WritePrivateProfileString(PassConnectSettings->DisplayName.c_str(), "password", szEncryptedPassword.data(), PassConnectSettings->IniFileName.c_str());
+                    IniWriteString(PassConnectSettings->DisplayName.c_str(), "password", szEncryptedPassword.data(), PassConnectSettings->IniFileName.c_str());
                 }
                 break;
             }

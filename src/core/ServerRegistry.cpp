@@ -6,6 +6,7 @@
 #include "SftpInternal.h"
 #include "PluginEntryPoints.h"
 #include "SftpClient.h"
+#include "IniFile.h"
 #include <algorithm>
 #include <string>
 #include <vector>
@@ -170,7 +171,7 @@ int LoadServersFromIniW(LPCWSTR inifilename, LPCSTR quickconnectname) noexcept
     int servercount = 0;
     std::array<wchar_t, 65535> serverlist{};
     
-    GetPrivateProfileStringW(nullptr, nullptr, L"", serverlist.data(), static_cast<DWORD>(serverlist.size()), inifilename);
+    IniGetString(nullptr, nullptr, L"", serverlist.data(), static_cast<DWORD>(serverlist.size()), inifilename);
     
     std::vector<std::string> ini_servers;
     if (quickconnectname)
@@ -182,8 +183,8 @@ int LoadServersFromIniW(LPCWSTR inifilename, LPCSTR quickconnectname) noexcept
         WideCharToMultiByte(CP_ACP, 0, wp, -1, sectionA.data(), static_cast<int>(sectionA.size()), nullptr, nullptr);
         
         std::array<wchar_t, 512> serverval{};
-        GetPrivateProfileStringW(wp, L"server", L"", serverval.data(), static_cast<DWORD>(serverval.size()), inifilename);
-        const int transferMode = GetPrivateProfileIntW(wp, L"transfermode", 0, inifilename);
+        IniGetString(wp, L"server", L"", serverval.data(), static_cast<DWORD>(serverval.size()), inifilename);
+        const int transferMode = IniGetInt(wp, L"transfermode", 0, inifilename);
         
         if (serverval[0] || transferMode == 3) {
             ini_servers.push_back(sectionA.data());
@@ -222,7 +223,7 @@ bool DeleteServerFromIniW(LPCSTR servername, LPCWSTR inifilename) noexcept
 {
     std::array<wchar_t, MAX_PATH> wsection{};
     AnsiToWide(servername, wsection.data(), static_cast<int>(wsection.size()));
-    return WritePrivateProfileStringW(wsection.data(), nullptr, nullptr, inifilename) != 0;
+    return IniWriteString(wsection.data(), nullptr, nullptr, inifilename) != 0;
 }
 
 int CopyMoveServerInIniW(LPCSTR oldservername, LPCSTR newservername,
@@ -237,11 +238,11 @@ int CopyMoveServerInIniW(LPCSTR oldservername, LPCSTR newservername,
     AnsiToWide(newservername, wnewsect.data(), static_cast<int>(wnewsect.size()));
 
     std::array<wchar_t, 1024> captlist{};
-    GetPrivateProfileStringW(woldsect.data(), nullptr, L"", captlist.data(), static_cast<DWORD>(captlist.size() - 1), inifilename);
+    IniGetString(woldsect.data(), nullptr, L"", captlist.data(), static_cast<DWORD>(captlist.size() - 1), inifilename);
     if (captlist[0]) {
         if (!OverWrite) {
             std::array<wchar_t, 100> testlist{};
-            GetPrivateProfileStringW(wnewsect.data(), nullptr, L"", testlist.data(), static_cast<DWORD>(testlist.size() - 1), inifilename);
+            IniGetString(wnewsect.data(), nullptr, L"", testlist.data(), static_cast<DWORD>(testlist.size() - 1), inifilename);
             if (testlist[0])
                 return FS_FILE_EXISTS;
         }
@@ -251,8 +252,8 @@ int CopyMoveServerInIniW(LPCSTR oldservername, LPCSTR newservername,
         wchar_t* pcapt = captlist.data();
         while (pcapt[0]) {
             std::array<wchar_t, 1024> valuebuf{};
-            GetPrivateProfileStringW(woldsect.data(), pcapt, L"", valuebuf.data(), static_cast<DWORD>(valuebuf.size() - 1), inifilename);
-            WritePrivateProfileStringW(wnewsect.data(), pcapt, valuebuf.data(), inifilename);
+            IniGetString(woldsect.data(), pcapt, L"", valuebuf.data(), static_cast<DWORD>(valuebuf.size() - 1), inifilename);
+            IniWriteString(wnewsect.data(), pcapt, valuebuf.data(), inifilename);
             pcapt += wcslen(pcapt) + 1;
         }
         if (Move)

@@ -41,6 +41,7 @@
 #include "LanPairSession.h"
 #include "TrustedInstallerToken.h"
 #include "JumpHostConnection.h"
+#include "IniFile.h"
 
 #pragma comment(lib, "Crypt32.lib")
 #pragma comment(lib, "bcrypt.lib")
@@ -736,7 +737,7 @@ void SftpGetServerBasePathW(LPCWSTR DisplayName, LPWSTR RelativePath, size_t max
     std::array<char, MAX_PATH> displayNameA{};
     std::array<char, MAX_PATH> server{};
     walcopy(displayNameA.data(), DisplayName, displayNameA.size() - 1);
-    GetPrivateProfileString(displayNameA.data(), "server", "", server.data(), server.size() - 1, inifilename);
+    IniGetString(displayNameA.data(), "server", "", server.data(), server.size() - 1, inifilename);
     // LAN Pair and PHP Agent: base path is always root. A PHP Agent server is
     // a URL whose path names the script, not a start folder.
     if (_strnicmp(server.data(), "lanpair://", 10) == 0 ||

@@ -1,4 +1,5 @@
 #include "ImportIoUtil.h"
+#include "IniFile.h"
 #include "SftpClient.h"
 
 #include <commdlg.h>
@@ -240,10 +241,10 @@ bool IniSectionExists(const std::string& section, LPCSTR iniPath) noexcept
 {
     if (section.empty() || !iniPath || !iniPath[0]) return false;
     std::array<char, 16> buf{};
-    if (GetPrivateProfileStringA(section.c_str(), "server", nullptr,
+    if (IniGetString(section.c_str(), "server", nullptr,
             buf.data(), static_cast<DWORD>(buf.size()), iniPath) > 0)
         return true;
-    return GetPrivateProfileStringA(section.c_str(), "user", nullptr,
+    return IniGetString(section.c_str(), "user", nullptr,
             buf.data(), static_cast<DWORD>(buf.size()), iniPath) > 0;
 }
 

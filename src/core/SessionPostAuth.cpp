@@ -6,6 +6,7 @@
 #include "SftpClient.h"
 #include "PluginEntryPoints.h"
 #include "SftpInternal.h"
+#include "IniFile.h"
 #include "res/resource.h"
 
 static void ToUpperInPlace(char* s) noexcept
@@ -17,7 +18,7 @@ static void ToUpperInPlace(char* s) noexcept
 static void SaveAutoDetectResult(pConnectSettings cs, const char* key, int value)
 {
     if (cs->DisplayName != s_quickconnect)
-        WritePrivateProfileString(cs->DisplayName.c_str(), key, value ? "1" : "0", cs->IniFileName.c_str());
+        IniWriteString(cs->DisplayName.c_str(), key, value ? "1" : "0", cs->IniFileName.c_str());
 }
 
 int SftpSessionDetectUtf8(pConnectSettings ConnectSettings)
@@ -197,7 +198,7 @@ void ResolveScpLargeFileProbe(pConnectSettings ConnectSettings)
         ConnectSettings->scpserver64bit = AUTODETECT_OFF;
         SFTP_LOG("CONN", "SCP-only: forcing largefilesupport=0, skipping 'which scp' probe");
         if (ConnectSettings->DisplayName != s_quickconnect)
-            WritePrivateProfileString(ConnectSettings->DisplayName.c_str(), "largefilesupport", "0", ConnectSettings->IniFileName.c_str());
+            IniWriteString(ConnectSettings->DisplayName.c_str(), "largefilesupport", "0", ConnectSettings->IniFileName.c_str());
         return;
     }
 
@@ -216,7 +217,7 @@ void ResolveScpLargeFileProbe(pConnectSettings ConnectSettings)
         }
     }
     if (ConnectSettings->DisplayName != s_quickconnect)
-        WritePrivateProfileString(ConnectSettings->DisplayName.c_str(), "largefilesupport",
-                                  ConnectSettings->scpserver64bit ? "1" : "0",
-                                  ConnectSettings->IniFileName.c_str());
+        IniWriteString(ConnectSettings->DisplayName.c_str(), "largefilesupport",
+                       ConnectSettings->scpserver64bit ? "1" : "0",
+                       ConnectSettings->IniFileName.c_str());
 }

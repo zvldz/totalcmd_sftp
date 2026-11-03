@@ -26,6 +26,7 @@
 #include "PhpAgentClient.h"
 #include "PluginEntryPointsInternal.h"
 #include "ImportCache.h"
+#include "IniFile.h"
 #include "VirtualSessionRegistry.h"
 
 // Declared in SftpConnection.cpp
@@ -813,9 +814,9 @@ void WINAPI FsSetDefaultParams(FsDefaultParamStruct * dps)
         // Apply language override from sftpplug.ini [Configuration] Language= (overrides TC detection).
         {
             std::array<wchar_t, 64> langOverride{};
-            GetPrivateProfileStringW(L"Configuration", L"Language", L"",
-                                     langOverride.data(), static_cast<DWORD>(langOverride.size()),
-                                     inifilenameW);
+            IniGetString(L"Configuration", L"Language", L"",
+                         langOverride.data(), static_cast<DWORD>(langOverride.size()),
+                         inifilenameW);
             if (langOverride[0]) {
                 const LANGID overrideId = LangNameToId(langOverride.data());
                 if (overrideId != 0) {

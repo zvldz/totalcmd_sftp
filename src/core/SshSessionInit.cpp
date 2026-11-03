@@ -15,6 +15,7 @@
 #include "IUserFeedback.h"
 #include "ITransportStream.h"
 #include "SshSessionInit.h"
+#include "IniFile.h"
 
 static LPVOID session_alloc(size_t count, LPVOID* /*abstract*/)
 {
@@ -241,8 +242,8 @@ int VerifyServerFingerprint(pConnectSettings ConnectSettings)
         // A match on an MD5 saved by an earlier version: same key, stored
         // again in the SHA256 form so later checks use the stronger hash.
         if (!stored.starts_with("SHA256:") && !fp.sha256.empty()) {
-            WritePrivateProfileString(ConnectSettings->DisplayName.c_str(), "fingerprint",
-                                      fp.sha256.c_str(), ConnectSettings->IniFileName.c_str());
+            IniWriteString(ConnectSettings->DisplayName.c_str(), "fingerprint",
+                           fp.sha256.c_str(), ConnectSettings->IniFileName.c_str());
             ConnectSettings->savedfingerprint = fp.sha256;
             SFTP_LOG("CONN", "Stored MD5 fingerprint matched, rewritten as %s", fp.sha256.c_str());
         }
@@ -264,8 +265,8 @@ int VerifyServerFingerprint(pConnectSettings ConnectSettings)
     if (!verified)
         return -100;
 
-    WritePrivateProfileString(ConnectSettings->DisplayName.c_str(), "fingerprint",
-                              FingerprintToStore(fp).c_str(), ConnectSettings->IniFileName.c_str());
+    IniWriteString(ConnectSettings->DisplayName.c_str(), "fingerprint",
+                   FingerprintToStore(fp).c_str(), ConnectSettings->IniFileName.c_str());
     ConnectSettings->savedfingerprint = FingerprintToStore(fp);
     return 0;
 }
