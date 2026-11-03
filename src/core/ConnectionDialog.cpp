@@ -35,6 +35,7 @@ extern void LanFileServerSetTrustedInstaller(bool enabled);
 #include "ConnectionDialog.h"
 #include "LanPair.h"
 #include "JumpHostConnection.h"
+#include "IniFile.h"
 #include "ProfileSettings.h"
 #include "LngLoader.h"
 #include "DialogLayout.h"
@@ -456,19 +457,19 @@ static UINT GetDlgItemText(HWND hWnd, int nIDDlgItem, std::string& out, size_t c
     return len;
 }
 
-static BOOL WritePrivateProfileString(const char* section, const char* key, const std::string& value, const char* fileName)
+static BOOL IniWriteString(const char* section, const char* key, const std::string& value, const char* fileName)
 {
-    return ::WritePrivateProfileStringA(section, key, value.c_str(), fileName);
+    return ::IniWriteString(section, key, value.c_str(), fileName);
 }
 
-static BOOL WritePrivateProfileString(const std::string& section, const char* key, const char* value, const std::string& fileName)
+static BOOL IniWriteString(const std::string& section, const char* key, const char* value, const std::string& fileName)
 {
-    return ::WritePrivateProfileStringA(section.c_str(), key, value, fileName.c_str());
+    return ::IniWriteString(section.c_str(), key, value, fileName.c_str());
 }
 
-static BOOL WritePrivateProfileString(const std::string& section, const char* key, const std::string& value, const std::string& fileName)
+static BOOL IniWriteString(const std::string& section, const char* key, const std::string& value, const std::string& fileName)
 {
-    return ::WritePrivateProfileStringA(section.c_str(), key, value.c_str(), fileName.c_str());
+    return ::IniWriteString(section.c_str(), key, value.c_str(), fileName.c_str());
 }
 
 static std::string WideToUtf8(const std::wstring& w)
@@ -1840,27 +1841,27 @@ INT_PTR WINAPI ProxyDlgProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lPara
             else
                 strlcpy(proxyentry.data(), "proxy", proxyentry.size()-1);
 
-            WritePrivateProfileString(proxyentry.data(), "proxyserver", ConnectData.proxyserver, ctx->iniFileName);
-            WritePrivateProfileString(proxyentry.data(), "proxyuser", ConnectData.proxyuser, ctx->iniFileName);
+            IniWriteString(proxyentry.data(), "proxyserver", ConnectData.proxyserver, ctx->iniFileName);
+            IniWriteString(proxyentry.data(), "proxyuser", ConnectData.proxyuser, ctx->iniFileName);
             std::array<char, 64> buf{};
             _itoa_s((int)ConnectData.proxytype, buf.data(), buf.size(), 10);
             LPSTR proxy_str = (ConnectData.proxytype == sftp::Proxy::notused) ? nullptr : buf.data();
-            WritePrivateProfileString(proxyentry.data(), "proxytype", proxy_str, ctx->iniFileName);
+            IniWriteString(proxyentry.data(), "proxytype", proxy_str, ctx->iniFileName);
 
             std::array<char, 1024> szEncryptedPassword{};
             if (!IsWindowVisible(GetDlgItem(hWnd, IDC_EDITPASS))) {  // Edit button is hidden.
                 if (ConnectData.proxypassword.empty()) {
-                    WritePrivateProfileString(proxyentry.data(), "proxypassword", nullptr, ctx->iniFileName);
+                    IniWriteString(proxyentry.data(), "proxypassword", nullptr, ctx->iniFileName);
                 } else if (CryptProc && IsDlgButtonChecked(hWnd, IDC_CRYPTPASS)) {
                     std::array<char, 64> proxyentry2{};
                     strlcpy(proxyentry2.data(), proxyentry.data(), proxyentry2.size()-1);
                     strlcat(proxyentry2.data(), "$$pass", proxyentry2.size()-1);
                     bool ok = CryptProc(PluginNumber, CryptoNumber, FS_CRYPT_SAVE_PASSWORD, proxyentry2.data(), const_cast<char*>(ConnectData.proxypassword.c_str()), 0) == FS_FILE_OK;
-                    WritePrivateProfileString(proxyentry.data(), "proxypassword", ok? "!" : nullptr, ctx->iniFileName);
+                    IniWriteString(proxyentry.data(), "proxypassword", ok? "!" : nullptr, ctx->iniFileName);
                     CryptCheckPass = true;
                 } else {
                     EncryptString(ConnectData.proxypassword.c_str(), szEncryptedPassword.data(), static_cast<UINT>(szEncryptedPassword.size()));
-                    WritePrivateProfileString(proxyentry.data(), "proxypassword", szEncryptedPassword.data(), ctx->iniFileName);
+                    IniWriteString(proxyentry.data(), "proxypassword", szEncryptedPassword.data(), ctx->iniFileName);
                 }
             }
             
@@ -2034,7 +2035,7 @@ bool DeleteProxy(int proxynrtodelete, LPCSTR ServerToSkip, LPCSTR iniFileName, L
     SERVERHANDLE hdl = FindFirstServer(name.data(), name.size() - 1);
     while (hdl) {
         if (_stricmp(name.data(), ServerToSkip) != 0) {
-            int proxynr = GetPrivateProfileInt(name.data(), "proxynr", 0, iniFileName);
+            int proxynr = IniGetInt(name.data(), "proxynr", 0, iniFileName);
             if (proxynr == proxynrtodelete) {
                 CanDelete = false;
                 if (AlreadyAdded)
@@ -2050,16 +2051,16 @@ bool DeleteProxy(int proxynrtodelete, LPCSTR ServerToSkip, LPCSTR iniFileName, L
 
     const std::string doomed = proxynrtodelete > 1
         ? std::format("proxy{}", proxynrtodelete) : std::string("proxy");
-    WritePrivateProfileString(doomed.c_str(), nullptr, nullptr, iniFileName);
+    IniWriteString(doomed.c_str(), nullptr, nullptr, iniFileName);
 
     // Only the session being edited can still point here — any other one would
     // have blocked the delete above. Leaving its number behind would aim it at
     // a record that no longer exists, which reads as "no proxy" and connects
     // straight to the host, so it is cleared where it can be seen.
     if (ServerToSkip && ServerToSkip[0] &&
-        GetPrivateProfileInt(ServerToSkip, "proxynr", 0, iniFileName) == proxynrtodelete)
+        IniGetInt(ServerToSkip, "proxynr", 0, iniFileName) == proxynrtodelete)
     {
-        WritePrivateProfileString(ServerToSkip, "proxynr", "0", iniFileName);
+        IniWriteString(ServerToSkip, "proxynr", "0", iniFileName);
     }
 
     return true;
@@ -2387,10 +2388,10 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
                 EnableWindow(GetDlgItem(m_hWnd, IDC_CRYPTPASS), false);
             else {
                 std::array<char, MAX_PATH> storedPasswordRaw{};
-                GetPrivateProfileString(dlgDisplayName, "password", "",
-                                        storedPasswordRaw.data(),
-                                        storedPasswordRaw.size() - 1,
-                                        dlgIniFileName);
+                IniGetString(dlgDisplayName, "password", "",
+                             storedPasswordRaw.data(),
+                             storedPasswordRaw.size() - 1,
+                             dlgIniFileName);
                 CheckDlgButton(m_hWnd, IDC_CRYPTPASS,
                                strcmp(storedPasswordRaw.data(), "!") == 0 ? BST_CHECKED : BST_UNCHECKED);
             }
@@ -2713,8 +2714,8 @@ void ConnectionDialog::OnOk()
             // existing name does. A section with any key present means it
             // exists.
             std::array<char, 100> existing{};
-            GetPrivateProfileString(targetProfile.data(), nullptr, "",
-                                    existing.data(), existing.size() - 1, dlgIniFileName);
+            IniGetString(targetProfile.data(), nullptr, "",
+                         existing.data(), existing.size() - 1, dlgIniFileName);
             if (existing[0]) {
                 warnNameTaken();
                 return;
@@ -2731,102 +2732,102 @@ void ConnectionDialog::OnOk()
         if (m_settings->dialogforconnection && strcmp(dlgDisplayName, s_quickconnect) == 0)
             m_settings->saveonlyprofile = true;
         std::array<char, 16> buf{};
-        WritePrivateProfileString(targetProfile.data(), "server",   m_settings->server.c_str(),  dlgIniFileName);
-        WritePrivateProfileString(targetProfile.data(), "user",     m_settings->user.c_str(),    dlgIniFileName);
+        IniWriteString(targetProfile.data(), "server",   m_settings->server.c_str(),  dlgIniFileName);
+        IniWriteString(targetProfile.data(), "user",     m_settings->user.c_str(),    dlgIniFileName);
         _itoa_s(m_settings->protocoltype, buf.data(), buf.size(), 10);
-        WritePrivateProfileString(targetProfile.data(), "protocol", m_settings->protocoltype == 0 ? nullptr : buf.data(), dlgIniFileName);
+        IniWriteString(targetProfile.data(), "protocol", m_settings->protocoltype == 0 ? nullptr : buf.data(), dlgIniFileName);
         _itoa_s(max(0, min(3, m_settings->transfermode)), buf.data(), buf.size(), 10);
-        WritePrivateProfileString(targetProfile.data(), "transfermode", buf.data(), dlgIniFileName);
+        IniWriteString(targetProfile.data(), "transfermode", buf.data(), dlgIniFileName);
         _itoa_s(max(0, min(2, m_settings->php_http_mode)), buf.data(), buf.size(), 10);
-        WritePrivateProfileString(targetProfile.data(), "phphttpmode", m_settings->php_http_mode == 0 ? nullptr : buf.data(), dlgIniFileName);
+        IniWriteString(targetProfile.data(), "phphttpmode", m_settings->php_http_mode == 0 ? nullptr : buf.data(), dlgIniFileName);
         _itoa_s(m_settings->php_chunk_mib, buf.data(), buf.size(), 10);
-        WritePrivateProfileString(targetProfile.data(), "phpchunkmb", m_settings->php_chunk_mib == 0 ? nullptr : buf.data(), dlgIniFileName);
-        WritePrivateProfileString(targetProfile.data(), "phptar", m_settings->php_tar ? "1" : nullptr, dlgIniFileName);
+        IniWriteString(targetProfile.data(), "phpchunkmb", m_settings->php_chunk_mib == 0 ? nullptr : buf.data(), dlgIniFileName);
+        IniWriteString(targetProfile.data(), "phptar", m_settings->php_tar ? "1" : nullptr, dlgIniFileName);
         _itoa_s(max(0, min(2, m_settings->lan_pair_role)), buf.data(), buf.size(), 10);
-        WritePrivateProfileString(targetProfile.data(), "lanpairrole", m_settings->lan_pair_role == 0 ? nullptr : buf.data(), dlgIniFileName);
-        WritePrivateProfileString(targetProfile.data(), "lanpairpeer", m_settings->lan_pair_peer.empty() ? nullptr : m_settings->lan_pair_peer.c_str(), dlgIniFileName);
+        IniWriteString(targetProfile.data(), "lanpairrole", m_settings->lan_pair_role == 0 ? nullptr : buf.data(), dlgIniFileName);
+        IniWriteString(targetProfile.data(), "lanpairpeer", m_settings->lan_pair_peer.empty() ? nullptr : m_settings->lan_pair_peer.c_str(), dlgIniFileName);
         _itoa_s(max(0, m_settings->lan_pair_timeout_min), buf.data(), buf.size(), 10);
-        WritePrivateProfileString(targetProfile.data(), "lanpairtimeout", m_settings->lan_pair_timeout_min == 0 ? nullptr : buf.data(), dlgIniFileName);
-        WritePrivateProfileString(targetProfile.data(), "lanparti", m_settings->lan_pair_trusted_installer ? "1" : nullptr, dlgIniFileName);
+        IniWriteString(targetProfile.data(), "lanpairtimeout", m_settings->lan_pair_timeout_min == 0 ? nullptr : buf.data(), dlgIniFileName);
+        IniWriteString(targetProfile.data(), "lanparti", m_settings->lan_pair_trusted_installer ? "1" : nullptr, dlgIniFileName);
         LanFileServerSetTrustedInstaller(m_settings->lan_pair_trusted_installer);
         if (m_settings->transfermode == static_cast<int>(sftp::TransferMode::smb_lan) &&
             !m_settings->password.empty() && !m_settings->lan_pair_peer.empty()) {
             const std::string localId = MakeLanPeerId();
             PrepareLanPairTrustKeys(localId, m_settings->lan_pair_peer, m_settings->password);
         }
-        WritePrivateProfileString(targetProfile.data(), "detailedlog", m_settings->detailedlog ? "1" : nullptr, dlgIniFileName);
-        WritePrivateProfileString(targetProfile.data(), "utf8",        m_settings->utf8names == -1 ? nullptr : m_settings->utf8names == 1 ? "1" : "0", dlgIniFileName);
+        IniWriteString(targetProfile.data(), "detailedlog", m_settings->detailedlog ? "1" : nullptr, dlgIniFileName);
+        IniWriteString(targetProfile.data(), "utf8",        m_settings->utf8names == -1 ? nullptr : m_settings->utf8names == 1 ? "1" : "0", dlgIniFileName);
         _itoa_s(m_settings->codepage, buf.data(), buf.size(), 10);
-        WritePrivateProfileString(targetProfile.data(), "codepage",    buf.data(), dlgIniFileName);
-        WritePrivateProfileString(targetProfile.data(), "unixlinebreaks", m_settings->unixlinebreaks == -1 ? nullptr : m_settings->unixlinebreaks == 1 ? "1" : "0", dlgIniFileName);
-        WritePrivateProfileString(targetProfile.data(), "largefilesupport", m_settings->scpserver64bit == -1 ? nullptr : m_settings->scpserver64bit == 1 ? "1" : "0", dlgIniFileName);
-        WritePrivateProfileString(targetProfile.data(), "compression",     m_settings->compressed          ? "1" : nullptr, dlgIniFileName);
-        WritePrivateProfileString(targetProfile.data(), "scpfordata",      m_settings->scpfordata           ? "1" : nullptr, dlgIniFileName);
-        WritePrivateProfileString(targetProfile.data(), "scponly",         m_settings->scponly              ? "1" : nullptr, dlgIniFileName);
-        WritePrivateProfileString(targetProfile.data(), "shelltransfer",   m_settings->shell_transfer_dd    ? "1" : nullptr, dlgIniFileName);
-        WritePrivateProfileString(targetProfile.data(), "shelltransferforce", m_settings->shell_transfer_force ? "1" : nullptr, dlgIniFileName);
-        WritePrivateProfileString(targetProfile.data(), "pubkeyfile",   m_settings->pubkeyfile.empty()   ? nullptr : m_settings->pubkeyfile.c_str(),   dlgIniFileName);
-        WritePrivateProfileString(targetProfile.data(), "privkeyfile",  m_settings->privkeyfile.empty()  ? nullptr : m_settings->privkeyfile.c_str(),  dlgIniFileName);
-        WritePrivateProfileString(targetProfile.data(), "useagent",     m_settings->useagent             ? "1" : nullptr, dlgIniFileName);
-        WritePrivateProfileString(targetProfile.data(), "usejumphost",  m_settings->use_jump_host        ? "1" : nullptr, dlgIniFileName);
+        IniWriteString(targetProfile.data(), "codepage",    buf.data(), dlgIniFileName);
+        IniWriteString(targetProfile.data(), "unixlinebreaks", m_settings->unixlinebreaks == -1 ? nullptr : m_settings->unixlinebreaks == 1 ? "1" : "0", dlgIniFileName);
+        IniWriteString(targetProfile.data(), "largefilesupport", m_settings->scpserver64bit == -1 ? nullptr : m_settings->scpserver64bit == 1 ? "1" : "0", dlgIniFileName);
+        IniWriteString(targetProfile.data(), "compression",     m_settings->compressed          ? "1" : nullptr, dlgIniFileName);
+        IniWriteString(targetProfile.data(), "scpfordata",      m_settings->scpfordata           ? "1" : nullptr, dlgIniFileName);
+        IniWriteString(targetProfile.data(), "scponly",         m_settings->scponly              ? "1" : nullptr, dlgIniFileName);
+        IniWriteString(targetProfile.data(), "shelltransfer",   m_settings->shell_transfer_dd    ? "1" : nullptr, dlgIniFileName);
+        IniWriteString(targetProfile.data(), "shelltransferforce", m_settings->shell_transfer_force ? "1" : nullptr, dlgIniFileName);
+        IniWriteString(targetProfile.data(), "pubkeyfile",   m_settings->pubkeyfile.empty()   ? nullptr : m_settings->pubkeyfile.c_str(),   dlgIniFileName);
+        IniWriteString(targetProfile.data(), "privkeyfile",  m_settings->privkeyfile.empty()  ? nullptr : m_settings->privkeyfile.c_str(),  dlgIniFileName);
+        IniWriteString(targetProfile.data(), "useagent",     m_settings->useagent             ? "1" : nullptr, dlgIniFileName);
+        IniWriteString(targetProfile.data(), "usejumphost",  m_settings->use_jump_host        ? "1" : nullptr, dlgIniFileName);
         // jumpsessionref: when non-empty, jump host params are resolved from the
         // referenced session at connect time, ignoring the manual jump_* fields
         // below (which are still preserved for switching back to manual mode).
-        WritePrivateProfileString(targetProfile.data(), "jumpsessionref",
+        IniWriteString(targetProfile.data(), "jumpsessionref",
             m_settings->jump_session_ref.empty() ? nullptr : m_settings->jump_session_ref.c_str(), dlgIniFileName);
         // Each jump field below is written unconditionally, an empty value
         // removing the key, so that clearing a field in the dialog also clears
         // it in the INI rather than leaving the session routed through a jump
         // host the user believes they removed.
-        WritePrivateProfileString(targetProfile.data(), "jumphost",
+        IniWriteString(targetProfile.data(), "jumphost",
             m_settings->jump_host.empty() ? nullptr : m_settings->jump_host.c_str(), dlgIniFileName);
         if (m_settings->jump_port && m_settings->jump_port != 22) {
             std::array<char, 16> portBuf{};
             _itoa_s(m_settings->jump_port, portBuf.data(), portBuf.size(), 10);
-            WritePrivateProfileString(targetProfile.data(), "jumpport", portBuf.data(), dlgIniFileName);
+            IniWriteString(targetProfile.data(), "jumpport", portBuf.data(), dlgIniFileName);
         } else {
             // 22 is the default the loader assumes, so drop the key instead of
             // leaving a stale port behind.
-            WritePrivateProfileString(targetProfile.data(), "jumpport", nullptr, dlgIniFileName);
+            IniWriteString(targetProfile.data(), "jumpport", nullptr, dlgIniFileName);
         }
-        WritePrivateProfileString(targetProfile.data(), "jumpuser",
+        IniWriteString(targetProfile.data(), "jumpuser",
             m_settings->jump_user.empty() ? nullptr : m_settings->jump_user.c_str(), dlgIniFileName);
-        WritePrivateProfileString(targetProfile.data(), "jumppubkeyfile",
+        IniWriteString(targetProfile.data(), "jumppubkeyfile",
             m_settings->jump_pubkeyfile.empty() ? nullptr : m_settings->jump_pubkeyfile.c_str(), dlgIniFileName);
-        WritePrivateProfileString(targetProfile.data(), "jumpprivkeyfile",
+        IniWriteString(targetProfile.data(), "jumpprivkeyfile",
             m_settings->jump_privkeyfile.empty() ? nullptr : m_settings->jump_privkeyfile.c_str(), dlgIniFileName);
-        WritePrivateProfileString(targetProfile.data(), "jumpuseagent", m_settings->jump_useagent ? "1" : nullptr, dlgIniFileName);
+        IniWriteString(targetProfile.data(), "jumpuseagent", m_settings->jump_useagent ? "1" : nullptr, dlgIniFileName);
         if (!m_settings->jump_password.empty()) {
             std::array<char, 1024> jumpEnc{};
             EncryptString(m_settings->jump_password.c_str(), jumpEnc.data(), static_cast<UINT>(jumpEnc.size()));
-            WritePrivateProfileString(targetProfile.data(), "jumppassword", jumpEnc.data(), dlgIniFileName);
+            IniWriteString(targetProfile.data(), "jumppassword", jumpEnc.data(), dlgIniFileName);
         } else {
-            WritePrivateProfileString(targetProfile.data(), "jumppassword", nullptr, dlgIniFileName);
+            IniWriteString(targetProfile.data(), "jumppassword", nullptr, dlgIniFileName);
         }
         if (m_jumpFingerprintCleared) {
-            WritePrivateProfileString(targetProfile.data(), "jumpfingerprint", nullptr, dlgIniFileName);
+            IniWriteString(targetProfile.data(), "jumpfingerprint", nullptr, dlgIniFileName);
         }
         _itoa_s(m_settings->filemod, modbuf.data(), modbuf.size(), 8);
-        WritePrivateProfileString(targetProfile.data(), "filemod", m_settings->filemod == 0644 ? nullptr : modbuf.data(), dlgIniFileName);
+        IniWriteString(targetProfile.data(), "filemod", m_settings->filemod == 0644 ? nullptr : modbuf.data(), dlgIniFileName);
         _itoa_s(m_settings->dirmod, modbuf.data(), modbuf.size(), 8);
-        WritePrivateProfileString(targetProfile.data(), "dirmod", m_settings->dirmod == 0755 ? nullptr : modbuf.data(), dlgIniFileName);
+        IniWriteString(targetProfile.data(), "dirmod", m_settings->dirmod == 0755 ? nullptr : modbuf.data(), dlgIniFileName);
         _itoa_s(m_settings->proxynr, buf.data(), buf.size(), 10);
-        WritePrivateProfileString(targetProfile.data(), TEXT("proxynr"), buf.data(), dlgIniFileName);
+        IniWriteString(targetProfile.data(), TEXT("proxynr"), buf.data(), dlgIniFileName);
 
         std::array<char, 1024> szEncryptedPassword{};
         if (!IsWindowVisible(GetDlgItem(m_hWnd, IDC_EDITPASS))) {
             if (m_settings->password.empty()) {
-                WritePrivateProfileString(targetProfile.data(), "password", nullptr, dlgIniFileName);
+                IniWriteString(targetProfile.data(), "password", nullptr, dlgIniFileName);
             } else if (CryptProc && IsDlgButtonChecked(m_hWnd, IDC_CRYPTPASS)) {
                 bool ok = CryptProc(PluginNumber, CryptoNumber, FS_CRYPT_SAVE_PASSWORD,
                                     targetProfile.data(),
                                     const_cast<char*>(m_settings->password.c_str()), 0) == FS_FILE_OK;
-                WritePrivateProfileString(targetProfile.data(), "password", ok ? "!" : nullptr, dlgIniFileName);
+                IniWriteString(targetProfile.data(), "password", ok ? "!" : nullptr, dlgIniFileName);
                 CryptCheckPass = true;
             } else {
                 EncryptString(m_settings->password.c_str(), szEncryptedPassword.data(),
                               static_cast<UINT>(szEncryptedPassword.size()));
-                WritePrivateProfileString(targetProfile.data(), "password", szEncryptedPassword.data(), dlgIniFileName);
+                IniWriteString(targetProfile.data(), "password", szEncryptedPassword.data(), dlgIniFileName);
             }
         }
 
