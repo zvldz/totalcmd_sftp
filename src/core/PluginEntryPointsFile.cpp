@@ -27,6 +27,7 @@
 #include "ImportSourceRegistry.h"
 #include "ImportCache.h"
 #include "ImportIoUtil.h"
+#include "IniFile.h"
 #include "VirtualSessionRegistry.h"
 #include "BuildInfo.h"
 
@@ -79,7 +80,7 @@ static int ExportSessionAsIniFile(
     content.append("[").append(exportSection).append("]\r\n");
 
     std::array<char, 8192> keyList{};
-    GetPrivateProfileStringA(srcSection, nullptr, "",
+    IniGetString(srcSection, nullptr, "",
         keyList.data(),
         static_cast<DWORD>(keyList.size() - 1),
         srcIni);
@@ -87,7 +88,7 @@ static int ExportSessionAsIniFile(
     while (p[0]) {
         if (p[0] != '_') {
             std::array<char, 2048> valueBuf{};
-            GetPrivateProfileStringA(srcSection, p, "",
+            IniGetString(srcSection, p, "",
                 valueBuf.data(),
                 static_cast<DWORD>(valueBuf.size() - 1),
                 srcIni);
@@ -128,12 +129,12 @@ static int ExportSessionAsIniFile(
     // since the number is local to the file it came from, and without its
     // password, which is machine-bound where it is stored at all.
     {
-        const int proxynr = GetPrivateProfileInt(srcSection, "proxynr", 0, srcIni);
+        const int proxynr = IniGetInt(srcSection, "proxynr", 0, srcIni);
         if (proxynr > 0) {
             const std::string proxySection = proxynr > 1
                 ? std::format("proxy{}", proxynr) : std::string("proxy");
             std::array<char, 4096> proxyKeys{};
-            GetPrivateProfileStringA(proxySection.c_str(), nullptr, "",
+            IniGetString(proxySection.c_str(), nullptr, "",
                 proxyKeys.data(), static_cast<DWORD>(proxyKeys.size() - 1), srcIni);
             if (proxyKeys[0]) {
                 content.append(kExportProxySection).append(RN);
@@ -141,7 +142,7 @@ static int ExportSessionAsIniFile(
                     if (_stricmp(k, "proxypassword") == 0)
                         continue;
                     std::array<char, 2048> value{};
-                    GetPrivateProfileStringA(proxySection.c_str(), k, "",
+                    IniGetString(proxySection.c_str(), k, "",
                         value.data(), static_cast<DWORD>(value.size() - 1), srcIni);
                     content.append(k).append("=").append(value.data()).append(RN);
                 }
@@ -315,7 +316,7 @@ static std::optional<int> TryImportSessionFromUpload(
         nullptr, nullptr);
 
     std::array<char, 8192> sectionNames{};
-    const DWORD gotSects = GetPrivateProfileSectionNamesA(
+    const DWORD gotSects = IniGetSectionNames(
         sectionNames.data(),
         static_cast<DWORD>(sectionNames.size() - 1),
         localA.data());
@@ -327,7 +328,7 @@ static std::optional<int> TryImportSessionFromUpload(
     std::string chosenSection;
     while (sp[0]) {
         std::array<char, 512> serverProbe{};
-        GetPrivateProfileStringA(sp, "server", "",
+        IniGetString(sp, "server", "",
             serverProbe.data(),
             static_cast<DWORD>(serverProbe.size() - 1),
             localA.data());
@@ -344,7 +345,7 @@ static std::optional<int> TryImportSessionFromUpload(
     // rebuild; a session made from it would connect straight to the host.
     {
         std::array<char, 512> route{};
-        GetPrivateProfileStringA(chosenSection.c_str(), kUnsupportedRouteKey, "",
+        IniGetString(chosenSection.c_str(), kUnsupportedRouteKey, "",
             route.data(), static_cast<DWORD>(route.size() - 1), localA.data());
         if (route[0]) {
             sftp::SessionDependency dep;
@@ -380,13 +381,13 @@ static std::optional<int> TryImportSessionFromUpload(
     // same route, create one when the route is new, and drop the reference
     // when nothing describes it — a number left pointing at a stranger is how
     // a session ends up quietly on the wrong proxy, or on none at all.
-    if (GetPrivateProfileInt(display.c_str(), "proxynr", 0, inifilename) > 0) {
+    if (IniGetInt(display.c_str(), "proxynr", 0, inifilename) > 0) {
         std::array<char, 512> proxyServer{}, proxyUser{};
-        const int proxytype = GetPrivateProfileInt("proxy", "proxytype", -1, localA.data());
-        GetPrivateProfileStringA("proxy", "proxyserver", "", proxyServer.data(),
-                                  static_cast<DWORD>(proxyServer.size() - 1), localA.data());
-        GetPrivateProfileStringA("proxy", "proxyuser", "", proxyUser.data(),
-                                  static_cast<DWORD>(proxyUser.size() - 1), localA.data());
+        const int proxytype = IniGetInt("proxy", "proxytype", -1, localA.data());
+        IniGetString("proxy", "proxyserver", "", proxyServer.data(),
+                      static_cast<DWORD>(proxyServer.size() - 1), localA.data());
+        IniGetString("proxy", "proxyuser", "", proxyUser.data(),
+                      static_cast<DWORD>(proxyUser.size() - 1), localA.data());
 
         int localNr = 0;
         if (proxytype > 0 && proxyServer[0]) {
@@ -406,7 +407,7 @@ static std::optional<int> TryImportSessionFromUpload(
 
         std::array<char, 16> buf{};
         _itoa_s(localNr, buf.data(), buf.size(), 10);
-        WritePrivateProfileString(display.c_str(), "proxynr", buf.data(), inifilename);
+        IniWriteString(display.c_str(), "proxynr", buf.data(), inifilename);
         if (localNr == 0)
             ShowPluginMessage(IDS_SIMPORT_PROXY_LOST, "", IDS_SIMPORT_TITLE,
                               "SFTP plugin - session import");
@@ -429,9 +430,9 @@ static std::vector<std::string> CollectSessionsUnderFolder(
 {
     std::vector<std::string> out;
     std::array<wchar_t, 65535> serverlist{};
-    GetPrivateProfileStringW(nullptr, nullptr, L"", serverlist.data(),
-                              static_cast<DWORD>(serverlist.size()),
-                              iniFileNameW);
+    IniGetString(nullptr, nullptr, L"", serverlist.data(),
+                  static_cast<DWORD>(serverlist.size()),
+                  iniFileNameW);
     const std::string needle = folderPrefix + "/";
     wchar_t* wp = serverlist.data();
     while (wp[0]) {
@@ -461,26 +462,26 @@ static bool CopyIniSectionAcrossFiles(LPCSTR srcSection, LPCSTR srcIni,
                                        LPCSTR dstSection, LPCSTR dstIni)
 {
     std::array<char, 4096> keyList{};
-    GetPrivateProfileStringA(srcSection, nullptr, "",
-                              keyList.data(),
-                              static_cast<DWORD>(keyList.size() - 1),
-                              srcIni);
+    IniGetString(srcSection, nullptr, "",
+                  keyList.data(),
+                  static_cast<DWORD>(keyList.size() - 1),
+                  srcIni);
     if (!keyList[0]) return false;
 
-    WritePrivateProfileStringA(dstSection, nullptr, nullptr, dstIni);
+    IniWriteString(dstSection, nullptr, nullptr, dstIni);
 
     bool any = false;
     char* p = keyList.data();
     while (p[0]) {
         if (p[0] != '_') {
             std::array<char, 2048> valueBuf{};
-            GetPrivateProfileStringA(srcSection, p, "",
-                                     valueBuf.data(),
-                                     static_cast<DWORD>(valueBuf.size() - 1),
-                                     srcIni);
-            WritePrivateProfileStringA(dstSection, p,
-                                       valueBuf[0] ? valueBuf.data() : nullptr,
-                                       dstIni);
+            IniGetString(srcSection, p, "",
+                         valueBuf.data(),
+                         static_cast<DWORD>(valueBuf.size() - 1),
+                         srcIni);
+            IniWriteString(dstSection, p,
+                           valueBuf[0] ? valueBuf.data() : nullptr,
+                           dstIni);
             any = true;
         }
         p += strlen(p) + 1;
@@ -500,13 +501,13 @@ static int ProxyRecordForDependency(const sftp::SessionDependency& dep, LPCSTR i
 
     nr = NextFreeProxyNr(iniFile);
     const std::string section = nr > 1 ? std::format("proxy{}", nr) : std::string("proxy");
-    WritePrivateProfileStringA(section.c_str(), "proxytype",
-                               std::to_string(type).c_str(), iniFile);
-    WritePrivateProfileStringA(section.c_str(), "proxyserver",
-                               dep.proxyServer.c_str(), iniFile);
+    IniWriteString(section.c_str(), "proxytype",
+                   std::to_string(type).c_str(), iniFile);
+    IniWriteString(section.c_str(), "proxyserver",
+                   dep.proxyServer.c_str(), iniFile);
     if (!dep.proxyUser.empty())
-        WritePrivateProfileStringA(section.c_str(), "proxyuser",
-                                   dep.proxyUser.c_str(), iniFile);
+        IniWriteString(section.c_str(), "proxyuser",
+                       dep.proxyUser.c_str(), iniFile);
     return nr;
 }
 
@@ -562,8 +563,8 @@ static int MaterialiseVirtualSession(const std::string& sourceId,
 
     if (dep.transferable()) {
         const int proxynr = ProxyRecordForDependency(dep, inifilename);
-        WritePrivateProfileStringA(newDisplay.c_str(), "proxynr",
-                                   std::to_string(proxynr).c_str(), inifilename);
+        IniWriteString(newDisplay.c_str(), "proxynr",
+                       std::to_string(proxynr).c_str(), inifilename);
     }
 
     // Sync g_servers so the new session shows up in the plugin panel on the
