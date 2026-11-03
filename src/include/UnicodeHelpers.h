@@ -75,6 +75,11 @@ void LogProcI(int PluginNr, int MsgType, LPCSTR LogString) noexcept;
 BOOL RequestProcI(int PluginNr, int RequestType, LPCSTR CustomTitle, LPCSTR CustomText,
                   LPSTR ReturnedText, int maxlen) noexcept;
 
+// Dialog control text as internal strings, through the wide API. Same
+// arguments and results as SetDlgItemTextA / GetDlgItemTextA.
+BOOL SetDlgItemTextI(HWND hDlg, int nIDDlgItem, LPCSTR lpString) noexcept;
+UINT GetDlgItemTextI(HWND hDlg, int nIDDlgItem, LPSTR lpString, int cchMax) noexcept;
+
 // File operations with Unicode support
 BOOL CopyFileT(LPCWSTR lpExistingFileName, LPCWSTR lpNewFileName, BOOL bFailIfExists) noexcept;
 BOOL CreateDirectoryT(LPCWSTR lpPathName, LPSECURITY_ATTRIBUTES lpSecurityAttributes) noexcept;

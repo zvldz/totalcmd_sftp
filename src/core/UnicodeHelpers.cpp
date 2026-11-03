@@ -354,6 +354,35 @@ BOOL RequestProcI(int PluginNr, int RequestType, LPCSTR CustomTitle, LPCSTR Cust
     return FALSE;
 }
 
+BOOL SetDlgItemTextI(HWND hDlg, int nIDDlgItem, LPCSTR lpString) noexcept
+{
+    try {
+        return SetDlgItemTextW(hDlg, nIDDlgItem,
+                               unicode_util::internal_to_wide(lpString ? lpString : "").c_str());
+    } catch (...) {
+        return FALSE;
+    }
+}
+
+UINT GetDlgItemTextI(HWND hDlg, int nIDDlgItem, LPSTR lpString, int cchMax) noexcept
+{
+    if (!lpString || cchMax <= 0)
+        return 0;
+    lpString[0] = 0;
+    try {
+        const HWND ctrl = GetDlgItem(hDlg, nIDDlgItem);
+        const int wlen = ctrl ? GetWindowTextLengthW(ctrl) : 0;
+        std::wstring w(static_cast<size_t>(wlen) + 1, L'\0');
+        const int got = GetDlgItemTextW(hDlg, nIDDlgItem, w.data(), wlen + 1);
+        w.resize(static_cast<size_t>(got > 0 ? got : 0));
+        (void)wilcopy(lpString, w.c_str(), static_cast<size_t>(cchMax));
+        SecureZeroMemory(w.data(), w.size() * sizeof(wchar_t));
+        return static_cast<UINT>(strlen(lpString));
+    } catch (...) {
+        return 0;
+    }
+}
+
 bool RequestProcT(int PluginNr, int RequestType, LPCWSTR CustomTitle, LPCWSTR CustomText,
                   LPWSTR ReturnedText, size_t maxlen) noexcept
 {

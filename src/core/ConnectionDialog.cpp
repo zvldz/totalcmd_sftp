@@ -65,17 +65,17 @@ struct JumpDialogContext {
 // Helper: open a file browser for key file selection in jump dialog.
 static void BrowseJumpKeyFile(HWND hWnd, int editCtrl)
 {
-    OPENFILENAMEA ofn{};
-    std::array<char, MAX_PATH> path{};
-    GetDlgItemTextA(hWnd, editCtrl, path.data(), static_cast<int>(path.size()) - 1);
+    OPENFILENAMEW ofn{};
+    std::array<wchar_t, MAX_PATH> path{};
+    GetDlgItemTextW(hWnd, editCtrl, path.data(), static_cast<int>(path.size()) - 1);
     ofn.lStructSize  = sizeof(ofn);
     ofn.hwndOwner    = hWnd;
-    ofn.lpstrFilter  = "Key files\0*.pub;*.pem;*.ppk;*.key\0All files\0*.*\0\0";
+    ofn.lpstrFilter  = L"Key files\0*.pub;*.pem;*.ppk;*.key\0All files\0*.*\0\0";
     ofn.lpstrFile    = path.data();
     ofn.nMaxFile     = static_cast<DWORD>(path.size()) - 1;
     ofn.Flags        = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_HIDEREADONLY;
-    if (GetOpenFileNameA(&ofn))
-        SetDlgItemTextA(hWnd, editCtrl, path.data());
+    if (GetOpenFileNameW(&ofn))
+        SetDlgItemTextW(hWnd, editCtrl, path.data());
 }
 
 // Enable/disable jump host controls based on the checkbox state.
@@ -242,20 +242,20 @@ static INT_PTR CALLBACK JumpHostDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
 
         if (fromSession && shown.status == JumpConfigStatus::Ready) {
             const JumpHostSettings& j = shown.endpoint;
-            SetDlgItemTextA(hWnd, IDC_JUMP_HOST, j.host.c_str());
+            SetDlgItemTextI(hWnd, IDC_JUMP_HOST, j.host.c_str());
             SetDlgItemInt(hWnd, IDC_JUMP_PORT, j.port ? j.port : 22, FALSE);
-            SetDlgItemTextA(hWnd, IDC_JUMP_USER, j.user.c_str());
-            SetDlgItemTextA(hWnd, IDC_JUMP_PASSWORD, "");
-            SetDlgItemTextA(hWnd, IDC_JUMP_PUBKEY, j.pubkeyfile.c_str());
-            SetDlgItemTextA(hWnd, IDC_JUMP_PRIVKEY, j.privkeyfile.c_str());
+            SetDlgItemTextI(hWnd, IDC_JUMP_USER, j.user.c_str());
+            SetDlgItemTextI(hWnd, IDC_JUMP_PASSWORD, "");
+            SetDlgItemTextI(hWnd, IDC_JUMP_PUBKEY, j.pubkeyfile.c_str());
+            SetDlgItemTextI(hWnd, IDC_JUMP_PRIVKEY, j.privkeyfile.c_str());
             CheckDlgButton(hWnd, IDC_JUMP_USEAGENT, j.useagent ? BST_CHECKED : BST_UNCHECKED);
         } else {
-            SetDlgItemTextA(hWnd, IDC_JUMP_HOST, cs->jump_host.c_str());
+            SetDlgItemTextI(hWnd, IDC_JUMP_HOST, cs->jump_host.c_str());
             SetDlgItemInt(hWnd, IDC_JUMP_PORT, cs->jump_port ? cs->jump_port : 22, FALSE);
-            SetDlgItemTextA(hWnd, IDC_JUMP_USER, cs->jump_user.c_str());
-            SetDlgItemTextA(hWnd, IDC_JUMP_PASSWORD, cs->jump_password.c_str());
-            SetDlgItemTextA(hWnd, IDC_JUMP_PUBKEY, cs->jump_pubkeyfile.c_str());
-            SetDlgItemTextA(hWnd, IDC_JUMP_PRIVKEY, cs->jump_privkeyfile.c_str());
+            SetDlgItemTextI(hWnd, IDC_JUMP_USER, cs->jump_user.c_str());
+            SetDlgItemTextI(hWnd, IDC_JUMP_PASSWORD, cs->jump_password.c_str());
+            SetDlgItemTextI(hWnd, IDC_JUMP_PUBKEY, cs->jump_pubkeyfile.c_str());
+            SetDlgItemTextI(hWnd, IDC_JUMP_PRIVKEY, cs->jump_privkeyfile.c_str());
             CheckDlgButton(hWnd, IDC_JUMP_USEAGENT, cs->jump_useagent ? BST_CHECKED : BST_UNCHECKED);
         }
 
@@ -267,7 +267,7 @@ static INT_PTR CALLBACK JumpHostDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
                 "Pick (manual) in the jump-host list to configure a host here instead.");
             const auto slot = note.find("{}");
             if (slot != std::string::npos)
-                note.replace(slot, 2, cs->jump_session_ref);
+                note.replace(slot, 2, unicode_util::internal_to_utf8(cs->jump_session_ref));
             SetDlgItemTextW(hWnd, IDC_JUMP_FROM_SESSION,
                             unicode_util::utf8_to_wstring(note).c_str());
         }
@@ -310,7 +310,7 @@ static INT_PTR CALLBACK JumpHostDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
             const unsigned short previousPort = cs->jump_port;
 
             std::array<char, MAX_PATH> buf{};
-            GetDlgItemTextA(hWnd, IDC_JUMP_HOST, buf.data(), static_cast<int>(buf.size()) - 1);
+            GetDlgItemTextI(hWnd, IDC_JUMP_HOST, buf.data(), static_cast<int>(buf.size()) - 1);
             cs->jump_host = buf.data();
 
             BOOL portOk = FALSE;
@@ -329,16 +329,16 @@ static INT_PTR CALLBACK JumpHostDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
                 ctx->fingerprintCleared = true;
             }
 
-            GetDlgItemTextA(hWnd, IDC_JUMP_USER, buf.data(), static_cast<int>(buf.size()) - 1);
+            GetDlgItemTextI(hWnd, IDC_JUMP_USER, buf.data(), static_cast<int>(buf.size()) - 1);
             cs->jump_user = buf.data();
 
-            GetDlgItemTextA(hWnd, IDC_JUMP_PASSWORD, buf.data(), static_cast<int>(buf.size()) - 1);
+            GetDlgItemTextI(hWnd, IDC_JUMP_PASSWORD, buf.data(), static_cast<int>(buf.size()) - 1);
             cs->jump_password = buf.data();
 
-            GetDlgItemTextA(hWnd, IDC_JUMP_PUBKEY, buf.data(), static_cast<int>(buf.size()) - 1);
+            GetDlgItemTextI(hWnd, IDC_JUMP_PUBKEY, buf.data(), static_cast<int>(buf.size()) - 1);
             cs->jump_pubkeyfile = buf.data();
 
-            GetDlgItemTextA(hWnd, IDC_JUMP_PRIVKEY, buf.data(), static_cast<int>(buf.size()) - 1);
+            GetDlgItemTextI(hWnd, IDC_JUMP_PRIVKEY, buf.data(), static_cast<int>(buf.size()) - 1);
             cs->jump_privkeyfile = buf.data();
 
             cs->jump_useagent = IsDlgButtonChecked(hWnd, IDC_JUMP_USEAGENT) == BST_CHECKED;
@@ -442,17 +442,18 @@ private:
     bool                   m_jumpFingerprintCleared = false;
 };
 
-static BOOL SetDlgItemText(HWND hWnd, int nIDDlgItem, const std::string& text)
+// Dialog text is exchanged as internal strings (UnicodeHelpers.h).
+static BOOL SetDlgItemTextI(HWND hWnd, int nIDDlgItem, const std::string& text)
 {
-    return ::SetDlgItemTextA(hWnd, nIDDlgItem, text.c_str());
+    return ::SetDlgItemTextI(hWnd, nIDDlgItem, text.c_str());
 }
 
-static UINT GetDlgItemText(HWND hWnd, int nIDDlgItem, std::string& out, size_t capacity = MAX_PATH)
+static UINT GetDlgItemTextI(HWND hWnd, int nIDDlgItem, std::string& out, size_t capacity = MAX_PATH)
 {
     if (capacity == 0)
         capacity = 1;
     out.assign(capacity, '\0');
-    const UINT len = ::GetDlgItemTextA(hWnd, nIDDlgItem, out.data(), static_cast<int>(capacity));
+    const UINT len = ::GetDlgItemTextI(hWnd, nIDDlgItem, out.data(), static_cast<int>(capacity));
     out.resize(len);
     return len;
 }
@@ -585,16 +586,9 @@ static void SetDialogLabelTextAndRedraw(HWND hWnd, int ctrlId, const wchar_t* te
     }
 }
 
-static void SetDialogLabelTextAndRedrawA(HWND hWnd, int ctrlId, const char* textA)
+static void SetDialogLabelTextAndRedrawU8(HWND hWnd, int ctrlId, const char* textU8)
 {
-    std::wstring w = Utf8ToWide(textA ? std::string(textA) : std::string{});
-    if (w.empty() && textA && textA[0]) {
-        const int lenAcp = MultiByteToWideChar(CP_ACP, 0, textA, -1, nullptr, 0);
-        if (lenAcp > 0) {
-            w.assign(static_cast<size_t>(lenAcp - 1), L'\0');
-            MultiByteToWideChar(CP_ACP, 0, textA, -1, w.data(), lenAcp);
-        }
-    }
+    const std::wstring w = Utf8ToWide(textU8 ? std::string(textU8) : std::string{});
     SetDialogLabelTextAndRedraw(hWnd, ctrlId, w.c_str());
 }
 
@@ -653,7 +647,7 @@ static void SplitLanTimeoutText(std::wstring& label, std::wstring& suffix)
 static int ReadLanTimeoutMinutes(HWND hWnd)
 {
     std::array<char, 32> buf{};
-    GetDlgItemTextA(hWnd, IDC_LAN_TIMEOUT, buf.data(), static_cast<int>(buf.size() - 1));
+    GetDlgItemTextI(hWnd, IDC_LAN_TIMEOUT, buf.data(), static_cast<int>(buf.size() - 1));
     const long value = strtol(buf.data(), nullptr, 10);
     return value > 0 ? static_cast<int>(value) : 0;
 }
@@ -662,7 +656,7 @@ static void SetLanTimeoutMinutes(HWND hWnd, int minutes)
 {
     std::array<char, 16> buf{};
     _itoa_s(max(0, minutes), buf.data(), static_cast<int>(buf.size()), 10);
-    SetDlgItemTextA(hWnd, IDC_LAN_TIMEOUT, buf.data());
+    SetDlgItemTextI(hWnd, IDC_LAN_TIMEOUT, buf.data());
 }
 
 static void GetPhpOptionLabels(std::string& methodLabel, std::string& chunkLabel) noexcept
@@ -1085,29 +1079,28 @@ static void HandleLanPairAction(HWND hWnd, ConnectDialogContext* dlgCtx, pConnec
 
 static void OnBrowseKeyFileCommand(HWND hWnd, bool isPublicKey)
 {
-    OPENFILENAME ofn{};
-    std::string szFileName(MAX_PATH, '\0');
-    
-    ofn.lStructSize = sizeof(OPENFILENAME);
+    OPENFILENAMEW ofn{};
+    std::wstring szFileName(MAX_PATH, L'\0');
+
+    ofn.lStructSize = sizeof(OPENFILENAMEW);
     ofn.hwndOwner = hWnd;
     ofn.nFilterIndex = 1;
     ofn.lpstrFile = szFileName.data();
     ofn.nMaxFile = static_cast<DWORD>(szFileName.size());
-    
+
     if (isPublicKey) {
-        lstrcpy(szFileName.data(), TEXT("*-cert.pub"));
-        ofn.lpstrFilter = TEXT("Certificates (*-cert.pub)\0*-cert.pub\0Public keys (*.pub)\0*.pub\0All Files\0*.*\0");
-        ofn.lpstrTitle = TEXT("Select certificate file");
+        wcscpy_s(szFileName.data(), szFileName.size(), L"*-cert.pub");
+        ofn.lpstrFilter = L"Certificates (*-cert.pub)\0*-cert.pub\0Public keys (*.pub)\0*.pub\0All Files\0*.*\0";
+        ofn.lpstrTitle = L"Select certificate file";
     } else {
-        lstrcpy(szFileName.data(), TEXT("*.pem"));
-        ofn.lpstrFilter = TEXT("Private key files (*.pem;*.ppk)\0*.pem;*.ppk\0OpenSSH private key (*.pem)\0*.pem\0PuTTY private key (*.ppk)\0*.ppk\0All Files\0*.*\0");
-        ofn.lpstrTitle = TEXT("Select private key file");
+        wcscpy_s(szFileName.data(), szFileName.size(), L"*.pem");
+        ofn.lpstrFilter = L"Private key files (*.pem;*.ppk)\0*.pem;*.ppk\0OpenSSH private key (*.pem)\0*.pem\0PuTTY private key (*.ppk)\0*.ppk\0All Files\0*.*\0";
+        ofn.lpstrTitle = L"Select private key file";
     }
     ofn.Flags = OFN_FILEMUSTEXIST | OFN_HIDEREADONLY;
-    
-    if (GetOpenFileName(&ofn)) {
-        szFileName.resize(strlen(szFileName.data()));
-        SetDlgItemText(hWnd, isPublicKey ? IDC_PUBKEY : IDC_PRIVKEY, szFileName.data());
+
+    if (GetOpenFileNameW(&ofn)) {
+        SetDlgItemTextW(hWnd, isPublicKey ? IDC_PUBKEY : IDC_PRIVKEY, szFileName.c_str());
         if (!isPublicKey)
             UpdateKeyControlsForPrivateKey(hWnd);
     }
@@ -1140,9 +1133,9 @@ static void OnPhpShellCommand(HWND hWnd, ConnectDialogContext* dlgCtx, pConnectS
     user.resize(MAX_PATH);
     password.resize(MAX_PATH);
 
-    const UINT serverLen = GetDlgItemTextA(hWnd, IDC_CONNECTTO, server.data(), static_cast<int>(server.size()));
-    const UINT userLen = GetDlgItemTextA(hWnd, IDC_USERNAME, user.data(), static_cast<int>(user.size()));
-    const UINT passLen = GetDlgItemTextA(hWnd, IDC_PASSWORD, password.data(), static_cast<int>(password.size()));
+    const UINT serverLen = GetDlgItemTextI(hWnd, IDC_CONNECTTO, server.data(), static_cast<int>(server.size()));
+    const UINT userLen = GetDlgItemTextI(hWnd, IDC_USERNAME, user.data(), static_cast<int>(user.size()));
+    const UINT passLen = GetDlgItemTextI(hWnd, IDC_PASSWORD, password.data(), static_cast<int>(password.size()));
 
     server.resize(serverLen);
     user.resize(userLen);
@@ -1237,8 +1230,8 @@ static void RebuildSystemAndEncodingCombos(HWND hWnd, ConnectDialogContext* dlgC
         std::string methodLabel;
         std::string chunkLabel;
         GetPhpOptionLabels(methodLabel, chunkLabel);
-        SetDialogLabelTextAndRedrawA(hWnd, IDC_SYSTEMLABEL, methodLabel.c_str());
-        SetDialogLabelTextAndRedrawA(hWnd, IDC_CODEPAGELABEL, chunkLabel.c_str());
+        SetDialogLabelTextAndRedrawU8(hWnd, IDC_SYSTEMLABEL, methodLabel.c_str());
+        SetDialogLabelTextAndRedrawU8(hWnd, IDC_CODEPAGELABEL, chunkLabel.c_str());
         if (dlgCtx && !dlgCtx->defaultPasswordLabel.empty())
             SetDialogLabelTextAndRedraw(hWnd, IDC_PASSLABEL, dlgCtx->defaultPasswordLabel.c_str());
         const std::wstring shellBtn = LoadResStringW(IDS_BUTTON_SHELL);
@@ -1266,9 +1259,9 @@ static void RebuildSystemAndEncodingCombos(HWND hWnd, ConnectDialogContext* dlgC
 
     if (dlgCtx) {
         if (!dlgCtx->defaultSystemLabel.empty())
-            SetDialogLabelTextAndRedrawA(hWnd, IDC_SYSTEMLABEL, dlgCtx->defaultSystemLabel.c_str());
+            SetDialogLabelTextAndRedrawU8(hWnd, IDC_SYSTEMLABEL, dlgCtx->defaultSystemLabel.c_str());
         if (!dlgCtx->defaultEncodingLabel.empty())
-            SetDialogLabelTextAndRedrawA(hWnd, IDC_CODEPAGELABEL, dlgCtx->defaultEncodingLabel.c_str());
+            SetDialogLabelTextAndRedrawU8(hWnd, IDC_CODEPAGELABEL, dlgCtx->defaultEncodingLabel.c_str());
         if (!dlgCtx->defaultPasswordLabel.empty())
             SetDialogLabelTextAndRedraw(hWnd, IDC_PASSLABEL, dlgCtx->defaultPasswordLabel.c_str());
     }
@@ -1356,12 +1349,12 @@ static INT_PTR ShowLocalizedDialogBoxParam(int dialogId, HWND parent, DLGPROC dl
             if (hglob) {
                 const DLGTEMPLATE* tpl = static_cast<const DLGTEMPLATE*>(LockResource(hglob));
                 if (tpl) {
-                    return DialogBoxIndirectParam(hinst, tpl, parent, dlgProc, dlgParam);
+                    return DialogBoxIndirectParamW(hinst, tpl, parent, dlgProc, dlgParam);
                 }
             }
         }
     }
-    return DialogBoxParam(hinst, MAKEINTRESOURCE(dialogId), parent, dlgProc, dlgParam);
+    return DialogBoxParamW(hinst, MAKEINTRESOURCEW(dialogId), parent, dlgProc, dlgParam);
 }
 
 static ProxyDialogContext* GetProxyDialogContext(HWND hWnd)
@@ -1439,7 +1432,7 @@ static void UpdateCertSectionState(HWND hWnd)
 
     // Without Pageant: pub key only needed when priv key is NOT a .ppk
     std::array<char, MAX_PATH> privKeyPath{};
-    GetDlgItemText(hWnd, IDC_PRIVKEY, privKeyPath.data(), static_cast<int>(privKeyPath.size() - 1));
+    GetDlgItemTextI(hWnd, IDC_PRIVKEY, privKeyPath.data(), static_cast<int>(privKeyPath.size() - 1));
     const bool pubKeyNeeded = !IsPpkPath(privKeyPath.data());
     EnableWindow(GetDlgItem(hWnd, IDC_STATICPUB), pubKeyNeeded ? TRUE : FALSE);
     EnableWindow(GetDlgItem(hWnd, IDC_PUBKEY),    pubKeyNeeded ? TRUE : FALSE);
@@ -1620,7 +1613,7 @@ static void TrimSessionName(char* s) noexcept
 // editing a session under someone else's name.
 static void SetSessionNameField(HWND hWnd, LPCSTR currentSession)
 {
-    SetDlgItemText(hWnd, IDC_SESSIONNAME, currentSession ? currentSession : "");
+    SetDlgItemTextI(hWnd, IDC_SESSIONNAME, currentSession ? currentSession : "");
 }
 
 // Populate the jump-host session-picker dropdown. First entry is "(manual)":
@@ -1662,7 +1655,7 @@ static std::string ReadJumpSessionRefFromDialog(HWND hWnd)
 
     std::wstring suffixW = LoadResStringW(IDS_JUMP_SESSION_MISSING_SUFFIX);
     if (suffixW.empty()) suffixW = L" (missing)";
-    const std::wstring prefixW = unicode_util::narrow_to_wide(kJumpMissingMarkerPrefix);
+    const std::wstring prefixW = unicode_util::internal_to_wide(kJumpMissingMarkerPrefix);
     const bool isMissingMarker =
         sW.rfind(prefixW, 0) == 0 &&
         sW.size() >= suffixW.size() &&
@@ -1670,15 +1663,13 @@ static std::string ReadJumpSessionRefFromDialog(HWND hWnd)
     if (isMissingMarker)
         return {};
 
-    return unicode_util::wide_to_narrow(sW);
+    return unicode_util::wide_to_internal(sW);
 }
 
 static void FillJumpSessionCombo(HWND hWnd, LPCSTR currentSessionName, LPCSTR currentRef)
 {
     // Wide throughout: translations arrive as UTF-8 from the .lng files,
-    // and the ANSI combobox messages would render those bytes through the
-    // system codepage. Session names come from the INI as ANSI, so they
-    // convert with CP_ACP while the translated entries convert as UTF-8.
+    // session names are internal strings.
     SendDlgItemMessageW(hWnd, IDC_JUMP_SESSION_PICK, CB_RESETCONTENT, 0, 0);
     const std::wstring noneTextW = LoadResStringW(IDS_JUMP_SESSION_NONE);
     SendDlgItemMessageW(hWnd, IDC_JUMP_SESSION_PICK, CB_ADDSTRING, 0,
@@ -1692,7 +1683,7 @@ static void FillJumpSessionCombo(HWND hWnd, LPCSTR currentSessionName, LPCSTR cu
         const bool isSelf  = currentSessionName && currentSessionName[0] &&
                              _stricmp(name.data(), currentSessionName) == 0;
         if (!isQuick && !isSelf) {
-            const std::wstring nameW = unicode_util::narrow_to_wide(name.data());
+            const std::wstring nameW = unicode_util::internal_to_wide(name.data());
             SendDlgItemMessageW(hWnd, IDC_JUMP_SESSION_PICK, CB_ADDSTRING, 0,
                                 (LPARAM)nameW.c_str());
             if (currentRef && currentRef[0] &&
@@ -1710,14 +1701,14 @@ static void FillJumpSessionCombo(HWND hWnd, LPCSTR currentSessionName, LPCSTR cu
         std::wstring suffixW = LoadResStringW(IDS_JUMP_SESSION_MISSING_SUFFIX);
         if (suffixW.empty()) suffixW = L" (missing)";
         const std::wstring markerW =
-            unicode_util::narrow_to_wide(kJumpMissingMarkerPrefix) +
-            unicode_util::narrow_to_wide(currentRef) + suffixW;
+            unicode_util::internal_to_wide(kJumpMissingMarkerPrefix) +
+            unicode_util::internal_to_wide(currentRef) + suffixW;
         SendDlgItemMessageW(hWnd, IDC_JUMP_SESSION_PICK, CB_ADDSTRING, 0,
                             (LPARAM)markerW.c_str());
         SendDlgItemMessageW(hWnd, IDC_JUMP_SESSION_PICK, CB_SELECTSTRING, (WPARAM)-1,
                             (LPARAM)markerW.c_str());
     } else if (currentRef && currentRef[0]) {
-        const std::wstring refW = unicode_util::narrow_to_wide(currentRef);
+        const std::wstring refW = unicode_util::internal_to_wide(currentRef);
         SendDlgItemMessageW(hWnd, IDC_JUMP_SESSION_PICK, CB_SELECTSTRING, (WPARAM)-1,
                             (LPARAM)refW.c_str());
     } else {
@@ -1770,8 +1761,8 @@ INT_PTR WINAPI ProxyDlgProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lPara
         EnableWindow(GetDlgItem(hWnd, IDC_PROXYSERVER), showProxySettings);
         EnableWindow(GetDlgItem(hWnd, IDC_PROXYUSERNAME), showProxySettings);
         EnableWindow(GetDlgItem(hWnd, IDC_PROXYPASSWORD), showProxySettings);
-        SetDlgItemText(hWnd, IDC_PROXYSERVER, ConnectData.proxyserver);
-        SetDlgItemText(hWnd, IDC_PROXYUSERNAME, ConnectData.proxyuser);
+        SetDlgItemTextI(hWnd, IDC_PROXYSERVER, ConnectData.proxyserver);
+        SetDlgItemTextI(hWnd, IDC_PROXYUSERNAME, ConnectData.proxyuser);
 
         if (ConnectData.proxypassword == "\001" && CryptProc) {
             std::array<char, 64> proxyentry{};
@@ -1785,7 +1776,7 @@ INT_PTR WINAPI ProxyDlgProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lPara
             std::array<char, MAX_PATH> proxyPassword{};
             if (CryptProc(PluginNumber, CryptoNumber, FS_CRYPT_LOAD_PASSWORD_NO_UI, proxyentry.data(), proxyPassword.data(), static_cast<int>(proxyPassword.size() - 1)) == FS_FILE_OK) {
                 ConnectData.proxypassword = proxyPassword.data();
-                SetDlgItemText(hWnd, IDC_PROXYPASSWORD, ConnectData.proxypassword);
+                SetDlgItemTextI(hWnd, IDC_PROXYPASSWORD, ConnectData.proxypassword);
                 CheckDlgButton(hWnd, IDC_CRYPTPASS, BST_CHECKED);
             } else {
                 ShowWindow(GetDlgItem(hWnd, IDC_PROXYPASSWORD), SW_HIDE);
@@ -1793,7 +1784,7 @@ INT_PTR WINAPI ProxyDlgProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lPara
                 ShowWindow(GetDlgItem(hWnd, IDC_EDITPASS), SW_SHOW);
             }
         } else {
-            SetDlgItemText(hWnd, IDC_PROXYPASSWORD, ConnectData.proxypassword);
+            SetDlgItemTextI(hWnd, IDC_PROXYPASSWORD, ConnectData.proxypassword);
             if (!CryptProc)
                 EnableWindow(GetDlgItem(hWnd, IDC_CRYPTPASS), false);
             else if (ConnectData.proxypassword.empty() && CryptCheckPass)
@@ -1831,9 +1822,9 @@ INT_PTR WINAPI ProxyDlgProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lPara
             else if (IsDlgButtonChecked(hWnd, IDC_SOCKS5PROXY))
                 ConnectData.proxytype = sftp::Proxy::socks5;
 
-            GetDlgItemText(hWnd, IDC_PROXYSERVER, ConnectData.proxyserver);
-            GetDlgItemText(hWnd, IDC_PROXYUSERNAME, ConnectData.proxyuser);
-            GetDlgItemText(hWnd, IDC_PROXYPASSWORD, ConnectData.proxypassword);
+            GetDlgItemTextI(hWnd, IDC_PROXYSERVER, ConnectData.proxyserver);
+            GetDlgItemTextI(hWnd, IDC_PROXYUSERNAME, ConnectData.proxyuser);
+            GetDlgItemTextI(hWnd, IDC_PROXYPASSWORD, ConnectData.proxypassword);
 
             std::array<char, 64> proxyentry{};
             if (ctx->proxynr > 1)
@@ -1914,9 +1905,9 @@ INT_PTR WINAPI ProxyDlgProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lPara
             err = CryptProc(PluginNumber, CryptoNumber, FS_CRYPT_LOAD_PASSWORD, proxyentry.data(), proxyPassword.data(), static_cast<int>(proxyPassword.size() - 1));
             if (err == FS_FILE_OK) {
                 ConnectData.proxypassword = proxyPassword.data();
-                SetDlgItemText(hWnd, IDC_PROXYPASSWORD, ConnectData.proxypassword);
+                SetDlgItemTextI(hWnd, IDC_PROXYPASSWORD, ConnectData.proxypassword);
             } else if (err == FS_FILE_READERROR) {         // No password stored.
-                SetDlgItemText(hWnd, IDC_PROXYPASSWORD, "");
+                SetDlgItemTextI(hWnd, IDC_PROXYPASSWORD, "");
             } else {
                 doshow = false;
             }
@@ -2323,12 +2314,13 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
     }
 
     {
-        std::array<char, 128> labelBuf{};
-        GetDlgItemText(m_hWnd, IDC_SYSTEMLABEL, labelBuf.data(), static_cast<int>(labelBuf.size() - 1));
-        m_ctx->defaultSystemLabel = labelBuf.data();
-        labelBuf.fill('\0');
-        GetDlgItemText(m_hWnd, IDC_CODEPAGELABEL, labelBuf.data(), static_cast<int>(labelBuf.size() - 1));
-        m_ctx->defaultEncodingLabel = labelBuf.data();
+        // Kept as UTF-8, like the labels that replace them.
+        std::array<wchar_t, 128> labelBuf{};
+        GetDlgItemTextW(m_hWnd, IDC_SYSTEMLABEL, labelBuf.data(), static_cast<int>(labelBuf.size() - 1));
+        m_ctx->defaultSystemLabel = unicode_util::wstring_to_utf8(labelBuf.data());
+        labelBuf.fill(L'\0');
+        GetDlgItemTextW(m_hWnd, IDC_CODEPAGELABEL, labelBuf.data(), static_cast<int>(labelBuf.size() - 1));
+        m_ctx->defaultEncodingLabel = unicode_util::wstring_to_utf8(labelBuf.data());
     }
     {
         std::array<WCHAR, 128> wlabelBuf{};
@@ -2337,7 +2329,7 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
     }
 
     if (strcmp(dlgDisplayName, s_quickconnect) != 0) {
-        SetDlgItemText(m_hWnd, IDC_CONNECTTO, m_settings->server);
+        SetDlgItemTextI(m_hWnd, IDC_CONNECTTO, m_settings->server);
         if (!m_settings->server.empty())
             serverfieldchangedbyuser = true;
 
@@ -2347,7 +2339,7 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
         default: CheckRadioButton(m_hWnd, IDC_PROTOAUTO, IDC_PROTOV6, IDC_PROTOAUTO); break;
         }
 
-        SetDlgItemText(m_hWnd, IDC_USERNAME, m_settings->user);
+        SetDlgItemTextI(m_hWnd, IDC_USERNAME, m_settings->user);
 
         if (m_settings->useagent)
             CheckDlgButton(m_hWnd, IDC_USEAGENT, BST_CHECKED);
@@ -2375,7 +2367,7 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
             if (CryptProc(PluginNumber, CryptoNumber, FS_CRYPT_LOAD_PASSWORD_NO_UI, dlgDisplayName,
                           sessionPassword.data(), static_cast<int>(sessionPassword.size() - 1)) == FS_FILE_OK) {
                 m_settings->password = sessionPassword.data();
-                SetDlgItemText(m_hWnd, IDC_PASSWORD, m_settings->password);
+                SetDlgItemTextI(m_hWnd, IDC_PASSWORD, m_settings->password);
                 CheckDlgButton(m_hWnd, IDC_CRYPTPASS, BST_CHECKED);
             } else {
                 ShowWindow(GetDlgItem(m_hWnd, IDC_PASSWORD), SW_HIDE);
@@ -2383,7 +2375,7 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
                 ShowWindow(GetDlgItem(m_hWnd, IDC_EDITPASS), SW_SHOW);
             }
         } else {
-            SetDlgItemText(m_hWnd, IDC_PASSWORD, m_settings->password);
+            SetDlgItemTextI(m_hWnd, IDC_PASSWORD, m_settings->password);
             if (!CryptProc)
                 EnableWindow(GetDlgItem(m_hWnd, IDC_CRYPTPASS), false);
             else {
@@ -2397,19 +2389,19 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
             }
         }
 
-        SetDlgItemText(m_hWnd, IDC_PUBKEY, m_settings->pubkeyfile);
-        SetDlgItemText(m_hWnd, IDC_PRIVKEY, m_settings->privkeyfile);
+        SetDlgItemTextI(m_hWnd, IDC_PUBKEY, m_settings->pubkeyfile);
+        SetDlgItemTextI(m_hWnd, IDC_PRIVKEY, m_settings->privkeyfile);
 
         _itoa_s(m_settings->filemod, modbuf.data(), modbuf.size(), 8);
-        SetDlgItemText(m_hWnd, IDC_FILEMOD, modbuf.data());
+        SetDlgItemTextI(m_hWnd, IDC_FILEMOD, modbuf.data());
         _itoa_s(m_settings->dirmod, modbuf.data(), modbuf.size(), 8);
-        SetDlgItemText(m_hWnd, IDC_DIRMOD, modbuf.data());
+        SetDlgItemTextI(m_hWnd, IDC_DIRMOD, modbuf.data());
 
         fillProxyCombobox(m_hWnd, m_settings->proxynr, dlgIniFileName);
     } else {
         CheckRadioButton(m_hWnd, IDC_PROTOAUTO, IDC_PROTOV6, IDC_PROTOAUTO);
-        SetDlgItemText(m_hWnd, IDC_FILEMOD, "644");
-        SetDlgItemText(m_hWnd, IDC_DIRMOD, "755");
+        SetDlgItemTextI(m_hWnd, IDC_FILEMOD, "644");
+        SetDlgItemTextI(m_hWnd, IDC_DIRMOD, "755");
         CheckDlgButton(m_hWnd, IDC_SHELLTRANSFER, BST_UNCHECKED);
         SendDlgItemMessage(m_hWnd, IDC_TRANSFERMODE, CB_SETCURSEL, 0, 0);
         fillProxyCombobox(m_hWnd, 0, dlgIniFileName);
@@ -2590,9 +2582,9 @@ void ConnectionDialog::OnOk()
     std::array<char, MAX_PATH> strbuf{};
     int cp = 0, cbline = 0;
 
-    GetDlgItemText(m_hWnd, IDC_CONNECTTO, m_settings->server);
-    GetDlgItemText(m_hWnd, IDC_USERNAME,  m_settings->user);
-    GetDlgItemText(m_hWnd, IDC_PASSWORD,  m_settings->password);
+    GetDlgItemTextI(m_hWnd, IDC_CONNECTTO, m_settings->server);
+    GetDlgItemTextI(m_hWnd, IDC_USERNAME,  m_settings->user);
+    GetDlgItemTextI(m_hWnd, IDC_PASSWORD,  m_settings->password);
     if (IsDlgButtonChecked(m_hWnd, IDC_PROTOV4))
         m_settings->protocoltype = 1;
     else if (IsDlgButtonChecked(m_hWnd, IDC_PROTOV6))
@@ -2621,8 +2613,8 @@ void ConnectionDialog::OnOk()
         m_settings->lan_pair_timeout_min = ReadLanTimeoutMinutes(m_hWnd);
     }
 
-    GetDlgItemText(m_hWnd, IDC_PUBKEY, m_settings->pubkeyfile);
-    GetDlgItemText(m_hWnd, IDC_PRIVKEY, m_settings->privkeyfile);
+    GetDlgItemTextI(m_hWnd, IDC_PUBKEY, m_settings->pubkeyfile);
+    GetDlgItemTextI(m_hWnd, IDC_PRIVKEY, m_settings->privkeyfile);
     m_settings->useagent      = IsDlgButtonChecked(m_hWnd, IDC_USEAGENT)     == BST_CHECKED;
     m_settings->use_jump_host = IsDlgButtonChecked(m_hWnd, IDC_JUMP_ENABLE)  == BST_CHECKED;
     // Read jump_session_ref from the picker rather than trusting the
@@ -2670,9 +2662,9 @@ void ConnectionDialog::OnOk()
         }
     }
 
-    GetDlgItemText(m_hWnd, IDC_FILEMOD, modbuf.data(), modbuf.size() - 1);
+    GetDlgItemTextI(m_hWnd, IDC_FILEMOD, modbuf.data(), modbuf.size() - 1);
     m_settings->filemod = modbuf[0] == 0 ? 0644 : strtol(modbuf.data(), nullptr, 8);
-    GetDlgItemText(m_hWnd, IDC_DIRMOD, modbuf.data(), modbuf.size() - 1);
+    GetDlgItemTextI(m_hWnd, IDC_DIRMOD, modbuf.data(), modbuf.size() - 1);
     m_settings->dirmod  = modbuf[0] == 0 ? 0755 : strtol(modbuf.data(), nullptr, 8);
 
     m_settings->proxynr = GetProxyNrFromCombo(m_hWnd);
@@ -2682,7 +2674,7 @@ void ConnectionDialog::OnOk()
     targetProfile[0] = 0;
     enteredProfile[0] = 0;
 
-    GetDlgItemText(m_hWnd, IDC_SESSIONNAME, enteredProfile.data(), enteredProfile.size() - 1);
+    GetDlgItemTextI(m_hWnd, IDC_SESSIONNAME, enteredProfile.data(), enteredProfile.size() - 1);
     TrimSessionName(enteredProfile.data());
     if (enteredProfile[0] && _stricmp(enteredProfile.data(), s_quickconnect) != 0) {
         strlcpy(targetProfile.data(), enteredProfile.data(), targetProfile.size() - 1);
@@ -2998,9 +2990,9 @@ void ConnectionDialog::OnEditPass()
                         static_cast<int>(sessionPassword.size() - 1));
     if (err == FS_FILE_OK) {
         m_settings->password = sessionPassword.data();
-        SetDlgItemText(m_hWnd, IDC_PASSWORD, m_settings->password);
+        SetDlgItemTextI(m_hWnd, IDC_PASSWORD, m_settings->password);
     } else if (err == FS_FILE_READERROR) {
-        SetDlgItemText(m_hWnd, IDC_PASSWORD, std::string{});
+        SetDlgItemTextI(m_hWnd, IDC_PASSWORD, std::string{});
     } else {
         doshow = false;
     }
