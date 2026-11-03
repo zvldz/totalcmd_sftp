@@ -173,6 +173,7 @@
     <ClCompile Include="..\src\core\KittyAdapter.cpp" />
     <ClCompile Include="..\src\core\ImportSourceRegistry.cpp" />
     <ClCompile Include="..\src\core\ImportIoUtil.cpp" />
+    <ClCompile Include="..\src\core\IniFile.cpp" />
     <ClCompile Include="..\src\core\VirtualSessionRegistry.cpp" />
     <ClCompile Include="..\src\core\PluginEntryPoints.cpp" />
     <ClCompile Include="..\src\core\PluginEntryPointsFind.cpp" />
@@ -225,6 +226,7 @@
     <ClInclude Include="..\src\include\KittyAdapter.h" />
     <ClInclude Include="..\src\include\ImportSourceRegistry.h" />
     <ClInclude Include="..\src\include\ImportIoUtil.h" />
+    <ClInclude Include="..\src\include\IniFile.h" />
     <ClInclude Include="..\src\include\VirtualSessionRegistry.h" />
     <ClInclude Include="..\src\include\BuildInfo.h" />
     <ClInclude Include="..\src\include\PluginEntryPoints.h" />
