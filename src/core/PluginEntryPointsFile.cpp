@@ -179,19 +179,16 @@ static bool CopyIniSectionAcrossFiles(LPCSTR srcSection, LPCSTR srcIni,
 static void ShowDependencyRefusal(const sftp::SessionDependency& dep)
 {
     std::string text = LngStrU8(IDS_IMPORT_BLOCKED,
-        "This session reaches its host through something that was not imported "
-        "with it: a proxy, a jump host or a tunnel. Connecting now would go "
-        "straight to the target instead, past the very thing that was put in "
-        "the way, so it is refused.");
+        "This session goes through a proxy, jump host or tunnel that was not "
+        "imported. A direct connection would bypass it, so it is refused.");
     if (!dep.detail.empty())
-        text.append("\r\n\r\n").append(dep.detail);
+        text.append("\r\n\r\n").append(unicode_util::internal_to_utf8(dep.detail));
     // Only connecting refuses such a proxy: copying the session creates the
     // record it needs, which a plain connect has no business doing.
     if (dep.transferable())
         text.append("\r\n\r\n").append(LngStrU8(IDS_IMPORT_BLOCKED_COPY,
-            "The proxy is one the plugin can rebuild: copy the session into "
-            "your own list with F5 and the proxy comes with it. Its password, "
-            "if it needs one, is asked for on the first connect."));
+            "Copy the session with F5: the proxy is copied with it. Its "
+            "password, if any, is asked for on connect."));
 
     const std::wstring message = unicode_util::utf8_to_wstring(text);
     const std::wstring title   = unicode_util::utf8_to_wstring(
@@ -1190,9 +1187,8 @@ static int CopyBetweenSessions(LPCWSTR OldName, LPCWSTR NewName,
     if (SameRemoteFile(src, srcRel, dst, dstRel)) {
         SFTP_LOG("ENTRY", "CopyBetweenSessions refused: same file '%S'", srcRel.c_str());
         ShowPluginMessage(IDS_ERR_SAME_FILE,
-            "Source and destination are the same file: both sessions point at "
-            "the same account on the same server, at the same path. Copying a "
-            "file onto itself would cut it short, so this is refused.",
+            "Source and destination are the same file on the same server. "
+            "Copying a file onto itself would truncate it, so it is refused.",
             IDS_TITLE_SFTP, "SFTP");
         return FS_FILE_USERABORT;
     }
