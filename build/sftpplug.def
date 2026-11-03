@@ -26,10 +26,13 @@ EXPORTS
 	FsSetTime
 	FsSetTimeW
 	FsStatusInfo
+	FsStatusInfoW
 	FsGetDefRootName
 	FsSetDefaultParams
 	FsDisconnect
+	FsDisconnectW
 	FsExtractCustomIcon
+	FsExtractCustomIconW
 	FsGetBackgroundFlags
 	FsServerSupportsChecksums
 	FsServerSupportsChecksumsW

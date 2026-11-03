@@ -592,16 +592,21 @@ void WINAPI FsSetCryptCallback(tCryptProc pCryptProc, int CryptoNr, int Flags)
     });
 }
 
-BOOL WINAPI FsDisconnect(LPCSTR DisconnectRoot)
+// An ANSI path from TC, in the system codepage, as an internal string.
+static std::string AcpToInternal(LPCSTR s)
 {
-    sftp::DllExceptionBarrier _barrier;
+    return s ? unicode_util::wide_to_internal(unicode_util::narrow_to_wide(s, CP_ACP)) : std::string();
+}
+
+// Body of FsDisconnectW / FsDisconnect; `root` is an internal string.
+static BOOL DisconnectPath(const std::string& root)
+{
     SFTP_LOG("DISCONNECT", "FsDisconnect ENTRY path='%s' tid=%lu",
-             DisconnectRoot ? DisconnectRoot : "(null)",
-             GetCurrentThreadId());
-    return sftp::dll_invoke(_barrier, FALSE, [&]() -> BOOL {
+             root.c_str(), GetCurrentThreadId());
+    {
         std::string displayName;
         displayName.resize(wdirtypemax);
-        GetDisplayNameFromPath(DisconnectRoot, displayName.data(), displayName.size() - 1);
+        GetDisplayNameFromPath(root.c_str(), displayName.data(), displayName.size() - 1);
         displayName.resize(strlen(displayName.data()));
         SFTP_LOG("DISCONNECT", "  displayName='%s'", displayName.c_str());
 
@@ -638,19 +643,36 @@ BOOL WINAPI FsDisconnect(LPCSTR DisconnectRoot)
         if (sftp::IsVirtualSessionAlias(displayName.data()))
             sftp::UnregisterVirtualSession(displayName);
         return true;
-    });
+    }
 }
-// Status callbacks are handled through ANSI entry in current plugin ABI.
-void WINAPI FsStatusInfo(LPCSTR RemoteDir, int InfoStartEnd, int InfoOperation)
+
+BOOL WINAPI FsDisconnectW(LPCWSTR DisconnectRoot)
 {
     sftp::DllExceptionBarrier _barrier;
-    sftp::dll_invoke_void(_barrier, [&] {
+    return sftp::dll_invoke(_barrier, FALSE, [&]() -> BOOL {
+        return DisconnectPath(DisconnectRoot ? unicode_util::wide_to_internal(DisconnectRoot) : std::string());
+    });
+}
+
+BOOL WINAPI FsDisconnect(LPCSTR DisconnectRoot)
+{
+    sftp::DllExceptionBarrier _barrier;
+    return sftp::dll_invoke(_barrier, FALSE, [&]() -> BOOL {
+        return DisconnectPath(AcpToInternal(DisconnectRoot));
+    });
+}
+
+// Body of FsStatusInfoW / FsStatusInfo; `remoteDir` is an internal string.
+static void StatusInfo(const std::string& remoteDir, int InfoStartEnd, int InfoOperation)
+{
+    const char* RemoteDir = remoteDir.c_str();
+    {
         SFTP_LOG("STATUS", "FsStatusInfo op=%d %s dir='%s'",
                  InfoOperation,
                  InfoStartEnd == FS_STATUS_START ? "START" : "END",
-                 RemoteDir ? RemoteDir : "");
+                 RemoteDir);
 
-        if (strlen(RemoteDir) < 2)
+        if (remoteDir.size() < 2)
             if (InfoOperation == FS_STATUS_OP_DELETE || InfoOperation == FS_STATUS_OP_RENMOV_MULTI)
                 disablereading = (InfoStartEnd == FS_STATUS_START) ? true : false;
 
@@ -664,7 +686,7 @@ void WINAPI FsStatusInfo(LPCSTR RemoteDir, int InfoStartEnd, int InfoOperation)
         // must auto-connect normally.
         const bool isPutOp = InfoOperation == FS_STATUS_OP_PUT_SINGLE ||
                              InfoOperation == FS_STATUS_OP_PUT_MULTI;
-        const bool destInImports = RemoteDir &&
+        const bool destInImports =
             _strnicmp(RemoteDir, "\\[Imports]\\", 11) == 0;
         if (InfoOperation == FS_STATUS_OP_RENMOV_MULTI ||
             (isPutOp && destInImports))
@@ -728,7 +750,7 @@ void WINAPI FsStatusInfo(LPCSTR RemoteDir, int InfoStartEnd, int InfoOperation)
                     if (rc != SFTP_OK && rc != SFTP_ABORT)
                         ShowStatusId(IDS_LOG_TAR_UPLOAD_FAIL, nullptr, false);
                 }
-                FsDisconnect(RemoteDir);
+                DisconnectPath(remoteDir);
                 return;
             }
             std::array<char, MAX_PATH> displayName{};
@@ -756,6 +778,23 @@ void WINAPI FsStatusInfo(LPCSTR RemoteDir, int InfoStartEnd, int InfoOperation)
             if (serverid)
                 SetServerIdForName(displayName.data(), static_cast<SERVERID>(serverid));
         }
+    }
+}
+
+void WINAPI FsStatusInfoW(LPCWSTR RemoteDir, int InfoStartEnd, int InfoOperation)
+{
+    sftp::DllExceptionBarrier _barrier;
+    sftp::dll_invoke_void(_barrier, [&] {
+        StatusInfo(RemoteDir ? unicode_util::wide_to_internal(RemoteDir) : std::string(),
+                   InfoStartEnd, InfoOperation);
+    });
+}
+
+void WINAPI FsStatusInfo(LPCSTR RemoteDir, int InfoStartEnd, int InfoOperation)
+{
+    sftp::DllExceptionBarrier _barrier;
+    sftp::dll_invoke_void(_barrier, [&] {
+        StatusInfo(AcpToInternal(RemoteDir), InfoStartEnd, InfoOperation);
     });
 }
 
@@ -831,13 +870,10 @@ void WINAPI FsSetDefaultParams(FsDefaultParamStruct * dps)
 // Imports leaf, or when no Imports rule matched — the caller then handles
 // regular saved-session rendering. Returns FS_ICON_EXTRACTED or
 // FS_ICON_EXTRACTED_DESTROY when a specific icon was selected.
-static int TryExtractImportIcon(LPCSTR RemoteName, int ExtractFlags, HICON* TheIcon)
+static int TryExtractImportIcon(LPCWSTR RemoteName, int ExtractFlags, HICON* TheIcon)
 {
-    const std::wstring w = unicode_util::narrow_to_wide(RemoteName);
-    if (w.empty()) return FS_ICON_USEDEFAULT;
-
     std::string sourceId, subPath;
-    if (ClassifyImportsPath(w.c_str(), &sourceId, &subPath) !=
+    if (ClassifyImportsPath(RemoteName, &sourceId, &subPath) !=
         ImportsPathKind::SourceSubPath)
     {
         return FS_ICON_USEDEFAULT;
@@ -897,17 +933,15 @@ static int TryExtractImportIcon(LPCSTR RemoteName, int ExtractFlags, HICON* TheI
     return FS_ICON_USEDEFAULT;
 }
 
-int WINAPI FsExtractCustomIcon(LPCSTR RemoteName, int ExtractFlags, HICON * TheIcon)
+// Body of FsExtractCustomIconW / FsExtractCustomIcon.
+static int ExtractCustomIcon(LPCWSTR RemoteName, int ExtractFlags, HICON* TheIcon)
 {
-    sftp::DllExceptionBarrier _barrier;
-    return sftp::dll_invoke(_barrier, FS_ICON_USEDEFAULT, [&]() -> int {
-        if (!RemoteName || strlen(RemoteName) <= 1)
+    {
+        if (!RemoteName || wcslen(RemoteName) <= 1)
             return FS_ICON_USEDEFAULT;
 
         // Import-magic-folder pseudo entries and virtual session rows use
-        // their own icon set (Windows stock glyphs + our padlock). The
-        // WFX icon API is ANSI-only, so the widening happens inside the
-        // helper.
+        // their own icon set (Windows stock glyphs + our padlock).
         const int importResult = TryExtractImportIcon(RemoteName, ExtractFlags, TheIcon);
         if (importResult != FS_ICON_USEDEFAULT)
             return importResult;
@@ -916,7 +950,7 @@ int WINAPI FsExtractCustomIcon(LPCSTR RemoteName, int ExtractFlags, HICON * TheI
         // at the plugin root or nested inside a folder. Anything else
         // (folder grouping, file inside an active session) keeps TC's
         // default rendering.
-        const PathResolution r = ResolvePathKind(RemoteName);
+        const PathResolution r = ResolvePathKindW(RemoteName);
         if (r.kind != PathKind::SessionLeaf)
             return FS_ICON_USEDEFAULT;
         if (_stricmp(r.displayName.c_str(), s_f7newconnection) == 0)
@@ -930,6 +964,25 @@ int WINAPI FsExtractCustomIcon(LPCSTR RemoteName, int ExtractFlags, HICON * TheI
             : MAKEINTRESOURCEA(sm ? IDI_ICON1SMALL : IDI_ICON1);
         *TheIcon = LoadIconA(hinst, lpIconName);
         return FS_ICON_EXTRACTED;
+    }
+}
+
+int WINAPI FsExtractCustomIconW(LPCWSTR RemoteName, int ExtractFlags, HICON * TheIcon)
+{
+    sftp::DllExceptionBarrier _barrier;
+    return sftp::dll_invoke(_barrier, FS_ICON_USEDEFAULT, [&]() -> int {
+        return ExtractCustomIcon(RemoteName, ExtractFlags, TheIcon);
+    });
+}
+
+int WINAPI FsExtractCustomIcon(LPCSTR RemoteName, int ExtractFlags, HICON * TheIcon)
+{
+    sftp::DllExceptionBarrier _barrier;
+    return sftp::dll_invoke(_barrier, FS_ICON_USEDEFAULT, [&]() -> int {
+        if (!RemoteName)
+            return FS_ICON_USEDEFAULT;
+        const std::wstring w = unicode_util::narrow_to_wide(RemoteName, CP_ACP);
+        return ExtractCustomIcon(w.c_str(), ExtractFlags, TheIcon);
     });
 }
 
