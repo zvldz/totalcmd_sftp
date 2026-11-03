@@ -8,6 +8,18 @@ detail.
 This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 `10.x` line to make divergence visible in TC's plugin manager.
 
+## 10.0.2.3 — unreleased
+
+### Changes
+
+- **`sftpplug.ini` and the import cache are stored in UTF-8.** The plugin
+  reads and writes its own INI files itself instead of through the Windows
+  INI functions. An existing file in the system codepage is read as before
+  and saved as UTF-8 on the first change. Older plugin versions still read
+  the file, but show non-English characters in it garbled. A session file
+  exported with F5 and copied back in is now read with its non-English
+  characters intact.
+
 ## 10.0.2.2 — 2026-11-03
 
 ### Features
