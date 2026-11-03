@@ -194,6 +194,23 @@ namespace unicode_util {
 // Helper for WIN32_FIND_DATA conversion - returns wide version
 [[nodiscard]] WIN32_FIND_DATAW convert_find_data_to_wide(const WIN32_FIND_DATAA& findA);
 
+// Codepage of the plugin's internal narrow strings: session names and folder
+// prefixes, the TC paths that carry them, values of the plugin's own INI
+// files. Every conversion between those and wide text goes through the two
+// functions below. File system paths handed to ANSI WinAPI calls are not
+// internal strings and keep CP_ACP.
+inline constexpr int kInternalCodepage = CP_ACP;
+
+[[nodiscard]] inline std::wstring internal_to_wide(std::string_view s)
+{
+    return narrow_to_wide(s, kInternalCodepage);
+}
+
+[[nodiscard]] inline std::string wide_to_internal(std::wstring_view w)
+{
+    return wide_to_narrow(w, kInternalCodepage);
+}
+
 } // namespace unicode_util
 
 // Legacy global alias kept for older plugin code paths.

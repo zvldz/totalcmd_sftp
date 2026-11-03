@@ -7,6 +7,7 @@
 #include "PluginEntryPoints.h"
 #include "SftpClient.h"
 #include "IniFile.h"
+#include "UnicodeHelpers.h"
 #include <algorithm>
 #include <string>
 #include <vector>
@@ -157,6 +158,7 @@ bool SetServerIdForName(LPCSTR name, SERVERID id) noexcept
     return success;
 }
 
+// INI file paths: a file system path from TC, CP_ACP, not an internal string.
 static void AnsiToWide(LPCSTR ansi, wchar_t* wide, int maxlen) noexcept
 {
     if (!wide || maxlen <= 0)
@@ -179,15 +181,14 @@ int LoadServersFromIniW(LPCWSTR inifilename, LPCSTR quickconnectname) noexcept
         
     wchar_t* wp = serverlist.data();
     while (wp[0]) {
-        std::array<char, MAX_PATH> sectionA{};
-        WideCharToMultiByte(CP_ACP, 0, wp, -1, sectionA.data(), static_cast<int>(sectionA.size()), nullptr, nullptr);
+        const std::string section = unicode_util::wide_to_internal(wp);
         
         std::array<wchar_t, 512> serverval{};
         IniGetString(wp, L"server", L"", serverval.data(), static_cast<DWORD>(serverval.size()), inifilename);
         const int transferMode = IniGetInt(wp, L"transfermode", 0, inifilename);
         
         if (serverval[0] || transferMode == 3) {
-            ini_servers.push_back(sectionA.data());
+            ini_servers.push_back(section);
         }
         wp += wcslen(wp) + 1;
     }
@@ -221,9 +222,8 @@ int LoadServersFromIniW(LPCWSTR inifilename, LPCSTR quickconnectname) noexcept
 
 bool DeleteServerFromIniW(LPCSTR servername, LPCWSTR inifilename) noexcept
 {
-    std::array<wchar_t, MAX_PATH> wsection{};
-    AnsiToWide(servername, wsection.data(), static_cast<int>(wsection.size()));
-    return IniWriteString(wsection.data(), nullptr, nullptr, inifilename) != 0;
+    const std::wstring wsection = unicode_util::internal_to_wide(servername ? servername : "");
+    return IniWriteString(wsection.c_str(), nullptr, nullptr, inifilename) != 0;
 }
 
 int CopyMoveServerInIniW(LPCSTR oldservername, LPCSTR newservername,
@@ -232,17 +232,15 @@ int CopyMoveServerInIniW(LPCSTR oldservername, LPCSTR newservername,
     if (_stricmp(oldservername, newservername) == 0)
         return FS_FILE_OK;
 
-    std::array<wchar_t, MAX_PATH> woldsect{};
-    std::array<wchar_t, MAX_PATH> wnewsect{};
-    AnsiToWide(oldservername, woldsect.data(), static_cast<int>(woldsect.size()));
-    AnsiToWide(newservername, wnewsect.data(), static_cast<int>(wnewsect.size()));
+    const std::wstring woldsect = unicode_util::internal_to_wide(oldservername);
+    const std::wstring wnewsect = unicode_util::internal_to_wide(newservername);
 
     std::array<wchar_t, 1024> captlist{};
-    IniGetString(woldsect.data(), nullptr, L"", captlist.data(), static_cast<DWORD>(captlist.size() - 1), inifilename);
+    IniGetString(woldsect.c_str(), nullptr, L"", captlist.data(), static_cast<DWORD>(captlist.size() - 1), inifilename);
     if (captlist[0]) {
         if (!OverWrite) {
             std::array<wchar_t, 100> testlist{};
-            IniGetString(wnewsect.data(), nullptr, L"", testlist.data(), static_cast<DWORD>(testlist.size() - 1), inifilename);
+            IniGetString(wnewsect.c_str(), nullptr, L"", testlist.data(), static_cast<DWORD>(testlist.size() - 1), inifilename);
             if (testlist[0])
                 return FS_FILE_EXISTS;
         }
@@ -252,8 +250,8 @@ int CopyMoveServerInIniW(LPCSTR oldservername, LPCSTR newservername,
         wchar_t* pcapt = captlist.data();
         while (pcapt[0]) {
             std::array<wchar_t, 1024> valuebuf{};
-            IniGetString(woldsect.data(), pcapt, L"", valuebuf.data(), static_cast<DWORD>(valuebuf.size() - 1), inifilename);
-            IniWriteString(wnewsect.data(), pcapt, valuebuf.data(), inifilename);
+            IniGetString(woldsect.c_str(), pcapt, L"", valuebuf.data(), static_cast<DWORD>(valuebuf.size() - 1), inifilename);
+            IniWriteString(wnewsect.c_str(), pcapt, valuebuf.data(), inifilename);
             pcapt += wcslen(pcapt) + 1;
         }
         if (Move)
@@ -432,13 +430,9 @@ PathResolution ResolvePathKindW(LPCWSTR path) noexcept
 {
     if (!path)
         return {};
-    const int needed = WideCharToMultiByte(CP_ACP, 0, path, -1,
-                                           nullptr, 0, nullptr, nullptr);
-    if (needed <= 1)
+    const std::string narrow = unicode_util::wide_to_internal(path);
+    if (narrow.empty())
         return {};
-    std::string narrow(static_cast<size_t>(needed - 1), '\0');
-    WideCharToMultiByte(CP_ACP, 0, path, -1,
-                        narrow.data(), needed, nullptr, nullptr);
     return ResolvePathKind(narrow.c_str());
 }
 
@@ -453,13 +447,9 @@ std::string PathToDisplayNameW(LPCWSTR path) noexcept
 {
     if (!path)
         return {};
-    const int needed = WideCharToMultiByte(CP_ACP, 0, path, -1,
-                                           nullptr, 0, nullptr, nullptr);
-    if (needed <= 1)
+    const std::string narrow = unicode_util::wide_to_internal(path);
+    if (narrow.empty())
         return {};
-    std::string narrow(static_cast<size_t>(needed - 1), '\0');
-    WideCharToMultiByte(CP_ACP, 0, path, -1,
-                        narrow.data(), needed, nullptr, nullptr);
     return NormaliseTcPath(narrow);
 }
 
