@@ -200,7 +200,7 @@ static void ApplyLangId(LANGID langId) noexcept
     } else {
         LoadStringW(hinst, IDS_F7NEW, s_f7newconnectionW.data(), static_cast<int>(s_f7newconnectionW.size()) - 1);
     }
-    walcopy(s_f7newconnection, s_f7newconnectionW.data(), countof(s_f7newconnection) - 1);
+    wilcopy(s_f7newconnection, s_f7newconnectionW.data(), countof(s_f7newconnection) - 1);
 
     const char* qcStr = LngGetString(IDS_QUICKCONNECT);
     if (qcStr) {
@@ -209,7 +209,7 @@ static void ApplyLangId(LANGID langId) noexcept
     } else {
         LoadStringW(hinst, IDS_QUICKCONNECT, s_quickconnectW.data(), static_cast<int>(s_quickconnectW.size()) - 1);
     }
-    walcopy(s_quickconnect, s_quickconnectW.data(), countof(s_quickconnect) - 1);
+    wilcopy(s_quickconnect, s_quickconnectW.data(), countof(s_quickconnect) - 1);
 }
 
 static LANGID LangNameToId(const wchar_t* name) noexcept
@@ -296,9 +296,9 @@ BOOL APIENTRY DllMain( HANDLE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
         // the whole DLL lifetime.
         sftp::InstallCrashHandler();
         LoadStringW(hinst, IDS_F7NEW, s_f7newconnectionW.data(), static_cast<int>(s_f7newconnectionW.size()) - 1);
-        walcopy(s_f7newconnection, s_f7newconnectionW.data(), countof(s_f7newconnection) - 1);
+        wilcopy(s_f7newconnection, s_f7newconnectionW.data(), countof(s_f7newconnection) - 1);
         LoadStringW(hinst, IDS_QUICKCONNECT, s_quickconnectW.data(), static_cast<int>(s_quickconnectW.size()) - 1);
-        walcopy(s_quickconnect, s_quickconnectW.data(), countof(s_quickconnect) - 1);
+        wilcopy(s_quickconnect, s_quickconnectW.data(), countof(s_quickconnect) - 1);
     }
     if (ul_reason_for_call == DLL_PROCESS_DETACH) {
         // Stop LAN services before CRT destroys global objects
@@ -361,38 +361,20 @@ void LogMsg(LPCSTR fmt, ...) noexcept
 namespace {
 thread_local const tConnectSettings* g_currentSession = nullptr;
 
-// Pick the user-recognisable identifier for the session.
+// Pick the user-recognisable identifier for the session, "[name] ".
 // Preference order: saved name (DisplayName) → server/host → empty.
-std::string SessionPrefixA(const tConnectSettings* cs)
-{
-    if (!cs) return {};
-    const std::string& name = !cs->DisplayName.empty() ? cs->DisplayName : cs->server;
-    if (name.empty()) return {};
-    std::string out;
-    out.reserve(name.size() + 3);
-    out.append("[").append(name).append("] ");
-    return out;
-}
-
 std::wstring SessionPrefixW(const tConnectSettings* cs)
 {
     if (!cs) return {};
     const std::string& name = !cs->DisplayName.empty() ? cs->DisplayName : cs->server;
     if (name.empty()) return {};
-    // Session names are typically ASCII but may carry UTF-8 if a user picked
-    // a non-Latin name. MultiByteToWideChar with CP_UTF8 covers both.
-    const int wlen = MultiByteToWideChar(CP_UTF8, 0, name.c_str(),
-                                         static_cast<int>(name.size()), nullptr, 0);
-    if (wlen <= 0) return {};
-    std::wstring w;
-    w.resize(static_cast<size_t>(wlen) + 3);
-    w[0] = L'[';
-    MultiByteToWideChar(CP_UTF8, 0, name.c_str(), static_cast<int>(name.size()),
-                        &w[1], wlen);
-    w[1 + wlen] = L']';
-    w[2 + wlen] = L' ';
-    w.resize(static_cast<size_t>(wlen) + 3);
-    return w;
+    return L"[" + unicode_util::internal_to_wide(name) + L"] ";
+}
+
+// The same for TC's ANSI log callback, which takes the system codepage.
+std::string SessionPrefixA(const tConnectSettings* cs)
+{
+    return unicode_util::wide_to_narrow(SessionPrefixW(cs), CP_ACP);
 }
 } // namespace
 
@@ -497,10 +479,8 @@ pConnectSettings GetServerIdAndRelativePathFromPathW(LPCWSTR Path, LPWSTR Relati
             GetServerIdFromName(r.displayName.c_str(), GetCurrentThreadId()));
     }
     if (serverid && !r.relative.empty()) {
-        std::array<wchar_t, wdirtypemax> wrel{};
-        MultiByteToWideChar(CP_ACP, 0, r.relative.c_str(), -1,
-                            wrel.data(), static_cast<int>(wrel.size()));
-        wcslcpy(RelativePath, wrel.data(), maxlen - 1);
+        const std::wstring wrel = unicode_util::internal_to_wide(r.relative);
+        wcslcpy(RelativePath, wrel.c_str(), maxlen - 1);
     } else {
         wcslcpy(RelativePath, L"\\", maxlen - 1);
     }
