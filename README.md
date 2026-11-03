@@ -710,9 +710,11 @@ User-facing summary; see `CHANGELOG.md` for per-version detail.
 
 ### In Progress
 
-- Splitting remaining oversized legacy functions
-- C-style buffer replacement with `std::vector` / `std::string`
-- Further UI/business-logic decoupling under WFX constraints
+- Unicode end to end — the connection dialog, settings and import cache
+  still go through ANSI WinAPI, so paths and names with characters
+  outside the system code page can be lost
+- Splitting the remaining oversized functions (file operations, directory
+  listing, connection dialog)
 - Expanding the help to cover every mode and edge case
 
 ### Planned / Deferred
