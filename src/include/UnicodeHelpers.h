@@ -213,6 +213,18 @@ inline constexpr int kInternalCodepage = CP_ACP;
 
 } // namespace unicode_util
 
+// Buffer forms of internal_to_wide / wide_to_internal, in the style of
+// awlcopy / walcopy ("i" = internal).
+inline LPWSTR iwlcopy(LPWSTR outname, LPCSTR inname, size_t maxlen) noexcept
+{
+    return awlcopyCP(unicode_util::kInternalCodepage, outname, inname, maxlen);
+}
+
+inline LPSTR wilcopy(LPSTR outname, LPCWSTR inname, size_t maxlen) noexcept
+{
+    return walcopyCP(unicode_util::kInternalCodepage, outname, inname, maxlen);
+}
+
 // Legacy global alias kept for older plugin code paths.
 [[nodiscard]] inline bool usys() noexcept {
     return unicode_util::usys();

@@ -273,7 +273,7 @@ void EmitDedupBuckets(DedupBuckets&                     buckets,
 static void FillFindDataFromPluginEntry(WIN32_FIND_DATAW& fd, const PluginFolderEntry& e)
 {
     fd = {};
-    awlcopy(fd.cFileName, e.name.c_str(), countof(fd.cFileName) - 1);
+    iwlcopy(fd.cFileName, e.name.c_str(), countof(fd.cFileName) - 1);
     SetInt64ToFileTime(&fd.ftLastWriteTime, FS_TIME_UNKNOWN);
     switch (e.kind) {
         case PluginFolderEntry::Kind::Pseudo:
@@ -722,17 +722,9 @@ static bool IsMagicFolderPath(LPCWSTR path, const wchar_t* folderNameW, std::str
     if (after[0] != L'\\' && after[0] != L'/') return false;
     if (outEntry) {
         std::wstring_view trail = after.substr(1);
-        // Convert to narrow ANSI and replace any '\' with '/' so folder-
-        // nested DisplayNames round-trip cleanly.
-        const int needed = WideCharToMultiByte(CP_ACP, 0, trail.data(),
-                                                static_cast<int>(trail.size()),
-                                                nullptr, 0, nullptr, nullptr);
-        outEntry->assign(needed > 0 ? static_cast<size_t>(needed) : 0, '\0');
-        if (needed > 0) {
-            WideCharToMultiByte(CP_ACP, 0, trail.data(),
-                                 static_cast<int>(trail.size()),
-                                 outEntry->data(), needed, nullptr, nullptr);
-        }
+        // Internal string with any '\' replaced by '/' so folder-nested
+        // DisplayNames round-trip cleanly.
+        *outEntry = unicode_util::wide_to_internal(trail);
         std::replace(outEntry->begin(), outEntry->end(), '\\', '/');
     }
     return true;
@@ -770,7 +762,7 @@ static HANDLE BuildProxiesListing(WIN32_FIND_DATAW* FindData)
         if (label.empty())
             continue;
         PluginFolderEntry e;
-        e.name = unicode_util::wstring_to_utf8(label);
+        e.name = unicode_util::wide_to_internal(label);
         e.kind = PluginFolderEntry::Kind::ProxyRecord;
         state->entries.push_back(std::move(e));
     }
@@ -795,31 +787,12 @@ static HANDLE BuildProxiesListing(WIN32_FIND_DATAW* FindData)
 
 namespace {
 
-// Widen ANSI to a heap-allocated wide string for case-insensitive match.
-std::wstring AnsiToWide(const char* s)
-{
-    if (!s || !s[0]) return {};
-    const int wchars = MultiByteToWideChar(CP_ACP, 0, s, -1, nullptr, 0);
-    if (wchars <= 0) return {};
-    std::wstring out(static_cast<size_t>(wchars - 1), L'\0');
-    MultiByteToWideChar(CP_ACP, 0, s, -1, out.data(), wchars);
-    return out;
-}
-
-// Narrow-copy a wide substring using CP_ACP, mirroring the pattern in
-// IsActiveSessionsPath. Also normalises backslashes to '/' so nested paths
-// round-trip cleanly through our path normalisation.
+// Internal-string copy of a wide substring, mirroring IsMagicFolderPath.
+// Also normalises backslashes to '/' so nested paths round-trip cleanly
+// through our path normalisation.
 void WideRangeToNarrowSlash(std::wstring_view src, std::string& out)
 {
-    const int needed = WideCharToMultiByte(CP_ACP, 0, src.data(),
-                                            static_cast<int>(src.size()),
-                                            nullptr, 0, nullptr, nullptr);
-    out.assign(needed > 0 ? static_cast<size_t>(needed) : 0, '\0');
-    if (needed > 0) {
-        WideCharToMultiByte(CP_ACP, 0, src.data(),
-                             static_cast<int>(src.size()),
-                             out.data(), needed, nullptr, nullptr);
-    }
+    out = unicode_util::wide_to_internal(src);
     std::replace(out.begin(), out.end(), '\\', '/');
 }
 
@@ -860,7 +833,7 @@ ImportsPathKind ClassifyImportsPath(LPCWSTR path,
     // Match against every registered adapter's FolderName() (wide, case-insensitive).
     const auto& adapters = sftp::GetImportSourceRegistry().Adapters();
     for (const auto& adapter : adapters) {
-        const std::wstring fname = AnsiToWide(adapter->FolderName());
+        const std::wstring fname = unicode_util::internal_to_wide(adapter->FolderName());
         if (fname.size() != segment.size()) continue;
         if (_wcsnicmp(fname.data(), segment.data(), fname.size()) != 0) continue;
 
@@ -971,7 +944,7 @@ HANDLE WINAPI FsFindFirstW(LPCWSTR Path, LPWIN32_FIND_DATAW FindData)
             SetLastError(ERROR_NO_MORE_FILES);
             return INVALID_HANDLE_VALUE;
         }
-        walcopy(pathA.data(), Path, pathA.size() - 1);
+        wilcopy(pathA.data(), Path, pathA.size() - 1);
         GetDisplayNameFromPath(pathA.data(), displayName.data(), displayName.size() - 1);
         serverid = static_cast<pConnectSettings>(GetServerIdFromName(displayName.data(), GetCurrentThreadId()));
         bool wasconnected = serverid != nullptr;
@@ -1181,7 +1154,7 @@ BOOL WINAPI FsFindNextW(HANDLE Hdl, LPWIN32_FIND_DATAW FindData)
             SERVERHANDLE hdl = FindFirstServer(name.data(), name.size() - 1);
             if (!hdl)
                 return false;
-            awlcopy(FindData->cFileName, name.data(), countof(FindData->cFileName)-1);
+            iwlcopy(FindData->cFileName, name.data(), countof(FindData->cFileName)-1);
             lf->rootfindhandle = hdl;
             lf->rootfindfirst = false;
             SetInt64ToFileTime(&FindData->ftLastWriteTime, FS_TIME_UNKNOWN);
@@ -1195,7 +1168,7 @@ BOOL WINAPI FsFindNextW(HANDLE Hdl, LPWIN32_FIND_DATAW FindData)
             lf->rootfindhandle = FindNextServer(lf->rootfindhandle, name.data(), name.size() - 1);
             if (!lf->rootfindhandle)
                 return false;
-            awlcopy(FindData->cFileName, name.data(), countof(FindData->cFileName)-1);
+            iwlcopy(FindData->cFileName, name.data(), countof(FindData->cFileName)-1);
             FindData->dwFileAttributes = FS_ATTR_UNIXMODE;
             FindData->dwReserved0 = LIBSSH2_SFTP_S_IFLNK; // Link entry.
             return true;
