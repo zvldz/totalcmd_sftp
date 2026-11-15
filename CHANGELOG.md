@@ -75,6 +75,10 @@ this fork's 10.0.2.2. Each entry names where it came from.
   against "Quick connect" and its Polish form, while the entry reads "Quick
   Connection" or its translation, so LAN Pair discovery announced it like a
   saved session. *From wesmar/sftp 10.3.0.0.*
+- **A post-login command's output keeps its non-English ending.** Trimming
+  the output treated UTF-8 bytes as blanks and cut letters off the end of
+  each line, and the progress text shown while the command ran was empty.
+  *From wesmar/sftp 10.3.0.0.*
 
 ### Changes
 
