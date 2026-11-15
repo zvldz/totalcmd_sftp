@@ -1903,7 +1903,9 @@ int WINAPI FsGetFileW(LPCWSTR RemoteName, LPWSTR LocalName, int CopyFlags, Remot
                 return FS_FILE_NOTSUPPORTED;
             return FS_FILE_EXISTSRESUMEALLOWED;
         }
-        if (OverWrite) {
+        // Over SSH the download removes the old file itself, once the remote
+        // one has opened, so a failed download keeps the local copy.
+        if (OverWrite && (IsPhpAgentTransport(serverid) || IsLanPairTransport(serverid))) {
             DeleteFileT(LocalName);
         }
 
