@@ -3176,8 +3176,8 @@ pConnectSettings SftpConnectToServer(LPCSTR DisplayName, LPCSTR inifilename,
             // when the user clicks the toolbar Disconnect button — so it
             // must be a clean, TC-parseable single-hierarchy path:
             //   * forward slashes inside folder-nested DisplayNames like
-            //     "work/ha1" are converted to backslashes; TC sees
-            //     "\work\ha1" and treats it as a normal nested path (parent
+            //     "work/web1" are converted to backslashes; TC sees
+            //     "\work\web1" and treats it as a normal nested path (parent
             //     "\work" is our implicit folder). Our own
             //     GetDisplayNameFromPath goes through NormaliseTcPath which
             //     converts `\` back to `/`, so registry lookup on disconnect

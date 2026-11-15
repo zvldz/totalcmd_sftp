@@ -566,7 +566,7 @@ static int ProxyRecordForDependency(const sftp::SessionDependency& dep, LPCSTR i
 // F5 materialise: copy a virtual session from the import cache into the
 // user's own sftpplug.ini as a real saved session. `sourceId` identifies
 // the adapter (e.g. "securecrt"), `subPath` is the virtual DisplayName
-// inside the source (e.g. "my/ha1_remote"), NewName is the destination
+// inside the source (e.g. "my/server"), NewName is the destination
 // TC path the user copied to. The materialised session keeps what the
 // adapter cached (host, user, key file, encoding) plus, when the source
 // put a proxy the plugin speaks in front of it, that proxy as a local
