@@ -370,6 +370,11 @@ int SftpDownloadFileW(pConnectSettings cs, LPCWSTR RemoteName, LPCWSTR LocalName
         }
     }
 
+    // A file being overwritten is removed rather than truncated in place:
+    // CREATE_ALWAYS is refused on a hidden or system file.
+    if (alwaysOverwrite && !Resume)
+        DeleteFileT(LocalName);
+
     // Open local file
     LocalFile local;
     int64_t loaded = 0;
