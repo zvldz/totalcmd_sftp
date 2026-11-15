@@ -399,7 +399,9 @@ int wmain(int argc, wchar_t** argv)
     {
         // A file the server refuses to read: the download fails and leaves
         // no local file, and a local file it was to overwrite stays intact.
-        // The shell paths still create the local file first (open in TODO).
+        // The shell paths learn of the refusal only after the local file
+        // exists: they remove an empty one, but an overwritten copy is gone
+        // (open in TODO).
         const std::wstring name = L"unreadable.bin";
         WriteFileBytes(local + name, RandomBytes(5000, 4));
         g_plugin.PutFileW((local + name).c_str(), (dir + L"\\" + name).c_str(), 0);
@@ -412,10 +414,7 @@ int wmain(int argc, wchar_t** argv)
         RemoteInfoStruct ri = InfoFor(dir, name);
         int rc = g_plugin.GetFileW(remote.c_str(), target.data(), 0, &ri);
         const std::string fresh = "download of an unreadable file fails, no local file left (rc=" + std::to_string(rc) + ")";
-        if (shellMode)
-            Known(rc != FS_FILE_OK && !LocalExists(target), fresh);
-        else
-            Check(rc != FS_FILE_OK && !LocalExists(target), fresh);
+        Check(rc != FS_FILE_OK && !LocalExists(target), fresh);
 
         WriteFileBytes(target, "previous local copy");
         const std::string keepHash = Sha256File(target);

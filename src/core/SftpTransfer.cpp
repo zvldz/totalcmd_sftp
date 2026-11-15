@@ -386,17 +386,26 @@ int SftpDownloadFileW(pConnectSettings cs, LPCWSTR RemoteName, LPCWSTR LocalName
         return SFTP_WRITEFAILED;
     }
 
-    if (forceShellFallback) {
-        int64_t shellLoaded = loaded;
-        return ShellDdDownloadFile(cs, remotePath, RemoteName,
-                                   local.get(), LocalName, filesize, loaded, textMode, &shellLoaded);
-    }
-
-    if (useScp && cs->scponly) {
-        // Shell SCP path
-        return ShellScpDownloadFile(cs, BuildShellScpArgument(remotePath), RemoteName,
-                                    local.get(), LocalName,
-                                    textMode, filesize, &loaded);
+    if (shellPath) {
+        int rc;
+        if (forceShellFallback) {
+            int64_t shellLoaded = loaded;
+            rc = ShellDdDownloadFile(cs, remotePath, RemoteName,
+                                     local.get(), LocalName, filesize, loaded, textMode, &shellLoaded);
+        } else {
+            // Shell SCP path
+            rc = ShellScpDownloadFile(cs, BuildShellScpArgument(remotePath), RemoteName,
+                                      local.get(), LocalName,
+                                      textMode, filesize, &loaded);
+        }
+        // These paths learn that the remote file cannot be read only after
+        // the local one exists; a failure that wrote nothing removes it
+        // rather than leave an empty file behind.
+        if (rc != SFTP_OK && !Resume && local.GetSize() == 0) {
+            CloseHandle(local.release());
+            DeleteFileT(LocalName);
+        }
+        return rc;
     }
 
     if (!useScp && Resume && loaded > 0) {

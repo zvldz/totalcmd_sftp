@@ -47,7 +47,10 @@ this fork's 10.0.2.2. Each entry names where it came from.
   file without read rights (`chmod 000`) failed with an error and still
   left an empty file behind — and when overwriting, the local copy was
   already truncated. Over SFTP and SCP the remote file is now opened first,
-  and the local file is not touched when that fails.
+  and the local file is not touched when that fails. With "SCP for
+  everything" and shell transfer the refusal shows up only after the local
+  file exists: the empty file is removed again, but a local copy being
+  overwritten is still lost there.
 - **"SCP for everything" lists non-ASCII names on servers without a UTF-8
   locale.** `ls` on a terminal printed such names as `test???`, and those
   files then could not be opened or deleted. Its output now goes through a
