@@ -162,7 +162,7 @@ static int ExportSessionAsIniFile(
     return FS_FILE_OK;
 }
 
-static bool CopyIniSectionAcrossFiles(LPCSTR srcSection, LPCSTR srcIni,
+static bool CopyIniSectionAcrossFiles(LPCSTR srcSection, LPCWSTR srcIni,
                                        LPCSTR dstSection, LPCSTR dstIni);
 
 // Try to import an uploaded file as a session-INI. Returns nullopt when the
@@ -307,16 +307,11 @@ static std::optional<int> TryImportSessionFromUpload(
             return abortWithMessage(IDS_SIMPORT_ERR_EMPTY);
     }
 
-    std::array<char, MAX_PATH * 4> localA{};
-    WideCharToMultiByte(CP_ACP, 0, LocalName, -1,
-        localA.data(), static_cast<int>(localA.size()),
-        nullptr, nullptr);
-
     std::array<char, 8192> sectionNames{};
     const DWORD gotSects = IniGetSectionNames(
         sectionNames.data(),
         static_cast<DWORD>(sectionNames.size() - 1),
-        localA.data());
+        LocalName);
     if (gotSects == 0)
         return abortWithMessage(IDS_SIMPORT_ERR_NO_SECTIONS);
 
@@ -328,7 +323,7 @@ static std::optional<int> TryImportSessionFromUpload(
         IniGetString(sp, "server", "",
             serverProbe.data(),
             static_cast<DWORD>(serverProbe.size() - 1),
-            localA.data());
+            LocalName);
         if (serverProbe[0]) {
             chosenSection = sp;
             break;
@@ -343,7 +338,7 @@ static std::optional<int> TryImportSessionFromUpload(
     {
         std::array<char, 512> route{};
         IniGetString(chosenSection.c_str(), kUnsupportedRouteKey, "",
-            route.data(), static_cast<DWORD>(route.size() - 1), localA.data());
+            route.data(), static_cast<DWORD>(route.size() - 1), LocalName);
         if (route[0]) {
             sftp::SessionDependency dep;
             dep.kind   = sftp::SessionDependency::Kind::Bastion;
@@ -368,7 +363,7 @@ static std::optional<int> TryImportSessionFromUpload(
         return FS_FILE_EXISTS;
 
     if (!CopyIniSectionAcrossFiles(chosenSection.c_str(),
-            localA.data(), display.c_str(), inifilename))
+            LocalName, display.c_str(), inifilename))
     {
         return abortWithMessage(IDS_SIMPORT_ERR_WRITE);
     }
@@ -380,11 +375,11 @@ static std::optional<int> TryImportSessionFromUpload(
     // a session ends up quietly on the wrong proxy, or on none at all.
     if (IniGetInt(display.c_str(), "proxynr", 0, inifilename) > 0) {
         std::array<char, 512> proxyServer{}, proxyUser{};
-        const int proxytype = IniGetInt("proxy", "proxytype", -1, localA.data());
+        const int proxytype = IniGetInt("proxy", "proxytype", -1, LocalName);
         IniGetString("proxy", "proxyserver", "", proxyServer.data(),
-                      static_cast<DWORD>(proxyServer.size() - 1), localA.data());
+                      static_cast<DWORD>(proxyServer.size() - 1), LocalName);
         IniGetString("proxy", "proxyuser", "", proxyUser.data(),
-                      static_cast<DWORD>(proxyUser.size() - 1), localA.data());
+                      static_cast<DWORD>(proxyUser.size() - 1), LocalName);
 
         int localNr = 0;
         if (proxytype > 0 && proxyServer[0]) {
@@ -398,7 +393,7 @@ static std::optional<int> TryImportSessionFromUpload(
                 // was bound to the machine it came from. A proxy that needs
                 // one is asked for it on connect, which is why the user name
                 // has to survive the trip.
-                CopyIniSectionAcrossFiles("proxy", localA.data(), dest.c_str(), inifilename);
+                CopyIniSectionAcrossFiles("proxy", LocalName, dest.c_str(), inifilename);
             }
         }
 
@@ -450,7 +445,7 @@ static std::vector<std::string> CollectSessionsUnderFolder(
 // an overwrite is a full clean replace — leftover keys from a prior session
 // (password, proxy, jump-host refs) never survive materialisation.
 // Returns true if at least one key was copied.
-static bool CopyIniSectionAcrossFiles(LPCSTR srcSection, LPCSTR srcIni,
+static bool CopyIniSectionAcrossFiles(LPCSTR srcSection, LPCWSTR srcIni,
                                        LPCSTR dstSection, LPCSTR dstIni)
 {
     std::array<char, 4096> keyList{};
@@ -547,7 +542,8 @@ static int MaterialiseVirtualSession(const std::string& sourceId,
     if (!dep.transferable() && RefuseIfDependencyBlocks(cacheSection))
         return FS_FILE_USERABORT;
 
-    if (!CopyIniSectionAcrossFiles(cacheSection.c_str(), cachePath.c_str(),
+    if (!CopyIniSectionAcrossFiles(cacheSection.c_str(),
+                                    unicode_util::narrow_to_wide(cachePath, CP_ACP).c_str(),
                                     newDisplay.c_str(), inifilename))
     {
         return FS_FILE_NOTFOUND;

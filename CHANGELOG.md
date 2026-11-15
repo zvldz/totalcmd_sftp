@@ -56,6 +56,10 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   included, went to the shorter path. A file name from the server too long
   to show is left out of the list instead of appearing cut, as a name that
   leads nowhere.
+- **Files in folders outside the system codepage are read.** An INI file
+  with a session copied into the plugin from such a folder was refused as
+  unreadable, and the PHP Shell history was not kept when the Windows
+  profile folder had such a name.
 
 ## 10.0.2.2 — 2026-11-03
 

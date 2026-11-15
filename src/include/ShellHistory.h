@@ -38,11 +38,11 @@ public:
 
 private:
     std::vector<std::string> entries_;
-    std::string              filePath_;
+    std::wstring             filePath_;
     bool                     loaded_ = false;
 
-    // Resolve %APPDATA%\sftpplug\shell_history.txt; creates the directory if needed.
-    static std::string ResolveFilePath();
+    // Resolve %APPDATA%\GHISLER\shell_history.txt; creates the directory if needed.
+    static std::wstring ResolveFilePath();
 
     // Overwrite the backing file with the current entries_ contents.
     void Rewrite() const;

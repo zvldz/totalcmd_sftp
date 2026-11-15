@@ -340,26 +340,26 @@ std::string RegistryChangeStamp(const char* subKey)
 
 namespace {
 
-// Convert an ANSI, NUL-separated Win32 filter ("A\0*.a\0B\0*.b\0") into a
-// wide, NUL-separated buffer with the required trailing double-NUL. Returns
-// empty vector on empty input.
+// Convert an internal-string, NUL-separated Win32 filter ("A\0*.a\0B\0*.b\0")
+// into a wide, NUL-separated buffer with the required trailing double-NUL.
+// Returns empty vector on empty input.
 std::vector<wchar_t> WidenNulSeparatedFilter(const char* filter)
 {
     if (!filter || !filter[0]) return {};
 
-    // Total ANSI length up to and including the terminating double-NUL.
-    size_t ansiLen = 0;
+    // Total length up to and including the terminating double-NUL.
+    size_t filterLen = 0;
     while (true) {
-        const size_t segLen = std::strlen(filter + ansiLen);
-        ansiLen += segLen + 1;  // include the segment's NUL
+        const size_t segLen = std::strlen(filter + filterLen);
+        filterLen += segLen + 1;  // include the segment's NUL
         if (segLen == 0) break;  // empty segment marks the end
     }
 
-    const int wchars = MultiByteToWideChar(CP_ACP, 0, filter,
-        static_cast<int>(ansiLen), nullptr, 0);
+    const int wchars = MultiByteToWideChar(unicode_util::kInternalCodepage, 0, filter,
+        static_cast<int>(filterLen), nullptr, 0);
     if (wchars <= 0) return {};
     std::vector<wchar_t> out(static_cast<size_t>(wchars), L'\0');
-    MultiByteToWideChar(CP_ACP, 0, filter, static_cast<int>(ansiLen),
+    MultiByteToWideChar(unicode_util::kInternalCodepage, 0, filter, static_cast<int>(filterLen),
         out.data(), wchars);
     return out;
 }
@@ -374,7 +374,7 @@ bool BrowseForFile(HWND               owner,
 {
     wchar_t wTitle[256] = {};
     if (title && title[0])
-        MultiByteToWideChar(CP_ACP, 0, title, -1, wTitle, 256);
+        iwlcopy(wTitle, title, 256);
 
     // GetOpenFileName expects a mutable buffer that both seeds the initial
     // selection and receives the picked path. Pre-fill with `initialPath`
@@ -382,15 +382,14 @@ bool BrowseForFile(HWND               owner,
     wchar_t wFile[MAX_PATH] = {};
     wchar_t wInitDir[MAX_PATH] = {};
     if (initialPath && initialPath[0]) {
-        const DWORD attrs = GetFileAttributesA(initialPath);
+        const std::wstring wInitial = unicode_util::internal_to_wide(initialPath);
+        const DWORD attrs = GetFileAttributesW(wInitial.c_str());
         if (attrs != INVALID_FILE_ATTRIBUTES &&
             (attrs & FILE_ATTRIBUTE_DIRECTORY))
         {
-            MultiByteToWideChar(CP_ACP, 0, initialPath, -1,
-                wInitDir, MAX_PATH);
+            wcsncpy_s(wInitDir, wInitial.c_str(), _TRUNCATE);
         } else {
-            MultiByteToWideChar(CP_ACP, 0, initialPath, -1,
-                wFile, MAX_PATH);
+            wcsncpy_s(wFile, wInitial.c_str(), _TRUNCATE);
         }
     }
 
@@ -420,11 +419,11 @@ bool BrowseForFolder(HWND               owner,
 {
     wchar_t wTitle[256] = {};
     if (title && title[0])
-        MultiByteToWideChar(CP_ACP, 0, title, -1, wTitle, 256);
+        iwlcopy(wTitle, title, 256);
 
     wchar_t wInitial[MAX_PATH] = {};
     if (initialPath && initialPath[0])
-        MultiByteToWideChar(CP_ACP, 0, initialPath, -1, wInitial, MAX_PATH);
+        iwlcopy(wInitial, initialPath, MAX_PATH);
 
     BROWSEINFOW bi = {};
     bi.hwndOwner = owner;

@@ -539,9 +539,9 @@ DWORD CopyList(const std::vector<std::string>& items, Ch* out, DWORD outSize)
 // Shared bodies of the ANSI and wide entry points
 // ---------------------------------------------------------------------------
 
-template <typename Ch>
+template <typename Ch, typename P>
 DWORD GetStringT(const Ch* section, const Ch* key, const Ch* defaultValue,
-                 Ch* out, DWORD outSize, const Ch* path)
+                 Ch* out, DWORD outSize, const P* path)
 {
     if (!out || outSize == 0)
         return 0;
@@ -595,8 +595,8 @@ INT ParseInt(std::string_view v)
     return negative ? -static_cast<INT>(result) : static_cast<INT>(result);
 }
 
-template <typename Ch>
-UINT GetIntT(const Ch* section, const Ch* key, INT defaultValue, const Ch* path)
+template <typename Ch, typename P>
+UINT GetIntT(const Ch* section, const Ch* key, INT defaultValue, const P* path)
 {
     if (!section || !key)
         return static_cast<UINT>(defaultValue);
@@ -669,6 +669,18 @@ DWORD IniGetString(LPCWSTR section, LPCWSTR key, LPCWSTR defaultValue,
     }
 }
 
+DWORD IniGetString(LPCSTR section, LPCSTR key, LPCSTR defaultValue,
+                   LPSTR out, DWORD outSize, LPCWSTR path)
+{
+    try {
+        return GetStringT(section, key, defaultValue, out, outSize, path);
+    } catch (...) {
+        if (out && outSize)
+            out[0] = 0;
+        return 0;
+    }
+}
+
 UINT IniGetInt(LPCSTR section, LPCSTR key, INT defaultValue, LPCSTR path)
 {
     try {
@@ -679,6 +691,15 @@ UINT IniGetInt(LPCSTR section, LPCSTR key, INT defaultValue, LPCSTR path)
 }
 
 UINT IniGetInt(LPCWSTR section, LPCWSTR key, INT defaultValue, LPCWSTR path)
+{
+    try {
+        return GetIntT(section, key, defaultValue, path);
+    } catch (...) {
+        return static_cast<UINT>(defaultValue);
+    }
+}
+
+UINT IniGetInt(LPCSTR section, LPCSTR key, INT defaultValue, LPCWSTR path)
 {
     try {
         return GetIntT(section, key, defaultValue, path);
@@ -713,4 +734,9 @@ DWORD IniGetSectionNames(LPSTR out, DWORD outSize, LPCSTR path)
 DWORD IniGetSectionNames(LPWSTR out, DWORD outSize, LPCWSTR path)
 {
     return IniGetString(nullptr, nullptr, L"", out, outSize, path);
+}
+
+DWORD IniGetSectionNames(LPSTR out, DWORD outSize, LPCWSTR path)
+{
+    return IniGetString(nullptr, nullptr, "", out, outSize, path);
 }

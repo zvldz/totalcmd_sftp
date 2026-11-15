@@ -1,7 +1,7 @@
 #include "global.h"
 #include "ShellHistory.h"
 
-#include <shlobj.h>     // SHGetFolderPathA / CSIDL_APPDATA
+#include <shlobj.h>     // SHGetFolderPathW / CSIDL_APPDATA
 #include <fstream>
 #include <algorithm>
 
@@ -12,24 +12,25 @@
 ShellHistory::ShellHistory() = default;
 
 // static
-std::string ShellHistory::ResolveFilePath()
+std::wstring ShellHistory::ResolveFilePath()
 {
     // Obtain %APPDATA% via the shell API so we respect roaming profile paths.
-    char appDataPath[MAX_PATH] = {};
-    if (FAILED(SHGetFolderPathA(nullptr, CSIDL_APPDATA, nullptr, SHGFP_TYPE_CURRENT, appDataPath)))
+    // Wide, so a profile folder outside the system codepage works too.
+    wchar_t appDataPath[MAX_PATH] = {};
+    if (FAILED(SHGetFolderPathW(nullptr, CSIDL_APPDATA, nullptr, SHGFP_TYPE_CURRENT, appDataPath)))
     {
         // Fallback: read the environment variable directly.
-        DWORD n = GetEnvironmentVariableA("APPDATA", appDataPath, MAX_PATH);
+        DWORD n = GetEnvironmentVariableW(L"APPDATA", appDataPath, MAX_PATH);
         if (n == 0 || n >= MAX_PATH)
             return {};
     }
 
     // Build the plugin subdirectory path and ensure it exists.
     // Total Commander stores all its plugin data under %APPDATA%\GHISLER.
-    std::string dir = std::string(appDataPath) + "\\GHISLER";
-    CreateDirectoryA(dir.c_str(), nullptr); // no-op if it already exists
+    std::wstring dir = std::wstring(appDataPath) + L"\\GHISLER";
+    CreateDirectoryW(dir.c_str(), nullptr); // no-op if it already exists
 
-    return dir + "\\shell_history.txt";
+    return dir + L"\\shell_history.txt";
 }
 
 void ShellHistory::Load()
@@ -90,7 +91,7 @@ void ShellHistory::Clear()
     entries_.clear();
 
     if (!filePath_.empty())
-        DeleteFileA(filePath_.c_str());
+        DeleteFileW(filePath_.c_str());
 }
 
 void ShellHistory::Rewrite() const
@@ -99,7 +100,7 @@ void ShellHistory::Rewrite() const
         return;
 
     // Write a temporary file first, then rename — avoids corrupt history on a crash/power-loss.
-    std::string tmp = filePath_ + ".tmp";
+    std::wstring tmp = filePath_ + L".tmp";
 
     {
         std::ofstream out(tmp, std::ios::out | std::ios::trunc);
@@ -118,5 +119,5 @@ void ShellHistory::Rewrite() const
     } // out is flushed and closed here
 
     // Atomic rename (on the same volume this is a metadata-only operation on NTFS).
-    MoveFileExA(tmp.c_str(), filePath_.c_str(), MOVEFILE_REPLACE_EXISTING);
+    MoveFileExW(tmp.c_str(), filePath_.c_str(), MOVEFILE_REPLACE_EXISTING);
 }

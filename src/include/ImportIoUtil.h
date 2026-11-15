@@ -54,9 +54,10 @@ std::wstring Utf8PathToWide(const std::string& path);
 // WinSCP writes UTF-8. Valid UTF-8 is kept, anything else is read as CP_ACP.
 std::string DecodedNameToUtf8(const std::string& bytes);
 
-// Modern shell folder picker. `title` and `initialPath` are ANSI (CP_ACP);
-// the returned `outPath` is an internal string, as custom paths are stored. Returns false if the user cancelled or the
-// selection could not be resolved to a filesystem path (e.g. namespace-only).
+// Modern shell folder picker. `title`, `initialPath` and the returned
+// `outPath` are internal strings, as custom paths are stored. Returns false if
+// the user cancelled or the selection could not be resolved to a filesystem
+// path (e.g. namespace-only).
 bool BrowseForFolder(HWND               owner,
                      const char*        title,
                      const char*        initialPath,
@@ -65,7 +66,8 @@ bool BrowseForFolder(HWND               owner,
 // Single-file picker via GetOpenFileNameW. `filter` is a NUL-separated Win32
 // filter string ("Session files\0*.reg\0All files\0*.*\0"); the terminating
 // double-NUL is required. `initialPath` may be a full file path (splits into
-// directory + name) or a bare directory. Returns false on cancel.
+// directory + name) or a bare directory. Strings are internal, as for
+// BrowseForFolder. Returns false on cancel.
 bool BrowseForFile(HWND               owner,
                    const char*        title,
                    const char*        filter,

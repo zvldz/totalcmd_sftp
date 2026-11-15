@@ -44,3 +44,10 @@ BOOL IniWriteString(LPCWSTR section, LPCWSTR key, LPCWSTR value, LPCWSTR path);
 
 DWORD IniGetSectionNames(LPSTR out, DWORD outSize, LPCSTR path);
 DWORD IniGetSectionNames(LPWSTR out, DWORD outSize, LPCWSTR path);
+
+// Reading a file whose path is not in the system codepage (one the user
+// dropped on the plugin, say) with internal strings for the rest.
+DWORD IniGetString(LPCSTR section, LPCSTR key, LPCSTR defaultValue,
+                   LPSTR out, DWORD outSize, LPCWSTR path);
+UINT  IniGetInt(LPCSTR section, LPCSTR key, INT defaultValue, LPCWSTR path);
+DWORD IniGetSectionNames(LPSTR out, DWORD outSize, LPCWSTR path);
