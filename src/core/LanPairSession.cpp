@@ -286,21 +286,7 @@ AuthResult pair1Connect(
 
         if (!forceNew) {
             if (!password.empty()) {
-                std::string combined;
-                if (localPeerId < serverPeerId)
-                    combined = localPeerId + "<>" + serverPeerId;
-                else
-                    combined = serverPeerId + "<>" + localPeerId;
-                std::vector<uint8_t> salt(16, 0);
-                auto h = hmacSha256(
-                    std::span<const uint8_t>(reinterpret_cast<const uint8_t*>("LANPAIR"), 7),
-                    std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(combined.data()), combined.size()));
-                if (h && h->size() >= 16) {
-                    for (size_t i = 0; i < 16; ++i) salt[i] = (*h)[i];
-                } else {
-                    memcpy(salt.data(), "sftpplug-pair...", 16);
-                }
-                auto derived = deriveKeyPbkdf2(password, std::span<const uint8_t>(salt.data(), salt.size()), kDerivedKeySize);
+                auto derived = derivePairKey(password, localPeerId, serverPeerId);
                 if (derived) {
                     key = *derived;
                     std::string raw(reinterpret_cast<const char*>(key.data()), key.size());
@@ -403,25 +389,7 @@ bool PrepareLanPairTrustKeys(const std::string& localPeerId,
 {
     using namespace lanpair_internal;
 
-    std::string combined;
-    if (localPeerId < remotePeerId)
-        combined = localPeerId + "<>" + remotePeerId;
-    else
-        combined = remotePeerId + "<>" + localPeerId;
-
-    std::vector<uint8_t> salt(16, 0);
-    auto h = hmacSha256(
-        std::span<const uint8_t>(reinterpret_cast<const uint8_t*>("LANPAIR"), 7),
-        std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(combined.data()), combined.size()));
-    if (h && h->size() >= 16) {
-        for (size_t i = 0; i < 16; ++i) salt[i] = (*h)[i];
-    } else {
-        memcpy(salt.data(), "sftpplug-pair...", 16);
-    }
-
-    auto key = deriveKeyPbkdf2(password,
-                               std::span<const uint8_t>(salt.data(), salt.size()),
-                               kDerivedKeySize);
+    auto key = derivePairKey(password, localPeerId, remotePeerId);
     if (!key) return false;
 
     const std::string raw(reinterpret_cast<const char*>(key->data()), key->size());
@@ -913,21 +881,7 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
             if (key.empty()) {
                 std::lock_guard<std::mutex> lk(passwordMu_);
                 if (!password_.empty()) {
-                    std::string combined;
-                    if (serverPeerId_ < clientPeerId)
-                        combined = serverPeerId_ + "<>" + clientPeerId;
-                    else
-                        combined = clientPeerId + "<>" + serverPeerId_;
-                    std::vector<uint8_t> salt(16, 0);
-                    auto h = hmacSha256(
-                        std::span<const uint8_t>(reinterpret_cast<const uint8_t*>("LANPAIR"), 7),
-                        std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(combined.data()), combined.size()));
-                    if (h && h->size() >= 16) {
-                        for (size_t i = 0; i < 16; ++i) salt[i] = (*h)[i];
-                    } else {
-                        memcpy(salt.data(), "sftpplug-pair...", 16);
-                    }
-                    auto derived = deriveKeyPbkdf2(password_, std::span<const uint8_t>(salt.data(), salt.size()), kDerivedKeySize);
+                    auto derived = derivePairKey(password_, serverPeerId_, clientPeerId);
                     if (derived) key = *derived;
                 }
             }

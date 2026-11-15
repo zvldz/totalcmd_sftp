@@ -47,7 +47,7 @@ Complete C-to-C++ rewrite of the original SFTP plugin by Christian Ghisler. Core
 | **Password** | Standard password auth. |
 | **Keyboard-Interactive** | Includes automated password-change-request handling. |
 | **PEM / OpenSSH** | Traditional private key formats, passed directly to libssh2. |
-| **PPK v2 / v3 (native)** | Built-in PuTTY key file parser. No external tools. BCrypt + Argon2d/i/id + AES-256-CBC. |
+| **PPK v2 / v3 (native)** | Built-in PuTTY key file parser. No external tools. OpenSSL: Argon2d/i/id, AES-256-CBC, HMAC. |
 | **Pageant** | SSH Agent integration. Auto-launch from `pageant.lnk` in the plugin directory. |
 | **Fallback chain** | Automatic progression: Pageant → key file → keyboard-interactive → password. |
 
@@ -148,22 +148,20 @@ This eliminates the minute-long UI freeze caused by impossible auth attempts in 
 
 ### Native PPK v2 / v3 Decoder
 
-Converts PuTTY Private Key files to traditional PEM format for libssh2 — no external tools, no `puttygen.exe`.
+Converts PuTTY Private Key files to an unencrypted PKCS#8 PEM in memory for libssh2 — no external tools, no `puttygen.exe`, nothing decrypted written to disk.
 
 **PPK v3 specification coverage:**
 
 | Component | Implementation |
 |-----------|---------------|
-| KDF | Argon2d / Argon2i / Argon2id — statically linked (argon2, /MT) |
+| KDF | Argon2d / Argon2i / Argon2id — OpenSSL `EVP_KDF`; memory, passes and lanes capped |
 | Encryption | AES-256-CBC |
-| MAC | HMAC-SHA-256 over `(algorithm ‖ encryption ‖ comment ‖ public_blob ‖ private_blob_plain)` |
+| MAC | HMAC-SHA-256 over `(algorithm ‖ encryption ‖ comment ‖ public_blob ‖ private_blob_plain)`, checked for unencrypted keys too |
 | MAC key source | Argon2 output bytes 48–79 (encrypted keys); empty string (unencrypted keys) |
-| Key derivation | Windows BCrypt `BCRYPT_SHA256_ALGORITHM` with HMAC flag |
-| Output | Traditional PEM, passed to `libssh2_userauth_publickey_frommemory` |
+| Key check | The key is rebuilt through OpenSSL, passes its pairwise check and must match the public blob |
+| Output | PKCS#8 PEM in wiped-on-free memory, passed to `libssh2_userauth_publickey_frommemory` |
 
-**PPK v2** uses SHA-1-based key derivation, also fully handled natively.
-
-SSH wire format helpers (`AppendU32`, `AppendSshStr`, `ReadSshStr`) are implemented inline without any external parser library.
+**PPK v2** uses SHA-1-based key derivation and HMAC-SHA-1 over the decrypted private blob, also handled natively.
 
 ### Pageant Integration
 
@@ -527,19 +525,26 @@ Single-language mode strips unused RC language blocks before compile and restore
 - `SFTP_DEBUG_ENABLED=1` → `OutputDebugString` output
 - `SFTP_DEBUG_TO_FILE=0` by default; set to 1 manually for file logging to `C:\temp\sftpplug_debug.log`
 
-**Rebuilding dependency libraries (`third_party/build.ps1`):**
+**Rebuilding dependency libraries (`build-deps.ps1`):**
 
-All dependency static libs (argon2 and libssh2) can be rebuilt from source:
+OpenSSL and libssh2 are rebuilt from their submodules as static `/MT` libraries:
 
 ```powershell
-.\third_party\build.ps1           # Build all (argon2 + libssh2, x64 + x86)
-.\third_party\build.ps1 -argon    # argon2 only
-.\third_party\build.ps1 -libssh2  # libssh2 only
-.\third_party\build.ps1 -x64only  # x64 only
-.\third_party\build.ps1 -x86only  # x86 only
+.\build-deps.ps1               # Build all (OpenSSL + libssh2, x64 + x86)
+.\build-deps.ps1 -SkipOpenSSL  # libssh2 only, against the OpenSSL already built
+.\build-deps.ps1 -SkipLibssh2  # OpenSSL only
+.\build-deps.ps1 -X64Only      # x64 only
 ```
 
-Output libs are placed in `src\lib\` (suffixed: `argon2_a_x64.lib`, `argon2_a_x86.lib`, `libssh2_x64.lib`, `libssh2_x86.lib`). The script verifies `/MT` (`LIBCMT`) linkage in every output lib before copying.
+Output libs are placed in `src\lib\` (`libcrypto_x64.lib`, `libcrypto_x86.lib`, `libssh2_x64.lib`, `libssh2_x86.lib`), the libssh2 headers in `src\include\libssh2\` and the OpenSSL headers in `src\lib\include-x64\` / `include-x86\`.
+
+**Unit tests (`tests\run-unit-tests.ps1`):** the PPK converter (against 20 puttygen keys in `tests\fixtures\ppk`), text-mode line endings, the terminal filter, wildcard matching, stored-password encryption and the LAN Pair key, built from the plugin's own sources for x64 and x86. Needs `build-deps.ps1` run once; the release workflow runs them before building the plugin.
+
+```powershell
+.\tests\run-unit-tests.ps1              # x64 + x86
+.\tests\run-unit-tests.ps1 -Arch x64    # one architecture
+.\tests\run-unit-tests.ps1 -Filter PPK  # test cases whose name contains "PPK" (case-sensitive)
+```
 
 ---
 
@@ -553,7 +558,7 @@ Output libs are placed in `src\lib\` (suffixed: `argon2_a_x64.lib`, `argon2_a_x8
 | Compiler (build) | Visual Studio 2026, MSVC v145 toolset, C++20 |
 | libssh2 | Statically linked (1.11.1), built against OpenSSL |
 | OpenSSL | Statically linked (3.5.9) — the crypto backend libssh2 runs on |
-| **Dependencies** | None — OpenSSL, libssh2 and argon2 are statically linked with `/MT`, so no VC++ Redistributable is required |
+| **Dependencies** | None — OpenSSL and libssh2 are statically linked with `/MT`, so no VC++ Redistributable is required |
 | Windows APIs | BCrypt, DPAPI (CryptProtectData), WinHTTP, DbgHelp, Winsock2 |
 
 ---
@@ -564,8 +569,8 @@ Distribution archive: `SFTPplug.zip`
 
 | File | Purpose |
 |------|---------|
-| `SFTPplug.wfx64` | x64 plugin binary (statically links libssh2 and Argon2, `/MT`) |
-| `SFTPplug.wfx` | x86 plugin binary (statically links libssh2 and Argon2, `/MT`) |
+| `SFTPplug.wfx64` | x64 plugin binary (statically links libssh2 and OpenSSL, `/MT`) |
+| `SFTPplug.wfx` | x86 plugin binary (statically links libssh2 and OpenSSL, `/MT`) |
 | `pluginst.inf` | Total Commander auto-install descriptor (`file=` x86, `file64=` x64) |
 | `sftp.php` | PHP Agent script for HTTP transfer and shell modes |
 | `SFTPplug-help.html` | Full offline documentation, one self-contained page |
@@ -586,7 +591,7 @@ Distribution archive: `SFTPplug.zip`
 | `language\ja.lng` | Japanese |
 | `language\zh-cn.lng` | Simplified Chinese |
 
-No external DLLs required. libssh2 and Argon2 are both rebuilt from source with `/MT` (static CRT) and statically linked into the binary — no VC++ Redistributable needed on the target system.
+No external DLLs required. libssh2 and OpenSSL are both rebuilt from source with `/MT` (static CRT) and statically linked into the binary — no VC++ Redistributable needed on the target system.
 
 Open `SFTPplug.zip` in Total Commander and press Enter to trigger the plugin install prompt.
 
@@ -641,7 +646,7 @@ To add a new language: create `language\XYZ.lng` (UTF-8) following the existing 
 ### Completed
 
 - ISshBackend abstraction layer
-- Native PPK v2/v3 conversion (BCrypt + Argon2, no tools)
+- Native PPK v2/v3 conversion (OpenSSL, no tools)
 - Shell DD/base64 fallback transfer
 - LAN Pair transport (PAIR1 auth, LAN2 protocol, UDP discovery, DPAPI trust, TOFU)
 - LAN Pair session timeout (configurable, enforced at session level)

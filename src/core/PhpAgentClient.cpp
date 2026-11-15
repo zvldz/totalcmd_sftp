@@ -13,7 +13,6 @@
 #include <regex>
 #include <unordered_map>
 #include "CoreUtils.h"
-#include "UtfConversion.h"
 #include "UnicodeHelpers.h"
 #include "SftpInternal.h"
 #include "PluginEntryPoints.h"
@@ -440,6 +439,10 @@ static bool ParseListLine(const std::string& line, WIN32_FIND_DATAW* outFd)
     fd.nFileSizeLow = (DWORD)(sz & 0xFFFFFFFFULL);
     long long mt = std::strtoll(mtimeS.c_str(), nullptr, 10);
     ConvUnixTimeToFileTime(&fd.ftLastWriteTime, mt);
+    // A name cut to fit would point at a file that does not exist.
+    const int wideLen = MultiByteToWideChar(CP_UTF8, 0, nameUtf8.c_str(), -1, nullptr, 0);
+    if (wideLen <= 0 || static_cast<size_t>(wideLen) > countof(fd.cFileName) - 1)
+        return false;
     ConvUTF8toUTF16(nameUtf8.c_str(), 0, fd.cFileName, countof(fd.cFileName) - 1);
     if (!fd.cFileName[0])
         return false;

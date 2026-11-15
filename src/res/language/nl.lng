@@ -203,7 +203,7 @@
 286=&Gebruikersnaam:
 287=SSH-agent gebruiken (Pageant)
 288=Wachtwoord wijzigen...
-289=Wachtwoord beveiligen met wachtwoordbeheerder (TC>=7.5)
+289=Wachtwoord beveiligen met wachtwoordbeheerder
 290=Clientcertificaat voor &verificatie:
 291=Certificaat (*-cert.pub), optioneel:
 292=Bestand met privésleutel (*.pem;*.ppk):
@@ -387,6 +387,24 @@
 12140=Kan proxy niet importeren: het bestand heeft geen sectie [proxy] met type en server.
 12141=Kan proxy niet importeren: schrijven naar sftpplug.ini is mislukt.
 12142=Deze proxy staat al in [Proxies] (zelfde type, server en gebruiker). Er is geen nieuwe record gemaakt.
+12143=Sessietime-out (min):
+12144=(0 = geen limiet)
+12145=Auto
+12146=Het .ppk-bestand vraagt Argon2-parameters boven de veilige grenzen.
+12147=Het .ppk-bestand bevat een sleutel waarvan de delen niet bij elkaar horen.
+12148=Downloadfout
+12149=Het bestand kon niet worden gedownload:
+12150=Overslaan
+12151=Alles overslaan
+12152=Overgeslagen na een downloadfout:
+12153=Meer...
+12154=Meer sessie-instellingen
+12155=SFTP-serveropdracht:
+12156=Leeg: het standaard sftp-subsysteem van de server. Voor een server zonder (OpenWrt, Dropbear) het pad van de SFTP-server, bijv. /usr/libexec/sftp-server.
+12157=Opdracht na aanmelden:
+12158=Wordt na elke aanmelding op de server uitgevoerd, behalve in de modus alleen SCP. De uitvoer verschijnt in het logvenster.
+12159=Wachten en uitvoer tonen
+12160=Starten zonder wachten
 12089=SFTP
 12104=(handmatig)
 12105= (ontbreekt)

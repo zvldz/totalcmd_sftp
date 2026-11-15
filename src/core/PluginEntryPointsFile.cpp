@@ -24,6 +24,7 @@
 #include "LanPairSession.h"
 #include "PluginEntryPointsInternal.h"
 #include "PhpAgentClient.h"
+#include "DownloadErrorBatch.h"
 #include "ImportSourceRegistry.h"
 #include "ImportCache.h"
 #include "ImportIoUtil.h"
@@ -1945,6 +1946,8 @@ int WINAPI FsGetFileW(LPCWSTR RemoteName, LPWSTR LocalName, int CopyFlags, Remot
                                           ri ? ri->Size64 : 0,
                                           ri ? &ri->LastWriteTime : nullptr,
                                           OverWrite, Resume, &fsResult);
+            if (fsResult == FS_FILE_READERROR)
+                return download_batch::ResolveReadError(RemoteName, LocalName, Move, resumeAsked);
             return (fsResult == FS_FILE_OK)
                 ? FinishDownloadMove(serverid, remotedir.data(), Move, resumeAsked)
                 : fsResult;
@@ -1954,6 +1957,10 @@ int WINAPI FsGetFileW(LPCWSTR RemoteName, LPWSTR LocalName, int CopyFlags, Remot
         // from there. It goes on only while each round adds to the file — an
         // error that keeps striking at the same offset would otherwise spin
         // here for good.
+        // A file that cannot be read may be skipped when it is one of many.
+        const auto readError = [&] {
+            return download_batch::ResolveReadError(RemoteName, LocalName, Move, resumeAsked);
+        };
         int64_t partialSize = -1;
         while (true) {  // auto-resume loop
             int rc = SftpDownloadFileW(serverid, remotedir.data(), LocalName, true, ri->Size64, &ri->LastWriteTime, Resume);
@@ -1961,7 +1968,7 @@ int WINAPI FsGetFileW(LPCWSTR RemoteName, LPWSTR LocalName, int CopyFlags, Remot
             switch (rc) {
                 case SFTP_OK:          return FinishDownloadMove(serverid, remotedir.data(), Move, resumeAsked);
                 case SFTP_EXISTS:      return FS_FILE_EXISTS;
-                case SFTP_READFAILED:  return FS_FILE_READERROR;
+                case SFTP_READFAILED:  return readError();
                 case SFTP_WRITEFAILED: return FS_FILE_WRITEERROR;
                 case SFTP_ABORT:       return FS_FILE_USERABORT;
                 case SFTP_PARTIAL: {
@@ -1972,13 +1979,13 @@ int WINAPI FsGetFileW(LPCWSTR RemoteName, LPWSTR LocalName, int CopyFlags, Remot
                     if (now <= partialSize) {
                         SFTP_LOG("ENTRY", "FsGetFileW auto-resume made no progress at %lld",
                                  static_cast<long long>(now));
-                        return FS_FILE_READERROR;
+                        return readError();
                     }
                     partialSize = now;
                     Resume = true;
                     break;
                 }
-                default:               return FS_FILE_READERROR;
+                default:               return readError();
             }
         }
         return FS_FILE_OK;
@@ -2101,6 +2108,13 @@ int WINAPI FsPutFileW(LPCWSTR LocalName, LPCWSTR RemoteName, int CopyFlags)
                  IsPhpAgentTransport(serverid) ? 1 : 0,
                  serverid->php_tar ? 1 : 0,
                  TarUploadSessionIsActive() ? 1 : 0);
+
+        // TC sets the EXISTS flags only when its own listing shows the file.
+        // A subfolder it never listed, a background copy: the upload, which
+        // truncates, would overwrite without asking. The server is asked
+        // instead, and TC then asks the user.
+        if (!OverWrite && !Resume && RemoteFileExists(serverid, remotedir.data()))
+            return SftpSupportsResume(serverid) ? FS_FILE_EXISTSRESUMEALLOWED : FS_FILE_EXISTS;
 
         const bool setattr = !!(CopyFlags & FS_COPYFLAGS_EXISTS_SAMECASE);
         int rc = SftpUploadFileW(serverid, LocalName, remotedir.data(), Resume, setattr);

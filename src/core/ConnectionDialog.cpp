@@ -25,9 +25,7 @@ extern void LanFileServerSetTrustedInstaller(bool enabled);
 #include "ServerRegistry.h"
 #include "res/resource.h"
 #include "CoreUtils.h"
-#include "UtfConversion.h"
 #include "UnicodeHelpers.h"
-#include "FtpDirectoryParser.h"
 #include "SftpInternal.h"
 #include "WindowsUserFeedback.h"
 #include "PhpAgentClient.h"
@@ -39,6 +37,8 @@ extern void LanFileServerSetTrustedInstaller(bool enabled);
 #include "ProfileSettings.h"
 #include "LngLoader.h"
 #include "DialogLayout.h"
+#include "DialogStrings.h"
+#include "DialogText.h"
 
 // Forward declaration - implemented in PluginHelp.cpp
 std::wstring GetPluginVersionW();
@@ -105,106 +105,6 @@ static void UpdateMainJumpControlStates(HWND hWnd, bool sshMode)
     EnableWindow(GetDlgItem(hWnd, IDC_JUMP_BUTTON), (sshMode && jumpChecked) ? TRUE : FALSE);
 }
 
-static void LocalizeDlgControls(HWND hWnd, UINT captionStrId,
-    std::initializer_list<std::pair<int, UINT>> controls);
-
-// Tighten and right-align the protocol radio buttons to maximize label width.
-static void ArrangeProtocolButtons(HWND hDlg)
-{
-    const int ids[] = { IDC_PROTOAUTO, IDC_PROTOV4, IDC_PROTOV6 };
-    RECT rDlg{};
-    GetClientRect(hDlg, &rDlg);
-
-    RECT rBase = { 0, 0, 4, 4 };
-    MapDialogRect(hDlg, &rBase);
-    const int gap = rBase.right / 2;
-
-    int right = rDlg.right - gap;
-
-    for (int i = 2; i >= 0; --i) {
-        HWND hw = GetDlgItem(hDlg, ids[i]);
-        if (!hw) continue;
-        RECT r;
-        GetWindowRect(hw, &r);
-        MapWindowPoints(NULL, hDlg, (LPPOINT)&r, 2);
-        
-        const int textW = DlgLayout::MeasureText(hDlg, hw);
-        const int actualBoxW = r.bottom - r.top; 
-        const int w = textW + actualBoxW + gap;
-        
-        right -= w;
-        SetWindowPos(hw, NULL, right, r.top, w, r.bottom - r.top, SWP_NOZORDER);
-        right -= gap;
-    }
-}
-
-// Position the LAN Pair Session timeout and TrustedInstaller checkbox.
-static void ArrangeLanTimeoutRow(HWND hDlg)
-{
-    HWND hLabel   = GetDlgItem(hDlg, IDC_LAN_TIMEOUT_LABEL);
-    HWND hEdit    = GetDlgItem(hDlg, IDC_LAN_TIMEOUT);
-    HWND hHint    = GetDlgItem(hDlg, IDC_LAN_TIMEOUT_HINT);
-    HWND hTi      = GetDlgItem(hDlg, IDC_LAN_TI);
-    HWND hSystem  = GetDlgItem(hDlg, IDC_SYSTEM);
-
-    if (!hLabel || !hEdit || !hHint || !hTi || !hSystem)
-        return;
-
-    const RECT rLabel = DlgLayout::GetRect(hDlg, IDC_LAN_TIMEOUT_LABEL);
-    const RECT rEdit  = DlgLayout::GetRect(hDlg, IDC_LAN_TIMEOUT);
-    const RECT rHint  = DlgLayout::GetRect(hDlg, IDC_LAN_TIMEOUT_HINT);
-    const RECT rTi    = DlgLayout::GetRect(hDlg, IDC_LAN_TI);
-    const RECT rSystem= DlgLayout::GetRect(hDlg, IDC_SYSTEM);
-    RECT rDlg{};
-    GetClientRect(hDlg, &rDlg);
-
-    const int gap = DlgLayout::kGap;
-
-    const int szLabel = DlgLayout::MeasureText(hDlg, hLabel);
-    const int labelX  = rLabel.left;
-    const int labelW  = szLabel + gap;
-
-    DlgLayout::Move(hDlg, IDC_LAN_TIMEOUT_LABEL, labelX, rLabel.top, labelW, rLabel.bottom - rLabel.top);
-
-    const int editX = labelX + labelW;
-    const int editW = rEdit.right - rEdit.left;
-    DlgLayout::Move(hDlg, IDC_LAN_TIMEOUT, editX, rEdit.top, editW, rEdit.bottom - rEdit.top);
-
-    const int szHint = DlgLayout::MeasureText(hDlg, hHint);
-    const int hintX  = editX + editW + gap;
-    const int hintW  = szHint + gap;
-    DlgLayout::Move(hDlg, IDC_LAN_TIMEOUT_HINT, hintX, rHint.top, hintW, rHint.bottom - rHint.top);
-
-    const int tiX = rSystem.left;
-    const int tiW = rDlg.right - gap - tiX;
-    if (tiW > 0)
-        DlgLayout::Move(hDlg, IDC_LAN_TI, tiX, rTi.top, tiW, rTi.bottom - rTi.top);
-}
-
-// Position the PHP TAR checkbox 4px to the right of the permissions-row right edit.
-// Must be called after ArrangePermissionsRow so IDC_DIRMOD is already at its final position.
-static void ArrangePhpTarCheckbox(HWND hDlg)
-{
-    HWND hTar    = GetDlgItem(hDlg, IDC_PHP_TAR);
-    HWND hDirmod = GetDlgItem(hDlg, IDC_DIRMOD);
-    if (!hTar || !hDirmod)
-        return;
-
-    const RECT rTar    = DlgLayout::GetRect(hDlg, IDC_PHP_TAR);
-    const RECT rDirmod = DlgLayout::GetRect(hDlg, IDC_DIRMOD);
-    RECT rDlg{};
-    GetClientRect(hDlg, &rDlg);
-
-    const int gap = DlgLayout::kGap;
-    const int h   = rTar.bottom - rTar.top;
-    const int x   = rDirmod.right + gap * 3;
-    const int w   = rDlg.right - gap - x;
-    if (w <= 0)
-        return;
-
-    DlgLayout::Move(hDlg, IDC_PHP_TAR, x, rTar.top, w, h);
-}
-
 // Jump Host settings dialog procedure.
 static INT_PTR CALLBACK JumpHostDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -218,20 +118,7 @@ static INT_PTR CALLBACK JumpHostDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
 
         pConnectSettings cs = ctx->cs;
 
-        LocalizeDlgControls(hWnd, IDS_JUMP_DLG_CAPTION, {
-            { IDC_JUMP_GROUP,        IDS_JUMP_DLG_GROUP    },
-            { IDC_JUMP_LABEL_HOST,   IDS_JUMP_DLG_HOST     },
-            { IDC_JUMP_LABEL_PORT,   IDS_JUMP_DLG_PORT     },
-            { IDC_JUMP_LABEL_USER,   IDS_JUMP_DLG_USER     },
-            { IDC_JUMP_LABEL_PASS,   IDS_JUMP_DLG_PASS     },
-            { IDC_JUMP_LABEL_PUBKEY, IDS_JUMP_DLG_PUBKEY   },
-            { IDC_JUMP_LABEL_PRIVKEY,IDS_JUMP_DLG_PRIVKEY  },
-            { IDC_JUMP_USEAGENT,     IDS_JUMP_DLG_USEAGENT },
-            { IDC_JUMP_CRYPTPASS,    IDS_DLG_CRYPTPASS     },
-            { IDC_JUMP_EDITPASS,     IDS_DLG_CHANGEPASS    },
-            { IDOK,                  IDS_BTN_OK            },
-            { IDCANCEL,              IDS_BTN_CANCEL        },
-        });
+        LocalizeDlgControls(hWnd, kJumpHostDialogCaption, kJumpHostDialogStrings);
 
         // With a reference the resolver decides what the jump host is, so show
         // exactly that rather than the session's own unused jump_* fields.
@@ -276,6 +163,8 @@ static INT_PTR CALLBACK JumpHostDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
             EnableWindow(GetDlgItem(hWnd, IDC_JUMP_CRYPTPASS), FALSE);
 
         UpdateJumpControlStates(hWnd, fromSession);
+        DlgLayout::OnInitDialog(hWnd);
+        DlgLayout::LayoutJumpHostDialog(hWnd);
 
         // Center dialog over parent.
         RECT r1{}, r2{};
@@ -288,6 +177,13 @@ static INT_PTR CALLBACK JumpHostDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
         }
         return 1;
     }
+
+    case DlgLayout::kDpiChangedMessage:
+        PostMessage(hWnd, DlgLayout::kRelayoutMessage, 0, 0);
+        return 0;
+    case DlgLayout::kRelayoutMessage:
+        DlgLayout::LayoutJumpHostDialog(hWnd);
+        return 1;
 
     case WM_COMMAND:
         if (!ctx) break;
@@ -423,6 +319,7 @@ private:
     void    OnProxyButton();
     void    OnProxyComboChanged();
     void    OnPluginHelp();
+    void    OnMoreButton();
     void    OnCertHelp();
     void    OnPasswordHelp();
     void    OnUtf8Help();
@@ -533,38 +430,6 @@ static std::wstring Utf8ToWide(const std::string& s)
     std::wstring out(static_cast<size_t>(len - 1), L'\0');
     MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, s.c_str(), -1, out.data(), len);
     return out;
-}
-
-static std::wstring LoadResStringW(UINT id)
-{
-    const char* lngStr = LngGetString(id);
-    if (lngStr)
-        return Utf8ToWide(std::string(lngStr));
-    std::array<wchar_t, 1024> buf{};
-    const int n = LoadStringW(hinst, id, buf.data(), static_cast<int>(buf.size() - 1));
-    if (n <= 0)
-        return {};
-    return std::wstring(buf.data(), static_cast<size_t>(n));
-}
-
-// Sets a dialog control's text from LNG/RC. No-op if no translation is found.
-static void LocalizeDlgControl(HWND hWnd, int ctrlId, UINT strId)
-{
-    std::wstring s = LoadResStringW(strId);
-    if (!s.empty())
-        SetDlgItemTextW(hWnd, ctrlId, s.c_str());
-}
-
-// Translates all named controls in a dialog from LNG/RC string table.
-// Call from WM_INITDIALOG after the dialog is fully initialized.
-static void LocalizeDlgControls(HWND hWnd, UINT captionStrId,
-    std::initializer_list<std::pair<int, UINT>> controls)
-{
-    std::wstring caption = LoadResStringW(captionStrId);
-    if (!caption.empty())
-        SetWindowTextW(hWnd, caption.c_str());
-    for (const auto& [ctrlId, strId] : controls)
-        LocalizeDlgControl(hWnd, ctrlId, strId);
 }
 
 // Repositions label + checkbox + button on one row based on actual text widths.
@@ -787,8 +652,14 @@ static void EnsureLanDiscoveryRunning(HWND hWnd, ConnectDialogContext* dlgCtx, p
         return;
     }
 
+    // The Quick Connection entry is not a name to advertise on the LAN; it
+    // reads in English or in whichever language is loaded.
     const std::wstring sessionName = GetSessionDisplayNameW(hWnd);
-    if (!sessionName.empty() && _wcsicmp(sessionName.c_str(), L"Quick connect") != 0 && _wcsicmp(sessionName.c_str(), L"Szybkie połączenie") != 0) {
+    const std::wstring quickLocal = LoadResStringW(IDS_QUICKCONNECT);
+    const bool isQuickConnection =
+        _wcsicmp(sessionName.c_str(), L"Quick Connection") == 0 ||
+        (!quickLocal.empty() && _wcsicmp(sessionName.c_str(), quickLocal.c_str()) == 0);
+    if (!sessionName.empty() && !isQuickConnection) {
         dlgCtx->lanDisplayName = sessionName;
     }
 
@@ -865,6 +736,8 @@ static INT_PTR CALLBACK PairingProgressDlgProc(HWND hDlg, UINT msg, WPARAM wPara
             ? std::format(L"{} s", p->secondsLeft)
             : FormatBracesW(secsTemplW, { std::wstring_view(secsNumW) });
         SetDlgItemTextW(hDlg, IDC_PAIRING_COUNTDOWN, secsW.c_str());
+        DlgLayout::OnInitDialog(hDlg);
+        DlgLayout::FitToText(hDlg);
 
         SetTimer(hDlg, 1, 1000, nullptr);
         return TRUE;
@@ -1353,6 +1226,7 @@ static void RebuildSystemAndEncodingCombos(HWND hWnd, ConnectDialogContext* dlgC
 
 static INT_PTR ShowLocalizedDialogBoxParam(int dialogId, HWND parent, DLGPROC dlgProc, LPARAM dlgParam) noexcept
 {
+    DlgLayout::PerMonitorDpiScope dpiScope;
     const LANGID langId = GetConfiguredUiLanguageId();
     if (langId != 0) {
         WORD bestLang = langId;
@@ -1528,6 +1402,7 @@ void UpdateScpOnlyDependentControls(HWND hWnd)
         EnableWindow(certHelp, FALSE);
         EnableWindow(certHelpPriv, FALSE);
         EnableWindow(phpShellBtn, TRUE);
+        EnableWindow(GetDlgItem(hWnd, IDC_MORE_BUTTON), FALSE);
         const std::wstring pairBtn = LoadResStringW(IDS_BUTTON_PAIR);
         SetWindowTextW(phpShellBtn, pairBtn.empty() ? L"Pair..." : pairBtn.c_str());
         ShowWindow(GetDlgItem(hWnd, IDC_PHP_TAR),           SW_HIDE);
@@ -1543,7 +1418,7 @@ void UpdateScpOnlyDependentControls(HWND hWnd)
         ShowWindow(GetDlgItem(hWnd, IDC_FILEMOD),           SW_HIDE);
         ShowWindow(GetDlgItem(hWnd, IDC_DIRMOD_LABEL),      SW_HIDE);
         ShowWindow(GetDlgItem(hWnd, IDC_DIRMOD),            SW_HIDE);
-        ArrangeLanTimeoutRow(hWnd);
+        DlgLayout::LayoutConnectionDialog(hWnd);
         SendMessage(hWnd, WM_SETREDRAW, TRUE, 0);
         RedrawWindow(hWnd, nullptr, nullptr, RDW_ERASE | RDW_FRAME | RDW_INVALIDATE | RDW_ALLCHILDREN);
         return;
@@ -1584,11 +1459,13 @@ void UpdateScpOnlyDependentControls(HWND hWnd)
         EnableWindow(certHelp, FALSE);
         EnableWindow(certHelpPriv, FALSE);
         EnableWindow(phpShellBtn, phpShellMode ? TRUE : FALSE);
+        EnableWindow(GetDlgItem(hWnd, IDC_MORE_BUTTON), FALSE);
         EnableWindow(GetDlgItem(hWnd, IDC_PHP_TAR), (phpAgentMode || phpShellMode) ? TRUE : FALSE);
         const std::wstring shellBtn = LoadResStringW(IDS_BUTTON_SHELL);
         SetWindowTextW(phpShellBtn, shellBtn.empty() ? L"Shell..." : shellBtn.c_str());
         UpdateCertSectionState(hWnd);
         UpdateMainJumpControlStates(hWnd, false);
+        DlgLayout::LayoutConnectionDialog(hWnd);
         SendMessage(hWnd, WM_SETREDRAW, TRUE, 0);
         RedrawWindow(hWnd, nullptr, nullptr, RDW_ERASE | RDW_FRAME | RDW_INVALIDATE | RDW_ALLCHILDREN);
         return;
@@ -1617,10 +1494,13 @@ void UpdateScpOnlyDependentControls(HWND hWnd)
     UpdateMainJumpControlStates(hWnd, true);
 
     EnableWindow(scpData, !scpOnly);
+    EnableWindow(GetDlgItem(hWnd, IDC_MORE_BUTTON), !scpOnly);
     EnableWindow(shellTransfer, scpOnly);
     if (!scpOnly)
         CheckDlgButton(hWnd, IDC_SHELLTRANSFER, BST_UNCHECKED);
 
+    // Visibility and the Shell/Pair caption may have changed.
+    DlgLayout::LayoutConnectionDialog(hWnd);
     SendMessage(hWnd, WM_SETREDRAW, TRUE, 0);
     RedrawWindow(hWnd, nullptr, nullptr, RDW_ERASE | RDW_FRAME | RDW_INVALIDATE | RDW_ALLCHILDREN);
 }
@@ -1767,20 +1647,7 @@ INT_PTR WINAPI ProxyDlgProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lPara
             return 1;
         }
         SetWindowLongPtr(hWnd, DWLP_USER, lParam);
-        LocalizeDlgControls(hWnd, IDS_PROXY_DLG_CAPTION, {
-            { IDC_PROXY_GROUP,      IDS_PROXY_DLG_GROUP   },
-            { IDC_NOPROXY,          IDS_PROXY_DLG_NOPROXY },
-            { IDC_OTHERPROXY,       IDS_PROXY_DLG_HTTP    },
-            { IDC_SOCKS4APROXY,     IDS_PROXY_DLG_SOCKS4A },
-            { IDC_SOCKS5PROXY,      IDS_PROXY_DLG_SOCKS5  },
-            { IDC_PROXY_LABEL_HOST, IDS_PROXY_DLG_HOST    },
-            { IDC_PROXY_LABEL_USER, IDS_PROXY_DLG_USER    },
-            { IDC_PROXY_LABEL_PASS, IDS_PROXY_DLG_PASS    },
-            { IDC_CRYPTPASS,        IDS_DLG_CRYPTPASS     },
-            { IDC_EDITPASS,         IDS_DLG_CHANGEPASS    },
-            { IDOK,                 IDS_BTN_OK            },
-            { IDCANCEL,             IDS_BTN_CANCEL        },
-        });
+        LocalizeDlgControls(hWnd, kProxyDialogCaption, kProxyDialogStrings);
         LoadProxySettingsFromNr(ctx->proxynr, &ctx->connectData, ctx->iniFileName);
 
         switch (ConnectData.proxytype) {
@@ -1826,6 +1693,9 @@ INT_PTR WINAPI ProxyDlgProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lPara
         }
         
 
+        DlgLayout::OnInitDialog(hWnd);
+        DlgLayout::LayoutProxyDialog(hWnd);
+
         // Center the dialog relative to its parent window.
         if (GetWindowRect(hWnd, &rt1) && GetWindowRect(GetParent(hWnd), &rt2)) {
             w = rt2.right  - rt2.left;
@@ -1838,6 +1708,12 @@ INT_PTR WINAPI ProxyDlgProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lPara
         }
         return 1;
     }
+    case DlgLayout::kDpiChangedMessage:
+        PostMessage(hWnd, DlgLayout::kRelayoutMessage, 0, 0);
+        return 0;
+    case DlgLayout::kRelayoutMessage:
+        DlgLayout::LayoutProxyDialog(hWnd);
+        return 1;
     case WM_SHOWWINDOW: {
         if (ctx && ctx->focusset)
             SetFocus(GetDlgItem(hWnd, ctx->focusset));
@@ -2156,6 +2032,93 @@ static void OnProxyButtonCommand(HWND hWnd, pConnectSettings dlgConnectResults, 
     }
 }
 
+// "More session settings": settings a session rarely needs, edited on a
+// copy that the connection dialog takes over on OK.
+struct MoreSettings {
+    std::string serverCommand;   // sftpservercommand
+    std::string sendCommand;     // sendcommand, run after login
+    int sendCommandMode = 0;     // sendcommandmode: 0/1 wait and show output, 2 do not wait
+};
+
+static std::string TrimmedDlgItemText(HWND hWnd, int id)
+{
+    std::array<char, 1024> buf{};
+    GetDlgItemTextI(hWnd, id, buf.data(), static_cast<int>(buf.size() - 1));
+    const std::string value = buf.data();
+    const size_t first = value.find_first_not_of(" \t");
+    if (first == std::string::npos)
+        return {};
+    return value.substr(first, value.find_last_not_of(" \t") - first + 1);
+}
+
+static INT_PTR CALLBACK MoreSettingsDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+    auto* more = reinterpret_cast<MoreSettings*>(GetWindowLongPtr(hWnd, DWLP_USER));
+
+    switch (msg) {
+    case WM_INITDIALOG: {
+        more = reinterpret_cast<MoreSettings*>(lParam);
+        SetWindowLongPtr(hWnd, DWLP_USER, lParam);
+        if (!more) { EndDialog(hWnd, IDCANCEL); return 1; }
+        LocalizeDlgControls(hWnd, kMoreSettingsDialogCaption, kMoreSettingsDialogStrings);
+        // The profile reads both back into MAX_PATH buffers.
+        SendDlgItemMessageW(hWnd, IDC_MORE_SFTPSERVER, EM_LIMITTEXT, MAX_PATH - 2, 0);
+        SendDlgItemMessageW(hWnd, IDC_MORE_SENDCMD, EM_LIMITTEXT, MAX_PATH - 2, 0);
+        SetDlgItemTextI(hWnd, IDC_MORE_SFTPSERVER, more->serverCommand.c_str());
+        SetDlgItemTextI(hWnd, IDC_MORE_SENDCMD, more->sendCommand.c_str());
+        for (UINT id : { IDS_MORE_SENDCMD_WAIT, IDS_MORE_SENDCMD_NOWAIT }) {
+            const std::wstring item = LoadResStringW(id);
+            SendDlgItemMessageW(hWnd, IDC_MORE_SENDCMD_MODE, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(item.c_str()));
+        }
+        SendDlgItemMessageW(hWnd, IDC_MORE_SENDCMD_MODE, CB_SETCURSEL, more->sendCommandMode == 2 ? 1 : 0, 0);
+        DlgLayout::OnInitDialog(hWnd);
+        DlgLayout::LayoutMoreSettingsDialog(hWnd);
+
+        // Center dialog over parent.
+        RECT r1{}, r2{};
+        if (GetWindowRect(hWnd, &r1) && GetWindowRect(GetParent(hWnd), &r2)) {
+            int w = r2.right - r2.left, h = r2.bottom - r2.top;
+            int dw = r1.right - r1.left, dh = r1.bottom - r1.top;
+            SetWindowPos(hWnd, nullptr,
+                r2.left + (w - dw) / 2, r2.top + (h - dh) / 2,
+                0, 0, SWP_NOZORDER | SWP_NOSIZE);
+        }
+        return 1;
+    }
+    case DlgLayout::kDpiChangedMessage:
+        PostMessage(hWnd, DlgLayout::kRelayoutMessage, 0, 0);
+        return 0;
+    case DlgLayout::kRelayoutMessage:
+        DlgLayout::LayoutMoreSettingsDialog(hWnd);
+        return 1;
+    case WM_COMMAND:
+        if (!more) break;
+        switch (LOWORD(wParam)) {
+        case IDOK: {
+            more->serverCommand = TrimmedDlgItemText(hWnd, IDC_MORE_SFTPSERVER);
+            more->sendCommand = TrimmedDlgItemText(hWnd, IDC_MORE_SENDCMD);
+            // Modes 0 and 1 both wait; a stored 1 stays as long as waiting is chosen.
+            const bool noWait = SendDlgItemMessageW(hWnd, IDC_MORE_SENDCMD_MODE, CB_GETCURSEL, 0, 0) == 1;
+            if (noWait)
+                more->sendCommandMode = 2;
+            else if (more->sendCommandMode == 2)
+                more->sendCommandMode = 0;
+            EndDialog(hWnd, IDOK);
+            return 1;
+        }
+        case IDCANCEL:
+            EndDialog(hWnd, IDCANCEL);
+            return 1;
+        default:
+            break;
+        }
+        break;
+    default:
+        break;
+    }
+    return 0;
+}
+
 static bool OnJumpButtonCommand(HWND hWnd, pConnectSettings dlgConnectResults)
 {
     if (!dlgConnectResults) return false;
@@ -2217,6 +2180,14 @@ INT_PTR ConnectionDialog::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
 {
     switch (msg) {
     case WM_INITDIALOG:   return OnInitDialog(lParam);
+    case DlgLayout::kDpiChangedMessage:
+        // The dialog manager rescales the dialog after this message; the
+        // text-driven layout runs once that is done.
+        PostMessage(m_hWnd, DlgLayout::kRelayoutMessage, 0, 0);
+        return 0;
+    case DlgLayout::kRelayoutMessage:
+        DlgLayout::LayoutConnectionDialog(m_hWnd);
+        return TRUE;
     case WM_SHOWWINDOW:   return OnShowWindow(LOWORD(wParam));
     case WM_COMMAND:      return OnCommand(wParam, lParam);
     case WM_APP_LAN_PEER: return OnLanPeerMessage(wParam, lParam);
@@ -2234,39 +2205,7 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
     LPCSTR dlgIniFileName = m_ctx->iniFileName;
     int* dlgFocusset = &m_ctx->focusset;
 
-    LocalizeDlgControls(m_hWnd, IDS_DLG_CAPTION, {
-        { IDC_LABEL_CONNECTTO,    IDS_DLG_CONNECTTO         },
-        { IDC_LABEL_USERNAME,     IDS_DLG_USERNAME          },
-        { IDC_PASSLABEL,          IDS_JUMP_DLG_PASS         },
-        { IDC_USEAGENT,           IDS_DLG_USEAGENT          },
-        { IDC_EDITPASS,           IDS_DLG_CHANGEPASS        },
-        { IDC_CRYPTPASS,          IDS_DLG_CRYPTPASS         },
-        { IDC_LABEL_CERTGROUP,    IDS_DLG_CERTGROUP         },
-        { IDC_STATICPUB,          IDS_DLG_PUBKEY            },
-        { IDC_STATICPEM,          IDS_DLG_PRIVKEY           },
-        { IDC_COMPRESS,           IDS_DLG_COMPRESS          },
-        { IDC_DETAILED_LOG,       IDS_DLG_DETAILED_LOG      },
-        { IDC_SHELLTRANSFER,      IDS_DLG_SHELLTRANSFER     },
-        { IDC_SCP_DATA,           IDS_DLG_SCP_DATA          },
-        { IDC_SCP_ALL,            IDS_DLG_SCP_ALL           },
-        { IDC_LABEL_TRANSFER,     IDS_DLG_TRANSFER          },
-        { IDC_SYSTEMLABEL,        IDS_DLG_SYSTEM            },
-        { IDC_CODEPAGELABEL,      IDS_DLG_ENCODING          },
-        { IDC_PERMISSIONS_GROUP,  IDS_DLG_PERMISSIONS_GROUP },
-        { IDC_LANPAIR_GROUP,      IDS_DLG_LANPAIR_GROUP     },
-        { IDC_FILEMOD_LABEL,      IDS_DLG_FILEMOD           },
-        { IDC_DIRMOD_LABEL,       IDS_DLG_DIRMOD            },
-        { IDC_LABEL_SESSION,      IDS_DLG_SESSION           },
-        { IDC_LABEL_JUMPHOST_GRP, IDS_DLG_JUMPHOST_GRP      },
-        { IDC_JUMP_ENABLE,        IDS_DLG_USE_JUMPHOST      },
-        { IDC_JUMP_BUTTON,        IDS_DLG_JUMP_BUTTON       },
-        { IDC_LABEL_PROXY_SETTINGS, IDS_DLG_PROXY_SETTINGS  },
-        { IDC_PHP_TAR,              IDS_DLG_PHP_TAR         },
-        { IDC_LAN_TI,               IDS_LAN_TI              },
-        { IDC_PLUGINHELP,         IDS_BTN_HELP              },
-        { IDOK,                   IDS_BTN_OK                },
-        { IDCANCEL,               IDS_BTN_CANCEL            },
-    });
+    LocalizeDlgControls(m_hWnd, kConnectionDialogCaption, kConnectionDialogStrings);
 
     // Append version to dialog title: "Połącz z serwerem SFTP v1.0.0.x"
     {
@@ -2278,17 +2217,8 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
         }
     }
 
-    ArrangeInlineRow(m_hWnd, IDC_LABEL_JUMPHOST_GRP, IDC_JUMP_ENABLE, IDC_JUMP_BUTTON,
-                     IDC_JUMP_SESSION_PICK);
-    ArrangePasswordRow(m_hWnd, IDC_PASSLABEL, IDC_PASSWORDHELP, IDC_USEAGENT);
-    ArrangePermissionsRow(m_hWnd, IDC_FILEMOD_LABEL, IDC_FILEMOD, IDC_DIRMOD_LABEL, IDC_DIRMOD, IDC_PERMISSIONS_GROUP);
-    ArrangePhpTarCheckbox(m_hWnd);
-    ArrangeProtocolButtons(m_hWnd);
-    ArrangeExpandLabel(m_hWnd, IDC_LABEL_CONNECTTO, IDC_PROTOAUTO);
-    ArrangeExpandLabel(m_hWnd, IDC_CODEPAGELABEL,   IDC_UTF8HELP);
-    ArrangeExpandLabel(m_hWnd, IDC_LABEL_TRANSFER,  IDC_TRANSFERMODE);
-    ArrangeExpandLabel(m_hWnd, IDC_SYSTEMLABEL,     IDC_SYSTEM);
-    ArrangeLabelFillButton(m_hWnd, IDC_LABEL_SESSION, IDC_SESSIONNAME, IDC_PHPSHELL);
+    DlgLayout::OnInitDialog(m_hWnd);
+    DlgLayout::LayoutConnectionDialog(m_hWnd);
 
 
     if (m_ctx->lanPeerId.empty())
@@ -2512,6 +2442,9 @@ INT_PTR ConnectionDialog::OnCommand(WPARAM wParam, LPARAM /*lParam*/)
     case IDC_PROXYCOMBO:
         if (HIWORD(wParam) == CBN_SELCHANGE)
             OnProxyComboChanged();
+        break;
+    case IDC_MORE_BUTTON:
+        OnMoreButton();
         break;
     case IDC_PLUGINHELP:
         OnPluginHelp();
@@ -2783,6 +2716,17 @@ void ConnectionDialog::OnOk()
         IniWriteString(targetProfile.data(), "scponly",         m_settings->scponly              ? "1" : nullptr, dlgIniFileName);
         IniWriteString(targetProfile.data(), "shelltransfer",   m_settings->shell_transfer_dd    ? "1" : nullptr, dlgIniFileName);
         IniWriteString(targetProfile.data(), "shelltransferforce", m_settings->shell_transfer_force ? "1" : nullptr, dlgIniFileName);
+        IniWriteString(targetProfile.data(), "sftpservercommand",
+            m_settings->sftpservercommand.empty() ? nullptr : m_settings->sftpservercommand.c_str(), dlgIniFileName);
+        IniWriteString(targetProfile.data(), "sendcommand",
+            m_settings->connectsendcommand.empty() ? nullptr : m_settings->connectsendcommand.c_str(), dlgIniFileName);
+        if (m_settings->sendcommandmode != 0) {
+            std::array<char, 16> modeBuf{};
+            _itoa_s(m_settings->sendcommandmode, modeBuf.data(), modeBuf.size(), 10);
+            IniWriteString(targetProfile.data(), "sendcommandmode", modeBuf.data(), dlgIniFileName);
+        } else {
+            IniWriteString(targetProfile.data(), "sendcommandmode", nullptr, dlgIniFileName);
+        }
         IniWriteString(targetProfile.data(), "pubkeyfile",   m_settings->pubkeyfile.empty()   ? nullptr : m_settings->pubkeyfile.c_str(),   dlgIniFileName);
         IniWriteString(targetProfile.data(), "privkeyfile",  m_settings->privkeyfile.empty()  ? nullptr : m_settings->privkeyfile.c_str(),  dlgIniFileName);
         IniWriteString(targetProfile.data(), "useagent",     m_settings->useagent             ? "1" : nullptr, dlgIniFileName);
@@ -2975,6 +2919,18 @@ void ConnectionDialog::OnProxyComboChanged()
         PostMessage(m_hWnd, WM_COMMAND, IDC_PROXYBUTTON, 0);
 }
 
+
+void ConnectionDialog::OnMoreButton()
+{
+    if (!m_settings) return;
+    MoreSettings more{m_settings->sftpservercommand, m_settings->connectsendcommand, m_settings->sendcommandmode};
+    if (ShowLocalizedDialogBoxParam(IDD_MORE_SETTINGS, m_hWnd, MoreSettingsDlgProc,
+                                    reinterpret_cast<LPARAM>(&more)) != IDOK)
+        return;
+    m_settings->sftpservercommand = more.serverCommand;
+    m_settings->connectsendcommand = more.sendCommand;
+    m_settings->sendcommandmode = more.sendCommandMode;
+}
 
 void ConnectionDialog::OnPluginHelp()
 {

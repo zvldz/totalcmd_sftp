@@ -13,11 +13,17 @@
 #include "TransferUtils.h"
 #include "ScpTransfer.h"
 #include "ScpTransferInternal.h"
+#include "TextConversion.h"
 #include "res/resource.h"
 
-// Keep command length safely below shell line limits on restricted hosts.
-// 1024 bytes -> 1368 base64 chars (+ command overhead).
+// An upload carries its data inside the command line, and the shell reads
+// that line through a terminal, which holds at most 4095 bytes of one line.
+// A shell that takes base64 spread over lines inside one quoted word gets
+// 48 KiB per command in lines of 76 characters; any other gets one line of
+// 1 KiB (1368 characters plus the command around them).
 static constexpr size_t SHELL_DD_UPLOAD_CHUNK_BYTES  = 1024;
+static constexpr size_t SHELL_DD_UPLOAD_LARGE_CHUNK  = 48 * 1024;
+static constexpr size_t SHELL_B64_LINE_CHARS         = 76;
 static constexpr size_t SHELL_DD_DOWNLOAD_BLOCK      = 65536;
 
 #define SHELL_DD_LOG(fmt, ...) SFTP_LOG("SHELL_DD", fmt, ##__VA_ARGS__)
@@ -39,6 +45,19 @@ static std::string ShellB64Encode(std::span<const uint8_t> data)
         out += kB64Chars[(b >> 12) & 0x3F];
         out += (i + 1 < len) ? kB64Chars[(b >> 6) & 0x3F] : '=';
         out += (i + 2 < len) ? kB64Chars[b & 0x3F]        : '=';
+    }
+    return out;
+}
+
+// Breaks base64 text into lines; `base64 -d` skips the line ends.
+static std::string ShellB64WrapLines(const std::string& b64)
+{
+    std::string out;
+    out.reserve(b64.size() + b64.size() / SHELL_B64_LINE_CHARS + 1);
+    for (size_t i = 0; i < b64.size(); i += SHELL_B64_LINE_CHARS) {
+        if (i)
+            out += '\n';
+        out.append(b64, i, SHELL_B64_LINE_CHARS);
     }
     return out;
 }
@@ -160,12 +179,16 @@ static bool ShellExecPersistentProcessLines(
     _snprintf_s(endMarker.data(), endMarker.size(), _TRUNCATE, "__WFX_DD_END__%u", seq);
     const size_t endMarkerLen = strlen(endMarker.data());
 
+    // The end marker goes out split by an empty string, "__WFX_DD_""END__n":
+    // the shell joins it when the command runs, but a terminal that still
+    // echoes (a host without `stty`) never shows it whole - so the echo of a
+    // command's last line cannot pass for the command having finished.
     std::string fullCmd = "echo \"";
     fullCmd += beginMarker.data();
     fullCmd += "\"; ";
     fullCmd += payload;
-    fullCmd += "; echo \"";
-    fullCmd += endMarker.data();
+    fullCmd += "; echo \"__WFX_DD_\"\"";
+    fullCmd += endMarker.data() + strlen("__WFX_DD_");
     fullCmd += "\":$?\n";
 
     if (!ShellSendPersistentCommand(cs, fullCmd)) {
@@ -323,6 +346,7 @@ static int ShellDdDownloadRaw(
     LPCWSTR localNameW,
     int64_t hintedSize,
     int64_t resumeFrom,
+    bool textMode,
     int64_t* outSizeLoaded)
 {
     *outSizeLoaded = resumeFrom;
@@ -353,14 +377,25 @@ static int ShellDdDownloadRaw(
     ch->sendEof();
 
     std::vector<char> buf(SHELL_DD_DOWNLOAD_BLOCK);
+    text_conversion::LfToCrLf toCrLf;
+    std::vector<char> converted;
     const SYSTICKS starttime = get_sys_ticks();
     SYSTICKS lastIoTime = get_sys_ticks();
 
     while (true) {
         int rc = (int)ch->read(buf.data(), buf.size());
         if (rc > 0) {
+            // The count stays in server bytes, which the size checks use;
+            // only what is written to disk is converted.
+            const char* out = buf.data();
+            size_t outLen = static_cast<size_t>(rc);
+            if (textMode) {
+                converted.clear();
+                outLen = toCrLf.Convert(buf.data(), outLen, converted);
+                out = converted.data();
+            }
             DWORD written = 0;
-            if (!WriteFile(localfile, buf.data(), (DWORD)rc, &written, nullptr) || written != (DWORD)rc) {
+            if (!WriteFile(localfile, out, (DWORD)outLen, &written, nullptr) || written != (DWORD)outLen) {
                 DisconnectShell(ch.get());
                 return SFTP_WRITEFAILED;
             }
@@ -406,6 +441,7 @@ static int ShellDdDownloadBase64(
     LPCWSTR localNameW,
     int64_t hintedSize,
     int64_t resumeFrom,
+    bool textMode,
     int64_t* outSizeLoaded)
 {
     *outSizeLoaded = resumeFrom;
@@ -431,10 +467,13 @@ static int ShellDdDownloadBase64(
     SHELL_DD_LOG("b64 DL payload: %s", payload.c_str());
 
     std::vector<uint8_t> decodeBuf(SHELL_DD_DOWNLOAD_BLOCK);
+    text_conversion::LfToCrLf toCrLf;
+    std::vector<char> converted;
     const SYSTICKS starttime = get_sys_ticks();
     int lineCount = 0;    
     int64_t decodedTotal = resumeFrom;
     int streamRc = SFTP_OK;
+    int exitCode = -1;
     bool ok = ShellExecPersistentProcessLines(cs, payload, 90000,
         [&](const char* p, size_t lineLen) -> bool {
             lineCount++;
@@ -448,8 +487,17 @@ static int ShellDdDownloadBase64(
             if (decoded == 0)
                 return true;
 
+            // The counts stay in server bytes, which the size checks use;
+            // only what is written to disk is converted.
+            const char* out = reinterpret_cast<const char*>(decodeBuf.data());
+            size_t outLen = decoded;
+            if (textMode) {
+                converted.clear();
+                outLen = toCrLf.Convert(out, outLen, converted);
+                out = converted.data();
+            }
             DWORD written = 0;
-            if (!WriteFile(localfile, decodeBuf.data(), (DWORD)decoded, &written, nullptr) || written != (DWORD)decoded) {
+            if (!WriteFile(localfile, out, (DWORD)outLen, &written, nullptr) || written != (DWORD)outLen) {
                 SHELL_DD_LOG("b64 DL write failed decoded=%llu written=%lu",
                             (unsigned long long)decoded, (unsigned long)written);
                 streamRc = SFTP_WRITEFAILED;
@@ -470,15 +518,24 @@ static int ShellDdDownloadBase64(
                 return false;
             }
             return true;
-        });
+        }, &exitCode);
     if (!ok) {
         if (streamRc != SFTP_OK)
             return streamRc;
         SHELL_DD_LOG("b64 DL: persistent shell command failed");
         return SFTP_READFAILED;
     }
-    SHELL_DD_LOG("b64 DL end: lines=%d decodedTotal=%lld out=%lld",
-                 lineCount, (long long)decodedTotal, (long long)*outSizeLoaded);
+    SHELL_DD_LOG("b64 DL end: lines=%d decodedTotal=%lld out=%lld exit=%d",
+                 lineCount, (long long)decodedTotal, (long long)*outSizeLoaded, exitCode);
+
+    // A file that could not be read (missing, no permission) gives no output
+    // at all - indistinguishable from an empty file except by base64's status.
+    // A resumed read is a pipeline whose status is the encoder's; its
+    // completeness is checked by size below.
+    if (resumeFrom == 0 && exitCode != 0) {
+        SHELL_DD_LOG("b64 DL failed: base64 exited with %d", exitCode);
+        return SFTP_READFAILED;
+    }
 
     if (lineCount == 0 && hintedSize > resumeFrom) {
         SHELL_DD_LOG("b64 DL failed: no lines returned for non-empty file");
@@ -506,6 +563,7 @@ static int ShellDdUploadRaw(
     LPCWSTR localNameW,
     int64_t fileSize,
     int64_t resumeFrom,
+    bool textMode,
     int64_t* outSizeLoaded)
 {
     *outSizeLoaded = resumeFrom;
@@ -535,14 +593,30 @@ static int ShellDdUploadRaw(
     }
 
     std::vector<char> buf(SHELL_DD_DOWNLOAD_BLOCK);
+    text_conversion::CrLfToLf toLf;
+    std::vector<char> converted;
     const SYSTICKS starttime = get_sys_ticks();
-    DWORD bytesRead = 0;
 
-    while (ReadFile(localfile, buf.data(), (DWORD)buf.size(), &bytesRead, nullptr) && bytesRead > 0) {
-        if (!ScpWriteAll(ch.get(), cs, buf.data(), (size_t)bytesRead, SFTP_SCP_WRITE_IDLE_TIMEOUT_MS)) {
+    // In text mode a CR ending one chunk waits for the next to show whether
+    // an LF follows; end of file releases it.
+    for (;;) {
+        DWORD bytesRead = 0;
+        if (!ReadFile(localfile, buf.data(), (DWORD)buf.size(), &bytesRead, nullptr))
+            break;  // a short read, caught by the size check of the caller
+        const bool atEof = (bytesRead == 0);
+        const char* out = buf.data();
+        size_t outLen = bytesRead;
+        if (textMode) {
+            converted.clear();
+            outLen = atEof ? toLf.Finish(converted) : toLf.Convert(buf.data(), bytesRead, converted);
+            out = converted.data();
+        }
+        if (outLen > 0 && !ScpWriteAll(ch.get(), cs, out, outLen, SFTP_SCP_WRITE_IDLE_TIMEOUT_MS)) {
             DisconnectShell(ch.get());
             return SFTP_WRITEFAILED;
         }
+        if (atEof)
+            break;
         *outSizeLoaded += bytesRead;
         if (UpdatePercentBar(cs, GetPercent(*outSizeLoaded, fileSize), localNameW, remoteNameW)) {
             DisconnectShell(ch.get());
@@ -576,7 +650,24 @@ static int ShellDdUploadRaw(
     return SFTP_OK;
 }
 
-// ---- base64 upload: one channel per chunk via printf | base64 -d ----
+// Whether the shell decodes base64 spread over lines inside one quoted word,
+// asked with six bytes before an upload rather than learned from a damaged one.
+static bool ShellTakesMultiLineBase64(pConnectSettings cs)
+{
+    std::vector<std::string> out;
+    int status = -1;
+    if (!ShellExecPersistentCollectLines(cs, "printf '%s' 'QUJD\nREVG' | base64 -d | wc -c", out, &status) ||
+        status != 0)
+        return false;
+    for (const auto& line : out) {
+        const char* p = ShellTrimLeft(line.c_str());
+        if (p[0] == '6' && (p[1] == '\0' || static_cast<unsigned char>(p[1]) <= ' '))
+            return true;
+    }
+    return false;
+}
+
+// ---- base64 upload: one command per chunk via printf | base64 -d ----
 
 static int ShellDdUploadBase64(
     pConnectSettings cs,
@@ -586,34 +677,63 @@ static int ShellDdUploadBase64(
     LPCWSTR localNameW,
     int64_t fileSize,
     int64_t resumeFrom,
+    bool textMode,
+    int64_t expectedRemoteSize,
     int64_t* outSizeLoaded)
 {
-    // Align resume to 3-byte boundary (base64 encodes in groups of 3).
-    // If alignedResume < resumeFrom, remote file has 1-2 extra bytes —
-    // known limitation: truncate not reliable on restricted hosts.
-    // Worst case: TC detects size mismatch and retransfers the file.
-    int64_t alignedResume = (resumeFrom / 3) * 3;
-    *outSizeLoaded = alignedResume;
+    // Every chunk is encoded and decoded on its own, padding included, so a
+    // resume may start at any byte; rounding it down to a multiple of three
+    // would append bytes the server already holds a second time.
+    *outSizeLoaded = resumeFrom;
 
-    if (alignedResume > 0) {
+    if (resumeFrom > 0) {
         LARGE_INTEGER li;
-        li.QuadPart = alignedResume;
+        li.QuadPart = resumeFrom;
         if (!SetFilePointerEx(localfile, li, nullptr, FILE_BEGIN))
             return SFTP_READFAILED;
     }
 
-    bool firstChunk = (alignedResume == 0);
-    std::vector<uint8_t> readBuf(SHELL_DD_UPLOAD_CHUNK_BYTES);
+    bool firstChunk = (resumeFrom == 0);
+    text_conversion::CrLfToLf toLf;
+    std::vector<char> converted;
     const SYSTICKS starttime = get_sys_ticks();
-    DWORD bytesRead = 0;
 
     if (!EnsureScpShell(cs) || !cs->scpShellChannel) {
         SHELL_DD_LOG("b64 UL: no persistent shell");
         return SFTP_FAILED;
     }
 
-    while (ReadFile(localfile, readBuf.data(), (DWORD)SHELL_DD_UPLOAD_CHUNK_BYTES, &bytesRead, nullptr) && bytesRead > 0) {
-        std::string b64 = ShellB64Encode(std::span<const uint8_t>(readBuf.data(), bytesRead));
+    const bool multiLine = fileSize - resumeFrom > static_cast<int64_t>(SHELL_DD_UPLOAD_CHUNK_BYTES) &&
+                           ShellTakesMultiLineBase64(cs);
+    const size_t chunkBytes = multiLine ? SHELL_DD_UPLOAD_LARGE_CHUNK : SHELL_DD_UPLOAD_CHUNK_BYTES;
+    SHELL_DD_LOG("b64 UL: %zu bytes per command", chunkBytes);
+    std::vector<uint8_t> readBuf(chunkBytes);
+
+    // In text mode a CR ending one chunk waits for the next to show whether
+    // an LF follows; end of file releases it. A chunk that converts to
+    // nothing sends no command.
+    for (;;) {
+        DWORD bytesRead = 0;
+        if (!ReadFile(localfile, readBuf.data(), static_cast<DWORD>(chunkBytes), &bytesRead, nullptr))
+            break;  // a short read, reported below
+        const bool atEof = (bytesRead == 0);
+        const uint8_t* data = readBuf.data();
+        size_t dataLen = bytesRead;
+        if (textMode) {
+            converted.clear();
+            const char* in = reinterpret_cast<const char*>(readBuf.data());
+            dataLen = atEof ? toLf.Finish(converted) : toLf.Convert(in, bytesRead, converted);
+            data = reinterpret_cast<const uint8_t*>(converted.data());
+        }
+        if (dataLen == 0) {
+            if (atEof)
+                break;
+            *outSizeLoaded += (int64_t)bytesRead;
+            continue;
+        }
+        std::string b64 = ShellB64Encode(std::span<const uint8_t>(data, dataLen));
+        if (multiLine)
+            b64 = ShellB64WrapLines(b64);
 
         // ">" truncates/creates on the first chunk; ">>" appends on all subsequent ones.
         const char* redirect = firstChunk ? ">" : ">>";
@@ -640,6 +760,8 @@ static int ShellDdUploadBase64(
             return SFTP_WRITEFAILED;
         }
 
+        if (atEof)
+            break;
         *outSizeLoaded += (int64_t)bytesRead;
 
         if (UpdatePercentBar(cs, GetPercent(*outSizeLoaded, fileSize), localNameW, remoteNameW)) {
@@ -658,6 +780,17 @@ static int ShellDdUploadBase64(
         return SFTP_READFAILED;
     }
 
+    // An empty file sends no chunk, so nothing above created it.
+    if (firstChunk) {
+        const std::string cmd = ": > '" + string_util::ShellQuoteSingle(ShellNormalizeScpPath(remotePath)) + "'";
+        std::vector<std::string> cmdOut;
+        int status = -1;
+        if (!ShellExecPersistentCollectLines(cs, cmd, cmdOut, &status) || status != 0) {
+            SHELL_DD_LOG("b64 upload: creating the empty file failed (%d)", status);
+            return SFTP_WRITEFAILED;
+        }
+    }
+
     // What the server ended up with has the last word. Every chunk answering
     // zero still leaves room for a truncated write, and this upload's caller
     // may delete the local original on the strength of the answer. A server
@@ -667,14 +800,14 @@ static int ShellDdUploadBase64(
         const int64_t remoteSize = ShellGetRemoteFileSize(cs, remotePath);
         if (remoteSize < 0)
             SHELL_DD_LOG("b64 upload: server did not report the size; chunks all confirmed");
-        if (remoteSize >= 0 && remoteSize != fileSize) {
-            SHELL_DD_LOG("b64 upload size mismatch: file %lld, server holds %lld",
-                         (long long)fileSize, (long long)remoteSize);
+        if (remoteSize >= 0 && remoteSize != expectedRemoteSize) {
+            SHELL_DD_LOG("b64 upload size mismatch: expected %lld, server holds %lld",
+                         (long long)expectedRemoteSize, (long long)remoteSize);
             return SFTP_WRITEFAILED;
         }
     }
 
-    ShowTransferSpeedIfLarge("Shell-b64 UL", *outSizeLoaded - alignedResume, starttime);
+    ShowTransferSpeedIfLarge("Shell-b64 UL", *outSizeLoaded - resumeFrom, starttime);
     return SFTP_OK;
 }
 
@@ -688,6 +821,7 @@ int ShellDdDownloadFile(
     LPCWSTR localNameW,
     int64_t hintedSize,
     int64_t resumeFrom,
+    bool textMode,
     int64_t* outSizeLoaded)
 {
     if (!cs || !cs->session || !IsValidFileHandle(localfile) || !outSizeLoaded)
@@ -708,7 +842,7 @@ int ShellDdDownloadFile(
 
     if (!cs->shell_dd_b64only) {
         int rc = ShellDdDownloadRaw(cs, remotePath, remoteNameW,
-                                    localfile, localNameW, hintedSize, resumeFrom, outSizeLoaded);
+                                    localfile, localNameW, hintedSize, resumeFrom, textMode, outSizeLoaded);
         if (rc == SFTP_OK) {
             // Sanity-check size: if the raw channel mangled bytes the count will
             // mismatch. A resumed file cannot be redone from scratch here, so a
@@ -746,7 +880,7 @@ int ShellDdDownloadFile(
 
     ShowStatusId(IDS_LOG_SHELL_BASE64, nullptr, true);
     return ShellDdDownloadBase64(cs, remotePath, remoteNameW,
-                                  localfile, localNameW, hintedSize, resumeFrom, outSizeLoaded);
+                                  localfile, localNameW, hintedSize, resumeFrom, textMode, outSizeLoaded);
 }
 
 int ShellDdUploadFile(
@@ -757,10 +891,23 @@ int ShellDdUploadFile(
     LPCWSTR localNameW,
     int64_t fileSize,
     int64_t resumeFrom,
+    bool textMode,
     int64_t* outSizeLoaded)
 {
     if (!cs || !cs->session || !IsValidFileHandle(localfile) || !outSizeLoaded)
         return SFTP_FAILED;
+
+    // What the server must hold afterwards: the converted size in text mode,
+    // measured with the converter the upload uses. A NUL byte makes the file
+    // binary, sent as it is.
+    int64_t expectedRemoteSize = fileSize;
+    if (textMode) {
+        int64_t converted = 0;
+        if (MeasureTextUpload(localfile, converted))
+            expectedRemoteSize = converted;
+        else
+            textMode = false;
+    }
 
     // Forced mode uses the persistent interactive shell channel only.
     if (cs->shell_transfer_force) {
@@ -786,13 +933,13 @@ int ShellDdUploadFile(
 
     if (!cs->shell_dd_b64only) {
         int rc = ShellDdUploadRaw(cs, remotePath, remoteNameW,
-                                  localfile, localNameW, fileSize, resumeFrom, outSizeLoaded);
+                                  localfile, localNameW, fileSize, resumeFrom, textMode, outSizeLoaded);
         if (rc == SFTP_OK) {
             // Verify remote size.
             int64_t remoteSize = ShellGetRemoteFileSize(cs, remotePath);
-            if (fileSize > 0 && remoteSize != fileSize) {
+            if (expectedRemoteSize > 0 && remoteSize != expectedRemoteSize) {
                 SHELL_DD_LOG("raw UL size mismatch: remote=%lld expected=%lld, switching to base64",
-                             (long long)remoteSize, (long long)fileSize);
+                             (long long)remoteSize, (long long)expectedRemoteSize);
                 cs->shell_dd_b64only = true;
                 SetFilePointer(localfile, 0, nullptr, FILE_BEGIN);
                 *outSizeLoaded = 0;
@@ -815,7 +962,8 @@ int ShellDdUploadFile(
 
     ShowStatusId(IDS_LOG_SHELL_BASE64, nullptr, true);
     return ShellDdUploadBase64(cs, remotePath, remoteNameW,
-                               localfile, localNameW, fileSize, resumeFrom, outSizeLoaded);
+                               localfile, localNameW, fileSize, resumeFrom,
+                               textMode, expectedRemoteSize, outSizeLoaded);
 }
 
 static std::string BaseNameFromPath(const std::string& path)
@@ -879,22 +1027,48 @@ int ShellScpUploadFile(
         return SFTP_WRITEFAILED;
     }
 
-    std::vector<char> dataBuf(textMode ? (SFTP_SCP_BLOCK_SIZE * 2) : (SFTP_MAX_WRITE_SIZE * 8));
+    std::vector<char> dataBuf(SFTP_MAX_WRITE_SIZE * 8);
+    std::vector<char> converted;
+    text_conversion::CrLfToLf toLf;
+    int64_t emitted = 0;
     const SYSTICKS starttime = get_sys_ticks();
-    DWORD len = 0;
-    while (ReadFile(localfile, dataBuf.data(), (DWORD)dataBuf.size(), &len, nullptr) && len > 0) {
-        size_t sendLen = len;
-        if (textMode)
-            sendLen = (size_t)ConvertCrLfToLf(dataBuf.data(), len);
-        if (!ScpWriteAll(channel.get(), cs, dataBuf.data(), sendLen, SFTP_SCP_WRITE_IDLE_TIMEOUT_MS)) {
+    for (;;) {
+        DWORD len = 0;
+        if (!ReadFile(localfile, dataBuf.data(), static_cast<DWORD>(dataBuf.size()), &len, nullptr)) {
+            DisconnectShell(channel.get());
+            return SFTP_READFAILED;
+        }
+        // In text mode a CR ending one chunk waits for the next to show
+        // whether an LF follows; end of file releases it.
+        const bool atEof = (len == 0);
+        const char* out = dataBuf.data();
+        size_t outLen = len;
+        if (textMode) {
+            converted.clear();
+            outLen = atEof ? toLf.Finish(converted) : toLf.Convert(dataBuf.data(), len, converted);
+            out = converted.data();
+        }
+        if (outLen > 0 && !ScpWriteAll(channel.get(), cs, out, outLen, SFTP_SCP_WRITE_IDLE_TIMEOUT_MS)) {
             DisconnectShell(channel.get());
             return SFTP_WRITEFAILED;
         }
+        emitted += static_cast<int64_t>(outLen);
+        if (atEof)
+            break;
         *outSizeLoaded += len;
         if (UpdatePercentBar(cs, GetPercent(*outSizeLoaded, fileSize), localNameW, remoteNameW)) {
             DisconnectShell(channel.get());
             return SFTP_ABORT;
         }
+    }
+
+    // scp -t reads exactly the size the header announced; any other count
+    // would leave it waiting for data or read our status byte as content.
+    if (emitted != fileSize) {
+        SFTP_LOG("SCP", "upload: emitted %lld bytes, header announced %lld",
+                 static_cast<long long>(emitted), static_cast<long long>(fileSize));
+        DisconnectShell(channel.get());
+        return SFTP_READFAILED;
     }
 
     const char zero = 0;

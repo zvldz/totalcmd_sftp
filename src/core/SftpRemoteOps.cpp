@@ -13,11 +13,12 @@
 #include "ServerRegistry.h"
 #include "res/resource.h"
 #include "CoreUtils.h"
-#include "UtfConversion.h"
 #include "UnicodeHelpers.h"
-#include "FtpDirectoryParser.h"
 #include "SftpInternal.h"
 #include "PhpAgentClient.h"
+#include "DialogLayout.h"
+#include "DialogStrings.h"
+#include "DialogText.h"
 
 namespace {
 
@@ -1290,15 +1291,6 @@ std::wstring FormatPermissions(DWORD mode)
 
 namespace {
 
-std::wstring LoadStringLngW(UINT id)
-{
-    if (const char* lng = LngGetString(id))
-        return unicode_util::utf8_to_wstring(lng);
-    std::array<wchar_t, 512> buf{};
-    const int n = LoadStringW(hinst, id, buf.data(), static_cast<int>(buf.size() - 1));
-    return n > 0 ? std::wstring(buf.data(), static_cast<size_t>(n)) : std::wstring();
-}
-
 // 1234567 → "1 234 567" with the user's thousands separator.
 std::wstring FormatSize(uint64_t size)
 {
@@ -1335,31 +1327,38 @@ struct PropertiesData {
     HFONT        monoFont = nullptr;
 };
 
+// The raw stat reply uses its own font, which the system does not rescale
+// when the dialog moves to a monitor with another DPI; it is made for the
+// dialog's current DPI and made again after a change.
+void ApplyPropertiesMonoFont(HWND hDlg, PropertiesData* d)
+{
+    HFONT font = CreateFontW(-MulDiv(8, static_cast<int>(DlgLayout::DpiOf(hDlg)), 72), 0, 0, 0, FW_NORMAL,
+                             FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
+                             CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, FIXED_PITCH | FF_MODERN, L"Consolas");
+    if (!font)
+        return;
+    SendDlgItemMessageW(hDlg, IDC_PROP_RAWSTAT, WM_SETFONT, reinterpret_cast<WPARAM>(font), TRUE);
+    if (d->monoFont)
+        DeleteObject(d->monoFont);
+    d->monoFont = font;
+}
+
 INT_PTR CALLBACK PropertiesDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
 {
     switch (msg) {
+    case DlgLayout::kDpiChangedMessage:
+        PostMessageW(hDlg, DlgLayout::kRelayoutMessage, 0, 0);
+        return FALSE;
+    case DlgLayout::kRelayoutMessage:
+        if (auto* d = reinterpret_cast<PropertiesData*>(GetWindowLongPtrW(hDlg, DWLP_USER)))
+            ApplyPropertiesMonoFont(hDlg, d);
+        DlgLayout::LayoutPropertiesDialog(hDlg);
+        return TRUE;
     case WM_INITDIALOG: {
         auto* d = reinterpret_cast<PropertiesData*>(lParam);
         SetWindowLongPtrW(hDlg, DWLP_USER, lParam);
 
-        const std::wstring caption = LoadStringLngW(IDS_PROP_CAPTION);
-        if (!caption.empty())
-            SetWindowTextW(hDlg, caption.c_str());
-        static constexpr std::pair<int, UINT> kLabels[] = {
-            { IDC_PROP_GRP_FILE,     IDS_PROP_GRP_FILE },
-            { IDC_PROP_LBL_NAME,     IDS_PROP_LBL_NAME },
-            { IDC_PROP_LBL_OWNER,    IDS_PROP_LBL_OWNER },
-            { IDC_PROP_LBL_GROUP,    IDS_PROP_LBL_GROUP },
-            { IDC_PROP_LBL_PERMS,    IDS_PROP_LBL_PERMS },
-            { IDC_PROP_LBL_SIZE,     IDS_PROP_LBL_SIZE },
-            { IDC_PROP_LBL_MODIFIED, IDS_PROP_LBL_MODIFIED },
-            { IDC_PROP_GRP_RAW,      IDS_PROP_GRP_RAW },
-        };
-        for (const auto& [ctrl, str] : kLabels) {
-            const std::wstring s = LoadStringLngW(str);
-            if (!s.empty())
-                SetDlgItemTextW(hDlg, ctrl, s.c_str());
-        }
+        LocalizeDlgControls(hDlg, kPropertiesDialogCaption, kPropertiesDialogStrings);
 
         SetDlgItemTextW(hDlg, IDC_PROP_NAME,        d->name.c_str());
         SetDlgItemTextW(hDlg, IDC_PROP_OWNER,       d->owner.c_str());
@@ -1370,14 +1369,10 @@ INT_PTR CALLBACK PropertiesDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lP
 
         // stat lines up its fields with spaces, which only a fixed-pitch
         // font keeps aligned.
-        HDC dc = GetDC(hDlg);
-        d->monoFont = CreateFontW(-MulDiv(8, GetDeviceCaps(dc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL,
-                                  FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
-                                  CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, FIXED_PITCH | FF_MODERN, L"Consolas");
-        ReleaseDC(hDlg, dc);
-        if (d->monoFont)
-            SendDlgItemMessageW(hDlg, IDC_PROP_RAWSTAT, WM_SETFONT, reinterpret_cast<WPARAM>(d->monoFont), FALSE);
+        ApplyPropertiesMonoFont(hDlg, d);
         SetDlgItemTextW(hDlg, IDC_PROP_RAWSTAT, d->raw.c_str());
+        DlgLayout::OnInitDialog(hDlg);
+        DlgLayout::LayoutPropertiesDialog(hDlg);
 
         // Focus on OK, so no read-only field opens with its text selected.
         SetFocus(GetDlgItem(hDlg, IDOK));
@@ -1442,7 +1437,7 @@ void SftpShowPropertiesW(pConnectSettings cs, LPCWSTR remotename)
         CopyStringA2W(cs, reply.data(), wide.data(), wide.size());
         d.raw = wide.data();
     } else {
-        d.raw = LoadStringLngW(IDS_PROP_NO_STAT);
+        d.raw = LoadResStringW(IDS_PROP_NO_STAT);
         LIBSSH2_SFTP_ATTRIBUTES attrs{};
         if (!cs->scponly && cs->sftpsession) {
             std::string pathA(wdirtypemax, '\0');
@@ -1478,6 +1473,7 @@ void SftpShowPropertiesW(pConnectSettings cs, LPCWSTR remotename)
         }
     }
 
+    DlgLayout::PerMonitorDpiScope dpiScope;
     DialogBoxParamW(hinst, MAKEINTRESOURCEW(IDD_PROPERTIES), GetActiveWindow(),
                     PropertiesDlgProc, reinterpret_cast<LPARAM>(&d));
 }

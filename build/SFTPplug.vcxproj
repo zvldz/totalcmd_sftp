@@ -74,7 +74,7 @@
       <InlineFunctionExpansion>Disabled</InlineFunctionExpansion>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <AdditionalIncludeDirectories>..\src\include;..\src\lib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\src\include;..\src\lib\include-$(PlatformTarget);..\src\lib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>_DEBUG;LIBSSH2_OPENSSL;LIBSSH2_STATIC;LIBSSH2_API=;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
@@ -92,7 +92,7 @@
       <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <SubSystem>Windows</SubSystem>
-      <AdditionalDependencies>crypt32.lib;bcrypt.lib;winhttp.lib;ws2_32.lib;iphlpapi.lib;shlwapi.lib;user32.lib;gdi32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;comdlg32.lib;comctl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>crypt32.lib;bcrypt.lib;dwmapi.lib;uxtheme.lib;winhttp.lib;ws2_32.lib;iphlpapi.lib;shlwapi.lib;user32.lib;gdi32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;comdlg32.lib;comctl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalOptions>/ignore:4017 /ignore:4099 /BREPRO %(AdditionalOptions)</AdditionalOptions>
     </Link>
   </ItemDefinitionGroup>
@@ -101,7 +101,7 @@
     <ClCompile>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <AdditionalIncludeDirectories>..\src\include;..\src\lib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\src\include;..\src\lib\include-$(PlatformTarget);..\src\lib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>NDEBUG;LIBSSH2_OPENSSL;LIBSSH2_STATIC;LIBSSH2_API=;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
@@ -123,7 +123,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <SubSystem>Windows</SubSystem>
       <AdditionalLibraryDirectories>..\php\deps\lib;..\src\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>crypt32.lib;bcrypt.lib;winhttp.lib;ws2_32.lib;iphlpapi.lib;shlwapi.lib;user32.lib;gdi32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;comdlg32.lib;comctl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>crypt32.lib;bcrypt.lib;dwmapi.lib;uxtheme.lib;winhttp.lib;ws2_32.lib;iphlpapi.lib;shlwapi.lib;user32.lib;gdi32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;comdlg32.lib;comctl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <AdditionalOptions>/ignore:4017 /ignore:4099 /BREPRO %(AdditionalOptions)</AdditionalOptions>
@@ -134,31 +134,33 @@
     <Link>
       <TargetMachine>MachineX64</TargetMachine>
       <MinimumRequiredVersion>6.00</MinimumRequiredVersion>
-      <AdditionalDependencies>argon2_a_x64.lib;libssh2_x64.lib;libcrypto_x64.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>libssh2_x64.lib;libcrypto_x64.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Platform)'=='Win32'">
     <Link>
       <TargetMachine>MachineX86</TargetMachine>
       <MinimumRequiredVersion>6.00</MinimumRequiredVersion>
-      <AdditionalDependencies>argon2_a_x86.lib;libssh2_x86.lib;libcrypto_x86.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>libssh2_x86.lib;libcrypto_x86.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <!-- Source Files -->
   <ItemGroup>
     <ClCompile Include="..\src\core\UnicodeHelpers.cpp" />
-    <ClCompile Include="..\src\core\UtfConversion.cpp" />
-    <ClCompile Include="..\src\core\FtpDirectoryParser.cpp" />
     <ClCompile Include="..\src\core\ServerRegistry.cpp" />
     <ClCompile Include="..\src\core\SftpConnection.cpp" />
     <ClCompile Include="..\src\core\ProxyNegotiator.cpp" />
     <ClCompile Include="..\src\core\ConnectionDialog.cpp" />
     <ClCompile Include="..\src\core\DialogLayout.cpp" />
+    <ClCompile Include="..\src\core\DialogText.cpp" />
     <ClCompile Include="..\src\core\SftpAuth.cpp" />
     <ClCompile Include="..\src\core\ScpTransfer.cpp" />
     <ClCompile Include="..\src\core\ShellFallbackTransfer.cpp" />
     <ClCompile Include="..\src\core\SftpTransfer.cpp" />
     <ClCompile Include="..\src\core\TransferUtils.cpp" />
+    <ClCompile Include="..\src\core\TextConversion.cpp" />
+    <ClCompile Include="..\src\core\TerminalText.cpp" />
+    <ClCompile Include="..\src\core\WildcardMatch.cpp" />
     <ClCompile Include="..\src\core\SftpRemoteOps.cpp" />
     <ClCompile Include="..\src\core\SftpShell.cpp" />
     <ClCompile Include="..\src\core\Libssh2Backend.cpp" />
@@ -192,6 +194,8 @@
     <ClCompile Include="..\src\core\PasswordCrypto.cpp" />
     <ClCompile Include="..\src\core\PhpAgentScriptConfig.cpp" />
     <ClCompile Include="..\src\core\ConnectionNetwork.cpp" />
+    <ClCompile Include="..\src\core\DarkMode.cpp" />
+    <ClCompile Include="..\src\core\DownloadErrorBatch.cpp" />
     <ClCompile Include="..\src\core\ProfileSettings.cpp" />
     <ClCompile Include="..\src\core\JumpHostConnection.cpp" />
     <ClCompile Include="..\src\core\PluginHelp.cpp" />
@@ -204,9 +208,7 @@
   <!-- Header Files -->
   <ItemGroup>
     <ClInclude Include="..\src\include\UnicodeHelpers.h" />
-    <ClInclude Include="..\src\include\UtfConversion.h" />
     <ClInclude Include="..\src\include\fsplugin.h" />
-    <ClInclude Include="..\src\include\FtpDirectoryParser.h" />
     <ClInclude Include="..\src\include\global.h" />
     <ClInclude Include="..\src\include\ServerRegistry.h" />
     <ClInclude Include="..\src\include\SftpClient.h" />
@@ -233,6 +235,8 @@
     <ClInclude Include="..\src\include\PluginEntryPointsInternal.h" />
     <ClInclude Include="..\src\include\LngLoader.h" />
     <ClInclude Include="..\src\include\DialogLayout.h" />
+    <ClInclude Include="..\src\include\DialogStrings.h" />
+    <ClInclude Include="..\src\include\DialogText.h" />
     <ClInclude Include="..\src\include\DllExceptionBarrier.h" />
     <ClInclude Include="..\src\include\CoreUtils.h" />
     <ClInclude Include="..\src\include\PpkConverter.h" />
@@ -249,6 +253,8 @@
     <ClInclude Include="..\src\include\AuthMethodParser.h" />
     <ClInclude Include="..\src\include\ConnectionLifecycle.h" />
     <ClInclude Include="..\src\include\ConnectionNetwork.h" />
+    <ClInclude Include="..\src\include\DarkMode.h" />
+    <ClInclude Include="..\src\include\DownloadErrorBatch.h" />
     <ClInclude Include="..\src\include\ProfileSettings.h" />
     <ClInclude Include="..\src\include\ITransportStream.h" />
     <ClInclude Include="..\src\include\JumpHostConnection.h" />

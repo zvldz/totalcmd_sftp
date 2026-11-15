@@ -555,6 +555,46 @@
 #define IDS_PIMPORT_ERR_NO_PROXY        12140  // File has no [proxy] section with type and server
 #define IDS_PIMPORT_ERR_WRITE           12141  // Failed to write the proxy record to sftpplug.ini
 #define IDS_PIMPORT_EXISTS              12142  // The same route already has a record; none was added
+#define IDS_DLG_LAN_TIMEOUT             12143  // LAN Pair: session timeout label
+#define IDS_DLG_LAN_TIMEOUT_HINT        12144  // LAN Pair: "(0 = no limit)"
+#define IDS_DLG_PROTO_AUTO              12145  // protocol radio "Auto"
+#define IDS_LOG_PPK_ERR_LIMITS          12146  // .ppk asks for Argon2 parameters beyond the caps
+#define IDS_LOG_PPK_ERR_INCONSISTENT    12147  // .ppk key parts do not belong together
+
+// ---------------------------------------------------------------------------
+// Download error in a multi-file copy: Skip / Skip all / Cancel
+// ---------------------------------------------------------------------------
+#define IDD_DOWNLOAD_ERROR              118
+#define IDC_DOWNLOAD_ERROR_TEXT         1118
+#define IDC_DOWNLOAD_ERROR_PATH         1119
+#define IDC_DOWNLOAD_SKIP               1120
+#define IDC_DOWNLOAD_SKIP_ALL           1121
+#define IDS_DOWNLOAD_ERROR_TITLE        12148
+#define IDS_DOWNLOAD_ERROR_TEXT         12149
+#define IDS_DOWNLOAD_SKIP               12150
+#define IDS_DOWNLOAD_SKIP_ALL           12151
+#define IDS_LOG_DOWNLOAD_SKIPPED        12152  // log line before the name of a skipped file
+
+// ---------------------------------------------------------------------------
+// More session settings: the "More..." button of the connection dialog
+// ---------------------------------------------------------------------------
+#define IDD_MORE_SETTINGS               119
+#define IDC_MORE_BUTTON                 1122
+#define IDC_MORE_SFTPSERVER_LABEL       1123
+#define IDC_MORE_SFTPSERVER             1124
+#define IDC_MORE_SFTPSERVER_HINT        1125
+#define IDS_DLG_MORE_BUTTON             12153
+#define IDS_MORE_DLG_CAPTION            12154
+#define IDS_MORE_SFTPSERVER             12155
+#define IDS_MORE_SFTPSERVER_HINT        12156
+#define IDC_MORE_SENDCMD_LABEL          1126
+#define IDC_MORE_SENDCMD                1127
+#define IDC_MORE_SENDCMD_MODE           1128
+#define IDC_MORE_SENDCMD_HINT           1129
+#define IDS_MORE_SENDCMD                12157
+#define IDS_MORE_SENDCMD_HINT           12158
+#define IDS_MORE_SENDCMD_WAIT           12159
+#define IDS_MORE_SENDCMD_NOWAIT         12160
 
 // Next default values for new objects
 //

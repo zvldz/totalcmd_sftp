@@ -44,10 +44,14 @@ int EstablishSocketConnection(pConnectSettings ConnectSettings, LPCSTR connectto
         ConnectSettings->sock = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
         if (ConnectSettings->sock == INVALID_SOCKET)
             continue;
-        std::array<char, 256> addrBuf{};
-        DWORD addrLen = static_cast<DWORD>(addrBuf.size());
-        WSAAddressToString(ai->ai_addr, ai->ai_addrlen, nullptr, addrBuf.data(), &addrLen);
-        ShowStatus(("IP address: " + std::string(addrBuf.data())).c_str());
+        // Address and port as connected, an IPv6 address in brackets.
+        std::array<char, NI_MAXHOST> host{};
+        std::array<char, NI_MAXSERV> port{};
+        if (getnameinfo(ai->ai_addr, static_cast<socklen_t>(ai->ai_addrlen), host.data(), static_cast<DWORD>(host.size()),
+                        port.data(), static_cast<DWORD>(port.size()), NI_NUMERICHOST | NI_NUMERICSERV) == 0) {
+            const bool v6 = ai->ai_family == AF_INET6;
+            ShowStatus(std::format("IP address: {}{}{}:{}", v6 ? "[" : "", host.data(), v6 ? "]" : "", port.data()).c_str());
+        }
 
         int nodelay = 1;
         setsockopt(ConnectSettings->sock, IPPROTO_TCP, TCP_NODELAY,
@@ -94,8 +98,12 @@ bool InitializeSftpSubsystemIfNeeded(pConnectSettings ConnectSettings, int progr
     std::array<char, 1024> buf{};
     char* errmsg = nullptr;
     int errmsg_len = 0;
+    const std::string& serverCommand = ConnectSettings->sftpservercommand;
     ShowStatusId(IDS_LOG_SFTP_INIT, nullptr, true);
-    SFTP_LOG("CONN", "Initializing SFTP subsystem");
+    if (serverCommand.empty())
+        SFTP_LOG("CONN", "Initializing SFTP subsystem");
+    else
+        SFTP_LOG("CONN", "Initializing SFTP via server command: %s", serverCommand.c_str());
     ShowStatusId(IDS_SESSION_STARTUP, " (SFTP)", true);
     // A host with no SFTP subsystem — dropbear on a camera or a router —
     // may never answer the request, and the call keeps saying "not yet".
@@ -106,7 +114,7 @@ bool InitializeSftpSubsystemIfNeeded(pConnectSettings ConnectSettings, int progr
         ConnectSettings->sftpsession = nullptr;
         if (ProgressLoop(buf.data(), progress, progress + 10, loop, lasttime))
             break;
-        auto sftpPtr = ConnectSettings->session->sftpInit();
+        auto sftpPtr = ConnectSettings->session->sftpInit(serverCommand);
         if (sftpPtr) {
             ConnectSettings->sftpsession = std::move(sftpPtr);
         } else if (ConnectSettings->session->lastErrno() != LIBSSH2_ERROR_EAGAIN) {

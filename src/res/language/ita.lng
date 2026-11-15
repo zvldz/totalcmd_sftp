@@ -203,7 +203,7 @@
 286=&Nome utente:
 287=Usa agente SSH (Pageant)
 288=Cambia password...
-289=Proteggi password con gestore password (TC>=7.5)
+289=Proteggi password con gestore password
 290=Certificato client per l'&autenticazione:
 291=Certificato (*-cert.pub), facoltativo:
 292=File chiave privata (*.pem;*.ppk):
@@ -387,6 +387,24 @@
 12140=Impossibile importare il proxy: il file non ha una sezione [proxy] con tipo e server.
 12141=Impossibile importare il proxy: scrittura su sftpplug.ini non riuscita.
 12142=Questo proxy è già in [Proxies] (stesso tipo, server e utente). Non è stato creato alcun nuovo record.
+12143=Timeout sessione (min):
+12144=(0 = nessun limite)
+12145=Auto
+12146=Il file .ppk richiede parametri Argon2 oltre i limiti di sicurezza.
+12147=Il file .ppk contiene una chiave le cui parti non corrispondono.
+12148=Errore di download
+12149=Impossibile scaricare il file:
+12150=Salta
+12151=Salta tutto
+12152=Saltato dopo un errore di download:
+12153=Altro...
+12154=Altre impostazioni sessione
+12155=Comando del server SFTP:
+12156=Vuoto: il sottosistema sftp standard del server. Per un server che non lo ha (OpenWrt, Dropbear), il percorso del suo server SFTP, ad es. /usr/libexec/sftp-server.
+12157=Comando dopo l'accesso:
+12158=Viene eseguito sul server dopo ogni accesso, tranne in modalità solo SCP. L'output va nella finestra del registro.
+12159=Attendi e mostra l'output
+12160=Avvia senza attendere
 12089=SFTP
 12104=(manuale)
 12105= (mancante)

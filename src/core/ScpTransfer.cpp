@@ -14,6 +14,7 @@
 #include "IUserFeedback.h"
 #include "ScpTransfer.h"
 #include "ScpTransferInternal.h"
+#include "TextConversion.h"
 #include "res/resource.h"
 #include "LngLoader.h"
 
@@ -152,22 +153,6 @@ bool ParseScpCLine(const std::string& line, int64_t& outSize, std::string& outNa
 }
 
 } // anonymous namespace
-
-int ConvertCrLfToLf(LPSTR data, size_t len)
-{
-    if (!data || len == 0)
-        return 0;
-
-    size_t out = 0;
-    for (size_t i = 0; i < len; ++i) {
-        const char ch = data[i];
-        if (ch == '\r' && i + 1 < len && data[i + 1] == '\n') {
-            continue;
-        }
-        data[out++] = ch;
-    }
-    return static_cast<int>(out);
-}
 
 void ShowTransferSpeedIfLarge(LPCSTR prefix, int64_t bytesTransferred, SYSTICKS starttime)
 {
@@ -426,8 +411,9 @@ int ShellScpDownloadFile(pConnectSettings cs,
 
     int64_t remoteSize = hintedFileSize;
     bool gotDataHeader = false;
-    bool lastWasCr = false;
+    text_conversion::LfToCrLf toCrLf;
     std::vector<char> dataBuf(SFTP_MAX_READ_SIZE * 2);
+    std::vector<char> converted;
     const auto start = std::chrono::steady_clock::now();
 
     while (true) {
@@ -477,12 +463,17 @@ int ShellScpDownloadFile(pConnectSettings cs,
             int rc = static_cast<int>(scp.get()->read(dataBuf.data(), want));
             if (rc > 0) {
                 remaining -= rc;
-                int wlen = rc;
-                if (textMode)
-                    wlen = ConvertCrToCrLf(dataBuf.data(), static_cast<size_t>(rc), &lastWasCr);
+                // LF -> CRLF can double a chunk, so it goes to its own buffer.
+                const char* out = dataBuf.data();
+                size_t outLen = static_cast<size_t>(rc);
+                if (textMode) {
+                    converted.clear();
+                    outLen = toCrLf.Convert(dataBuf.data(), outLen, converted);
+                    out = converted.data();
+                }
                 DWORD written = 0;
-                if (!WriteFile(localfile, dataBuf.data(), static_cast<DWORD>(wlen), &written, nullptr) ||
-                    written != static_cast<DWORD>(wlen)) {
+                if (!WriteFile(localfile, out, static_cast<DWORD>(outLen), &written, nullptr) ||
+                    written != static_cast<DWORD>(outLen)) {
                     return SFTP_WRITEFAILED;
                 }
                 *outSizeLoaded += rc;

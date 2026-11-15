@@ -11,6 +11,7 @@
 #include <string>
 #include <string_view>
 #include <algorithm>
+#include <openssl/crypto.h>
 #include "fsplugin.h"
 #include "BuildInfo.h"
 #include "CoreUtils.h"
@@ -25,6 +26,7 @@
 #include "LngLoader.h"
 #include "PhpAgentClient.h"
 #include "PluginEntryPointsInternal.h"
+#include "DownloadErrorBatch.h"
 #include "ImportCache.h"
 #include "IniFile.h"
 #include "VirtualSessionRegistry.h"
@@ -524,6 +526,14 @@ static void DetectAndApplyLanguage(const char* fallbackIniPath) noexcept
 
 static int _FsInit(int PluginNr)
 {
+    // OpenSSL is linked statically and built with no-autoload-config; saying
+    // so again here, before libssh2 starts it up, keeps a stray openssl.cnf
+    // (or OPENSSL_CONF) from reconfiguring the crypto inside Total
+    // Commander's process. Once set, later requests to load it are ignored.
+    static const bool cryptoReady = OPENSSL_init_crypto(OPENSSL_INIT_NO_LOAD_CONFIG, nullptr) == 1;
+    if (!cryptoReady)
+        return 1;
+
     if (!g_winsockInitialized) {
         WSADATA wsaData{};
         if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
@@ -730,6 +740,13 @@ static void StatusInfo(const std::string& remoteDir, int InfoStartEnd, int InfoO
                  InfoOperation,
                  InfoStartEnd == FS_STATUS_START ? "START" : "END",
                  RemoteDir);
+
+        if (InfoOperation == FS_STATUS_OP_GET_MULTI || InfoOperation == FS_STATUS_OP_GET_MULTI_THREAD) {
+            if (InfoStartEnd == FS_STATUS_START)
+                download_batch::Begin();
+            else
+                download_batch::End();
+        }
 
         if (remoteDir.size() < 2)
             if (InfoOperation == FS_STATUS_OP_DELETE || InfoOperation == FS_STATUS_OP_RENMOV_MULTI)

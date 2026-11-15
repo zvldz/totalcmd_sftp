@@ -206,7 +206,7 @@
 286=&Nazwa użytkownika:
 287=Użyj agenta SSH (Pageant)
 288=Zmień hasło...
-289=Chroń hasło menedżerem haseł (TC>=7.5)
+289=Chroń hasło menedżerem haseł
 290=Certyfikat klienta do &uwierzytelniania:
 291=Certyfikat (*-cert.pub), opcjonalnie:
 292=Plik klucza prywatnego (*.pem;*.ppk):
@@ -376,6 +376,24 @@
 12140=Nie można zaimportować proxy: plik nie zawiera sekcji [proxy] z typem i serwerem.
 12141=Nie można zaimportować proxy: zapis do sftpplug.ini nie powiódł się.
 12142=To proxy jest już w [Proxies] (ten sam typ, serwer i użytkownik). Nie utworzono nowego wpisu.
+12143=Limit czasu sesji (min):
+12144=(0 = bez limitu)
+12145=Auto
+12146=Plik .ppk żąda parametrów Argon2 powyżej bezpiecznych limitów.
+12147=Plik .ppk zawiera klucz, którego części do siebie nie pasują.
+12148=Błąd pobierania
+12149=Nie udało się pobrać pliku:
+12150=Pomiń
+12151=Pomiń wszystkie
+12152=Pominięto po błędzie pobierania:
+12153=Więcej...
+12154=Więcej ustawień sesji
+12155=Polecenie serwera SFTP:
+12156=Puste: standardowy podsystem sftp serwera. Dla serwera bez niego (OpenWrt, Dropbear) ścieżka jego serwera SFTP, np. /usr/libexec/sftp-server.
+12157=Polecenie po zalogowaniu:
+12158=Uruchamiane na serwerze po każdym zalogowaniu, z wyjątkiem trybu tylko SCP. Wynik trafia do okna dziennika.
+12159=Czekaj i pokaż wynik
+12160=Uruchom bez czekania
 12089=SFTP
 12090=Szukam peera LAN Pair w sieci lokalnej...
 12091={} s

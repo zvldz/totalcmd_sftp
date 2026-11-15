@@ -7,6 +7,177 @@ detail.
 
 This fork started from wesmar's plugin as of 24 March 2026.
 
+## 10.4.0.0 — unreleased
+
+Fixes and improvements taken over from
+[wesmar/sftp 10.3.0.0](https://github.com/wesmar/sftp), which is based on
+this fork's 10.0.2.2. Each entry names where it came from.
+
+### Security
+
+- **Stack buffer checks are on.** The plugin is built with `/GS`, so a
+  stack buffer overrun ends the process instead of running whatever
+  overwrote the return address. Control Flow Guard and CET were already on.
+  *From wesmar/sftp 10.3.0.0.*
+- **Control Flow Guard also in OpenSSL and libssh2.** The plugin's own code
+  was built with it, the two libraries it links were not, so the guard
+  stopped at their code. *From wesmar/sftp 10.3.0.0.*
+- **OpenSSL reads no configuration file and carries only what SSH uses.**
+  A stray `openssl.cnf` or `OPENSSL_CONF` on the machine could reconfigure
+  the crypto inside Total Commander's process; the plugin now forbids it at
+  start-up and OpenSSL is built without the default lookup. Algorithms SSH
+  does not negotiate are left out of the build, and with them the obsolete
+  `ssh-dss` keys, the `blowfish-cbc`, `cast128-cbc` and `arcfour` ciphers
+  and `hmac-ripemd160`. *From wesmar/sftp 10.3.0.0.*
+
+### Features
+
+- **SFTP through a server command.** A session can name the SFTP server
+  to run, for example `/usr/libexec/sftp-server`, and the plugin executes
+  it instead of requesting the `sftp` subsystem — like `sftp -s` in
+  OpenSSH. Hosts such as OpenWrt or Dropbear that have the binary but no
+  subsystem then work in SFTP mode. Set under More... in the connection
+  dialog (`sftpservercommand` in `sftpplug.ini`). The feature first
+  appeared in numbereleven-a's fork; the libssh2 patch is
+  *from wesmar/sftp 10.3.0.0.*
+- **More... in the connection dialog.** Opens the session settings that
+  are rarely needed: the SFTP server command above and the command run
+  after login, with whether to wait for it. The command after login
+  (`sendcommand`) existed before but could only be set in `sftpplug.ini`.
+- **Dark dialogs when Total Commander is dark.** With TC in dark mode —
+  always on, following Windows, or switched by hand — every dialog of the
+  plugin opens dark too: caption, background, fields, lists, buttons,
+  scroll bars, check boxes and group boxes. In light mode nothing changes.
+- **Skip and Skip all for a file that cannot be downloaded.** In a copy of
+  several files, a file the server will not hand over (no read rights, a
+  broken link) asks whether to skip it, skip every such file in this copy,
+  or cancel — Total Commander's own message offers only OK or Cancel, one
+  window per file. A skipped file is noted in the log and nothing of it is
+  left on disk. A move and a resumed download keep the plain error, as
+  skipping would let Total Commander delete a source that never arrived.
+  *From wesmar/sftp 10.3.0.0.*
+
+### Fixes
+
+- **SCP text-mode download no longer overruns its buffer.** With text mode
+  on, a file dense with line breaks grew past the read buffer as LF became
+  CRLF and was written beyond it in memory — and the content comes from the
+  server. The converted text now goes to a buffer of its own.
+  *From wesmar/sftp 10.3.0.0.*
+- **Text-mode uploads over SCP announce exactly what they send.** The size
+  in the scp header was the file size minus its CRs, but a CR without an LF
+  after it stays, and a CRLF split between two reads kept its CR; the
+  server then waited for bytes that never came or took the closing byte as
+  file data. The size is now counted by the same conversion that sends the
+  file, and a mismatch fails the upload instead of leaving scp out of step.
+  *From wesmar/sftp 10.3.0.0.*
+- **"Resume" on a text-mode file starts the transfer over.** The offsets
+  of a converted file differ on the two sides, so it cannot be continued
+  from the middle; Total Commander still offers "Resume", and picking it
+  now sends the whole file again instead of failing, in both directions.
+- **Text mode also in shell transfers.** Files sent or fetched through the
+  shell (dd / base64: the forced shell mode, and before this release every
+  SCP-only resume) kept their line endings as they were, while SFTP and
+  SCP converted them. They are now converted the same way, and the size
+  check compares with the converted size.
+- **SOCKS proxies refuse what they cannot send instead of sending
+  something else.** A SOCKS5 proxy's "no acceptable method" was never
+  recognised, a user name or password over 255 bytes was cut short, and a
+  host name over 255 bytes was cut into a different name; these now end
+  with an error. Reply bytes are read as unsigned, an IPv6 address is never
+  looked up in DNS, and a SOCKS4 request is checked against its buffer.
+  Proxy credentials are wiped from memory once sent.
+  *From wesmar/sftp 10.3.0.0.*
+- **PuTTY keys are converted on OpenSSL, and more of them load.** An
+  encrypted key in PuTTY's format 2 never loaded: its MAC was checked over
+  the encrypted data, while PuTTY computes it over the decrypted one. About
+  one Ed25519 key in 256 was refused because its secret was stored shorter
+  than 32 bytes. The Argon2 settings of a format-3 key were taken as given,
+  so a crafted file could demand any amount of memory and time; they are
+  now capped. Every key is now rebuilt and checked by OpenSSL, the MAC is
+  verified for unencrypted keys too, and the decrypted key is wiped from
+  memory. *From wesmar/sftp 10.3.0.0.*
+- **A PuTTY key refused for its Argon2 settings or for not matching itself
+  is named as such** instead of a general conversion error.
+  *From wesmar/sftp 10.3.0.0.*
+- **Shell and SCP-only listings survive modern prompts.** An escape
+  sequence was skipped up to the next letter "m", so bracketed paste
+  (`ESC[?2004h`) swallowed the marker the listing waits for, and systemd's
+  OSC 3008 records (Ubuntu 25.10, Fedora 42) left fragments in the lines.
+  Control sequences are now parsed as ECMA-48 defines them, UTF-8 text is
+  kept, and only real octal escapes are decoded.
+  *From wesmar/sftp 10.3.0.0.*
+- **Shell transfers: resume, empty files and missing files.** A resumed
+  base64 upload rounded its starting point down to a multiple of three and
+  appended from there, writing one or two bytes twice. An empty file was
+  never created on the server, yet reported as uploaded — and on a move the
+  local file was then deleted. A file the server could not read came down
+  as an empty file; base64's exit status now fails it.
+  *From wesmar/sftp 10.3.0.0.*
+- **An upload no longer overwrites a file Total Commander did not know
+  about.** When TC had not listed the target folder — a background copy, a
+  subfolder never opened — it passed no "file exists" flag, and the upload
+  replaced the server's file without asking. The server is now asked first,
+  and TC asks the user. *From wesmar/sftp 10.3.0.0.*
+- **Quick Connection is not advertised on the LAN.** The name was checked
+  against "Quick connect" and its Polish form, while the entry reads "Quick
+  Connection" or its translation, so LAN Pair discovery announced it like a
+  saved session. *From wesmar/sftp 10.3.0.0.*
+- **A post-login command's output keeps its non-English ending.** Trimming
+  the output treated UTF-8 bytes as blanks and cut letters off the end of
+  each line, and the progress text shown while the command ran was empty.
+  *From wesmar/sftp 10.3.0.0.*
+- **Smaller hardening.** A PHP Agent listing entry whose name does not fit
+  is left out rather than shown cut, as a name that leads nowhere. A stored
+  password in the old numeric format with a value above 255 is refused
+  instead of decoded into a wrong byte. *From wesmar/sftp 10.3.0.0.*
+- **LAN Pair: faster pairing key and Unicode profile paths.** The pairing
+  key is derived with Windows' own PBKDF2, about four times faster and with
+  exactly the same result, so existing pairings keep working. The secrets
+  folder is found through the wide API, so a Windows profile whose path
+  has characters outside the system codepage works.
+  *From wesmar/sftp 10.3.0.0.*
+- **Long file names no longer crash the text-mode check.** Matching a name
+  against the text-type list copied both into fixed buffers of 260 and
+  1024 characters, and a longer one ended the process. Matching now works
+  on the strings themselves, and letters beyond ASCII match regardless of
+  case. *From wesmar/sftp 10.3.0.0.*
+
+### Changes
+
+- **Dialogs sharp on every monitor and sized to their text.** The plugin's
+  windows (connection, proxy, jump host, properties, download error, LAN
+  Pair search) are per-monitor DPI aware: on a second screen with another
+  scale they are drawn at its DPI instead of being stretched, and they lay
+  out again when moved there. Each dialog grows until the loaded
+  language's texts fit, so labels no longer end cut off ("Use SSH agent
+  (Pageant" and many translated ones), group boxes share one right edge and
+  "Jump..." stays inside the window. On Windows 11 they get rounded corners
+  and the Mica caption. A layout test renders every dialog in every
+  language and checks for clipped, overlapping or outside controls.
+  *From wesmar/sftp 10.3.0.0.*
+- **"Protect password with password manager" without "(TC>=7.5)".** Every
+  Total Commander the plugin runs in is newer than that.
+- **No more argon2 library.** Argon2 for PuTTY keys of format 3 comes from
+  OpenSSL (3.2 and later), which the plugin already carries; the separate
+  argon2 submodule and its build step are gone.
+  *From wesmar/sftp 10.3.0.0, on OpenSSL 3.5 here.*
+- **UTF-8 and UTF-16 are converted by Windows itself.** A name with bytes
+  that are not valid UTF-8 — a file on the server named in another
+  encoding — shows whole, with `�` in their place, instead of being cut at
+  the first bad byte. The bundled ConvertUTF library is gone.
+  *From wesmar/sftp 10.3.0.0.*
+- **Unit tests.** The PPK converter (against 20 puttygen keys), text-mode
+  line endings, the terminal filter, wildcard matching, stored-password
+  encryption and the LAN Pair key are covered by unit tests, run on every
+  release build before the plugin is built. *From wesmar/sftp 10.3.0.0.*
+- **Faster uploads through the shell.** When the shell takes base64 spread
+  over several lines, each command now carries 48 KiB instead of 1 KiB; a
+  six-byte probe asks first, and a shell that does not take it keeps the
+  single-line 1 KiB form. The command's end marker is sent split, so a
+  terminal that still echoes cannot pass the echo for the end.
+  *From wesmar/sftp 10.3.0.0.*
+
 ## 10.0.2.3 — 2026-11-15
 
 ### Features

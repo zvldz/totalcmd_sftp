@@ -160,9 +160,6 @@ void ReplaceSubString(LPSTR buf, LPCSTR fromstr, LPCSTR tostr, size_t maxlen);
 bool ParseAddress(LPCSTR serverstring, LPSTR addr, WORD* port, int defport);
 bool IsNumericIPv6(LPCSTR addr);
 
-// Wildcard matching
-bool MultiFileMatchW(LPCWSTR wild, LPCWSTR name);
-
 } // extern "C"
 
 // std::string overload helpers to ease incremental migration from C buffers.

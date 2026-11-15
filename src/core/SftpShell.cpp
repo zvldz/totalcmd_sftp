@@ -12,8 +12,8 @@
 #include "ServerRegistry.h"
 #include "res/resource.h"
 #include "CoreUtils.h"
-#include "UtfConversion.h"
 #include "SftpInternal.h"
+#include "TerminalText.h"
 #include "UnicodeHelpers.h"
 
 namespace {
@@ -85,30 +85,10 @@ bool IsEchoOrPromptLine(std::string_view line) noexcept
     return false;
 }
 
-// Decode octal escape sequences in-place (modifies string)
+// Terminal control sequences out, then ls-style \ooo escapes decoded.
 void StripEscapeSequences(std::string& str)
 {
-    std::string result;
-    result.reserve(str.size());
-    for (size_t i = 0; i < str.size(); ++i) {
-        if (str[i] == '\x1B') { // ESC
-            ++i;
-            while (i < str.size() && str[i] != 'm')
-                ++i;
-            // skip 'm' as well
-        } else if (str[i] == '\\' && i + 3 < str.size() &&
-                   std::isdigit(static_cast<unsigned char>(str[i+1])) &&
-                   std::isdigit(static_cast<unsigned char>(str[i+2])) &&
-                   std::isdigit(static_cast<unsigned char>(str[i+3]))) {
-            // octal escape: \123
-            int value = (str[i+1] - '0') * 64 + (str[i+2] - '0') * 8 + (str[i+3] - '0');
-            result.push_back(static_cast<char>(value));
-            i += 3;
-        } else {
-            result.push_back(str[i]);
-        }
-    }
-    str.swap(result);
+    str = terminal_text::DecodeOctalEscapes(terminal_text::StripControls(str));
 }
 
 void StripEscapeSequencesLocalA(LPSTR msgbuf)

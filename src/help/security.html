@@ -64,7 +64,7 @@ icacls "C:\Program Files\Total Commander\wcx_ftp.ini" /grant "${env:USERNAME}:F"
 <ul>
   <li>Private key files (PEM/PPK) are read only at connection time and not stored in the session profile.</li>
   <li>PPK v2 and v3 are converted to an in-memory PEM form — the conversion result is never written to disk.</li>
-  <li>Argon2 (PPK v3 key derivation) is statically compiled into the plugin — no separate DLL is involved.</li>
+  <li>Argon2 (PPK v3 key derivation) comes from the OpenSSL statically compiled into the plugin — no separate DLL is involved. The Argon2 settings a key file asks for are capped, so a crafted file cannot demand unbounded memory or time.</li>
 </ul>
 
 <h2>Operational recommendations</h2>

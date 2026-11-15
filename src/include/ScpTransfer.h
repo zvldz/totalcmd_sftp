@@ -22,6 +22,7 @@ int ShellDdDownloadFile(
     LPCWSTR localNameW,
     int64_t fileSize,
     int64_t resumeFrom,
+    bool textMode,
     int64_t* outSizeLoaded);
 
 int ShellDdUploadFile(
@@ -32,6 +33,7 @@ int ShellDdUploadFile(
     LPCWSTR localNameW,
     int64_t fileSize,
     int64_t resumeFrom,
+    bool textMode,
     int64_t* outSizeLoaded);
 
 int ShellScpDownloadFile(

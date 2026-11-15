@@ -203,7 +203,7 @@
 286=&Uživatelské jméno:
 287=Použít agenta SSH (Pageant)
 288=Změnit heslo...
-289=Chránit heslo správcem hesel (TC>=7.5)
+289=Chránit heslo správcem hesel
 290=Klientský certifikát pro &ověřování:
 291=Certifikát (*-cert.pub), volitelné:
 292=Soubor soukromého klíče (*.pem;*.ppk):
@@ -387,6 +387,24 @@
 12140=Nelze importovat proxy: soubor neobsahuje sekci [proxy] s typem a serverem.
 12141=Nelze importovat proxy: zápis do sftpplug.ini selhal.
 12142=Tato proxy už v [Proxies] je (stejný typ, server a uživatel). Nový záznam nebyl vytvořen.
+12143=Časový limit relace (min):
+12144=(0 = bez omezení)
+12145=Auto
+12146=Soubor .ppk požaduje parametry Argon2 nad bezpečné limity.
+12147=Soubor .ppk obsahuje klíč, jehož části k sobě nepatří.
+12148=Chyba stahování
+12149=Soubor se nepodařilo stáhnout:
+12150=Přeskočit
+12151=Přeskočit vše
+12152=Přeskočeno po chybě stahování:
+12153=Další...
+12154=Další nastavení relace
+12155=Příkaz SFTP serveru:
+12156=Prázdné: standardní subsystém sftp serveru. Pro server bez něj (OpenWrt, Dropbear) cesta k jeho SFTP serveru, např. /usr/libexec/sftp-server.
+12157=Příkaz po přihlášení:
+12158=Spustí se na serveru po každém přihlášení, kromě režimu jen SCP. Jeho výstup jde do okna protokolu.
+12159=Počkat a zobrazit výstup
+12160=Spustit bez čekání
 12089=SFTP
 12104=(ručně)
 12105= (chybí)

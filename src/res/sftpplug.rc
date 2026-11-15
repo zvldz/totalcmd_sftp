@@ -37,7 +37,7 @@ BEGIN
     CONTROL         "Use SSH agent (Pageant)",IDC_USEAGENT,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,170,58,135,8
     PUSHBUTTON      "Change password...",IDC_EDITPASS,5,71,305,14,NOT WS_VISIBLE
     EDITTEXT        IDC_PASSWORD,5,68,305,12,ES_PASSWORD | ES_AUTOHSCROLL
-    CONTROL         "Protect password with password manager (TC>=7.5)",IDC_CRYPTPASS,
+    CONTROL         "Protect password with password manager",IDC_CRYPTPASS,
                     "Button",BS_AUTOCHECKBOX | WS_TABSTOP,5,82,305,10
     GROUPBOX        "Client certificate for &authentication:",IDC_LABEL_CERTGROUP,5,92,305,60
     LTEXT           "Certificate (*-cert.pub), optional:",IDC_STATICPUB,10,103,269,8
@@ -74,7 +74,7 @@ BEGIN
     LTEXT           "Session timeout (min):",IDC_LAN_TIMEOUT_LABEL,13,224,80,8,NOT WS_VISIBLE
     EDITTEXT        IDC_LAN_TIMEOUT,95,222,15,12,ES_AUTOHSCROLL | ES_NUMBER | NOT WS_VISIBLE
     LTEXT           "(0=no limit)",IDC_LAN_TIMEOUT_HINT,130,224,50,8,NOT WS_VISIBLE
-    CONTROL         "TrustedInstaller",IDC_LAN_TI,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,185,224,105,8,NOT WS_VISIBLE
+    CONTROL         "TrustedInstaller",IDC_LAN_TI,"Button",BS_AUTOCHECKBOX | NOT WS_VISIBLE | WS_TABSTOP,185,224,105,8
     LTEXT           "Session:",IDC_LABEL_SESSION,5,241,30,8
     EDITTEXT        IDC_SESSIONNAME,38,240,227,12,ES_AUTOHSCROLL
     PUSHBUTTON      "Shell...",IDC_PHPSHELL,270,238,40,14
@@ -86,6 +86,7 @@ BEGIN
     LTEXT           "Proxy settings:",IDC_LABEL_PROXY_SETTINGS,5,273,295,8
     COMBOBOX        IDC_PROXYCOMBO,5,283,305,30,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
     PUSHBUTTON      "Help",IDC_PLUGINHELP,5,301,45,14
+    PUSHBUTTON      "More...",IDC_MORE_BUTTON,53,301,45,14
     DEFPUSHBUTTON   "OK",IDOK,204,301,50,14
     PUSHBUTTON      "Cancel",IDCANCEL,258,301,50,14
 END
@@ -131,7 +132,7 @@ BEGIN
     PUSHBUTTON      "?",IDC_PROXYHELP,288,19,12,10
     GROUPBOX        "Proxy settings",IDC_PROXY_GROUP,5,5,305,88
     PUSHBUTTON      "Change password...",IDC_EDITPASS,105,65,195,14,NOT WS_VISIBLE
-    CONTROL         "Protect password with password manager (TC>=7.5)",IDC_CRYPTPASS,
+    CONTROL         "Protect password with password manager",IDC_CRYPTPASS,
                     "Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,81,288,10
     DEFPUSHBUTTON   "OK",IDOK,205,99,50,14
     PUSHBUTTON      "Cancel",IDCANCEL,260,99,50,14
@@ -152,7 +153,7 @@ BEGIN
     EDITTEXT        IDC_JUMP_USER,65,58,233,12,ES_AUTOHSCROLL
     LTEXT           "&Password:",IDC_JUMP_LABEL_PASS,12,77,50,8
     EDITTEXT        IDC_JUMP_PASSWORD,65,75,233,12,ES_PASSWORD | ES_AUTOHSCROLL
-    CONTROL         "Protect password with password manager (TC>=7.5)",IDC_JUMP_CRYPTPASS,
+    CONTROL         "Protect password with password manager",IDC_JUMP_CRYPTPASS,
                     "Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,90,286,10
     PUSHBUTTON      "Change password...",IDC_JUMP_EDITPASS,65,75,233,14,NOT WS_VISIBLE
     LTEXT           "Certificate (*-cert.pub), optional:",IDC_JUMP_LABEL_PUBKEY,12,105,270,8
@@ -175,6 +176,34 @@ BEGIN
     LTEXT           "",IDC_PAIRING_STATUS,10,10,200,10
     LTEXT           "",IDC_PAIRING_COUNTDOWN,10,24,200,10
     PUSHBUTTON      "Cancel",IDCANCEL,85,44,50,12
+END
+
+IDD_DOWNLOAD_ERROR DIALOGEX 0, 0, 300, 82
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Download error"
+FONT 8, "MS Shell Dlg", 0, 0, 0x1
+BEGIN
+    LTEXT           "The file could not be downloaded:",IDC_DOWNLOAD_ERROR_TEXT,8,8,284,10
+    EDITTEXT        IDC_DOWNLOAD_ERROR_PATH,8,21,284,26,ES_MULTILINE | ES_AUTOVSCROLL | ES_READONLY | WS_VSCROLL
+    DEFPUSHBUTTON   "Skip",IDC_DOWNLOAD_SKIP,122,59,52,14
+    PUSHBUTTON      "Skip all",IDC_DOWNLOAD_SKIP_ALL,178,59,56,14
+    PUSHBUTTON      "Cancel",IDCANCEL,238,59,54,14
+END
+
+IDD_MORE_SETTINGS DIALOGEX 0, 0, 280, 152
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "More session settings"
+FONT 8, "MS Shell Dlg", 0, 0, 0x1
+BEGIN
+    LTEXT           "SFTP server command:",IDC_MORE_SFTPSERVER_LABEL,7,8,266,8
+    EDITTEXT        IDC_MORE_SFTPSERVER,7,19,266,12,ES_AUTOHSCROLL
+    LTEXT           "Empty: the server's standard sftp subsystem. For a server without it (OpenWrt, Dropbear), the path of its SFTP server, e.g. /usr/libexec/sftp-server.",IDC_MORE_SFTPSERVER_HINT,7,35,266,26
+    LTEXT           "Command after login:",IDC_MORE_SENDCMD_LABEL,7,66,266,8
+    EDITTEXT        IDC_MORE_SENDCMD,7,77,266,12,ES_AUTOHSCROLL
+    COMBOBOX        IDC_MORE_SENDCMD_MODE,7,93,266,40,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Runs on the server after each login, except in SCP-only mode. Its output goes to the log window.",IDC_MORE_SENDCMD_HINT,7,109,266,18
+    DEFPUSHBUTTON   "OK",IDOK,167,131,50,14
+    PUSHBUTTON      "Cancel",IDCANCEL,223,131,50,14
 END
 
 
@@ -756,7 +785,7 @@ END
 STRINGTABLE
 BEGIN
     IDS_DLG_CHANGEPASS      "Change password..."
-    IDS_DLG_CRYPTPASS       "Protect password with password manager (TC>=7.5)"
+    IDS_DLG_CRYPTPASS       "Protect password with password manager"
     IDS_DLG_CERTGROUP       "Client certificate for &authentication:"
     IDS_DLG_PUBKEY          "Certificate (*-cert.pub), optional:"
     IDS_DLG_PRIVKEY         "Private key file (*.pem;*.ppk):"
@@ -792,6 +821,24 @@ BEGIN
     IDS_PIMPORT_ERR_NO_PROXY "Cannot import proxy: the file has no [proxy] section with a type and server."
     IDS_PIMPORT_ERR_WRITE   "Cannot import proxy: failed to write to sftpplug.ini."
     IDS_PIMPORT_EXISTS      "This proxy is already in [Proxies] (same type, server and user). No new record was made."
+    IDS_DLG_LAN_TIMEOUT     "Session timeout (min):"
+    IDS_DLG_LAN_TIMEOUT_HINT "(0 = no limit)"
+    IDS_DLG_PROTO_AUTO      "Auto"
+    IDS_LOG_PPK_ERR_LIMITS  "The .ppk file asks for Argon2 parameters beyond the safe limits."
+    IDS_LOG_PPK_ERR_INCONSISTENT "The .ppk file holds a key whose parts do not belong together."
+    IDS_DOWNLOAD_ERROR_TITLE "Download error"
+    IDS_DOWNLOAD_ERROR_TEXT "The file could not be downloaded:"
+    IDS_DOWNLOAD_SKIP       "Skip"
+    IDS_DOWNLOAD_SKIP_ALL   "Skip all"
+    IDS_LOG_DOWNLOAD_SKIPPED "Skipped after a download error:"
+    IDS_DLG_MORE_BUTTON     "More..."
+    IDS_MORE_DLG_CAPTION    "More session settings"
+    IDS_MORE_SFTPSERVER     "SFTP server command:"
+    IDS_MORE_SFTPSERVER_HINT "Empty: the server's standard sftp subsystem. For a server without it (OpenWrt, Dropbear), the path of its SFTP server, e.g. /usr/libexec/sftp-server."
+    IDS_MORE_SENDCMD        "Command after login:"
+    IDS_MORE_SENDCMD_HINT   "Runs on the server after each login, except in SCP-only mode. Its output goes to the log window."
+    IDS_MORE_SENDCMD_WAIT   "Wait for it and show its output"
+    IDS_MORE_SENDCMD_NOWAIT "Start it without waiting"
     IDS_DLG_LANPAIR_GROUP   " LAN Pair Session: "
     IDS_DLG_FILEMOD         "New files (Upload):"
     IDS_DLG_DIRMOD          "New folders:"

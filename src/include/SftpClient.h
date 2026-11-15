@@ -93,6 +93,7 @@ struct tConnectSettings {
     std::string account_password;
     std::string key_passphrase;
     std::string connectsendcommand;
+    std::string sftpservercommand;   // empty: request the "sftp" subsystem
     WCHAR lastactivepath[1024];
     std::string savedfingerprint;
     std::string pubkeyfile;

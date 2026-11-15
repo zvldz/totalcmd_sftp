@@ -203,7 +203,7 @@
 286=&Nume utilizator:
 287=Folosire agent SSH (Pageant)
 288=Schimbare parolă...
-289=Protejare parolă cu manager de parole (TC>=7.5)
+289=Protejare parolă cu manager de parole
 290=Certificat client pentru &autentificare:
 291=Certificat (*-cert.pub), opțional:
 292=Fișier cheie privată (*.pem;*.ppk):
@@ -387,6 +387,24 @@
 12140=Nu se poate importa proxy-ul: fișierul nu are o secțiune [proxy] cu tip și server.
 12141=Nu se poate importa proxy-ul: scrierea în sftpplug.ini a eșuat.
 12142=Acest proxy există deja în [Proxies] (același tip, server și utilizator). Nu a fost creată nicio înregistrare nouă.
+12143=Limită de timp sesiune (min):
+12144=(0 = fără limită)
+12145=Auto
+12146=Fișierul .ppk cere parametri Argon2 peste limitele sigure.
+12147=Fișierul .ppk conține o cheie ale cărei părți nu se potrivesc.
+12148=Eroare la descărcare
+12149=Fișierul nu a putut fi descărcat:
+12150=Omite
+12151=Omite tot
+12152=Omis după o eroare la descărcare:
+12153=Mai mult...
+12154=Alte setări ale sesiunii
+12155=Comanda serverului SFTP:
+12156=Gol: subsistemul sftp standard al serverului. Pentru un server fără el (OpenWrt, Dropbear), calea serverului SFTP, de ex. /usr/libexec/sftp-server.
+12157=Comandă după autentificare:
+12158=Rulează pe server după fiecare autentificare, cu excepția modului doar SCP. Ieșirea apare în fereastra jurnalului.
+12159=Așteaptă și afișează ieșirea
+12160=Pornește fără așteptare
 12089=SFTP
 12104=(manual)
 12105= (lipsește)
