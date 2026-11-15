@@ -42,6 +42,12 @@ this fork's 10.0.2.2. Each entry names where it came from.
 
 ### Fixes
 
+- **A file the server refuses to read leaves no empty copy.** A download
+  created the local file first and only then opened the remote one, so a
+  file without read rights (`chmod 000`) failed with an error and still
+  left an empty file behind — and when overwriting, the local copy was
+  already truncated. Over SFTP and SCP the remote file is now opened first,
+  and the local file is not touched when that fails.
 - **SCP text-mode download no longer overruns its buffer.** With text mode
   on, a file dense with line breaks grew past the read buffer as LF became
   CRLF and was written beyond it in memory — and the content comes from the
