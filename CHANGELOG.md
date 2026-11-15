@@ -69,6 +69,12 @@ This fork started from wesmar's plugin as of 24 March 2026.
   downloading file". The record comes out as an INI snippet without the
   password; copying such a file into `[Proxies]` adds it, or says the same
   proxy is already there.
+- **A key passphrase with non-English letters opens keys from Windows and
+  from elsewhere.** puttygen on Windows encrypts a key with the passphrase
+  in the system codepage, tools elsewhere in UTF-8. The plugin now tries
+  the passphrase as typed and, when that does not open the key, in the
+  system codepage — for PuTTY and OpenSSH keys alike. Keys made with such a
+  passphrase on Windows had stopped opening in 10.0.2.3-rc1.
 
 ## 10.0.2.2 — 2026-11-03
 

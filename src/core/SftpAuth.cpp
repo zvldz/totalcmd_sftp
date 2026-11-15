@@ -288,6 +288,32 @@ static bool ReadKeyFile(const char* path, std::string& out)
     return !out.empty();
 }
 
+// A key passphrase reaches us as typed, in UTF-8. Windows tools encrypt with
+// the passphrase in the system codepage instead (puttygen reads it with
+// GetWindowTextA, characters outside the codepage turned into '?'), tools
+// elsewhere in UTF-8. A passphrase with characters beyond ASCII is therefore
+// tried in both forms; one in ASCII is the same bytes either way.
+static bool HasNonAscii(const char* s) noexcept
+{
+    for (; s && *s; ++s)
+        if (static_cast<unsigned char>(*s) >= 0x80)
+            return true;
+    return false;
+}
+
+static bool ConvertPpkInEitherEncoding(const char* ppkPath, const char* passphrase,
+                                       std::string& outPem, PpkConvertError* outError)
+{
+    bool converted = ConvertPpkToOpenSsh(ppkPath, passphrase, outPem, outError);
+    if (!converted && *outError == PpkConvertError::bad_passphrase_or_mac && HasNonAscii(passphrase)) {
+        std::string acp = unicode_util::internal_to_acp(passphrase);
+        converted = ConvertPpkToOpenSsh(ppkPath, acp.c_str(), outPem, outError);
+        SecureZeroMemory(acp.data(), acp.size());
+        AUTH_LOG("PPK conversion with the passphrase in the system codepage: converted=%d", converted);
+    }
+    return converted;
+}
+
 // A PuTTY key is converted in memory into `outConvertedPem`; its public half
 // is then derived from it, so the public key file is dropped.
 static bool PreparePrivateKeyForAuth(
@@ -309,7 +335,7 @@ static bool PreparePrivateKeyForAuth(
     const char* ppkPass = keyPassphrase.c_str();
     PpkConvertError convErr = PpkConvertError::internal_error;
     ShowStatusId(IDS_LOG_PPK_CONVERTING, nullptr, true);
-    bool converted = ConvertPpkToOpenSsh(privKeyFile, ppkPass, outConvertedPem, &convErr);
+    bool converted = ConvertPpkInEitherEncoding(privKeyFile, ppkPass, outConvertedPem, &convErr);
     const std::string convStatus = std::format("PPK conv: {}, err={}", converted, static_cast<int>(convErr));
     AUTH_LOG("PPK conversion: converted=%d, convErr=%d", converted, convErr);
     ShowStatus(convStatus.c_str());
@@ -323,7 +349,7 @@ static bool PreparePrivateKeyForAuth(
         LoadStr(ioPromptBuf, ioPromptBufLen, IDS_KEYPASSPHRASE);
         BuildUserAtServerTitle(title.data(), title.size(), IDS_PASSPHRASE, user, host);
         if (RequestProcI(PluginNumber, RT_Password, title.data(), ioPromptBuf, ppkPassBuf.data(), ppkPassBuf.size() - 1)) {
-            converted = ConvertPpkToOpenSsh(privKeyFile, ppkPassBuf.data(), outConvertedPem, &convErr);
+            converted = ConvertPpkInEitherEncoding(privKeyFile, ppkPassBuf.data(), outConvertedPem, &convErr);
             // This prompt is only reached once the passphrase already held
             // failed to open the key, so a conversion that succeeds here
             // replaces it: what opened the key outranks what was assumed.
@@ -619,19 +645,34 @@ int SftpAuthPubKeyOn(const SshAuthTarget& target, LPCSTR progressbuf, int progre
              convertedPpk ? "(converted PPK)" : privkeyfile.data(),
              pubkeyfileptr ? pubkeyfileptr : "(null)",
              passphrasePtr ? "(set)" : "(null)");
-    SYSTICKS authStart = get_sys_ticks();
-    while ((auth = target.session->userauthPubkeyFromMemory(target.user.c_str(), (unsigned)target.user.size(),
-                pubData.data(), pubData.size(), privData.data(), privData.size(), passphrasePtr)) == LIBSSH2_ERROR_EAGAIN) {
-        if (ProgressLoop(buf.data(), progress, progress + 10, ploop, plasttime))
-            break;
-        if (get_ticks_between(authStart) > SSH_AUTH_STAGE_TIMEOUT_MS) {
-            ShowStatusId(IDS_LOG_PUBKEY_TIMEOUT, nullptr, true);
-            auth = LIBSSH2_ERROR_TIMEOUT;
-            break;
+    const auto tryKey = [&](const char* keyPass) {
+        int rc;
+        const SYSTICKS authStart = get_sys_ticks();
+        while ((rc = target.session->userauthPubkeyFromMemory(target.user.c_str(), (unsigned)target.user.size(),
+                    pubData.data(), pubData.size(), privData.data(), privData.size(), keyPass)) == LIBSSH2_ERROR_EAGAIN) {
+            if (ProgressLoop(buf.data(), progress, progress + 10, ploop, plasttime))
+                break;
+            if (get_ticks_between(authStart) > SSH_AUTH_STAGE_TIMEOUT_MS) {
+                ShowStatusId(IDS_LOG_PUBKEY_TIMEOUT, nullptr, true);
+                rc = LIBSSH2_ERROR_TIMEOUT;
+                break;
+            }
+            if (target.waitIo) target.waitIo();
         }
-        if (target.waitIo) target.waitIo();
-    }
+        return rc;
+    };
+    auth = tryKey(passphrasePtr);
     AUTH_LOG("userauthPubkeyFromMemory result=%d", auth);
+    // A key that would not open with the passphrase as typed (both errors are
+    // raised while reading the key, before the server is asked) gets the same
+    // passphrase in the system codepage, as Windows tools encrypt with it.
+    if ((auth == LIBSSH2_ERROR_KEYFILE_AUTH_FAILED || auth == LIBSSH2_ERROR_FILE) &&
+        passphrasePtr && HasNonAscii(passphrasePtr)) {
+        std::string acp = unicode_util::internal_to_acp(passphrasePtr);
+        auth = tryKey(acp.c_str());
+        SecureZeroMemory(acp.data(), acp.size());
+        AUTH_LOG("userauthPubkeyFromMemory with the passphrase in the system codepage: result=%d", auth);
+    }
     if (auth) {
         cleanupConvertedIfNeeded();
         char* errMsg = nullptr;
