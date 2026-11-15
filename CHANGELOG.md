@@ -32,6 +32,12 @@ This fork started from wesmar's plugin as of 24 March 2026.
 
 ### Fixes
 
+- **A file the server refuses to read leaves no empty copy.** A download
+  created the local file first and only then opened the remote one, so a
+  file without read rights (`chmod 000`) failed with an error and still
+  left an empty file behind — and when overwriting, the local copy was
+  already truncated. Over SFTP and SCP the remote file is now opened first,
+  and the local file is not touched when that fails.
 - **A password the master password could not store is kept.** When Total
   Commander refused to save a session or proxy password in its password
   store — it cannot create `wcx_ftp.ini` when it keeps its settings in a

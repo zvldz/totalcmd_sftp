@@ -333,6 +333,33 @@ int SftpDownloadFileW(pConnectSettings cs, LPCWSTR RemoteName, LPCWSTR LocalName
     if (useScp && !PrepareScpTransferSession(cs))
         return SFTP_FAILED;
 
+    // The remote file is opened before the local one is created, so a file
+    // the server refuses to read leaves no empty local file behind and does
+    // not truncate a local file about to be overwritten. The shell paths open
+    // the remote side themselves and come after the local file.
+    const bool shellPath = forceShellFallback || (useScp && cs->scponly);
+    std::unique_ptr<ISftpHandle> sftpHandle;
+    std::unique_ptr<ISshChannel> scpHandle;
+    libssh2_struct_stat scpInfo{};
+    int64_t scpRemain = 0;
+
+    // An existing target goes back to Total Commander to ask about
+    // overwriting before anything is opened on the server.
+    if (!alwaysOverwrite && !Resume && GetFileAttributesT(LocalName) != INVALID_FILE_ATTRIBUTES)
+        return SFTP_EXISTS;
+
+    if (!shellPath) {
+        if (useScp) {
+            if (!OpenScpDownloadChannel(cs, BuildScpPathArgument(remotePath).c_str(), scpHandle, &scpInfo))
+                return SFTP_READFAILED;
+            scpRemain = scpInfo.st_size;
+        } else {
+            sftpHandle = OpenSftpFileWithRetry(cs, remotePath.c_str(), LIBSSH2_FXF_READ, 0);
+            if (!sftpHandle)
+                return SFTP_READFAILED;
+        }
+    }
+
     // Open local file
     LocalFile local;
     int64_t loaded = 0;
@@ -350,33 +377,17 @@ int SftpDownloadFileW(pConnectSettings cs, LPCWSTR RemoteName, LPCWSTR LocalName
                                    local.get(), LocalName, filesize, loaded, &shellLoaded);
     }
 
-    // Open remote
-    std::unique_ptr<ISftpHandle> sftpHandle;
-    std::unique_ptr<ISshChannel> scpHandle;
-    libssh2_struct_stat scpInfo{};
-    int64_t scpRemain = 0;
+    if (useScp && cs->scponly) {
+        // Shell SCP path
+        return ShellScpDownloadFile(cs, BuildShellScpArgument(remotePath), RemoteName,
+                                    local.get(), LocalName,
+                                    textMode, filesize, &loaded);
+    }
 
-    if (useScp) {
-        if (cs->scponly) {
-            // Shell SCP path
-            return ShellScpDownloadFile(cs, BuildShellScpArgument(remotePath), RemoteName,
-                                        local.get(), LocalName,
-                                        textMode, filesize, &loaded);
-        } else {
-            if (!OpenScpDownloadChannel(cs, BuildScpPathArgument(remotePath).c_str(), scpHandle, &scpInfo))
-                return SFTP_READFAILED;
-            scpRemain = scpInfo.st_size;
-        }
-    } else {
-        sftpHandle = OpenSftpFileWithRetry(cs, remotePath.c_str(), LIBSSH2_FXF_READ, 0);
-        if (!sftpHandle)
+    if (!useScp && Resume && loaded > 0) {
+        sftpHandle->seek(static_cast<size_t>(loaded));
+        if (static_cast<int64_t>(sftpHandle->tell()) != loaded)
             return SFTP_READFAILED;
-
-        if (Resume && loaded > 0) {
-            sftpHandle->seek(static_cast<size_t>(loaded));
-            if (static_cast<int64_t>(sftpHandle->tell()) != loaded)
-                return SFTP_READFAILED;
-        }
     }
 
     // Download loop

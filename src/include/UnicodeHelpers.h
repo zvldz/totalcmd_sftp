@@ -87,6 +87,7 @@ BOOL RemoveDirectoryT(LPCWSTR lpPathName) noexcept;
 BOOL DeleteFileT(LPCWSTR lpFileName) noexcept;
 BOOL MoveFileT(LPCWSTR lpExistingFileName, LPCWSTR lpNewFileName) noexcept;
 BOOL SetFileAttributesT(LPCWSTR lpFileName, DWORD dwFileAttributes) noexcept;
+DWORD GetFileAttributesT(LPCWSTR lpFileName) noexcept;
 
 HANDLE CreateFileT(
     LPCWSTR lpFileName, 

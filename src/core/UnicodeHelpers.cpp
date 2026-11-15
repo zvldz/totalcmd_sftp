@@ -480,6 +480,18 @@ BOOL SetFileAttributesT(LPCWSTR lpFileName, DWORD dwFileAttributes) noexcept
     return SetFileAttributesW(wbuf.data(), dwFileAttributes);
 }
 
+DWORD GetFileAttributesT(LPCWSTR lpFileName) noexcept
+{
+    if (!lpFileName) return INVALID_FILE_ATTRIBUTES;
+
+    std::array<WCHAR, wdirtypemax> wbuf{};
+    if (!MakeExtraLongNameW(wbuf.data(), lpFileName, wbuf.size() - 1)) {
+        return INVALID_FILE_ATTRIBUTES;
+    }
+
+    return GetFileAttributesW(wbuf.data());
+}
+
 HANDLE CreateFileT(
     LPCWSTR lpFileName, 
     DWORD dwDesiredAccess, 
