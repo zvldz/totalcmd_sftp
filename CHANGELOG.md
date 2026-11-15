@@ -35,6 +35,14 @@ this fork's 10.0.2.2. Each entry names where it came from.
   file, and a mismatch fails the upload instead of leaving scp out of step.
   Resuming a text-mode upload is refused over SFTP and SCP, as the offsets
   on the two sides differ. *From wesmar/sftp 10.3.0.0.*
+- **SOCKS proxies refuse what they cannot send instead of sending
+  something else.** A SOCKS5 proxy's "no acceptable method" was never
+  recognised, a user name or password over 255 bytes was cut short, and a
+  host name over 255 bytes was cut into a different name; these now end
+  with an error. Reply bytes are read as unsigned, an IPv6 address is never
+  looked up in DNS, and a SOCKS4 request is checked against its buffer.
+  Proxy credentials are wiped from memory once sent.
+  *From wesmar/sftp 10.3.0.0.*
 
 ## 10.0.2.3 — unreleased
 
