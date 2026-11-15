@@ -83,6 +83,7 @@ struct Plugin {
 // Callbacks
 // ---------------------------------------------------------------------------
 int g_unexpectedPrompts = 0;
+int g_messages = 0;
 bool g_verbose = false;
 
 std::string Narrow(const std::wstring& w)
@@ -124,6 +125,7 @@ BOOL WINAPI OnRequest(int, int type, LPCWSTR title, LPCWSTR text, LPWSTR, int)
         return accept;
     }
     if (type == RT_MsgOK) {
+        ++g_messages;
         std::printf("      message: %s\n", Narrow(all).c_str());
         return TRUE;
     }
@@ -412,6 +414,7 @@ int wmain(int argc, wchar_t** argv)
         std::wstring target = back + name;
         DeleteFileW(target.c_str());
         RemoteInfoStruct ri = InfoFor(dir, name);
+        const int messagesBefore = g_messages;
         int rc = g_plugin.GetFileW(remote.c_str(), target.data(), 0, &ri);
         const std::string fresh = "download of an unreadable file fails, no local file left (rc=" + std::to_string(rc) + ")";
         Check(rc != FS_FILE_OK && !LocalExists(target), fresh);
@@ -424,6 +427,9 @@ int wmain(int argc, wchar_t** argv)
             Known(rc != FS_FILE_OK && Sha256File(target) == keepHash, over);
         else
             Check(rc != FS_FILE_OK && Sha256File(target) == keepHash, over);
+        // Total Commander reports the failed download itself; the plugin
+        // adds no dialog of its own, least of all one blaming scp.
+        Check(g_messages == messagesBefore, "no extra message box for an unreadable file");
         DeleteFileW(target.c_str());
         g_plugin.ExecuteFileW(nullptr, remote.data(), L"chmod 644");
     }
