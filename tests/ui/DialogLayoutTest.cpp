@@ -19,6 +19,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "DarkMode.h"
 #include "DialogLayout.h"
 #include "DialogStrings.h"
 
@@ -291,8 +292,24 @@ int wmain(int argc, wchar_t** argv)
         {"download-error", IDD_DOWNLOAD_ERROR, kDownloadErrorDialogCaption, kDownloadErrorDialogStrings, DlgLayout::LayoutDownloadErrorDialog, Variant::Ssh},
     };
 
+    // Every language light, then English and Russian once more in the dark
+    // colours Total Commander's dark mode brings.
+    struct Pass {
+        const Language* lang;
+        bool dark;
+    };
+    std::vector<Pass> passes;
+    for (const auto& lang : languages)
+        passes.push_back({&lang, false});
+    for (const auto& lang : languages)
+        if (lang.code == L"en" || lang.code == L"rus")
+            passes.push_back({&lang, true});
+
     int failures = 0;
-    for (const auto& lang : languages) {
+    for (const auto& pass : passes) {
+        const Language& lang = *pass.lang;
+        DarkMode::SetOverride(pass.dark ? 1 : 0);
+        const std::wstring prefix = pass.dark ? L"dark-" : L"";
         for (const auto& dc : cases) {
             Run run{&lang, &dc};
             HWND h = nullptr;
@@ -314,12 +331,12 @@ int wmain(int argc, wchar_t** argv)
             const int bad = Check(h, report);
             RECT r{};
             GetWindowRect(h, &r);
-            std::printf("%s %-6s %-15s %4ldx%-4ld dpi %u%s\n", bad ? "FAIL" : "ok  ", WideToUtf8(lang.code).c_str(), dc.name,
+            std::printf("%s %-11s %-15s %4ldx%-4ld dpi %u%s\n", bad ? "FAIL" : "ok  ", WideToUtf8(prefix + lang.code).c_str(), dc.name,
                         r.right - r.left, r.bottom - r.top, DlgLayout::DpiOf(h), report.empty() ? "" : ":");
             for (const auto& line : report)
                 std::printf("%s\n", line.c_str());
             failures += bad;
-            SaveScreenshot(h, outDir / (lang.code + L"-" + Utf8ToWide(dc.name) + L".png"));
+            SaveScreenshot(h, outDir / (prefix + lang.code + L"-" + Utf8ToWide(dc.name) + L".png"));
             DestroyWindow(h);
             Pump();
         }

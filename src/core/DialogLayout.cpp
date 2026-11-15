@@ -1,4 +1,5 @@
 #include "DialogLayout.h"
+#include "DarkMode.h"
 
 #include <dwmapi.h>
 
@@ -430,6 +431,7 @@ void OnInitDialog(HWND hDlg)
 {
     PerMonitorDpiScope::ReleaseEarly();
     ApplyWindowChrome(hDlg);
+    DarkMode::Apply(hDlg);
 }
 
 // ---------------------------------------------------------------------------

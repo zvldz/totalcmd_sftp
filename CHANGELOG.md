@@ -39,6 +39,10 @@ this fork's 10.0.2.2. Each entry names where it came from.
   Dropbear that have the binary but no subsystem then work in SFTP mode.
   No dialog field yet. The feature first appeared in numbereleven-a's
   fork; the libssh2 patch is *from wesmar/sftp 10.3.0.0.*
+- **Dark dialogs when Total Commander is dark.** With TC in dark mode —
+  always on, following Windows, or switched by hand — every dialog of the
+  plugin opens dark too: caption, background, fields, lists, buttons,
+  scroll bars, check boxes and group boxes. In light mode nothing changes.
 - **Skip and Skip all for a file that cannot be downloaded.** In a copy of
   several files, a file the server will not hand over (no read rights, a
   broken link) asks whether to skip it, skip every such file in this copy,

@@ -39,9 +39,10 @@ foreach ($a in $archs) {
     $cmd = "call `"$vsDevCmd`" -arch=$a -host_arch=x64 -no_logo >nul && " +
            "cd /d `"$(Join-Path $Root 'src\res')`" && rc /nologo $inc /fo `"$res`" sftpplug.rc && " +
            "cd /d `"$out`" && cl /nologo /std:c++20 /EHsc /W3 /permissive- /utf-8 /MT /O2 /DUNICODE /D_UNICODE $inc " +
-           "`"$(Join-Path $PSScriptRoot 'ui\DialogLayoutTest.cpp')`" `"$(Join-Path $Root 'src\core\DialogLayout.cpp')`" `"$res`" " +
+           "`"$(Join-Path $PSScriptRoot 'ui\DialogLayoutTest.cpp')`" `"$(Join-Path $Root 'src\core\DialogLayout.cpp')`" " +
+           "`"$(Join-Path $Root 'src\core\DarkMode.cpp')`" `"$res`" " +
            "/Fe:`"$exe`" /link /SUBSYSTEM:CONSOLE /MANIFEST:EMBED /MANIFESTINPUT:`"$(Join-Path $PSScriptRoot 'ui\host.manifest')`" " +
-           "user32.lib gdi32.lib dwmapi.lib gdiplus.lib"
+           "user32.lib gdi32.lib dwmapi.lib gdiplus.lib uxtheme.lib comctl32.lib"
     cmd /c $cmd *> $log
     if ($LASTEXITCODE -ne 0) {
         Get-Content $log -Tail 30 | ForEach-Object { Write-Host "    $_" }
