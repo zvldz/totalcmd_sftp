@@ -358,7 +358,7 @@ int SftpDownloadFileW(pConnectSettings cs, LPCWSTR RemoteName, LPCWSTR LocalName
     if (forceShellFallback) {
         int64_t shellLoaded = loaded;
         return ShellDdDownloadFile(cs, remotePath, RemoteName,
-                                   local.get(), LocalName, filesize, loaded, &shellLoaded);
+                                   local.get(), LocalName, filesize, loaded, textMode, &shellLoaded);
     }
 
     // Open remote
@@ -477,7 +477,7 @@ int SftpUploadFileW(pConnectSettings cs, LPCWSTR LocalName, LPCWSTR RemoteName,
     if (forceShellFallback) {
         int64_t shellUploaded = 0;
         return ShellDdUploadFile(cs, remotePath, RemoteName,
-                                 local.get(), LocalName, filesize, Resume ? 1 : 0, &shellUploaded);
+                                 local.get(), LocalName, filesize, Resume ? 1 : 0, textMode, &shellUploaded);
     }
 
     if (!ReconnectSFTPChannelIfNeeded(cs))

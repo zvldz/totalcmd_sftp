@@ -38,6 +38,11 @@ this fork's 10.0.2.2. Each entry names where it came from.
   of a converted file differ on the two sides, so it cannot be continued
   from the middle; Total Commander still offers "Resume", and picking it
   now sends the whole file again instead of failing, in both directions.
+- **Text mode also in shell transfers.** Files sent or fetched through the
+  shell (dd / base64: the forced shell mode, and before this release every
+  SCP-only resume) kept their line endings as they were, while SFTP and
+  SCP converted them. They are now converted the same way, and the size
+  check compares with the converted size.
 - **SOCKS proxies refuse what they cannot send instead of sending
   something else.** A SOCKS5 proxy's "no acceptable method" was never
   recognised, a user name or password over 255 bytes was cut short, and a
