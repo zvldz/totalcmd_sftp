@@ -558,6 +558,20 @@
 #define IDS_LOG_PPK_ERR_LIMITS          12146  // .ppk asks for Argon2 parameters beyond the caps
 #define IDS_LOG_PPK_ERR_INCONSISTENT    12147  // .ppk key parts do not belong together
 
+// ---------------------------------------------------------------------------
+// Download error in a multi-file copy: Skip / Skip all / Cancel
+// ---------------------------------------------------------------------------
+#define IDD_DOWNLOAD_ERROR              118
+#define IDC_DOWNLOAD_ERROR_TEXT         1118
+#define IDC_DOWNLOAD_ERROR_PATH         1119
+#define IDC_DOWNLOAD_SKIP               1120
+#define IDC_DOWNLOAD_SKIP_ALL           1121
+#define IDS_DOWNLOAD_ERROR_TITLE        12148
+#define IDS_DOWNLOAD_ERROR_TEXT         12149
+#define IDS_DOWNLOAD_SKIP               12150
+#define IDS_DOWNLOAD_SKIP_ALL           12151
+#define IDS_LOG_DOWNLOAD_SKIPPED        12152  // log line before the name of a skipped file
+
 // Next default values for new objects
 //
 #ifdef APSTUDIO_INVOKED

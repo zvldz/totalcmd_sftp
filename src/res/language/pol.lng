@@ -378,6 +378,11 @@
 12142=To proxy jest już w [Proxies] (ten sam typ, serwer i użytkownik). Nie utworzono nowego wpisu.
 12146=Plik .ppk żąda parametrów Argon2 powyżej bezpiecznych limitów.
 12147=Plik .ppk zawiera klucz, którego części do siebie nie pasują.
+12148=Błąd pobierania
+12149=Nie udało się pobrać pliku:
+12150=Pomiń
+12151=Pomiń wszystkie
+12152=Pominięto po błędzie pobierania:
 12089=SFTP
 12090=Szukam peera LAN Pair w sieci lokalnej...
 12091={} s

@@ -26,6 +26,7 @@
 #include "LngLoader.h"
 #include "PhpAgentClient.h"
 #include "PluginEntryPointsInternal.h"
+#include "DownloadErrorBatch.h"
 #include "ImportCache.h"
 #include "IniFile.h"
 #include "VirtualSessionRegistry.h"
@@ -739,6 +740,13 @@ static void StatusInfo(const std::string& remoteDir, int InfoStartEnd, int InfoO
                  InfoOperation,
                  InfoStartEnd == FS_STATUS_START ? "START" : "END",
                  RemoteDir);
+
+        if (InfoOperation == FS_STATUS_OP_GET_MULTI || InfoOperation == FS_STATUS_OP_GET_MULTI_THREAD) {
+            if (InfoStartEnd == FS_STATUS_START)
+                download_batch::Begin();
+            else
+                download_batch::End();
+        }
 
         if (remoteDir.size() < 2)
             if (InfoOperation == FS_STATUS_OP_DELETE || InfoOperation == FS_STATUS_OP_RENMOV_MULTI)

@@ -389,6 +389,11 @@
 12142=Ez a proxy már szerepel a [Proxies] mappában (azonos típus, kiszolgáló és felhasználó). Új bejegyzés nem jött létre.
 12146=A .ppk fájl a biztonságos határokon túli Argon2-paramétereket kér.
 12147=A .ppk fájlban lévő kulcs részei nem tartoznak össze.
+12148=Letöltési hiba
+12149=A fájlt nem sikerült letölteni:
+12150=Kihagyás
+12151=Összes kihagyása
+12152=Letöltési hiba miatt kihagyva:
 12089=SFTP
 12104=(kézi)
 12105= (hiányzik)

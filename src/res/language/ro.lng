@@ -389,6 +389,11 @@
 12142=Acest proxy există deja în [Proxies] (același tip, server și utilizator). Nu a fost creată nicio înregistrare nouă.
 12146=Fișierul .ppk cere parametri Argon2 peste limitele sigure.
 12147=Fișierul .ppk conține o cheie ale cărei părți nu se potrivesc.
+12148=Eroare la descărcare
+12149=Fișierul nu a putut fi descărcat:
+12150=Omite
+12151=Omite tot
+12152=Omis după o eroare la descărcare:
 12089=SFTP
 12104=(manual)
 12105= (lipsește)

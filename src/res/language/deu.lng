@@ -390,6 +390,11 @@
 12142=Dieser Proxy ist bereits in [Proxies] (gleicher Typ, Server und Benutzer). Es wurde kein neuer Eintrag angelegt.
 12146=Die .ppk-Datei verlangt Argon2-Parameter über den sicheren Grenzen.
 12147=Die .ppk-Datei enthält einen Schlüssel, dessen Teile nicht zusammenpassen.
+12148=Downloadfehler
+12149=Die Datei konnte nicht heruntergeladen werden:
+12150=Überspringen
+12151=Alle überspringen
+12152=Nach einem Downloadfehler übersprungen:
 12089=SFTP
 12104=(manuell)
 12105= (fehlt)

@@ -389,6 +389,11 @@
 12142=Tato proxy už v [Proxies] je (stejný typ, server a uživatel). Nový záznam nebyl vytvořen.
 12146=Soubor .ppk požaduje parametry Argon2 nad bezpečné limity.
 12147=Soubor .ppk obsahuje klíč, jehož části k sobě nepatří.
+12148=Chyba stahování
+12149=Soubor se nepodařilo stáhnout:
+12150=Přeskočit
+12151=Přeskočit vše
+12152=Přeskočeno po chybě stahování:
 12089=SFTP
 12104=(ručně)
 12105= (chybí)

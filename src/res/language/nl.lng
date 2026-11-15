@@ -389,6 +389,11 @@
 12142=Deze proxy staat al in [Proxies] (zelfde type, server en gebruiker). Er is geen nieuwe record gemaakt.
 12146=Het .ppk-bestand vraagt Argon2-parameters boven de veilige grenzen.
 12147=Het .ppk-bestand bevat een sleutel waarvan de delen niet bij elkaar horen.
+12148=Downloadfout
+12149=Het bestand kon niet worden gedownload:
+12150=Overslaan
+12151=Alles overslaan
+12152=Overgeslagen na een downloadfout:
 12089=SFTP
 12104=(handmatig)
 12105= (ontbreekt)

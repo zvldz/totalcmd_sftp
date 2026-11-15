@@ -193,6 +193,7 @@
     <ClCompile Include="..\src\core\PasswordCrypto.cpp" />
     <ClCompile Include="..\src\core\PhpAgentScriptConfig.cpp" />
     <ClCompile Include="..\src\core\ConnectionNetwork.cpp" />
+    <ClCompile Include="..\src\core\DownloadErrorBatch.cpp" />
     <ClCompile Include="..\src\core\ProfileSettings.cpp" />
     <ClCompile Include="..\src\core\JumpHostConnection.cpp" />
     <ClCompile Include="..\src\core\PluginHelp.cpp" />
@@ -248,6 +249,7 @@
     <ClInclude Include="..\src\include\AuthMethodParser.h" />
     <ClInclude Include="..\src\include\ConnectionLifecycle.h" />
     <ClInclude Include="..\src\include\ConnectionNetwork.h" />
+    <ClInclude Include="..\src\include\DownloadErrorBatch.h" />
     <ClInclude Include="..\src\include\ProfileSettings.h" />
     <ClInclude Include="..\src\include\ITransportStream.h" />
     <ClInclude Include="..\src\include\JumpHostConnection.h" />

@@ -39,6 +39,14 @@ this fork's 10.0.2.2. Each entry names where it came from.
   Dropbear that have the binary but no subsystem then work in SFTP mode.
   No dialog field yet. The feature first appeared in numbereleven-a's
   fork; the libssh2 patch is *from wesmar/sftp 10.3.0.0.*
+- **Skip and Skip all for a file that cannot be downloaded.** In a copy of
+  several files, a file the server will not hand over (no read rights, a
+  broken link) asks whether to skip it, skip every such file in this copy,
+  or cancel — Total Commander's own message offers only OK or Cancel, one
+  window per file. A skipped file is noted in the log and nothing of it is
+  left on disk. A move and a resumed download keep the plain error, as
+  skipping would let Total Commander delete a source that never arrived.
+  *From wesmar/sftp 10.3.0.0.*
 
 ### Fixes
 

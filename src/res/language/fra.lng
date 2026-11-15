@@ -390,6 +390,11 @@
 12142=Ce proxy figure déjà dans [Proxies] (même type, serveur et utilisateur). Aucun nouvel enregistrement n'a été créé.
 12146=Le fichier .ppk demande des paramètres Argon2 au-delà des limites sûres.
 12147=Le fichier .ppk contient une clé dont les parties ne correspondent pas.
+12148=Erreur de téléchargement
+12149=Le fichier n'a pas pu être téléchargé :
+12150=Ignorer
+12151=Tout ignorer
+12152=Ignoré après une erreur de téléchargement :
 12089=SFTP
 12104=(manuel)
 12105= (introuvable)
