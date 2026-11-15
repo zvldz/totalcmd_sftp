@@ -41,6 +41,11 @@ This fork started from wesmar's plugin as of 24 March 2026.
   everything" and shell transfer the refusal shows up only after the local
   file exists: the empty file is removed again, but a local copy being
   overwritten is still lost there.
+- **An SCP download of an unreadable file no longer blames scp.** "Use
+  SCP for data transfers" showed "Cannot execute SCP ... make sure that
+  SCP is installed" for a file without read rights. When the file is
+  there, the refusal is now a status line; the dialog stays for a scp
+  that really does not run.
 - **"SCP for everything" lists non-ASCII names on servers without a UTF-8
   locale.** `ls` on a terminal printed such names as `test???`, and those
   files then could not be opened or deleted. Its output now goes through a

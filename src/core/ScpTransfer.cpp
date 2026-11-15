@@ -287,14 +287,16 @@ std::string BuildScpPathArgument(const std::string& path)
 // over SFTP, which "SCP for data" keeps open beside scp; without it there is
 // no telling, and the answer is no. `filename` is the scp argument, which
 // carries quotes when the path holds a space.
-static bool ScpSourceIsMissing(pConnectSettings cs, const char* filename)
+enum class ScpSource { unknown, missing, present };
+
+static ScpSource ScpSourceState(pConnectSettings cs, const char* filename)
 {
     if (!cs || !filename)
-        return false;
+        return ScpSource::unknown;
     if (!cs->sftpsession || cs->scponly) {
         SFTP_LOG("SCP", "missing-check: no SFTP session to ask (sftp=%d scponly=%d)",
                  cs->sftpsession ? 1 : 0, cs->scponly ? 1 : 0);
-        return false;
+        return ScpSource::unknown;
     }
     std::string path = filename;
     if (path.size() >= 2 && path.front() == '"' && path.back() == '"')
@@ -309,7 +311,11 @@ static bool ScpSourceIsMissing(pConnectSettings cs, const char* filename)
     } while (rc == LIBSSH2_ERROR_EAGAIN);
     const unsigned long fx = (rc == LIBSSH2_ERROR_SFTP_PROTOCOL) ? cs->sftpsession->lastError() : 0;
     SFTP_LOG("SCP", "missing-check '%s': lstat rc=%d fx=%lu", path.c_str(), rc, fx);
-    return fx == LIBSSH2_FX_NO_SUCH_FILE || fx == LIBSSH2_FX_NO_SUCH_PATH;
+    if (rc == 0)
+        return ScpSource::present;
+    if (fx == LIBSSH2_FX_NO_SUCH_FILE || fx == LIBSSH2_FX_NO_SUCH_PATH)
+        return ScpSource::missing;
+    return ScpSource::unknown;
 }
 
 bool OpenScpDownloadChannel(pConnectSettings cs, const char* filename,
@@ -353,11 +359,17 @@ bool OpenScpDownloadChannel(pConnectSettings cs, const char* filename,
                 // The commonest refusal is a file that is not there — Shift+F4
                 // on a new name asks for one first — which is not scp failing
                 // to run. libssh2 reads scp's own message and drops it, so the
-                // question goes to SFTP, which this mode keeps open: a missing
-                // file gets a status line, anything else the dialog.
-                if (ScpSourceIsMissing(cs, filename)) {
+                // question goes to SFTP, which this mode keeps open. A missing
+                // file, or one that is there — scp ran and refused it, most
+                // often for want of read rights — gets a status line; only
+                // when that tells nothing does the dialog blame scp itself.
+                const ScpSource source = ScpSourceState(cs, filename);
+                if (source == ScpSource::missing) {
                     SFTP_LOG("SCP", "Download refused: '%s' does not exist", filename);
                     ShowStatus("SCP: no such file");
+                } else if (source == ScpSource::present) {
+                    SFTP_LOG("SCP", "Download refused: '%s' exists but scp cannot read it", filename);
+                    ShowStatus("SCP: the server refused to read the file (permissions?)");
                 } else if (cs->feedback) {
                     cs->feedback->ShowError(
                         LngStrA(IDS_SCP_EXEC_FAILED, "Cannot execute SCP to start transfer. Please make sure that SCP is installed on the server and path to it is included in PATH.\n\nYou may also try SFTP instead of SCP (uncheck 'Use SCP for all' in connection settings).").c_str(),
