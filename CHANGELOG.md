@@ -71,6 +71,10 @@ this fork's 10.0.2.2. Each entry names where it came from.
   subfolder never opened — it passed no "file exists" flag, and the upload
   replaced the server's file without asking. The server is now asked first,
   and TC asks the user. *From wesmar/sftp 10.3.0.0.*
+- **Quick Connection is not advertised on the LAN.** The name was checked
+  against "Quick connect" and its Polish form, while the entry reads "Quick
+  Connection" or its translation, so LAN Pair discovery announced it like a
+  saved session. *From wesmar/sftp 10.3.0.0.*
 
 ### Changes
 

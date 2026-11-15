@@ -787,8 +787,14 @@ static void EnsureLanDiscoveryRunning(HWND hWnd, ConnectDialogContext* dlgCtx, p
         return;
     }
 
+    // The Quick Connection entry is not a name to advertise on the LAN; it
+    // reads in English or in whichever language is loaded.
     const std::wstring sessionName = GetSessionDisplayNameW(hWnd);
-    if (!sessionName.empty() && _wcsicmp(sessionName.c_str(), L"Quick connect") != 0 && _wcsicmp(sessionName.c_str(), L"Szybkie połączenie") != 0) {
+    const std::wstring quickLocal = LoadResStringW(IDS_QUICKCONNECT);
+    const bool isQuickConnection =
+        _wcsicmp(sessionName.c_str(), L"Quick Connection") == 0 ||
+        (!quickLocal.empty() && _wcsicmp(sessionName.c_str(), quickLocal.c_str()) == 0);
+    if (!sessionName.empty() && !isQuickConnection) {
         dlgCtx->lanDisplayName = sessionName;
     }
 
