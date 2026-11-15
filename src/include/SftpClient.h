@@ -262,7 +262,7 @@ int  SftpRenameMoveFileW(pConnectSettings ConnectSettings, LPCWSTR OldName, LPCW
 int  SftpDownloadFileW(pConnectSettings ConnectSettings, LPCWSTR RemoteName, LPCWSTR LocalName, bool alwaysoverwrite, int64_t filesize, LPFILETIME ft, bool Resume);
 int  SftpUploadFileW(pConnectSettings ConnectSettings, LPCWSTR LocalName, LPCWSTR RemoteName, bool Resume, bool setattr);
 int  SftpDeleteFileW(pConnectSettings ConnectSettings, LPCWSTR RemoteName, bool isdir);
-int  SftpSetAttr(pConnectSettings ConnectSettings, LPCSTR RemoteName, int NewAttr);
+int  SftpSetAttrW(pConnectSettings ConnectSettings, LPCWSTR RemoteName, int NewAttr);
 int  SftpSetDateTimeW(pConnectSettings ConnectSettings, LPCWSTR RemoteName, LPFILETIME LastWriteTime);
 void SftpGetLastActivePathW(pConnectSettings ConnectSettings, LPWSTR RelativePath, size_t maxlen);
 bool SftpChmodW(pConnectSettings ConnectSettings, LPCWSTR RemoteName, LPCWSTR chmod);

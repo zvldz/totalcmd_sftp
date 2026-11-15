@@ -2327,11 +2327,7 @@ BOOL WINAPI FsSetAttrW(LPCWSTR RemoteName, int NewAttr)
             return false;
         ResetLastPercent(serverid);
         SessionContextGuard _sessionGuard(serverid);
-        // Use std::string instead of std::array<char, wdirtypemax>
-        std::string remotedirA(wdirtypemax, '\0');
-        walcopy(remotedirA.data(), remotedirW.data(), remotedirA.size() - 1);
-        remotedirA.resize(strlen(remotedirA.data()));
-        int rc = SftpSetAttr(serverid, remotedirA.data(), NewAttr);
+        int rc = SftpSetAttrW(serverid, remotedirW.c_str(), NewAttr);
         return (rc == SFTP_OK) ? true : false;
     });
 }
@@ -2342,13 +2338,8 @@ BOOL WINAPI FsSetAttr(LPCSTR RemoteName, int NewAttr)
     return sftp::dll_invoke(_barrier, FALSE, [&]() -> BOOL {
         if (!RemoteName || !RemoteName[0])
             return false;
-        std::array<char, wdirtypemax> remotedir{};
-        pConnectSettings serverid = GetServerIdAndRelativePathFromPath(RemoteName, remotedir.data(), remotedir.size() - 1);
-        if (serverid == nullptr)
-            return false;
-        ResetLastPercent(serverid);
-        int rc = SftpSetAttr(serverid, remotedir.data(), NewAttr);
-        return (rc == SFTP_OK) ? true : false;
+        std::array<WCHAR, wdirtypemax> remoteNameW{};
+        return FsSetAttrW(awlcopy(remoteNameW.data(), RemoteName, remoteNameW.size() - 1), NewAttr);
     });
 }
 

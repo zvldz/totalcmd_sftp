@@ -988,7 +988,7 @@ int SftpRenameMoveFileW(pConnectSettings cs, LPCWSTR OldName, LPCWSTR NewName, b
     return (rc == 0) ? SFTP_OK : SFTP_FAILED;
 }
 
-int SftpSetAttr(pConnectSettings cs, LPCSTR RemoteName, int NewAttr)
+int SftpSetAttrW(pConnectSettings cs, LPCWSTR RemoteName, int NewAttr)
 {
     if (!cs || !RemoteName || !RemoteName[0])
         return SFTP_FAILED;
@@ -997,7 +997,9 @@ int SftpSetAttr(pConnectSettings cs, LPCSTR RemoteName, int NewAttr)
     if (!cs->sftpsession)
         return SFTP_FAILED;
 
-    std::string nameStr(RemoteName);
+    std::string nameStr(wdirtypemax, '\0');
+    CopyStringW2A(cs, RemoteName, nameStr.data(), nameStr.size());
+    nameStr.resize(strlen(nameStr.c_str()));
     std::replace(nameStr.begin(), nameStr.end(), '\\', '/');
 
     // Fetch current permissions via lstat so we can do a RMW on the mode bits.
