@@ -66,3 +66,6 @@ src/include/build_info_gen.h
 *.7z
 *.tar.gz
 debug.log
+
+# Unit test builds (tests/run-unit-tests.ps1).
+tests/out/

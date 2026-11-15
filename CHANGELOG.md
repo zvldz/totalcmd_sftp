@@ -96,6 +96,10 @@ this fork's 10.0.2.2. Each entry names where it came from.
   OpenSSL (3.2 and later), which the plugin already carries; the separate
   argon2 submodule and its build step are gone.
   *From wesmar/sftp 10.3.0.0, on OpenSSL 3.5 here.*
+- **Unit tests.** The PPK converter (against 20 puttygen keys), text-mode
+  line endings, the terminal filter and the LAN Pair key are covered by
+  unit tests, run on every release build before the plugin is built.
+  *From wesmar/sftp 10.3.0.0.*
 
 ## 10.0.2.3 — unreleased
 

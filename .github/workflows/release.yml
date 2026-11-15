@@ -83,6 +83,12 @@ jobs:
         # (OpenSSL is the bulk), acceptable since releases are rare.
         run: ./build-deps.ps1 -Clean
 
+      - name: Unit tests (x64 + x86)
+        shell: pwsh
+        # Built against the OpenSSL just produced; a failing test stops the
+        # release before the plugin is built.
+        run: ./tests/run-unit-tests.ps1
+
       - name: Build plugin (Release x64 + x86)
         shell: pwsh
         # The help page is generated from src/help by a Python script, so the
