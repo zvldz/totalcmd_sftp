@@ -65,6 +65,11 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   folder) and `${VDS_CONFIG_PATH}` (its configuration folder) into key
   paths, so one configuration works on any system. They were left as they
   were, and the key was never found.
+- **F3 and F5 on a proxy in `[Proxies]` show and copy the record, and a
+  copied record goes back the same way.** They used to end in "Error
+  downloading file". The record comes out as an INI snippet without the
+  password; copying such a file into `[Proxies]` adds it, or says the same
+  proxy is already there.
 
 ## 10.0.2.2 — 2026-11-03
 

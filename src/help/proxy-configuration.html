@@ -18,6 +18,12 @@ points at:</p>
   <li><b>Enter</b> opens the settings of the record under the cursor.</li>
   <li><b>F8</b> deletes it. A record still used by a session is not deleted;
       the sessions using it are named instead.</li>
+  <li><b>F3</b> shows the record as an INI snippet, <b>F5</b> copies it out
+      as a file — without the password.</li>
+  <li><b>F5</b> of such a file into <b>[Proxies]</b> adds it as a record. If
+      a record with the same type, server and user is already there, nothing
+      is added and the plugin says so. The password is asked for on
+      connect.</li>
 </ul>
 
 <p>The connection dialog carries the list only: pick a record for the session,

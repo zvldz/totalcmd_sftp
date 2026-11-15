@@ -384,6 +384,10 @@
 12136=Antwort von stat auf dem Server
 12137=Der Server hat keinen stat-Befehl ausgeführt. Angaben des SFTP-Protokolls:
 12138=Total Commander konnte das Passwort nicht in seinem Passwortspeicher sichern (Schreibfehler). Es wurde stattdessen in den Plugin-Einstellungen gespeichert, ohne Master-Passwort.
+12139=SFTP-Plugin - Proxy-Import
+12140=Proxy kann nicht importiert werden: die Datei enthält keinen Abschnitt [proxy] mit Typ und Server.
+12141=Proxy kann nicht importiert werden: Schreiben in sftpplug.ini fehlgeschlagen.
+12142=Dieser Proxy ist bereits in [Proxies] (gleicher Typ, Server und Benutzer). Es wurde kein neuer Eintrag angelegt.
 12089=SFTP
 12104=(manuell)
 12105= (fehlt)

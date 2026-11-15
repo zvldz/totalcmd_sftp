@@ -58,11 +58,32 @@ static const char* DependencyName(sftp::SessionDependency::Kind kind)
     return "";
 }
 
-static int ExportSessionAsIniFile(
-    LPCSTR srcSection, LPCSTR srcIni,
-    LPCSTR exportSection, LPCSTR headerComment,
-    LPCWSTR destFile, BOOL OverWrite,
-    const sftp::SessionDependency* dependency = nullptr)
+// The proxy record numbered `proxynr` in `srcIni`, under the fixed export
+// name. It travels without its number, since the number is local to the
+// file it came from, and without its password, which is machine-bound where
+// it is stored at all. Returns false when the file has no such record.
+static bool AppendProxyRecord(std::string& content, int proxynr, LPCSTR srcIni)
+{
+    const std::string proxySection = proxynr > 1
+        ? std::format("proxy{}", proxynr) : std::string("proxy");
+    std::array<char, 4096> proxyKeys{};
+    IniGetString(proxySection.c_str(), nullptr, "",
+        proxyKeys.data(), static_cast<DWORD>(proxyKeys.size() - 1), srcIni);
+    if (!proxyKeys[0])
+        return false;
+    content.append(kExportProxySection).append(RN);
+    for (const char* k = proxyKeys.data(); *k; k += strlen(k) + 1) {
+        if (_stricmp(k, "proxypassword") == 0)
+            continue;
+        std::array<char, 2048> value{};
+        IniGetString(proxySection.c_str(), k, "",
+            value.data(), static_cast<DWORD>(value.size() - 1), srcIni);
+        content.append(k).append("=").append(value.data()).append(RN);
+    }
+    return true;
+}
+
+static int WriteExportFile(LPCWSTR destFile, BOOL OverWrite, const std::string& content)
 {
     if (!OverWrite) {
         const DWORD attrs = GetFileAttributesW(destFile);
@@ -72,7 +93,24 @@ static int ExportSessionAsIniFile(
             return FS_FILE_EXISTS;
         }
     }
+    HANDLE h = CreateFileW(destFile, GENERIC_WRITE, 0, nullptr,
+                           CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (h == INVALID_HANDLE_VALUE)
+        return FS_FILE_WRITEERROR;
+    DWORD written = 0;
+    WriteFile(h, content.data(),
+              static_cast<DWORD>(content.size()),
+              &written, nullptr);
+    CloseHandle(h);
+    return FS_FILE_OK;
+}
 
+static int ExportSessionAsIniFile(
+    LPCSTR srcSection, LPCSTR srcIni,
+    LPCSTR exportSection, LPCSTR headerComment,
+    LPCWSTR destFile, BOOL OverWrite,
+    const sftp::SessionDependency* dependency = nullptr)
+{
     std::string content;
     content.reserve(1024);
     if (headerComment && headerComment[0])
@@ -125,41 +163,25 @@ static int ExportSessionAsIniFile(
     // A session that goes through a proxy takes the record with it. `proxynr`
     // alone would be meaningless anywhere else: it would land on whatever
     // record holds that number there, or on none at all, which reads as a
-    // direct connection to the host. The record travels without its number,
-    // since the number is local to the file it came from, and without its
-    // password, which is machine-bound where it is stored at all.
+    // direct connection to the host.
     {
         const int proxynr = IniGetInt(srcSection, "proxynr", 0, srcIni);
-        if (proxynr > 0) {
-            const std::string proxySection = proxynr > 1
-                ? std::format("proxy{}", proxynr) : std::string("proxy");
-            std::array<char, 4096> proxyKeys{};
-            IniGetString(proxySection.c_str(), nullptr, "",
-                proxyKeys.data(), static_cast<DWORD>(proxyKeys.size() - 1), srcIni);
-            if (proxyKeys[0]) {
-                content.append(kExportProxySection).append(RN);
-                for (const char* k = proxyKeys.data(); *k; k += strlen(k) + 1) {
-                    if (_stricmp(k, "proxypassword") == 0)
-                        continue;
-                    std::array<char, 2048> value{};
-                    IniGetString(proxySection.c_str(), k, "",
-                        value.data(), static_cast<DWORD>(value.size() - 1), srcIni);
-                    content.append(k).append("=").append(value.data()).append(RN);
-                }
-            }
-        }
+        if (proxynr > 0)
+            AppendProxyRecord(content, proxynr, srcIni);
     }
 
-    HANDLE h = CreateFileW(destFile, GENERIC_WRITE, 0, nullptr,
-                           CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (h == INVALID_HANDLE_VALUE)
-        return FS_FILE_WRITEERROR;
-    DWORD written = 0;
-    WriteFile(h, content.data(),
-              static_cast<DWORD>(content.size()),
-              &written, nullptr);
-    CloseHandle(h);
-    return FS_FILE_OK;
+    return WriteExportFile(destFile, OverWrite, content);
+}
+
+// F3/F5 on a row of [Proxies]: the record as an INI snippet, written the
+// way a session export carries it.
+static int ExportProxyAsIniFile(int proxynr, const std::string& rowName,
+                                LPCSTR srcIni, LPCWSTR destFile, BOOL OverWrite)
+{
+    std::string content = "; Proxy record '" + rowName + "' from sftpplug.ini" + RN;
+    if (!AppendProxyRecord(content, proxynr, srcIni))
+        return FS_FILE_NOTFOUND;
+    return WriteExportFile(destFile, OverWrite, content);
 }
 
 static bool CopyIniSectionAcrossFiles(LPCSTR srcSection, LPCWSTR srcIni,
@@ -258,6 +280,49 @@ static pConnectSettings ResolveTransferSession(LPCWSTR RemoteName,
 
     SetServerIdForName(r.displayName.c_str(), static_cast<SERVERID>(fresh));
     return GetServerIdAndRelativePathFromPathW(RemoteName, relativeOut, maxlen);
+}
+
+// A file copied into [Proxies]: the reverse of F5 on a proxy row. Its
+// [proxy] section becomes a record, unless one already describes the same
+// route (kind, server, user): that one is left as it is and the user is
+// told, since nothing new appears. A password does not come with it; it is
+// asked for on connect.
+static int ImportProxyFromUpload(LPCWSTR LocalName)
+{
+    auto abortWithMessage = [](UINT msgId) -> int {
+        ShowPluginMessage(msgId, "", IDS_PIMPORT_TITLE,
+                          "SFTP plugin - proxy import");
+        return FS_FILE_USERABORT;
+    };
+
+    const int proxytype = static_cast<int>(IniGetInt("proxy", "proxytype", -1, LocalName));
+    std::array<char, 512> proxyServer{}, proxyUser{};
+    IniGetString("proxy", "proxyserver", "", proxyServer.data(),
+                 static_cast<DWORD>(proxyServer.size() - 1), LocalName);
+    IniGetString("proxy", "proxyuser", "", proxyUser.data(),
+                 static_cast<DWORD>(proxyUser.size() - 1), LocalName);
+    if (proxytype <= 0 || !proxyServer[0]) {
+        SFTP_LOG("ENTRY", "Proxy import refused: no [proxy] with type and server");
+        return abortWithMessage(IDS_PIMPORT_ERR_NO_PROXY);
+    }
+
+    const int existing = FindMatchingProxyNr(proxytype, proxyServer.data(), proxyUser.data(), inifilename);
+    if (existing > 0) {
+        SFTP_LOG("ENTRY", "Proxy import: '%s' matches record %d", proxyServer.data(), existing);
+        ShowPluginMessage(IDS_PIMPORT_EXISTS,
+                          "This proxy is already in [Proxies] (same type, server and user). No new record was made.",
+                          IDS_PIMPORT_TITLE, "SFTP plugin - proxy import", MB_ICONINFORMATION);
+        return FS_FILE_OK;
+    }
+
+    const int nr = NextFreeProxyNr(inifilename);
+    const std::string dest = nr > 1 ? std::format("proxy{}", nr) : std::string("proxy");
+    if (!CopyIniSectionAcrossFiles("proxy", LocalName, dest.c_str(), inifilename)) {
+        SFTP_LOG("ENTRY", "Proxy import: writing record %d failed", nr);
+        return abortWithMessage(IDS_PIMPORT_ERR_WRITE);
+    }
+    SFTP_LOG("ENTRY", "Proxy import: '%s' added as record %d", proxyServer.data(), nr);
+    return FS_FILE_OK;
 }
 
 static std::optional<int> TryImportSessionFromUpload(
@@ -1753,6 +1818,19 @@ int WINAPI FsGetFileW(LPCWSTR RemoteName, LPWSTR LocalName, int CopyFlags, Remot
             }
         }
 
+        // F3/F4/F5 on a row inside [Proxies] → the record as an INI snippet.
+        // Without this TC tries to download the row from the server.
+        {
+            std::string proxyEntry;
+            if (IsProxiesPath(RemoteName, &proxyEntry) && !proxyEntry.empty()) {
+                const int proxynr = ProxyNrFromRowName(proxyEntry);
+                if (proxynr <= 0)
+                    return FS_FILE_NOTFOUND;
+                return ExportProxyAsIniFile(proxynr, proxyEntry, inifilename,
+                                            LocalName, OverWrite);
+            }
+        }
+
         // F3/F4 on a saved-session entry (root-level OR nested in a folder)
         // → open the Edit Session dialog instead of downloading the entry as
         // a file. Same effect as RMB → Properties / Alt+Enter, but reachable
@@ -1952,6 +2030,10 @@ int WINAPI FsPutFileW(LPCWSTR LocalName, LPCWSTR RemoteName, int CopyFlags)
         // branch below.
         if (IsImportsPath(RemoteName))
             return FS_FILE_OK;
+
+        // A file copied into [Proxies] is a proxy record coming back.
+        if (IsProxiesPath(RemoteName))
+            return ImportProxyFromUpload(LocalName);
 
         // Reverse of the [Imports] INI-export path: when the destination
         // path does NOT resolve to any existing session, treat the upload

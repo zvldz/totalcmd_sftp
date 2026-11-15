@@ -383,6 +383,10 @@
 12136=A stat parancs válasza a szerveren
 12137=A szerver nem futtatott stat parancsot. Az SFTP protokoll adatai:
 12138=A Total Commander nem tudta menteni a jelszót a jelszótárába (írási hiba). A jelszó a bővítmény beállításaiba került, mesterjelszó nélkül.
+12139=SFTP bővítmény - proxy importálása
+12140=A proxy nem importálható: a fájlban nincs típust és kiszolgálót tartalmazó [proxy] szakasz.
+12141=A proxy nem importálható: az sftpplug.ini írása sikertelen.
+12142=Ez a proxy már szerepel a [Proxies] mappában (azonos típus, kiszolgáló és felhasználó). Új bejegyzés nem jött létre.
 12089=SFTP
 12104=(kézi)
 12105= (hiányzik)

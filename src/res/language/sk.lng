@@ -383,6 +383,10 @@
 12136=Odpoveď príkazu stat na serveri
 12137=Server nespustil príkaz stat. Čo hlási protokol SFTP:
 12138=Total Commander nemohol uložiť heslo do svojho úložiska hesiel (chyba zápisu). Heslo bolo uložené v nastaveniach pluginu, bez hlavného hesla.
+12139=SFTP modul - import proxy
+12140=Proxy nie je možné importovať: súbor neobsahuje sekciu [proxy] s typom a serverom.
+12141=Proxy nie je možné importovať: zápis do sftpplug.ini zlyhal.
+12142=Táto proxy už v [Proxies] je (rovnaký typ, server a používateľ). Nový záznam nebol vytvorený.
 12089=SFTP
 12104=(ručne)
 12105= (chýba)

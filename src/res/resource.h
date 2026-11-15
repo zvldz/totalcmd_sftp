@@ -551,6 +551,10 @@
 #define IDS_PROP_GRP_RAW                12136
 #define IDS_PROP_NO_STAT                12137  // raw box: no stat command, SFTP attributes shown instead
 #define IDS_CRYPT_SAVE_FAILED           12138  // TC password store refused a save; stored plainly instead
+#define IDS_PIMPORT_TITLE               12139  // MessageBox title for proxy-INI import errors
+#define IDS_PIMPORT_ERR_NO_PROXY        12140  // File has no [proxy] section with type and server
+#define IDS_PIMPORT_ERR_WRITE           12141  // Failed to write the proxy record to sftpplug.ini
+#define IDS_PIMPORT_EXISTS              12142  // The same route already has a record; none was added
 
 // Next default values for new objects
 //
