@@ -83,6 +83,12 @@ this fork's 10.0.2.2. Each entry names where it came from.
   is left out rather than shown cut, as a name that leads nowhere. A stored
   password in the old numeric format with a value above 255 is refused
   instead of decoded into a wrong byte. *From wesmar/sftp 10.3.0.0.*
+- **LAN Pair: faster pairing key and Unicode profile paths.** The pairing
+  key is derived with Windows' own PBKDF2, about four times faster and with
+  exactly the same result, so existing pairings keep working. The secrets
+  folder is found through the wide API, so a Windows profile whose path
+  has characters outside the system codepage works.
+  *From wesmar/sftp 10.3.0.0.*
 
 ### Changes
 
