@@ -12,7 +12,6 @@
 #include "ServerRegistry.h"
 #include "res/resource.h"
 #include "CoreUtils.h"
-#include "UtfConversion.h"
 #include "SftpInternal.h"
 #include "PpkConverter.h"
 #include "UnicodeHelpers.h"

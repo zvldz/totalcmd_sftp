@@ -16,7 +16,6 @@
 #include "ServerRegistry.h"
 #include "res/resource.h"
 #include "CoreUtils.h"
-#include "UtfConversion.h"
 #include "UnicodeHelpers.h"
 #include "SftpInternal.h"
 #include "IUserFeedback.h"

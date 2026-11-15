@@ -9,7 +9,6 @@
 #include "SftpInternal.h"
 #include "IUserFeedback.h"
 #include "CoreUtils.h"
-#include "UtfConversion.h"
 #include "UnicodeHelpers.h"
 #include "TransferUtils.h"
 #include "TextConversion.h"

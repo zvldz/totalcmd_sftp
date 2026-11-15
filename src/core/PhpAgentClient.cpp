@@ -13,7 +13,6 @@
 #include <regex>
 #include <unordered_map>
 #include "CoreUtils.h"
-#include "UtfConversion.h"
 #include "UnicodeHelpers.h"
 #include "SftpInternal.h"
 #include "PluginEntryPoints.h"

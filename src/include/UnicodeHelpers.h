@@ -3,7 +3,6 @@
 #include <windows.h>
 #include "fsplugin.h"
 #include "CoreUtils.h"
-#include "UtfConversion.h"
 
 // C++ Standard Library headers
 #include <string>

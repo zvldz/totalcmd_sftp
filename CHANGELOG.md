@@ -122,6 +122,11 @@ this fork's 10.0.2.2. Each entry names where it came from.
   OpenSSL (3.2 and later), which the plugin already carries; the separate
   argon2 submodule and its build step are gone.
   *From wesmar/sftp 10.3.0.0, on OpenSSL 3.5 here.*
+- **UTF-8 and UTF-16 are converted by Windows itself.** A name with bytes
+  that are not valid UTF-8 — a file on the server named in another
+  encoding — shows whole, with `�` in their place, instead of being cut at
+  the first bad byte. The bundled ConvertUTF library is gone.
+  *From wesmar/sftp 10.3.0.0.*
 - **Unit tests.** The PPK converter (against 20 puttygen keys), text-mode
   line endings, the terminal filter, wildcard matching, stored-password
   encryption and the LAN Pair key are covered by unit tests, run on every
