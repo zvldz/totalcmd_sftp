@@ -66,6 +66,11 @@ this fork's 10.0.2.2. Each entry names where it came from.
   local file was then deleted. A file the server could not read came down
   as an empty file; base64's exit status now fails it.
   *From wesmar/sftp 10.3.0.0.*
+- **An upload no longer overwrites a file Total Commander did not know
+  about.** When TC had not listed the target folder — a background copy, a
+  subfolder never opened — it passed no "file exists" flag, and the upload
+  replaced the server's file without asking. The server is now asked first,
+  and TC asks the user. *From wesmar/sftp 10.3.0.0.*
 
 ### Changes
 

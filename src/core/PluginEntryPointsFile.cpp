@@ -2100,6 +2100,13 @@ int WINAPI FsPutFileW(LPCWSTR LocalName, LPCWSTR RemoteName, int CopyFlags)
                  serverid->php_tar ? 1 : 0,
                  TarUploadSessionIsActive() ? 1 : 0);
 
+        // TC sets the EXISTS flags only when its own listing shows the file.
+        // A subfolder it never listed, a background copy: the upload, which
+        // truncates, would overwrite without asking. The server is asked
+        // instead, and TC then asks the user.
+        if (!OverWrite && !Resume && RemoteFileExists(serverid, remotedir.data()))
+            return SftpSupportsResume(serverid) ? FS_FILE_EXISTSRESUMEALLOWED : FS_FILE_EXISTS;
+
         const bool setattr = !!(CopyFlags & FS_COPYFLAGS_EXISTS_SAMECASE);
         int rc = SftpUploadFileW(serverid, LocalName, remotedir.data(), Resume, setattr);
         SFTP_LOG("ENTRY", "FsPutFileW SftpUploadFileW rc=%d", rc);
