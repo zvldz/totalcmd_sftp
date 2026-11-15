@@ -76,6 +76,7 @@ std::optional<std::vector<BYTE>> Base64Decode(std::string_view b64) {
     if (!CryptStringToBinaryA(b64.data(), static_cast<DWORD>(b64.size()),
                               CRYPT_STRING_BASE64, result.data(), &needed, nullptr, nullptr))
         return std::nullopt;
+    result.resize(needed); // the first call's size is an upper bound
     return result;
 }
 
@@ -120,12 +121,17 @@ std::optional<std::string> LegacyDecryptXor(std::string_view encrypted)
     result.reserve(encrypted.size() / 3);
 
     for (size_t i = 0; i < encrypted.size(); i += 3) {
-        if (!isdigit(encrypted[i]) || !isdigit(encrypted[i+1]) || !isdigit(encrypted[i+2]))
+        if (!isdigit(static_cast<unsigned char>(encrypted[i])) ||
+            !isdigit(static_cast<unsigned char>(encrypted[i+1])) ||
+            !isdigit(static_cast<unsigned char>(encrypted[i+2])))
             return std::nullopt;
 
         int num = (encrypted[i] - '0') * 100 +
                   (encrypted[i+1] - '0') * 10 +
                   (encrypted[i+2] - '0');
+        // Each triplet encodes one byte; anything above is not this format.
+        if (num > 0xFF)
+            return std::nullopt;
 
         char ch = static_cast<char>(num ^ g_pszKey[(i/3 + iPos) % keyLen]);
         result.push_back(ch);

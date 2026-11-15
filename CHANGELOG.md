@@ -79,6 +79,10 @@ this fork's 10.0.2.2. Each entry names where it came from.
   the output treated UTF-8 bytes as blanks and cut letters off the end of
   each line, and the progress text shown while the command ran was empty.
   *From wesmar/sftp 10.3.0.0.*
+- **Smaller hardening.** A PHP Agent listing entry whose name does not fit
+  is left out rather than shown cut, as a name that leads nowhere. A stored
+  password in the old numeric format with a value above 255 is refused
+  instead of decoded into a wrong byte. *From wesmar/sftp 10.3.0.0.*
 
 ### Changes
 
