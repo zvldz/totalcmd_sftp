@@ -203,7 +203,7 @@
 286=&Uživatelské jméno:
 287=Použít agenta SSH (Pageant)
 288=Změnit heslo...
-289=Chránit heslo správcem hesel (TC>=7.5)
+289=Chránit heslo správcem hesel
 290=Klientský certifikát pro &ověřování:
 291=Certifikát (*-cert.pub), volitelné:
 292=Soubor soukromého klíče (*.pem;*.ppk):

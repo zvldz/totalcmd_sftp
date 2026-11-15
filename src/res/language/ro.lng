@@ -203,7 +203,7 @@
 286=&Nume utilizator:
 287=Folosire agent SSH (Pageant)
 288=Schimbare parolă...
-289=Protejare parolă cu manager de parole (TC>=7.5)
+289=Protejare parolă cu manager de parole
 290=Certificat client pentru &autentificare:
 291=Certificat (*-cert.pub), opțional:
 292=Fișier cheie privată (*.pem;*.ppk):

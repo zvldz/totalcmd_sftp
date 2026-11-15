@@ -203,7 +203,7 @@
 286=&Gebruikersnaam:
 287=SSH-agent gebruiken (Pageant)
 288=Wachtwoord wijzigen...
-289=Wachtwoord beveiligen met wachtwoordbeheerder (TC>=7.5)
+289=Wachtwoord beveiligen met wachtwoordbeheerder
 290=Clientcertificaat voor &verificatie:
 291=Certificaat (*-cert.pub), optioneel:
 292=Bestand met privésleutel (*.pem;*.ppk):

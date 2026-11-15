@@ -174,6 +174,8 @@ this fork's 10.0.2.2. Each entry names where it came from.
   and the Mica caption. A layout test renders every dialog in every
   language and checks for clipped, overlapping or outside controls.
   *From wesmar/sftp 10.3.0.0.*
+- **"Protect password with password manager" without "(TC>=7.5)".** Every
+  Total Commander the plugin runs in is newer than that.
 - **No more argon2 library.** Argon2 for PuTTY keys of format 3 comes from
   OpenSSL (3.2 and later), which the plugin already carries; the separate
   argon2 submodule and its build step are gone.

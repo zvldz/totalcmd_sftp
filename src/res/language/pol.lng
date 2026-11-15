@@ -206,7 +206,7 @@
 286=&Nazwa użytkownika:
 287=Użyj agenta SSH (Pageant)
 288=Zmień hasło...
-289=Chroń hasło menedżerem haseł (TC>=7.5)
+289=Chroń hasło menedżerem haseł
 290=Certyfikat klienta do &uwierzytelniania:
 291=Certyfikat (*-cert.pub), opcjonalnie:
 292=Plik klucza prywatnego (*.pem;*.ppk):

@@ -203,7 +203,7 @@
 286=&Felhasználónév:
 287=SSH-ügynök használata (Pageant)
 288=Jelszó módosítása...
-289=Jelszó védelme jelszókezelővel (TC>=7.5)
+289=Jelszó védelme jelszókezelővel
 290=Ügyféltanúsítvány &hitelesítéshez:
 291=Tanúsítvány (*-cert.pub), nem kötelező:
 292=Titkos kulcs fájlja (*.pem;*.ppk):

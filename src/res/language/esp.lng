@@ -203,7 +203,7 @@
 286=&Nombre de usuario:
 287=Usar agente SSH (Pageant)
 288=Cambiar contraseña...
-289=Proteger contraseña con gestor de contraseñas (TC>=7.5)
+289=Proteger contraseña con gestor de contraseñas
 290=Certificado de cliente para &autenticación:
 291=Certificado (*-cert.pub), opcional:
 292=Archivo de clave privada (*.pem;*.ppk):
