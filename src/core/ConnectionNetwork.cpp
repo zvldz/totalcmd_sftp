@@ -98,8 +98,12 @@ bool InitializeSftpSubsystemIfNeeded(pConnectSettings ConnectSettings, int progr
     std::array<char, 1024> buf{};
     char* errmsg = nullptr;
     int errmsg_len = 0;
+    const std::string& serverCommand = ConnectSettings->sftpservercommand;
     ShowStatusId(IDS_LOG_SFTP_INIT, nullptr, true);
-    SFTP_LOG("CONN", "Initializing SFTP subsystem");
+    if (serverCommand.empty())
+        SFTP_LOG("CONN", "Initializing SFTP subsystem");
+    else
+        SFTP_LOG("CONN", "Initializing SFTP via server command: %s", serverCommand.c_str());
     ShowStatusId(IDS_SESSION_STARTUP, " (SFTP)", true);
     // A host with no SFTP subsystem — dropbear on a camera or a router —
     // may never answer the request, and the call keeps saying "not yet".
@@ -110,7 +114,7 @@ bool InitializeSftpSubsystemIfNeeded(pConnectSettings ConnectSettings, int progr
         ConnectSettings->sftpsession = nullptr;
         if (ProgressLoop(buf.data(), progress, progress + 10, loop, lasttime))
             break;
-        auto sftpPtr = ConnectSettings->session->sftpInit();
+        auto sftpPtr = ConnectSettings->session->sftpInit(serverCommand);
         if (sftpPtr) {
             ConnectSettings->sftpsession = std::move(sftpPtr);
         } else if (ConnectSettings->session->lastErrno() != LIBSSH2_ERROR_EAGAIN) {

@@ -13,3 +13,7 @@ CVE-2026-66034.patch
 CVE-2026-66035.patch
 CVE-2026-58050.patch
 CVE-2026-58051.patch
+# The plugin's own change, applied after the security backports: start SFTP
+# through an "exec" of a server command, for hosts without the "sftp"
+# subsystem (OpenWrt / Dropbear). Not upstream; carried until libssh2 has it.
+sftpplug-sftp-init-command.patch

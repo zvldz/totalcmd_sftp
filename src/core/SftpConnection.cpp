@@ -895,7 +895,7 @@ bool ReconnectSFTPChannelIfNeeded(pConnectSettings ConnectSettings)
                 if (ProgressLoop("Reconnect SFTP channel", 0, 100, &loop, &starttime))
                     break;
                 {
-                    auto sftpPtr = ConnectSettings->session->sftpInit();
+                    auto sftpPtr = ConnectSettings->session->sftpInit(ConnectSettings->sftpservercommand);
                     if (sftpPtr) {
                         ConnectSettings->sftpsession = std::move(sftpPtr);
                     } else if (ConnectSettings->session->lastErrno() != LIBSSH2_ERROR_EAGAIN) {

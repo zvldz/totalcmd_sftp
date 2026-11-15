@@ -4,6 +4,7 @@
 
 #include <memory>
 #include <cstdint>
+#include <string_view>
 #include <basetsd.h>
 
 #if defined(_MSC_VER) && !defined(HAVE_SSIZE_T)
@@ -137,7 +138,11 @@ struct ISshSession {
     virtual int sessionFlag(int flag, int value) = 0;
     virtual int blockDirections() = 0;
 
-    virtual std::unique_ptr<ISftpSession> sftpInit() = 0;
+    // Starts SFTP. An empty serverCommand requests the standard "sftp"
+    // subsystem; otherwise the command is executed instead (OpenSSH's
+    // `sftp -s`), for servers such as OpenWrt/Dropbear without the subsystem.
+    // Pass the same command on every EAGAIN retry.
+    virtual std::unique_ptr<ISftpSession> sftpInit(std::string_view serverCommand) = 0;
     virtual std::unique_ptr<ISshChannel> openChannel() = 0;
     virtual std::unique_ptr<ISshChannel> scpRecv2(const char* path,
                                                    libssh2_struct_stat* sb) = 0;

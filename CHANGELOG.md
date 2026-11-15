@@ -30,6 +30,16 @@ this fork's 10.0.2.2. Each entry names where it came from.
   `ssh-dss` keys, the `blowfish-cbc`, `cast128-cbc` and `arcfour` ciphers
   and `hmac-ripemd160`. *From wesmar/sftp 10.3.0.0.*
 
+### Features
+
+- **SFTP through a server command.** A session can name the SFTP server
+  to run, `sftpservercommand=/usr/libexec/sftp-server` in its section of
+  `sftpplug.ini`, and the plugin executes it instead of requesting the
+  `sftp` subsystem — like `sftp -s` in OpenSSH. Hosts such as OpenWrt or
+  Dropbear that have the binary but no subsystem then work in SFTP mode.
+  No dialog field yet. The feature first appeared in numbereleven-a's
+  fork; the libssh2 patch is *from wesmar/sftp 10.3.0.0.*
+
 ### Fixes
 
 - **SCP text-mode download no longer overruns its buffer.** With text mode

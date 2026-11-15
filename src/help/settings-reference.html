@@ -181,6 +181,11 @@
   <li>Custom locations added through <code>[Add custom location...]</code> are stored per source in <code>sftpplug.ini</code></li>
 </ul>
 
+<h3>Keys without a dialog field</h3>
+<ul>
+  <li><code>sftpservercommand</code> — a command that starts the SFTP server on the host, run instead of requesting the <code>sftp</code> subsystem (the same as <code>sftp -s</code> in OpenSSH). For hosts that have an SFTP server binary but no subsystem configured, such as OpenWrt or Dropbear: <code>sftpservercommand=/usr/libexec/sftp-server</code>. Empty or missing: the standard subsystem. Set it in the session's section of <code>sftpplug.ini</code>.</li>
+</ul>
+
 <div class="note">
   <b>Tip:</b> After importing from WinSCP, verify transfer mode settings — SCP sessions arrive with <code>scponly=1</code> and <code>scpfordata=1</code>. Proxy definitions are not imported from any source and have to be set up again. See <a href="import-migration.html">Import sessions from other programs</a>.
 </div>

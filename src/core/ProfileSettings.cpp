@@ -245,6 +245,9 @@ bool LoadServerSettings(LPCSTR DisplayName, pConnectSettings ConnectResults, LPC
     IniGetString(DisplayName, "sendcommand", "", sendCommandBuf.data(), sendCommandBuf.size() - 1, iniFileName);
     ConnectResults->connectsendcommand = sendCommandBuf.data();
     ConnectResults->sendcommandmode = IniGetInt(DisplayName, "sendcommandmode", 0, iniFileName);
+    std::array<char, MAX_PATH> serverCommandBuf{};
+    IniGetString(DisplayName, "sftpservercommand", "", serverCommandBuf.data(), serverCommandBuf.size() - 1, iniFileName);
+    ConnectResults->sftpservercommand = serverCommandBuf.data();
     return !ConnectResults->server.empty();
 }
 

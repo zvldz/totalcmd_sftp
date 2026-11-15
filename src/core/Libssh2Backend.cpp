@@ -462,9 +462,11 @@ int Libssh2Session::blockDirections()
     return libssh2_session_block_directions(session_);
 }
 
-std::unique_ptr<ISftpSession> Libssh2Session::sftpInit()
+std::unique_ptr<ISftpSession> Libssh2Session::sftpInit(std::string_view serverCommand)
 {
-    LIBSSH2_SFTP* sftp = libssh2_sftp_init(session_);
+    LIBSSH2_SFTP* sftp = serverCommand.empty()
+        ? libssh2_sftp_init(session_)
+        : libssh2_sftp_init_command(session_, serverCommand.data(), serverCommand.size());
     if (!sftp)
         return nullptr;
     return std::make_unique<Libssh2SftpSession>(sftp);

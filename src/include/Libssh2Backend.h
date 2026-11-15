@@ -141,7 +141,7 @@ public:
     int sessionFlag(int flag, int value) override;
     int blockDirections() override;
 
-    std::unique_ptr<ISftpSession> sftpInit() override;
+    std::unique_ptr<ISftpSession> sftpInit(std::string_view serverCommand) override;
     std::unique_ptr<ISshChannel> openChannel() override;
     std::unique_ptr<ISshChannel> scpRecv2(const char* path,
                                            libssh2_struct_stat* sb) override;
