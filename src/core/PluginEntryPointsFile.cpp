@@ -1709,8 +1709,12 @@ int WINAPI FsGetFileW(LPCWSTR RemoteName, LPWSTR LocalName, int CopyFlags, Remot
                 const sftp::SessionDependency dep =
                     sftp::ImportCache::ReadDependency(cacheSection, cachePath);
 
+                // The path as Total Commander shows it: folders in the
+                // session name are joined by '/' inside the plugin.
+                std::string tcSubPath = subPath;
+                std::replace(tcSubPath.begin(), tcSubPath.end(), '/', '\\');
                 std::string header = "Imported session from [Imports]\\[";
-                header.append(sourceId).append("]\\").append(subPath);
+                header.append(sourceId).append("]\\").append(tcSubPath);
                 return ExportSessionAsIniFile(cacheSection.c_str(),
                     cachePath.c_str(), subPath.c_str(),
                     header.c_str(), LocalName, OverWrite, &dep);
