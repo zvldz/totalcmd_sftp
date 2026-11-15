@@ -387,6 +387,8 @@
 12140=A proxy nem importálható: a fájlban nincs típust és kiszolgálót tartalmazó [proxy] szakasz.
 12141=A proxy nem importálható: az sftpplug.ini írása sikertelen.
 12142=Ez a proxy már szerepel a [Proxies] mappában (azonos típus, kiszolgáló és felhasználó). Új bejegyzés nem jött létre.
+12146=A .ppk fájl a biztonságos határokon túli Argon2-paramétereket kér.
+12147=A .ppk fájlban lévő kulcs részei nem tartoznak össze.
 12089=SFTP
 12104=(kézi)
 12105= (hiányzik)

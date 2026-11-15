@@ -555,6 +555,8 @@
 #define IDS_PIMPORT_ERR_NO_PROXY        12140  // File has no [proxy] section with type and server
 #define IDS_PIMPORT_ERR_WRITE           12141  // Failed to write the proxy record to sftpplug.ini
 #define IDS_PIMPORT_EXISTS              12142  // The same route already has a record; none was added
+#define IDS_LOG_PPK_ERR_LIMITS          12146  // .ppk asks for Argon2 parameters beyond the caps
+#define IDS_LOG_PPK_ERR_INCONSISTENT    12147  // .ppk key parts do not belong together
 
 // Next default values for new objects
 //

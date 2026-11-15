@@ -70,6 +70,9 @@ this fork's 10.0.2.2. Each entry names where it came from.
   now capped. Every key is now rebuilt and checked by OpenSSL, the MAC is
   verified for unencrypted keys too, and the decrypted key is wiped from
   memory. *From wesmar/sftp 10.3.0.0.*
+- **A PuTTY key refused for its Argon2 settings or for not matching itself
+  is named as such** instead of a general conversion error.
+  *From wesmar/sftp 10.3.0.0.*
 - **Shell and SCP-only listings survive modern prompts.** An escape
   sequence was skipped up to the next letter "m", so bracketed paste
   (`ESC[?2004h`) swallowed the marker the listing waits for, and systemd's

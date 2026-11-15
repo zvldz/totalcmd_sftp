@@ -160,6 +160,12 @@ static void ShowPpkConversionFailure(PpkConvertError convErr)
     case PpkConvertError::kdf_unavailable:
         ShowStatusId(IDS_LOG_PPK_ERR_ARGON2, nullptr, true);
         break;
+    case PpkConvertError::kdf_limits_exceeded:
+        ShowStatusId(IDS_LOG_PPK_ERR_LIMITS, nullptr, true);
+        break;
+    case PpkConvertError::inconsistent_key:
+        ShowStatusId(IDS_LOG_PPK_ERR_INCONSISTENT, nullptr, true);
+        break;
     case PpkConvertError::passphrase_required:
     case PpkConvertError::bad_passphrase_or_mac:
         ShowStatusId(IDS_LOG_PPK_ERR_PASSPHRASE, nullptr, true);

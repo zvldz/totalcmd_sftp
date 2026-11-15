@@ -387,6 +387,8 @@
 12140=Não é possível importar o proxy: o arquivo não tem uma seção [proxy] com tipo e servidor.
 12141=Não é possível importar o proxy: falha ao gravar em sftpplug.ini.
 12142=Este proxy já está em [Proxies] (mesmo tipo, servidor e usuário). Nenhum registro novo foi criado.
+12146=O arquivo .ppk pede parâmetros Argon2 acima dos limites seguros.
+12147=O arquivo .ppk contém uma chave cujas partes não correspondem.
 12089=SFTP
 12104=(manual)
 12105= (ausente)
