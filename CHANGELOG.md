@@ -13,6 +13,13 @@ Fixes and improvements taken over from
 [wesmar/sftp 10.3.0.0](https://github.com/wesmar/sftp), which is based on
 this fork's 10.0.2.2. Each entry names where it came from.
 
+### Security
+
+- **Stack buffer checks are on.** The plugin is built with `/GS`, so a
+  stack buffer overrun ends the process instead of running whatever
+  overwrote the return address. Control Flow Guard and CET were already on.
+  *From wesmar/sftp 10.3.0.0.*
+
 ## 10.0.2.3 — unreleased
 
 ### Features
