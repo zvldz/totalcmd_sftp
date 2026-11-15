@@ -82,9 +82,6 @@
     <ClCompile Include="..\src\core\UnicodeHelpers.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\core\FtpDirectoryParser.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="..\src\core\UtfConversion.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -224,9 +221,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\src\include\UnicodeHelpers.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="..\src\include\FtpDirectoryParser.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\src\include\global.h">

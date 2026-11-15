@@ -27,7 +27,6 @@ extern void LanFileServerSetTrustedInstaller(bool enabled);
 #include "CoreUtils.h"
 #include "UtfConversion.h"
 #include "UnicodeHelpers.h"
-#include "FtpDirectoryParser.h"
 #include "SftpInternal.h"
 #include "WindowsUserFeedback.h"
 #include "PhpAgentClient.h"

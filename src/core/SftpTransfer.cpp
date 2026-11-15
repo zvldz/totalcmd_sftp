@@ -18,7 +18,6 @@
 #include "CoreUtils.h"
 #include "UtfConversion.h"
 #include "UnicodeHelpers.h"
-#include "FtpDirectoryParser.h"
 #include "SftpInternal.h"
 #include "IUserFeedback.h"
 #include "PhpAgentClient.h"

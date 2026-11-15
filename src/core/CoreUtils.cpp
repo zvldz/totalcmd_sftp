@@ -307,19 +307,6 @@ bool UnixTimeToLocalTime(const time_t* mtime, LPFILETIME ft)
     return ConvSysTimeToFileTime(&st, ft);
 }
 
-void Conv2Chars(LPSTR buf, int nr)
-{
-    if (!buf) return;
-    
-    if (nr <= 9) {
-        buf[0] = '0';
-        buf[1] = '0' + nr;
-        buf[2] = '\0';
-    } else {
-        sprintf_s(buf, 3, "%02d", nr);
-    }
-}
-
 bool CreateIsoDateString(LPFILETIME ft, LPSTR buf)
 {
     if (!ft || !buf) return false;

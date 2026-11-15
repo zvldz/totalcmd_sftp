@@ -148,7 +148,6 @@
   <ItemGroup>
     <ClCompile Include="..\src\core\UnicodeHelpers.cpp" />
     <ClCompile Include="..\src\core\UtfConversion.cpp" />
-    <ClCompile Include="..\src\core\FtpDirectoryParser.cpp" />
     <ClCompile Include="..\src\core\ServerRegistry.cpp" />
     <ClCompile Include="..\src\core\SftpConnection.cpp" />
     <ClCompile Include="..\src\core\ProxyNegotiator.cpp" />
@@ -208,7 +207,6 @@
     <ClInclude Include="..\src\include\UnicodeHelpers.h" />
     <ClInclude Include="..\src\include\UtfConversion.h" />
     <ClInclude Include="..\src\include\fsplugin.h" />
-    <ClInclude Include="..\src\include\FtpDirectoryParser.h" />
     <ClInclude Include="..\src\include\global.h" />
     <ClInclude Include="..\src\include\ServerRegistry.h" />
     <ClInclude Include="..\src\include\SftpClient.h" />
