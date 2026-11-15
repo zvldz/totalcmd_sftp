@@ -52,6 +52,13 @@ this fork's 10.0.2.2. Each entry names where it came from.
   now capped. Every key is now rebuilt and checked by OpenSSL, the MAC is
   verified for unencrypted keys too, and the decrypted key is wiped from
   memory. *From wesmar/sftp 10.3.0.0.*
+- **Shell and SCP-only listings survive modern prompts.** An escape
+  sequence was skipped up to the next letter "m", so bracketed paste
+  (`ESC[?2004h`) swallowed the marker the listing waits for, and systemd's
+  OSC 3008 records (Ubuntu 25.10, Fedora 42) left fragments in the lines.
+  Control sequences are now parsed as ECMA-48 defines them, UTF-8 text is
+  kept, and only real octal escapes are decoded.
+  *From wesmar/sftp 10.3.0.0.*
 
 ### Changes
 
