@@ -229,6 +229,12 @@ namespace unicode_util {
     return wstring_to_utf8(internal_to_wide(s));
 }
 
+// For an ANSI API that takes the system codepage.
+[[nodiscard]] inline std::string internal_to_acp(std::string_view s)
+{
+    return wide_to_narrow(internal_to_wide(s), CP_ACP);
+}
+
 } // namespace unicode_util
 
 // Buffer forms of internal_to_wide / wide_to_internal, in the style of

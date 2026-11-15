@@ -93,13 +93,5 @@ void OpenPluginHelp(HWND hWnd)
     msgW += std::wstring(helpPath.begin(), helpPath.end());
     msgW += L"\n\n";
     msgW += shortHelpW;
-    int needed = WideCharToMultiByte(CP_ACP, 0, msgW.c_str(), -1, nullptr, 0, nullptr, nullptr);
-    std::string msg(needed > 0 ? needed - 1 : 0, '\0');
-    if (needed > 0)
-        WideCharToMultiByte(CP_ACP, 0, msgW.c_str(), -1, msg.data(), needed, nullptr, nullptr);
-    int titleNeeded = WideCharToMultiByte(CP_ACP, 0, helpTitle.c_str(), -1, nullptr, 0, nullptr, nullptr);
-    std::string title(titleNeeded > 0 ? titleNeeded - 1 : 0, '\0');
-    if (titleNeeded > 0)
-        WideCharToMultiByte(CP_ACP, 0, helpTitle.c_str(), -1, title.data(), titleNeeded, nullptr, nullptr);
-    feedback.ShowError(msg, title);
+    feedback.ShowError(unicode_util::wide_to_internal(msgW), unicode_util::wide_to_internal(helpTitle));
 }

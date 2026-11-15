@@ -10,6 +10,17 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 
 ## 10.0.2.3 — unreleased
 
+### Features
+
+- **Any characters in session names, folders, hosts, users and key
+  paths.** The plugin used to keep them in the Windows codepage, so a name
+  in another script — Chinese or Greek on a Russian Windows, say — came out
+  as question marks. Now the session list, the connection dialog, the
+  status line and the password manager take any characters, and a key file
+  opens from any folder. A user name or password with non-English
+  characters now reaches the server in UTF-8, as SSH expects; one that was
+  set up to work as system-codepage bytes may need to be entered again.
+
 ### Changes
 
 - **`sftpplug.ini` and the import cache are stored in UTF-8.** The plugin

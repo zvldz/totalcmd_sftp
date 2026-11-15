@@ -33,6 +33,10 @@ pConnectSettings GetServerIdAndRelativePathFromPathW(LPCWSTR Path, LPWSTR Relati
 // Re-scans every channel of one import source into the cache, as
 // [Refresh] does (PluginEntryPointsFile.cpp).
 void RefreshImportSource(const std::string& sourceId);
+
+// Closes the session a TC path names; `root` is an internal string. What
+// FsDisconnect does, for callers inside the plugin.
+BOOL DisconnectSessionPath(const std::string& root);
 void  ResetLastPercent(pConnectSettings ConnectSettings);
 void  ApplyTcLanguageToPluginResources(const char* tcIniPath) noexcept;
 

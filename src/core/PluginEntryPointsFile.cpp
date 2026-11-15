@@ -973,7 +973,7 @@ int WINAPI FsExecuteFileW(HWND MainWin, LPWSTR RemoteName, LPCWSTR Verb)
                         std::string disconnPath;
                         disconnPath.reserve(r.displayName.size() + 1);
                         disconnPath.append("\\").append(r.displayName);
-                        FsDisconnect(disconnPath.c_str());
+                        DisconnectSessionPath(disconnPath);
                     }
                 }
                 return FS_EXEC_OK;
@@ -1185,7 +1185,7 @@ static int CopyBetweenSessions(LPCWSTR OldName, LPCWSTR NewName,
     // copy is written back, and a move would then delete it. Inside one
     // session Total Commander catches this; across two it cannot tell.
     if (SameRemoteFile(src, srcRel, dst, dstRel)) {
-        SFTP_LOG("ENTRY", "CopyBetweenSessions refused: same file '%S'", srcRel.c_str());
+        SFTP_LOG("ENTRY", "CopyBetweenSessions refused: same file '%s'", unicode_util::wstring_to_utf8(srcRel).c_str());
         ShowPluginMessage(IDS_ERR_SAME_FILE,
             "Source and destination are the same file on the same server. "
             "Copying a file onto itself would truncate it, so it is refused.",
@@ -1208,8 +1208,9 @@ static int CopyBetweenSessions(LPCWSTR OldName, LPCWSTR NewName,
     if (!OverWrite && RemoteFileExists(dst, dstRel.c_str()))
         return FS_FILE_EXISTS;
 
-    SFTP_LOG("ENTRY", "CopyBetweenSessions '%S' -> '%S' via '%S'",
-             srcRel.c_str(), dstRel.c_str(), tempFile.data());
+    SFTP_LOG("ENTRY", "CopyBetweenSessions '%s' -> '%s' via '%s'",
+             unicode_util::wstring_to_utf8(srcRel).c_str(), unicode_util::wstring_to_utf8(dstRel).c_str(),
+             unicode_util::wstring_to_utf8(tempFile.data()).c_str());
 
     // Reading owns the first half of the bar, writing the second, and both
     // report the two remote names so the temporary file never shows up.
@@ -1260,8 +1261,8 @@ int WINAPI FsRenMovFileW(LPCWSTR OldName, LPCWSTR NewName, BOOL Move, BOOL OverW
 {
     sftp::DllExceptionBarrier _barrier;
     return sftp::dll_invoke(_barrier, FS_FILE_WRITEERROR, [&]() -> int {
-        SFTP_LOG("ENTRY", "FsRenMovFileW start old='%S' new='%S' move=%d overwrite=%d",
-                 OldName ? OldName : L"(null)", NewName ? NewName : L"(null)",
+        SFTP_LOG("ENTRY", "FsRenMovFileW start old='%s' new='%s' move=%d overwrite=%d",
+                 unicode_util::wstring_to_utf8(OldName ? OldName : L"(null)").c_str(), unicode_util::wstring_to_utf8(NewName ? NewName : L"(null)").c_str(),
                  Move ? 1 : 0, OverWrite ? 1 : 0);
 
         // \[Imports]\ interactions with FsRenMovFile:
@@ -1315,7 +1316,7 @@ int WINAPI FsRenMovFileW(LPCWSTR OldName, LPCWSTR NewName, BOOL Move, BOOL OverW
                 std::string disconnPath;
                 disconnPath.reserve(rOld.displayName.size() + 1);
                 disconnPath.append("\\").append(rOld.displayName);
-                FsDisconnect(disconnPath.c_str());
+                DisconnectSessionPath(disconnPath);
             }
             int rc = CopyMoveServerInIniW(rOld.displayName.c_str(),
                                           newDisplay.c_str(),
@@ -1381,7 +1382,7 @@ int WINAPI FsRenMovFileW(LPCWSTR OldName, LPCWSTR NewName, BOOL Move, BOOL OverW
                     std::string disconnPath;
                     disconnPath.reserve(oldName.size() + 1);
                     disconnPath.append("\\").append(oldName);
-                    FsDisconnect(disconnPath.c_str());
+                    DisconnectSessionPath(disconnPath);
                 }
                 CopyMoveServerInIniW(oldName.c_str(), newName.c_str(),
                                       !!Move, !!OverWrite, inifilenameW);
@@ -1988,8 +1989,8 @@ int WINAPI FsPutFileW(LPCWSTR LocalName, LPCWSTR RemoteName, int CopyFlags)
                 if (Resume) {
                     ShowStatusId(IDS_MOVE_KEPT_RESUMED, nullptr, true);
                 } else if (!DeleteFileW(LocalName)) {
-                    SFTP_LOG("ENTRY", "FsPutFileW LAN move: could not delete '%S' (%lu)",
-                             LocalName, GetLastError());
+                    SFTP_LOG("ENTRY", "FsPutFileW LAN move: could not delete '%s' (%lu)",
+                             unicode_util::wstring_to_utf8(LocalName).c_str(), GetLastError());
                     ShowStatusId(IDS_ERR_DELETE, nullptr, true);
                 }
             }
@@ -2006,11 +2007,11 @@ int WINAPI FsPutFileW(LPCWSTR LocalName, LPCWSTR RemoteName, int CopyFlags)
             // than being reported as sent. One it took is sent only when the
             // batch runs, after this call has returned, so a move stays a copy.
             if (TarUploadSessionQueue(serverid, LocalName, remoteRelA.c_str())) {
-                SFTP_LOG("TAR", "FsPutFileW queued '%S' -> '%s'%s", LocalName, remoteRelA.c_str(),
+                SFTP_LOG("TAR", "FsPutFileW queued '%s' -> '%s'%s", unicode_util::wstring_to_utf8(LocalName).c_str(), remoteRelA.c_str(),
                          Move ? " (move kept as a copy)" : "");
                 return FS_FILE_OK;
             }
-            SFTP_LOG("TAR", "FsPutFileW not queued '%S'; uploading it alone", LocalName);
+            SFTP_LOG("TAR", "FsPutFileW not queued '%s'; uploading it alone", unicode_util::wstring_to_utf8(LocalName).c_str());
         }
         SFTP_LOG("TAR", "FsPutFileW TAR skip: isPhpAgent=%d php_tar=%d tarActive=%d",
                  IsPhpAgentTransport(serverid) ? 1 : 0,
@@ -2031,8 +2032,8 @@ int WINAPI FsPutFileW(LPCWSTR LocalName, LPCWSTR RemoteName, int CopyFlags)
                     SFTP_LOG("ENTRY", "FsPutFileW move: resumed, source kept");
                     ShowStatusId(IDS_MOVE_KEPT_RESUMED, nullptr, true);
                 } else if (Move && !DeleteFileW(LocalName)) {
-                    SFTP_LOG("ENTRY", "FsPutFileW move: could not delete '%S' (%lu)",
-                             LocalName, GetLastError());
+                    SFTP_LOG("ENTRY", "FsPutFileW move: could not delete '%s' (%lu)",
+                             unicode_util::wstring_to_utf8(LocalName).c_str(), GetLastError());
                     ShowStatusId(IDS_ERR_DELETE, nullptr, true);
                 }
                 return FS_FILE_OK;
@@ -2158,13 +2159,13 @@ BOOL WINAPI FsDeleteFileW(LPCWSTR RemoteName)
                         std::string disconnPath;
                         disconnPath.reserve(name.size() + 1);
                         disconnPath.append("\\").append(name);
-                        FsDisconnect(disconnPath.c_str());
+                        DisconnectSessionPath(disconnPath);
                     }
                 } else {
                     std::string disconnPath;
                     disconnPath.reserve(entry.size() + 1);
                     disconnPath.append("\\").append(entry);
-                    FsDisconnect(disconnPath.c_str());
+                    DisconnectSessionPath(disconnPath);
                 }
                 HWND hTcMain = FindWindowA("TTOTAL_CMD", nullptr);
                 if (hTcMain) PostMessage(hTcMain, WM_USER + 51, 540, 0);
@@ -2207,7 +2208,7 @@ BOOL WINAPI FsDeleteFileW(LPCWSTR RemoteName)
                 std::string disconnPath;
                 disconnPath.reserve(r.displayName.size() + 1);
                 disconnPath.append("\\").append(r.displayName);
-                FsDisconnect(disconnPath.c_str());
+                DisconnectSessionPath(disconnPath);
             }
             if (DeleteServerFromIniW(r.displayName.c_str(), inifilenameW)) {
                 if (HaveCryptProc())
@@ -2281,7 +2282,7 @@ BOOL WINAPI FsRemoveDirW(LPCWSTR RemoteName)
                 std::string disconnPath;
                 disconnPath.reserve(name.size() + 1);
                 disconnPath.append("\\").append(name);
-                FsDisconnect(disconnPath.c_str());
+                DisconnectSessionPath(disconnPath);
                 DeleteServerFromIniW(name.c_str(), inifilenameW);
                 if (HaveCryptProc())
                     CryptProcI(PluginNumber, CryptoNumber, FS_CRYPT_DELETE_PASSWORD,

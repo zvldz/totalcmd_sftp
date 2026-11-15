@@ -538,7 +538,7 @@ std::unique_ptr<ITransportStream> ConnectViaJumpHost(
     const std::string portStr = std::to_string(jump.port);
 
     struct addrinfo* res = nullptr;
-    if (getaddrinfo(jump.host.c_str(), portStr.c_str(), &hints, &res) != 0) {
+    if (getaddrinfo(unicode_util::internal_to_acp(jump.host).c_str(), portStr.c_str(), &hints, &res) != 0) {
         ShowStatus(("Jump host: DNS failed for " + jump.host).c_str());
         if (cs->feedback)
             cs->feedback->ShowError(("ProxyJump: cannot resolve jump host: " + jump.host).c_str());

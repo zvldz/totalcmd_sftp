@@ -26,7 +26,7 @@ namespace unicode_util {
 // files, messages. Conversions go through the helpers in UnicodeHelpers.h.
 // File system paths handed to ANSI WinAPI calls are not internal strings and
 // keep CP_ACP.
-inline constexpr int kInternalCodepage = CP_ACP;
+inline constexpr int kInternalCodepage = CP_UTF8;
 }
 
 namespace detail {

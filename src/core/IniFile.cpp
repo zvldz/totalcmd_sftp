@@ -1,4 +1,5 @@
 #include "IniFile.h"
+#include "CoreUtils.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -39,14 +40,22 @@ std::string FromWide(std::wstring_view w, UINT cp)
     return s;
 }
 
-// Caller strings → UTF-8 used inside the parsed file.
-std::string ToUtf8(LPCSTR s)  { return s ? FromWide(ToWide(s, CP_ACP), CP_UTF8) : std::string(); }
+// Caller strings → UTF-8 used inside the parsed file. Narrow callers pass
+// the plugin's internal strings.
+std::string ToUtf8(LPCSTR s)
+{
+    return s ? FromWide(ToWide(s, unicode_util::kInternalCodepage), CP_UTF8) : std::string();
+}
 std::string ToUtf8(LPCWSTR s) { return s ? FromWide(s, CP_UTF8) : std::string(); }
 
 // UTF-8 from the parsed file → caller strings.
-void FromUtf8(std::string_view u, std::string& out)  { out = FromWide(ToWide(u, CP_UTF8), CP_ACP); }
+void FromUtf8(std::string_view u, std::string& out)
+{
+    out = FromWide(ToWide(u, CP_UTF8), unicode_util::kInternalCodepage);
+}
 void FromUtf8(std::string_view u, std::wstring& out) { out = ToWide(u, CP_UTF8); }
 
+// A narrow path is a file system path from TC, in the system codepage.
 std::wstring PathOf(LPCSTR p)  { return p ? ToWide(p, CP_ACP) : std::wstring(); }
 std::wstring PathOf(LPCWSTR p) { return p ? std::wstring(p) : std::wstring(); }
 

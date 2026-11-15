@@ -859,7 +859,7 @@ ImportsPathKind ClassifyImportsPath(LPCWSTR path,
 HANDLE WINAPI FsFindFirstW(LPCWSTR Path, LPWIN32_FIND_DATAW FindData)
 {
     sftp::DllExceptionBarrier _barrier;
-    SFTP_LOG("FIND", "FsFindFirstW ENTRY path='%S'", Path ? Path : L"(null)");
+    SFTP_LOG("FIND", "FsFindFirstW ENTRY path='%s'", unicode_util::wstring_to_utf8(Path ? Path : L"(null)").c_str());
     return sftp::dll_invoke(_barrier, INVALID_HANDLE_VALUE, [&]() -> HANDLE {
         int hr = ERROR_SUCCESS;
         std::array<WCHAR, wdirtypemax> remotedir{};
@@ -1047,7 +1047,7 @@ HANDLE WINAPI FsFindFirstW(LPCWSTR Path, LPWIN32_FIND_DATAW FindData)
 
         // LAN Pair: use our own directory enumeration.
         if (IsLanPairTransport(serverid)) {
-            SFTP_LOG("LAN", "FsFindFirstW LAN path='%S'", Path);
+            SFTP_LOG("LAN", "FsFindFirstW LAN path='%s'", unicode_util::wstring_to_utf8(Path).c_str());
             if (!serverid->lanSession || !serverid->lanSession->isConnected()) {
                 SFTP_LOG("LAN", "FsFindFirstW: no active lanSession");
                 SetLastError(ERROR_CONNECTION_REFUSED);
@@ -1089,7 +1089,7 @@ HANDLE WINAPI FsFindFirstW(LPCWSTR Path, LPWIN32_FIND_DATAW FindData)
         }
 
         // Retrieve the directory
-        SFTP_LOG("FIND", "FsFindFirstW: connection ready, calling SftpFindFirstFileW remotedir='%S'", remotedir.data());
+        SFTP_LOG("FIND", "FsFindFirstW: connection ready, calling SftpFindFirstFileW remotedir='%s'", unicode_util::wstring_to_utf8(remotedir.data()).c_str());
         bool ok = (SFTP_OK == SftpFindFirstFileW(serverid, remotedir.data(), &sftpdataptr));
         SFTP_LOG("FIND", "FsFindFirstW: SftpFindFirstFileW returned ok=%d", ok ? 1 : 0);
 

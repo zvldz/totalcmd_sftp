@@ -1987,7 +1987,7 @@ std::wstring DescribeProxyRecordW(int proxynr, LPCSTR iniFileName)
     }
 
     std::array<WCHAR, 256> serverW{};
-    awlcopy(serverW.data(), data.proxyserver.c_str(), serverW.size() - 1);
+    iwlcopy(serverW.data(), data.proxyserver.c_str(), serverW.size() - 1);
     out += serverW.data();
     return out;
 }
@@ -3143,7 +3143,7 @@ pConnectSettings SftpConnectToServer(LPCSTR DisplayName, LPCSTR inifilename,
             char* p = strchr(serverBuf.data(), '/');
             ConnectSettings.lastactivepath[0] = 0;
             if (p) {
-                awlcopy(ConnectSettings.lastactivepath, p, countof(ConnectSettings.lastactivepath)-1);
+                iwlcopy(ConnectSettings.lastactivepath, p, countof(ConnectSettings.lastactivepath)-1);
                 p[0] = 0;
                 // Remove trailing slash, including the root edge case.
             }

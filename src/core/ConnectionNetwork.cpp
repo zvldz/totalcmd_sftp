@@ -30,7 +30,7 @@ int EstablishSocketConnection(pConnectSettings ConnectSettings, LPCSTR connectto
     const std::string portStr = std::format("{}", connecttoport);
     std::array<char, 256> progressBuf{};
     struct addrinfo* res = nullptr;
-    if (getaddrinfo(connecttoserver, portStr.c_str(), &hints, &res) != 0) {
+    if (getaddrinfo(unicode_util::internal_to_acp(connecttoserver).c_str(), portStr.c_str(), &hints, &res) != 0) {
         ShowErrorId(IDS_ERR_GETADDRINFO);
         if (LogProc || LogProcW) {
             const std::string msg = std::format("SFTP: DNS lookup failed for '{}' (WSA error {})", connecttoserver, WSAGetLastError());

@@ -658,7 +658,7 @@ static std::string AcpToInternal(LPCSTR s)
 }
 
 // Body of FsDisconnectW / FsDisconnect; `root` is an internal string.
-static BOOL DisconnectPath(const std::string& root)
+BOOL DisconnectSessionPath(const std::string& root)
 {
     SFTP_LOG("DISCONNECT", "FsDisconnect ENTRY path='%s' tid=%lu",
              root.c_str(), GetCurrentThreadId());
@@ -709,7 +709,7 @@ BOOL WINAPI FsDisconnectW(LPCWSTR DisconnectRoot)
 {
     sftp::DllExceptionBarrier _barrier;
     return sftp::dll_invoke(_barrier, FALSE, [&]() -> BOOL {
-        return DisconnectPath(DisconnectRoot ? unicode_util::wide_to_internal(DisconnectRoot) : std::string());
+        return DisconnectSessionPath(DisconnectRoot ? unicode_util::wide_to_internal(DisconnectRoot) : std::string());
     });
 }
 
@@ -717,7 +717,7 @@ BOOL WINAPI FsDisconnect(LPCSTR DisconnectRoot)
 {
     sftp::DllExceptionBarrier _barrier;
     return sftp::dll_invoke(_barrier, FALSE, [&]() -> BOOL {
-        return DisconnectPath(AcpToInternal(DisconnectRoot));
+        return DisconnectSessionPath(AcpToInternal(DisconnectRoot));
     });
 }
 
@@ -809,7 +809,7 @@ static void StatusInfo(const std::string& remoteDir, int InfoStartEnd, int InfoO
                     if (rc != SFTP_OK && rc != SFTP_ABORT)
                         ShowStatusId(IDS_LOG_TAR_UPLOAD_FAIL, nullptr, false);
                 }
-                DisconnectPath(remoteDir);
+                DisconnectSessionPath(remoteDir);
                 return;
             }
             std::array<char, MAX_PATH> displayName{};

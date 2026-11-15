@@ -171,7 +171,7 @@ void ShowTransferStart(bool scp, LPCWSTR name, int resId)
     std::array<char, MAX_PATH> abuf{};
     std::array<WCHAR, wdirtypemax> wbuf{};
     LoadStr(abuf, resId);
-    awlcopy(wbuf.data(), abuf.data(), wdirtypemax - 1);
+    iwlcopy(wbuf.data(), abuf.data(), wdirtypemax - 1);
     if (scp)
         wcslcat(wbuf.data(), L" (SCP)", wdirtypemax);
     wcslcat(wbuf.data(), name, wdirtypemax - 1);

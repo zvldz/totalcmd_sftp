@@ -273,7 +273,7 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
         LoadStr(statusBuf, IDS_GET_DIR);
         size_t len = strlen(statusBuf.data());
         if (len < statusBuf.size() - 1)
-            walcopy(statusBuf.data() + len, remotedir, static_cast<int>(statusBuf.size() - len - 1));
+            wilcopy(statusBuf.data() + len, remotedir, static_cast<int>(statusBuf.size() - len - 1));
         // Normalise '\' (TC's API convention) to '/' (SSH/SFTP native) so
         // status lines for directory listings match the slash style used by
         // ShowTransferStart for Upload/Download messages.
@@ -713,7 +713,7 @@ int SftpCreateDirectoryW(pConnectSettings cs, LPCWSTR Path)
     std::array<char, MAX_PATH> msgBuf{};
     LoadStr(msgBuf, IDS_MK_DIR);
     std::wstring display(wdirtypemax, L'\0');
-    awlcopy(display.data(), msgBuf.data(), wdirtypemax - 1);
+    iwlcopy(display.data(), msgBuf.data(), wdirtypemax - 1);
     display.resize(wcslen(display.c_str()));
     display += Path;
     ShowStatusW(display.c_str());
@@ -790,7 +790,7 @@ int SftpDeleteFileW(pConnectSettings cs, LPCWSTR RemoteName, bool isdir)
     std::array<char, MAX_PATH> msgBuf{};
     LoadStr(msgBuf, IDS_DELETE);
     std::wstring display(wdirtypemax, L'\0');
-    awlcopy(display.data(), msgBuf.data(), wdirtypemax - 1);
+    iwlcopy(display.data(), msgBuf.data(), wdirtypemax - 1);
     display.resize(wcslen(display.c_str()));
     display += RemoteName;
     ShowStatusW(display.c_str());
@@ -963,7 +963,7 @@ int SftpRenameMoveFileW(pConnectSettings cs, LPCWSTR OldName, LPCWSTR NewName, b
         // zero is a failure — treating every non-negative answer as success
         // reported renames that never happened.
         const int rc = SftpQuoteCommand2W(cs, nullptr, cmdW.c_str(), nullptr, 0);
-        SFTP_LOG("SCP", "rename: %S -> rc=%d", cmdW.c_str(), rc);
+        SFTP_LOG("SCP", "rename: %s -> rc=%d", unicode_util::wstring_to_utf8(cmdW).c_str(), rc);
         return (rc == 0) ? SFTP_OK : SFTP_FAILED;
     }
 

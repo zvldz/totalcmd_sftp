@@ -17,8 +17,9 @@
 // accepts a UTF-8 file (BOM optional), a UTF-16 LE file with BOM, and falls
 // back to the system codepage for anything that is not valid UTF-8, so an
 // existing ANSI file is read correctly and saved as UTF-8 on its first
-// write. ANSI overloads convert through CP_ACP at the boundary, wide ones
-// through UTF-16.
+// write. Narrow overloads take the plugin's internal strings
+// (kInternalCodepage) for sections, keys and values and a CP_ACP path; wide
+// ones take UTF-16.
 //
 // A file in a write-protected folder is looked up and written where Total
 // Commander redirects the profile API for plugins:
