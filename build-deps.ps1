@@ -362,11 +362,32 @@ exit /b 0
         'no-deprecated'
         'no-engine'
         'no-dso'
+        'no-module'
         'no-legacy'
         'no-ssl'
         'no-tls'
         'no-dtls'
+        'no-quic'
         'no-fips'
+        # A static library would otherwise read openssl.cnf from the
+        # OPENSSLDIR compiled in at build time, a path that does not exist on
+        # a user's machine and that anyone could create. FsInit also asks for
+        # no config at run time.
+        'no-autoload-config'
+        # Only what SSH negotiates survives: AES (CBC/CTR/GCM), ChaCha20-
+        # Poly1305, SHA-1/SHA-2, MD5 (legacy fingerprints), HMAC, RSA,
+        # prime-field EC (ECDSA, ECDH), Ed25519, X25519, DH, 3DES, and Argon2
+        # with BLAKE2 for PuTTY v3 keys. libssh2 reads the resulting
+        # OPENSSL_NO_* macros and drops the matching algorithms itself, so
+        # ssh-dss, blowfish-cbc, cast128-cbc, arcfour and hmac-ripemd160 go.
+        'no-aria', 'no-async', 'no-bf', 'no-camellia', 'no-cast', 'no-cmp'
+        'no-cms', 'no-comp', 'no-ct', 'no-dgram', 'no-dsa', 'no-ec2m'
+        'no-gost', 'no-idea', 'no-md4', 'no-mdc2', 'no-ml-dsa', 'no-ml-kem'
+        'no-multiblock', 'no-nextprotoneg', 'no-ocb', 'no-ocsp', 'no-psk'
+        'no-rc2', 'no-rc4', 'no-rfc3779', 'no-rmd160', 'no-seed', 'no-siv'
+        'no-slh-dsa', 'no-sm2', 'no-sm3', 'no-sm4', 'no-srp', 'no-srtp'
+        'no-ssl-trace', 'no-ts', 'no-ui-console', 'no-whirlpool'
+        'no-winstore', 'no-zlib', 'no-zstd'
         "--prefix=$OutDir"
         "--openssldir=$OutDir\ssl"
     ) -join ' '

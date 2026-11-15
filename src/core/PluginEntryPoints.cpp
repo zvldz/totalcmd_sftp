@@ -11,6 +11,7 @@
 #include <string>
 #include <string_view>
 #include <algorithm>
+#include <openssl/crypto.h>
 #include "fsplugin.h"
 #include "BuildInfo.h"
 #include "CoreUtils.h"
@@ -524,6 +525,14 @@ static void DetectAndApplyLanguage(const char* fallbackIniPath) noexcept
 
 static int _FsInit(int PluginNr)
 {
+    // OpenSSL is linked statically and built with no-autoload-config; saying
+    // so again here, before libssh2 starts it up, keeps a stray openssl.cnf
+    // (or OPENSSL_CONF) from reconfiguring the crypto inside Total
+    // Commander's process. Once set, later requests to load it are ignored.
+    static const bool cryptoReady = OPENSSL_init_crypto(OPENSSL_INIT_NO_LOAD_CONFIG, nullptr) == 1;
+    if (!cryptoReady)
+        return 1;
+
     if (!g_winsockInitialized) {
         WSADATA wsaData{};
         if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {

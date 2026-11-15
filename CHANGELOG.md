@@ -22,6 +22,13 @@ this fork's 10.0.2.2. Each entry names where it came from.
 - **Control Flow Guard also in OpenSSL and libssh2.** The plugin's own code
   was built with it, the two libraries it links were not, so the guard
   stopped at their code. *From wesmar/sftp 10.3.0.0.*
+- **OpenSSL reads no configuration file and carries only what SSH uses.**
+  A stray `openssl.cnf` or `OPENSSL_CONF` on the machine could reconfigure
+  the crypto inside Total Commander's process; the plugin now forbids it at
+  start-up and OpenSSL is built without the default lookup. Algorithms SSH
+  does not negotiate are left out of the build, and with them the obsolete
+  `ssh-dss` keys, the `blowfish-cbc`, `cast128-cbc` and `arcfour` ciphers
+  and `hmac-ripemd160`. *From wesmar/sftp 10.3.0.0.*
 
 ### Fixes
 
