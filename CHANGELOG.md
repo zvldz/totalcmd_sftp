@@ -59,6 +59,13 @@ this fork's 10.0.2.2. Each entry names where it came from.
   Control sequences are now parsed as ECMA-48 defines them, UTF-8 text is
   kept, and only real octal escapes are decoded.
   *From wesmar/sftp 10.3.0.0.*
+- **Shell transfers: resume, empty files and missing files.** A resumed
+  base64 upload rounded its starting point down to a multiple of three and
+  appended from there, writing one or two bytes twice. An empty file was
+  never created on the server, yet reported as uploaded — and on a move the
+  local file was then deleted. A file the server could not read came down
+  as an empty file; base64's exit status now fails it.
+  *From wesmar/sftp 10.3.0.0.*
 
 ### Changes
 

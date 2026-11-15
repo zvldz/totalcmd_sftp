@@ -436,6 +436,7 @@ static int ShellDdDownloadBase64(
     int lineCount = 0;    
     int64_t decodedTotal = resumeFrom;
     int streamRc = SFTP_OK;
+    int exitCode = -1;
     bool ok = ShellExecPersistentProcessLines(cs, payload, 90000,
         [&](const char* p, size_t lineLen) -> bool {
             lineCount++;
@@ -471,15 +472,24 @@ static int ShellDdDownloadBase64(
                 return false;
             }
             return true;
-        });
+        }, &exitCode);
     if (!ok) {
         if (streamRc != SFTP_OK)
             return streamRc;
         SHELL_DD_LOG("b64 DL: persistent shell command failed");
         return SFTP_READFAILED;
     }
-    SHELL_DD_LOG("b64 DL end: lines=%d decodedTotal=%lld out=%lld",
-                 lineCount, (long long)decodedTotal, (long long)*outSizeLoaded);
+    SHELL_DD_LOG("b64 DL end: lines=%d decodedTotal=%lld out=%lld exit=%d",
+                 lineCount, (long long)decodedTotal, (long long)*outSizeLoaded, exitCode);
+
+    // A file that could not be read (missing, no permission) gives no output
+    // at all - indistinguishable from an empty file except by base64's status.
+    // A resumed read is a pipeline whose status is the encoder's; its
+    // completeness is checked by size below.
+    if (resumeFrom == 0 && exitCode != 0) {
+        SHELL_DD_LOG("b64 DL failed: base64 exited with %d", exitCode);
+        return SFTP_READFAILED;
+    }
 
     if (lineCount == 0 && hintedSize > resumeFrom) {
         SHELL_DD_LOG("b64 DL failed: no lines returned for non-empty file");
@@ -589,21 +599,19 @@ static int ShellDdUploadBase64(
     int64_t resumeFrom,
     int64_t* outSizeLoaded)
 {
-    // Align resume to 3-byte boundary (base64 encodes in groups of 3).
-    // If alignedResume < resumeFrom, remote file has 1-2 extra bytes —
-    // known limitation: truncate not reliable on restricted hosts.
-    // Worst case: TC detects size mismatch and retransfers the file.
-    int64_t alignedResume = (resumeFrom / 3) * 3;
-    *outSizeLoaded = alignedResume;
+    // Every chunk is encoded and decoded on its own, padding included, so a
+    // resume may start at any byte; rounding it down to a multiple of three
+    // would append bytes the server already holds a second time.
+    *outSizeLoaded = resumeFrom;
 
-    if (alignedResume > 0) {
+    if (resumeFrom > 0) {
         LARGE_INTEGER li;
-        li.QuadPart = alignedResume;
+        li.QuadPart = resumeFrom;
         if (!SetFilePointerEx(localfile, li, nullptr, FILE_BEGIN))
             return SFTP_READFAILED;
     }
 
-    bool firstChunk = (alignedResume == 0);
+    bool firstChunk = (resumeFrom == 0);
     std::vector<uint8_t> readBuf(SHELL_DD_UPLOAD_CHUNK_BYTES);
     const SYSTICKS starttime = get_sys_ticks();
     DWORD bytesRead = 0;
@@ -659,6 +667,17 @@ static int ShellDdUploadBase64(
         return SFTP_READFAILED;
     }
 
+    // An empty file sends no chunk, so nothing above created it.
+    if (firstChunk) {
+        const std::string cmd = ": > '" + string_util::ShellQuoteSingle(ShellNormalizeScpPath(remotePath)) + "'";
+        std::vector<std::string> cmdOut;
+        int status = -1;
+        if (!ShellExecPersistentCollectLines(cs, cmd, cmdOut, &status) || status != 0) {
+            SHELL_DD_LOG("b64 upload: creating the empty file failed (%d)", status);
+            return SFTP_WRITEFAILED;
+        }
+    }
+
     // What the server ended up with has the last word. Every chunk answering
     // zero still leaves room for a truncated write, and this upload's caller
     // may delete the local original on the strength of the answer. A server
@@ -675,7 +694,7 @@ static int ShellDdUploadBase64(
         }
     }
 
-    ShowTransferSpeedIfLarge("Shell-b64 UL", *outSizeLoaded - alignedResume, starttime);
+    ShowTransferSpeedIfLarge("Shell-b64 UL", *outSizeLoaded - resumeFrom, starttime);
     return SFTP_OK;
 }
 
