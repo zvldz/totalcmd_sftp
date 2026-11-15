@@ -50,6 +50,12 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   a custom import location in such a folder was not read. PuTTY, KiTTY and
   WinSCP sessions read the same characters correctly too, including
   locations in folders outside the system codepage.
+- **A remote path too long for the plugin is refused instead of cut.** A
+  path beyond about 1000 bytes — 1000 Latin letters, fewer in other
+  scripts — used to be cut short silently, and the operation, a delete
+  included, went to the shorter path. A file name from the server too long
+  to show is left out of the list instead of appearing cut, as a name that
+  leads nowhere.
 
 ## 10.0.2.2 — 2026-11-03
 

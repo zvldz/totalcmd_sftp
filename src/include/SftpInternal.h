@@ -84,7 +84,6 @@ extern char          global_detectcrlf;     // 0=no, 1=yes, -1=detecting
 // Utility functions defined in SftpConnection.cpp
 // ---------------------------------------------------------------------------
 bool  EscapePressed() noexcept;
-void  strlcpyansitoutf8(LPSTR utf8str, LPCSTR ansistr, size_t maxlen) noexcept;
 void  wcslcpytoutf8(LPSTR utf8str, LPCWSTR utf16str, size_t maxlen);
 void  CopyStringW2A(pConnectSettings cs, LPCWSTR instr, LPSTR outstr, size_t outmax) noexcept;
 void  CopyStringA2W(pConnectSettings cs, LPCSTR instr, LPWSTR outstr, size_t outmax, bool useCVT = true) noexcept;

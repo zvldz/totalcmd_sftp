@@ -96,20 +96,35 @@ bool EscapePressed() noexcept
     return false;
 }
 
-void strlcpyansitoutf8(LPSTR utf8str, LPCSTR ansistr, size_t maxlen) noexcept
-{
-    std::array<WCHAR, 1024> utf16buf{};
-    MultiByteToWideChar(CP_ACP, 0, ansistr, -1, utf16buf.data(), static_cast<int>(utf16buf.size()));
-    ConvUTF16toUTF8(utf16buf.data(), 0, utf8str, maxlen);
-}
-
 void wcslcpytoutf8(LPSTR utf8str, LPCWSTR utf16str, size_t maxlen)
 {
     ConvUTF16toUTF8(utf16str, 0, utf8str, maxlen);
 }
 
+// A path cut to fit would name a different file, so a string that does not
+// fit (terminator included, one slot kept free) is not converted at all and
+// comes out empty.
+static bool FitsW2A(int codepage, LPCWSTR s, size_t outmax) noexcept
+{
+    const int needed = WideCharToMultiByte(codepage, 0, s, -1, nullptr, 0, nullptr, nullptr);
+    return needed > 0 && static_cast<size_t>(needed) < outmax;
+}
+
+static bool FitsA2W(int codepage, LPCSTR s, size_t outmax) noexcept
+{
+    const int needed = MultiByteToWideChar(codepage, 0, s, -1, nullptr, 0);
+    return needed > 0 && static_cast<size_t>(needed) < outmax;
+}
+
 void CopyStringW2A(pConnectSettings ConnectSettings, LPCWSTR instr, LPSTR outstr, size_t outmax) noexcept
 {
+    if (!outstr || outmax == 0)
+        return;
+    const int codepage = ConnectSettings->utf8names > 0 ? CP_UTF8 : ConnectSettings->codepage;
+    if (!instr || !FitsW2A(codepage, instr, outmax)) {
+        outstr[0] = '\0';
+        return;
+    }
     if (ConnectSettings->utf8names > 0) {
         ConvUTF16toUTF8(instr, 0, outstr, outmax);
     } else {
@@ -119,6 +134,13 @@ void CopyStringW2A(pConnectSettings ConnectSettings, LPCWSTR instr, LPSTR outstr
 
 void CopyStringA2W(pConnectSettings ConnectSettings, LPCSTR instr, LPWSTR outstr, size_t outmax, bool useCVT) noexcept
 {
+    if (!outstr || outmax == 0)
+        return;
+    const int codepage = ConnectSettings->utf8names > 0 ? CP_UTF8 : ConnectSettings->codepage;
+    if (!instr || !FitsA2W(codepage, instr, outmax)) {
+        outstr[0] = L'\0';
+        return;
+    }
     if (ConnectSettings->utf8names > 0) {
         if (useCVT)
             ConvUTF8toUTF16(instr, 0, outstr, outmax);
