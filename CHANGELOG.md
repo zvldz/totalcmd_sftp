@@ -33,8 +33,11 @@ this fork's 10.0.2.2. Each entry names where it came from.
   server then waited for bytes that never came or took the closing byte as
   file data. The size is now counted by the same conversion that sends the
   file, and a mismatch fails the upload instead of leaving scp out of step.
-  Resuming a text-mode upload is refused over SFTP and SCP, as the offsets
-  on the two sides differ. *From wesmar/sftp 10.3.0.0.*
+  *From wesmar/sftp 10.3.0.0.*
+- **"Resume" on a text-mode file starts the transfer over.** The offsets
+  of a converted file differ on the two sides, so it cannot be continued
+  from the middle; Total Commander still offers "Resume", and picking it
+  now sends the whole file again instead of failing, in both directions.
 - **SOCKS proxies refuse what they cannot send instead of sending
   something else.** A SOCKS5 proxy's "no acceptable method" was never
   recognised, a user name or password over 255 bytes was cut short, and a

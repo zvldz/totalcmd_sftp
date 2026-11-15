@@ -319,6 +319,15 @@ int SftpDownloadFileW(pConnectSettings cs, LPCWSTR RemoteName, LPCWSTR LocalName
     if (IsPhpAgentTransport(cs))
         return PhpAgentDownloadFileW(cs, RemoteName, LocalName, alwaysOverwrite, filesize, Resume);
 
+    // Converted text has different offsets on each side, so a text file is
+    // never continued: a resume asked for becomes a transfer from the start.
+    // Decided first, since a resume also picks the transfer path below.
+    bool textMode = (cs->unixlinebreaks == 1) && SftpDetermineTransferModeW(RemoteName);
+    if (textMode && Resume) {
+        SFTP_LOG("SFTP", "Download: text mode, resume becomes a full transfer");
+        Resume = false;
+    }
+
     const bool forceShellFallback = (cs->scponly && cs->shell_transfer_force && cs->shell_transfer_dd) ||
                                     (cs->scponly && Resume);
     bool useScp = cs->scpfordata;
@@ -328,9 +337,6 @@ int SftpDownloadFileW(pConnectSettings cs, LPCWSTR RemoteName, LPCWSTR LocalName
     ShowTransferStart(useScp, RemoteName, IDS_DOWNLOAD);
 
     std::string remotePath = ToRemotePathA(cs, RemoteName);
-    bool textMode = (cs->unixlinebreaks == 1) && SftpDetermineTransferModeW(RemoteName);
-    if (textMode && Resume)
-        return SFTP_FAILED;
 
     if (!ReconnectSFTPChannelIfNeeded(cs))
         return SFTP_FAILED;
@@ -436,6 +442,15 @@ int SftpUploadFileW(pConnectSettings cs, LPCWSTR LocalName, LPCWSTR RemoteName,
     if (IsPhpAgentTransport(cs))
         return PhpAgentUploadFileW(cs, LocalName, RemoteName, Resume);
 
+    // Converted text has different offsets on each side, so a text file is
+    // never continued: a resume asked for becomes a transfer from the start.
+    // Decided first, since a resume also picks the transfer path below.
+    bool textMode = (cs->unixlinebreaks == 1) && SftpDetermineTransferModeW(LocalName);
+    if (textMode && Resume) {
+        SFTP_LOG("SFTP", "Upload: text mode, resume becomes a full transfer");
+        Resume = false;
+    }
+
     const bool forceShellFallback = (cs->scponly && cs->shell_transfer_force && cs->shell_transfer_dd) ||
                                     (cs->scponly && Resume);
     bool useScp = cs->scpfordata;
@@ -458,18 +473,12 @@ int SftpUploadFileW(pConnectSettings cs, LPCWSTR LocalName, LPCWSTR RemoteName,
     ShowTransferStart(useScp, RemoteName, IDS_UPLOAD);
 
     std::string remotePath = ToRemotePathA(cs, RemoteName);
-    bool textMode = (cs->unixlinebreaks == 1) && SftpDetermineTransferModeW(LocalName);
 
     if (forceShellFallback) {
         int64_t shellUploaded = 0;
         return ShellDdUploadFile(cs, remotePath, RemoteName,
                                  local.get(), LocalName, filesize, Resume ? 1 : 0, &shellUploaded);
     }
-
-    // Converted text has different offsets on each side, so a resume position
-    // taken from the remote size would point into the wrong place locally.
-    if (textMode && Resume)
-        return SFTP_FAILED;
 
     if (!ReconnectSFTPChannelIfNeeded(cs))
         return SFTP_FAILED;
