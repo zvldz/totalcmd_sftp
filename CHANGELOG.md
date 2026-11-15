@@ -89,6 +89,11 @@ this fork's 10.0.2.2. Each entry names where it came from.
   folder is found through the wide API, so a Windows profile whose path
   has characters outside the system codepage works.
   *From wesmar/sftp 10.3.0.0.*
+- **Long file names no longer crash the text-mode check.** Matching a name
+  against the text-type list copied both into fixed buffers of 260 and
+  1024 characters, and a longer one ended the process. Matching now works
+  on the strings themselves, and letters beyond ASCII match regardless of
+  case. *From wesmar/sftp 10.3.0.0.*
 
 ### Changes
 
@@ -97,7 +102,7 @@ this fork's 10.0.2.2. Each entry names where it came from.
   argon2 submodule and its build step are gone.
   *From wesmar/sftp 10.3.0.0, on OpenSSL 3.5 here.*
 - **Unit tests.** The PPK converter (against 20 puttygen keys), text-mode
-  line endings, the terminal filter and the LAN Pair key are covered by
+  line endings, the terminal filter, wildcard matching and the LAN Pair key are covered by
   unit tests, run on every release build before the plugin is built.
   *From wesmar/sftp 10.3.0.0.*
 

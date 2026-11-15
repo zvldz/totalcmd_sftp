@@ -13,6 +13,7 @@
 #include "UnicodeHelpers.h"
 #include "TransferUtils.h"
 #include "TextConversion.h"
+#include "WildcardMatch.h"
 
 namespace {
 constexpr int SFTP_PROGRESS_ABORT_POLL_MS = 5000;

@@ -538,7 +538,7 @@ OpenSSL and libssh2 are rebuilt from their submodules as static `/MT` libraries:
 
 Output libs are placed in `src\lib\` (`libcrypto_x64.lib`, `libcrypto_x86.lib`, `libssh2_x64.lib`, `libssh2_x86.lib`), the libssh2 headers in `src\include\libssh2\` and the OpenSSL headers in `src\lib\include-x64\` / `include-x86\`.
 
-**Unit tests (`tests\run-unit-tests.ps1`):** the PPK converter (against 20 puttygen keys in `tests\fixtures\ppk`), text-mode line endings, the terminal filter and the LAN Pair key, built from the plugin's own sources for x64 and x86. Needs `build-deps.ps1` run once; the release workflow runs them before building the plugin.
+**Unit tests (`tests\run-unit-tests.ps1`):** the PPK converter (against 20 puttygen keys in `tests\fixtures\ppk`), text-mode line endings, the terminal filter, wildcard matching and the LAN Pair key, built from the plugin's own sources for x64 and x86. Needs `build-deps.ps1` run once; the release workflow runs them before building the plugin.
 
 ```powershell
 .\tests\run-unit-tests.ps1              # x64 + x86
