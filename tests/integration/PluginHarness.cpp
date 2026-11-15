@@ -384,6 +384,19 @@ int wmain(int argc, wchar_t** argv)
     }
 
     {
+        // A missing directory is an error, an empty one an empty listing.
+        bool listedMissing = true;
+        ListDir(dir + L"\\no-such-dir", listedMissing);
+        Check(!listedMissing, "listing a missing directory fails");
+        const std::wstring emptyDir = dir + L"\\empty-dir";
+        bool listedEmpty = false;
+        const bool made = g_plugin.MkDirW(emptyDir.c_str()) == TRUE;
+        const auto emptyEntries = ListDir(emptyDir, listedEmpty);
+        Check(made && listedEmpty && emptyEntries.empty(), "an empty directory lists as empty");
+        Check(g_plugin.RemoveDirW(emptyDir.c_str()) == TRUE, "remove the empty directory");
+    }
+
+    {
         // A file the server refuses to read: the download fails and leaves
         // no local file, and a local file it was to overwrite stays intact.
         // The shell paths still create the local file first (open in TODO).

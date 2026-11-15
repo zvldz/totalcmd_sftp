@@ -204,6 +204,17 @@ bool ParseScpListingLine(pConnectSettings cs, const char* line, WIN32_FIND_DATAW
     if (tokens.size() < 9)
         return false;
 
+    // The first token is the mode, "drwxr-xr-x" and the like, maybe with an
+    // ACL or xattr mark after it. A message such as "ls: cannot access ..."
+    // also starts with a type letter and has enough words, but no mode.
+    const std::string& modeTok = tokens[0];
+    if (modeTok.size() < 10)
+        return false;
+    for (size_t i = 1; i < 10; ++i) {
+        if (!strchr("-rwxsStTlL", modeTok[i]))
+            return false;
+    }
+
     // Find name start: after 8 tokens
     size_t namePos = 0;
     int tokCount = 0;
@@ -357,9 +368,15 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
             // in UTC. GNU `ls` on a terminal quotes names with spaces or
             // quotes in them ('a b'); QUOTING_STYLE=literal keeps them bare,
             // and other `ls` builds ignore it.
-            std::string command = "echo \"" + beginMarker + "\"; env TZ=UTC0 LC_TIME=C QUOTING_STYLE=literal ls -la '" +
-                                  string_util::ShellQuoteSingle(listTarget) +
-                                  "'; echo \"" + endMarker + "\":$?\n";
+            // On a terminal `ls` also prints every byte its locale cannot
+            // show as `?` — all of a non-ASCII name where the locale is not
+            // UTF-8 — so its output goes through `cat` and the names arrive
+            // as the bytes they are. The pipe hides the status of `ls`; the
+            // one reported is whether the directory exists and is readable.
+            const std::string quotedTarget = "'" + string_util::ShellQuoteSingle(listTarget) + "'";
+            std::string command = "echo \"" + beginMarker + "\"; env TZ=UTC0 LC_TIME=C QUOTING_STYLE=literal ls -la " +
+                                  quotedTarget + " | cat; test -d " + quotedTarget + " && test -r " + quotedTarget +
+                                  "; echo \"" + endMarker + "\":$?\n";
             SFTP_LOG("FIND", "SCP listing '%s'", listTarget.c_str());
 
             // Write command
@@ -840,9 +857,16 @@ int SftpDeleteFileW(pConnectSettings cs, LPCWSTR RemoteName, bool isdir)
             // empty, as SFTP's rmdir does. Total Commander removes the files
             // itself and then asks for the empty directory; after a move it
             // relies on that refusal to keep whatever was skipped or failed.
+            //
+            // A file goes with plain `rm`, so a name that does not exist —
+            // one the listing could not reproduce — fails instead of passing
+            // for deleted. Its input is /dev/null: `rm` asks before removing
+            // a write-protected file only when reading from a terminal.
             std::string cmd = "echo \"" + beginMarker + "\"; ";
-            cmd += isdir ? "rmdir '" : "rm -f '";
+            cmd += isdir ? "rmdir '" : "rm '";
             cmd += string_util::ShellQuoteSingle(target) + "'";
+            if (!isdir)
+                cmd += " < /dev/null";
             cmd += "; echo \"" + endMarker + "\":$?\n";
 
             ISshChannel* channel = cs->scpShellChannel.get();

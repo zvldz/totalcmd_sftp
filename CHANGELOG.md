@@ -48,6 +48,15 @@ this fork's 10.0.2.2. Each entry names where it came from.
   left an empty file behind — and when overwriting, the local copy was
   already truncated. Over SFTP and SCP the remote file is now opened first,
   and the local file is not touched when that fails.
+- **"SCP for everything" lists non-ASCII names on servers without a UTF-8
+  locale.** `ls` on a terminal printed such names as `test???`, and those
+  files then could not be opened or deleted. Its output now goes through a
+  pipe and the names arrive as they are.
+- **"SCP for everything" no longer reports a failed delete as done.** A
+  file that was not there passed for deleted (`rm -f`); now the error comes
+  back. The error line of `ls` for a missing directory is no longer read as
+  a file entry, so such a directory fails to open instead of showing a
+  bogus entry.
 - **SCP text-mode download no longer overruns its buffer.** With text mode
   on, a file dense with line breaks grew past the read buffer as LF became
   CRLF and was written beyond it in memory — and the content comes from the
