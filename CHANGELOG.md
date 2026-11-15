@@ -7,7 +7,7 @@ detail.
 
 This fork started from wesmar's plugin as of 24 March 2026.
 
-## 10.0.2.3 — unreleased
+## 10.0.2.3 — 2026-11-15
 
 ### Features
 
