@@ -4,9 +4,14 @@
 set -e
 
 if [ "$1" = "gen-keys" ]; then
-    rm -f /keys/id_ed25519 /keys/id_ed25519.pub
+    rm -f /keys/id_ed25519* /keys/authorized_keys
     ssh-keygen -q -t ed25519 -N '' -C plugin-test -f /keys/id_ed25519
-    cp /keys/id_ed25519.pub /keys/authorized_keys
+    # The passphrase "пароль" as UTF-8 and as the same word in cp1251 bytes:
+    # a key protected on a Windows machine may carry either.
+    ssh-keygen -q -t ed25519 -N 'пароль' -C plugin-test-utf8 -f /keys/id_ed25519_utf8
+    ssh-keygen -q -t ed25519 -N "$(printf '\357\340\360\356\353\374')" -C plugin-test-cp1251 \
+        -f /keys/id_ed25519_cp1251
+    cat /keys/id_ed25519*.pub > /keys/authorized_keys
     echo "keys written to /keys"
     exit 0
 fi

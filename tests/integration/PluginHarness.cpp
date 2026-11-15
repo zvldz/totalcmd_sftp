@@ -110,7 +110,7 @@ void WINAPI OnLog(int, int, LPCWSTR text)
         std::printf("      log: %s\n", Narrow(text).c_str());
 }
 
-BOOL WINAPI OnRequest(int, int type, LPCWSTR title, LPCWSTR text, LPWSTR, int)
+BOOL WINAPI OnRequest(int, int type, LPCWSTR title, LPCWSTR text, LPWSTR returned, int maxlen)
 {
     const std::wstring t = text ? text : L"";
     const std::wstring all = (title ? std::wstring(title) + L" | " : std::wstring()) + t;
@@ -123,6 +123,15 @@ BOOL WINAPI OnRequest(int, int type, LPCWSTR title, LPCWSTR text, LPWSTR, int)
         if (!accept)
             ++g_unexpectedPrompts;
         return accept;
+    }
+    // A key passphrase, when the run supplies one: typed the same way for
+    // every key, the plugin works out the bytes the key was protected with.
+    wchar_t passphrase[128] = {};
+    if (type == RT_Password && returned && maxlen > 0 &&
+        GetEnvironmentVariableW(L"SFTP_IT_PASSPHRASE", passphrase, 128) > 0) {
+        wcsncpy_s(returned, static_cast<size_t>(maxlen), passphrase, _TRUNCATE);
+        std::printf("      prompt (passphrase, answered): %s\n", Narrow(all).c_str());
+        return TRUE;
     }
     if (type == RT_MsgOK) {
         ++g_messages;

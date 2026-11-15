@@ -18,7 +18,10 @@ Everything a run creates on the server lives in one directory under
 -RemoteBase, and only that directory is removed.
 
 .PARAMETER Modes
-sftp, scp, scponly, shell, text, nosub (default: all).
+sftp, scp, scponly, shell, text, nosub, key-utf8, key-cp1251 (default:
+all). The key-* modes log in with a key whose passphrase is a Cyrillic
+word, stored as UTF-8 or as cp1251 bytes; the second only means something
+where the ANSI code page is 1251.
 
 .EXAMPLE
 .\tests\run-integration-tests.ps1
@@ -26,7 +29,7 @@ sftp, scp, scponly, shell, text, nosub (default: all).
 #>
 param(
     [ValidateSet('x64', 'x86', 'both')] [string]$Arch = 'both',
-    [string[]]$Modes = @('sftp', 'scp', 'scponly', 'shell', 'text', 'nosub'),
+    [string[]]$Modes = @('sftp', 'scp', 'scponly', 'shell', 'text', 'nosub', 'key-utf8', 'key-cp1251'),
     [string]$RemoteBase = '/tmp',
     [switch]$VerboseLog
 )
@@ -35,9 +38,12 @@ $ErrorActionPreference = 'Stop'
 $Root = Split-Path $PSScriptRoot -Parent
 $Bench = Join-Path $Root 'tools\ssh-test'
 $KeyFile = Join-Path $Bench 'keys\id_ed25519'
+# Both protected with the same Cyrillic word, one as UTF-8, one as cp1251.
+$KeyFileUtf8 = Join-Path $Bench 'keys\id_ed25519_utf8'
+$KeyFileCp1251 = Join-Path $Bench 'keys\id_ed25519_cp1251'
 
 $Modes = @($Modes | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
-$knownModes = 'sftp', 'scp', 'scponly', 'shell', 'text', 'nosub'
+$knownModes = 'sftp', 'scp', 'scponly', 'shell', 'text', 'nosub', 'key-utf8', 'key-cp1251'
 foreach ($m in $Modes) { if ($m -notin $knownModes) { throw "Unknown mode '$m'. Known: $($knownModes -join ', ')" } }
 
 # ---------------------------------------------------------------------------
@@ -45,12 +51,18 @@ foreach ($m in $Modes) { if ($m -notin $knownModes) { throw "Unknown mode '$m'. 
 # ---------------------------------------------------------------------------
 Push-Location $Bench
 try {
-    if (-not (Test-Path $KeyFile)) {
+    docker compose build 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Building tools\ssh-test failed. Is Docker running?' }
+    # A missing key means a new set: the servers read authorized_keys only
+    # when they start, so they are recreated after it.
+    $recreate = @()
+    if (@($KeyFile, $KeyFileUtf8, $KeyFileCp1251 | Where-Object { -not (Test-Path $_) }).Count) {
         docker compose run --rm ssh gen-keys
-        if ($LASTEXITCODE -ne 0) { throw 'Generating the test keys failed. Is Docker running?' }
+        if ($LASTEXITCODE -ne 0) { throw 'Generating the test keys failed.' }
+        $recreate = @('--force-recreate')
     }
-    docker compose up -d --build 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'Starting tools\ssh-test failed. Is Docker running?' }
+    docker compose up -d @recreate 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Starting tools\ssh-test failed.' }
 } finally {
     Pop-Location
 }
@@ -67,7 +79,15 @@ $overrides = @{
     text    = @{ scpfordata = '0'; scponly = '0'; shelltransfer = '0'; shelltransferforce = '0'; unixlinebreaks = '1' }
     nosub   = @{ scpfordata = '0'; scponly = '0'; shelltransfer = '0'; shelltransferforce = '0'; unixlinebreaks = '0'
                  server = '127.0.0.1:2223'; sftpservercommand = '/usr/lib/openssh/sftp-server' }
+    'key-utf8'   = @{ scpfordata = '0'; scponly = '0'; shelltransfer = '0'; shelltransferforce = '0'; unixlinebreaks = '0'
+                      privkeyfile = $KeyFileUtf8 }
+    'key-cp1251' = @{ scpfordata = '0'; scponly = '0'; shelltransfer = '0'; shelltransferforce = '0'; unixlinebreaks = '0'
+                      privkeyfile = $KeyFileCp1251 }
 }
+# The passphrase is typed the same way for both keys; the plugin has to
+# find the bytes the key was protected with. Built from code points so the
+# script stays ASCII, which Windows PowerShell would read as ANSI.
+$env:SFTP_IT_PASSPHRASE = -join [char[]](0x43F, 0x430, 0x440, 0x43E, 0x43B, 0x44C)
 
 $iniDir = Join-Path ([System.IO.Path]::GetTempPath()) "sftpplug-it-ini-$PID"
 New-Item -ItemType Directory -Path $iniDir -Force | Out-Null
