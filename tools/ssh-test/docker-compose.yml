@@ -1,0 +1,31 @@
+# Disposable OpenSSH servers for the plugin's integration tests
+# (tests/run-integration-tests.ps1). Account tester / password tester,
+# or the key from ./keys.
+#
+#   docker compose run --rm ssh gen-keys   create ./keys (once)
+#   docker compose up -d --build           start both
+#   docker compose down                    stop and remove them
+#
+# ssh        port 2222, the usual "sftp" subsystem
+# ssh-nosub  port 2223, no subsystem: SFTP only through
+#            sftpservercommand=/usr/lib/openssh/sftp-server
+
+x-ssh: &ssh
+  build: .
+  image: sftpplug-ssh-test
+  volumes:
+    - ./keys:/keys
+  restart: "no"
+
+services:
+  ssh:
+    <<: *ssh
+    ports:
+      - "127.0.0.1:2222:22"
+
+  ssh-nosub:
+    <<: *ssh
+    environment:
+      NO_SFTP_SUBSYSTEM: "1"
+    ports:
+      - "127.0.0.1:2223:22"
