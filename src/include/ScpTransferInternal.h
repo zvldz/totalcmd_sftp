@@ -15,7 +15,6 @@ inline constexpr size_t SFTP_SCP_BLOCK_SIZE = 16'384;
 inline constexpr int SFTP_SCP_READ_IDLE_TIMEOUT_MS  = 20'000;
 inline constexpr int SFTP_SCP_WRITE_IDLE_TIMEOUT_MS = 20'000;
 
-int ConvertCrLfToLf(LPSTR data, size_t len);
 void ShowTransferSpeedIfLarge(LPCSTR prefix, int64_t bytesTransferred, SYSTICKS starttime);
 bool ScpWriteAll(ISshChannel* channel, pConnectSettings cs, const char* data, size_t len, DWORD timeoutMs);
 bool ScpReadByte(ISshChannel* channel, pConnectSettings cs, char* outByte, DWORD timeoutMs);

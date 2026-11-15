@@ -159,6 +159,7 @@
     <ClCompile Include="..\src\core\ShellFallbackTransfer.cpp" />
     <ClCompile Include="..\src\core\SftpTransfer.cpp" />
     <ClCompile Include="..\src\core\TransferUtils.cpp" />
+    <ClCompile Include="..\src\core\TextConversion.cpp" />
     <ClCompile Include="..\src\core\SftpRemoteOps.cpp" />
     <ClCompile Include="..\src\core\SftpShell.cpp" />
     <ClCompile Include="..\src\core\Libssh2Backend.cpp" />

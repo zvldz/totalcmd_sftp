@@ -13,6 +13,7 @@
 #include "TransferUtils.h"
 #include "ScpTransfer.h"
 #include "ScpTransferInternal.h"
+#include "TextConversion.h"
 #include "res/resource.h"
 
 // Keep command length safely below shell line limits on restricted hosts.
@@ -879,22 +880,48 @@ int ShellScpUploadFile(
         return SFTP_WRITEFAILED;
     }
 
-    std::vector<char> dataBuf(textMode ? (SFTP_SCP_BLOCK_SIZE * 2) : (SFTP_MAX_WRITE_SIZE * 8));
+    std::vector<char> dataBuf(SFTP_MAX_WRITE_SIZE * 8);
+    std::vector<char> converted;
+    text_conversion::CrLfToLf toLf;
+    int64_t emitted = 0;
     const SYSTICKS starttime = get_sys_ticks();
-    DWORD len = 0;
-    while (ReadFile(localfile, dataBuf.data(), (DWORD)dataBuf.size(), &len, nullptr) && len > 0) {
-        size_t sendLen = len;
-        if (textMode)
-            sendLen = (size_t)ConvertCrLfToLf(dataBuf.data(), len);
-        if (!ScpWriteAll(channel.get(), cs, dataBuf.data(), sendLen, SFTP_SCP_WRITE_IDLE_TIMEOUT_MS)) {
+    for (;;) {
+        DWORD len = 0;
+        if (!ReadFile(localfile, dataBuf.data(), static_cast<DWORD>(dataBuf.size()), &len, nullptr)) {
+            DisconnectShell(channel.get());
+            return SFTP_READFAILED;
+        }
+        // In text mode a CR ending one chunk waits for the next to show
+        // whether an LF follows; end of file releases it.
+        const bool atEof = (len == 0);
+        const char* out = dataBuf.data();
+        size_t outLen = len;
+        if (textMode) {
+            converted.clear();
+            outLen = atEof ? toLf.Finish(converted) : toLf.Convert(dataBuf.data(), len, converted);
+            out = converted.data();
+        }
+        if (outLen > 0 && !ScpWriteAll(channel.get(), cs, out, outLen, SFTP_SCP_WRITE_IDLE_TIMEOUT_MS)) {
             DisconnectShell(channel.get());
             return SFTP_WRITEFAILED;
         }
+        emitted += static_cast<int64_t>(outLen);
+        if (atEof)
+            break;
         *outSizeLoaded += len;
         if (UpdatePercentBar(cs, GetPercent(*outSizeLoaded, fileSize), localNameW, remoteNameW)) {
             DisconnectShell(channel.get());
             return SFTP_ABORT;
         }
+    }
+
+    // scp -t reads exactly the size the header announced; any other count
+    // would leave it waiting for data or read our status byte as content.
+    if (emitted != fileSize) {
+        SFTP_LOG("SCP", "upload: emitted %lld bytes, header announced %lld",
+                 static_cast<long long>(emitted), static_cast<long long>(fileSize));
+        DisconnectShell(channel.get());
+        return SFTP_READFAILED;
     }
 
     const char zero = 0;

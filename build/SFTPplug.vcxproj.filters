@@ -58,6 +58,9 @@
     <ClCompile Include="..\src\core\TransferUtils.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\core\TextConversion.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\src\core\SftpRemoteOps.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>

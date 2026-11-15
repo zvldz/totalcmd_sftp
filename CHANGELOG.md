@@ -20,6 +20,22 @@ this fork's 10.0.2.2. Each entry names where it came from.
   overwrote the return address. Control Flow Guard and CET were already on.
   *From wesmar/sftp 10.3.0.0.*
 
+### Fixes
+
+- **SCP text-mode download no longer overruns its buffer.** With text mode
+  on, a file dense with line breaks grew past the read buffer as LF became
+  CRLF and was written beyond it in memory — and the content comes from the
+  server. The converted text now goes to a buffer of its own.
+  *From wesmar/sftp 10.3.0.0.*
+- **Text-mode uploads over SCP announce exactly what they send.** The size
+  in the scp header was the file size minus its CRs, but a CR without an LF
+  after it stays, and a CRLF split between two reads kept its CR; the
+  server then waited for bytes that never came or took the closing byte as
+  file data. The size is now counted by the same conversion that sends the
+  file, and a mismatch fails the upload instead of leaving scp out of step.
+  Resuming a text-mode upload is refused over SFTP and SCP, as the offsets
+  on the two sides differ. *From wesmar/sftp 10.3.0.0.*
+
 ## 10.0.2.3 — unreleased
 
 ### Features

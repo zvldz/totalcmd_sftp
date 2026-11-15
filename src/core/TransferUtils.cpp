@@ -2,6 +2,7 @@
 #include <windows.h>
 #include <array>
 #include <string>
+#include <vector>
 #include <algorithm>
 #include "SftpClient.h"
 #include "PluginEntryPoints.h"
@@ -11,6 +12,7 @@
 #include "UtfConversion.h"
 #include "UnicodeHelpers.h"
 #include "TransferUtils.h"
+#include "TextConversion.h"
 
 namespace {
 constexpr int SFTP_PROGRESS_ABORT_POLL_MS = 5000;
@@ -90,36 +92,6 @@ std::string BuildShellScpArgument(const std::string& path)
     return "'" + string_util::ShellQuoteSingle(path) + "'";
 }
 
-int ConvertCrToCrLf(LPSTR data, size_t len, bool* pLastWasCr)
-{
-    if (!data || !pLastWasCr)
-        return 0;
-
-    bool lastWasCr = *pLastWasCr;
-    std::string result;
-    result.reserve(len + len / 2); // worst case expansion
-
-    for (size_t i = 0; i < len; ++i) {
-        const unsigned char c = static_cast<unsigned char>(data[i]);
-        if (c == '\r') {
-            lastWasCr = true;
-            result.push_back('\r');
-        } else if (c == '\n') {
-            if (!lastWasCr)
-                result.push_back('\r');
-            result.push_back('\n');
-            lastWasCr = false;
-        } else {
-            lastWasCr = false;
-            result.push_back(c);
-        }
-    }
-
-    *pLastWasCr = lastWasCr;
-    memcpy(data, result.data(), result.size());
-    return static_cast<int>(result.size());
-}
-
 bool SftpDetermineTransferModeW(LPCWSTR RemoteName)
 {
     if (Global_TransferMode == 'A')
@@ -134,6 +106,37 @@ bool SftpDetermineTransferModeW(LPCWSTR RemoteName)
         name.remove_prefix(slash + 1);
 
     return MultiFileMatchW(Global_TextTypes.data(), name.data());
+}
+
+bool MeasureTextUpload(HANDLE file, int64_t& convertedSize)
+{
+    convertedSize = 0;
+    LARGE_INTEGER zero{};
+    if (!SetFilePointerEx(file, zero, nullptr, FILE_BEGIN))
+        return false;
+
+    text_conversion::CrLfToLf counter;
+    std::vector<char> buf(256 * 1024);
+    bool isText = true;
+    for (;;) {
+        DWORD got = 0;
+        // A read error is reported by the upload's own read; sending the file
+        // unconverted keeps the announced size equal to what is read.
+        if (!ReadFile(file, buf.data(), static_cast<DWORD>(buf.size()), &got, nullptr)) {
+            isText = false;
+            break;
+        }
+        if (got == 0)
+            break;
+        if (std::find(buf.data(), buf.data() + got, '\0') != buf.data() + got) {
+            isText = false;
+            break;
+        }
+        convertedSize += static_cast<int64_t>(counter.Count(buf.data(), got));
+    }
+    convertedSize += static_cast<int64_t>(counter.FinishCount());
+    SetFilePointerEx(file, zero, nullptr, FILE_BEGIN);
+    return isText;
 }
 
 int CloseRemote(pConnectSettings cs, ISftpHandle* remotefilesftp,
