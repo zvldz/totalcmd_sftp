@@ -179,7 +179,7 @@ void ShowTransferStart(bool scp, LPCWSTR name, int resId)
 }
 
 // Policy decisions for download/upload
-bool ResolveScpPolicy(pConnectSettings cs, int64_t filesize, bool resume, bool isDownload, bool& useScp)
+bool ResolveScpPolicy(pConnectSettings cs, int64_t filesize, bool resume, bool& useScp)
 {
     if (!cs) return false;
     if (useScp && resume && !cs->scponly)
@@ -331,7 +331,7 @@ int SftpDownloadFileW(pConnectSettings cs, LPCWSTR RemoteName, LPCWSTR LocalName
     const bool forceShellFallback = (cs->scponly && cs->shell_transfer_force && cs->shell_transfer_dd) ||
                                     (cs->scponly && Resume);
     bool useScp = cs->scpfordata;
-    if (!ResolveScpPolicy(cs, filesize, Resume, true, useScp))
+    if (!ResolveScpPolicy(cs, filesize, Resume, useScp))
         return SFTP_ABORT;
 
     ShowTransferStart(useScp, RemoteName, IDS_DOWNLOAD);
@@ -467,7 +467,7 @@ int SftpUploadFileW(pConnectSettings cs, LPCWSTR LocalName, LPCWSTR RemoteName,
     int64_t filesize = local.GetSize();
     if (filesize < 0) return SFTP_READFAILED;
 
-    if (!ResolveScpPolicy(cs, filesize, Resume, false, useScp))
+    if (!ResolveScpPolicy(cs, filesize, Resume, useScp))
         return SFTP_ABORT;
 
     ShowTransferStart(useScp, RemoteName, IDS_UPLOAD);
