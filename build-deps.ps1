@@ -31,7 +31,6 @@ Remove all thirdparty/build/ contents before building.
 param(
     [switch]$SkipOpenSSL,
     [switch]$SkipLibssh2,
-    [switch]$SkipArgon2,
     [switch]$X64Only,
     [switch]$Clean
 )
@@ -50,10 +49,6 @@ $opensslOutX64    = Join-Path $buildRoot  'openssl-x64'
 $opensslOutX86    = Join-Path $buildRoot  'openssl-x86'
 $libssh2BuildX64  = Join-Path $buildRoot  'libssh2-x64'
 $libssh2BuildX86  = Join-Path $buildRoot  'libssh2-x86'
-$argon2Src        = Join-Path $thirdparty 'argon2'
-$argon2Cmake      = Join-Path $thirdparty 'argon2-cmake'
-$argon2BuildX64   = Join-Path $buildRoot  'argon2-x64'
-$argon2BuildX86   = Join-Path $buildRoot  'argon2-x86'
 $patchesRoot      = Join-Path $thirdparty 'patches'
 $libDestDir       = Join-Path $projectRoot 'src\lib'
 $includeDestDir   = Join-Path $projectRoot 'src\include\libssh2'
@@ -62,7 +57,6 @@ $vswhereDir       = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\
 # Pinned version sanity (must match .gitmodules / submodule SHAs)
 $expectedOpensslTag = 'openssl-3.5.9'
 $expectedLibssh2Tag = 'libssh2-1.11.1'
-$expectedArgon2Tag  = '20190702'
 
 # ============================================================================
 # Helpers
@@ -280,7 +274,6 @@ if ($jomExe) {
 Write-Section 'Submodules'
 Test-SubmoduleCheckedOut $opensslSrc $expectedOpensslTag
 Test-SubmoduleCheckedOut $libssh2Src $expectedLibssh2Tag
-Test-SubmoduleCheckedOut $argon2Src  $expectedArgon2Tag
 
 # ============================================================================
 # Patches
@@ -510,69 +503,6 @@ if (-not $SkipLibssh2) {
 }
 
 # ============================================================================
-# argon2 build
-# ============================================================================
-function Build-Argon2 {
-    param(
-        [Parameter(Mandatory)] [ValidateSet('x64','x86')] [string]$Arch,
-        [Parameter(Mandatory)] [string]$BuildDir
-    )
-
-    Write-Section "argon2 $Arch"
-
-    if (Test-Path $BuildDir) { Remove-Item -Recurse -Force $BuildDir }
-    New-Item -ItemType Directory -Path $BuildDir -Force | Out-Null
-
-    # CMakeLists.txt at $argon2Cmake references sources via relative path
-    # into the sibling argon2 submodule. /MT runtime + /Z7 embedded debug
-    # info to match openssl/libssh2.
-    $cmakeArgs = @(
-        '-S', $argon2Cmake
-        '-B', $BuildDir
-        '-G', 'Ninja'
-        "-DCMAKE_MAKE_PROGRAM=$ninjaExe"
-        '-DCMAKE_BUILD_TYPE=Release'
-        '-DCMAKE_POLICY_DEFAULT_CMP0091=NEW'
-        '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded'
-        '-DCMAKE_C_FLAGS_RELEASE=/MT /O2 /Ob2 /DNDEBUG /Z7'
-    )
-
-    $cmakeArgsQuoted = ($cmakeArgs | ForEach-Object { "`"$_`"" }) -join ' '
-    $configureBody = @"
-set "PATH=$vswhereDir;%PATH%"
-call "$vsDevCmd" -arch=$Arch -host_arch=x64 -no_logo
-if errorlevel 1 exit /b 1
-"$cmakeExe" $cmakeArgsQuoted
-exit /b %errorlevel%
-"@
-    Invoke-CmdScript -Body $configureBody -Description "argon2 ${Arch}: cmake configure"
-
-    $buildBody = @"
-set "PATH=$vswhereDir;%PATH%"
-call "$vsDevCmd" -arch=$Arch -host_arch=x64 -no_logo
-if errorlevel 1 exit /b 1
-"$cmakeExe" --build "$BuildDir" --config Release
-exit /b %errorlevel%
-"@
-    Invoke-CmdScript -Body $buildBody -Description "argon2 ${Arch}: cmake build"
-
-    $candidate = Get-ChildItem -Path $BuildDir -Filter 'argon2.lib' -Recurse -ErrorAction SilentlyContinue |
-                 Select-Object -First 1
-    if (-not $candidate) { throw "argon2.lib not produced under $BuildDir" }
-    Write-OK "argon2.lib ($Arch) at $($candidate.FullName)"
-    return $candidate.FullName
-}
-
-$argon2LibX64 = $null
-$argon2LibX86 = $null
-if (-not $SkipArgon2) {
-    $argon2LibX64 = Build-Argon2 -Arch x64 -BuildDir $argon2BuildX64
-    if (-not $X64Only) {
-        $argon2LibX86 = Build-Argon2 -Arch x86 -BuildDir $argon2BuildX86
-    }
-}
-
-# ============================================================================
 # Install: copy libs + headers into src/ tree
 # ============================================================================
 Write-Section 'Install into src/'
@@ -592,30 +522,27 @@ if (-not $SkipOpenSSL) {
     if (-not $X64Only) {
         Copy-IfDifferent (Join-Path $opensslOutX86 'lib\libcrypto.lib') (Join-Path $libDestDir 'libcrypto_x86.lib')
     }
+}
 
-    # OpenSSL headers -> src/lib/include-<arch>/ for the plugin's own OpenSSL
-    # calls (the PPK converter). Per architecture: the generated
-    # configuration.h differs between x64 and x86.
-    $opensslHeaderSets = @(@{ Arch = 'x64'; Out = $opensslOutX64 })
-    if (-not $X64Only) { $opensslHeaderSets += @{ Arch = 'x86'; Out = $opensslOutX86 } }
-    foreach ($set in $opensslHeaderSets) {
-        $headerTarget = Join-Path $libDestDir "include-$($set.Arch)"
-        if (Test-Path $headerTarget) { Remove-Item -LiteralPath $headerTarget -Recurse -Force }
-        Copy-Item -LiteralPath (Join-Path $set.Out 'include') -Destination $headerTarget -Recurse
-        Write-OK "  -> src\lib\include-$($set.Arch)"
-    }
+# OpenSSL headers -> src/lib/include-<arch>/ for the plugin's own OpenSSL
+# calls (the PPK converter). Per architecture: the generated configuration.h
+# differs between x64 and x86. Copied from whatever OpenSSL is built, also
+# with -SkipOpenSSL, so a tree built before the headers were needed gets them.
+$opensslHeaderSets = @(@{ Arch = 'x64'; Out = $opensslOutX64 })
+if (-not $X64Only) { $opensslHeaderSets += @{ Arch = 'x86'; Out = $opensslOutX86 } }
+foreach ($set in $opensslHeaderSets) {
+    $headerSource = Join-Path $set.Out 'include'
+    if (-not (Test-Path $headerSource)) { throw "OpenSSL $($set.Arch) headers not found at $headerSource. Run without -SkipOpenSSL first." }
+    $headerTarget = Join-Path $libDestDir "include-$($set.Arch)"
+    if (Test-Path $headerTarget) { Remove-Item -LiteralPath $headerTarget -Recurse -Force }
+    Copy-Item -LiteralPath $headerSource -Destination $headerTarget -Recurse
+    Write-OK "  -> src\lib\include-$($set.Arch)"
 }
 
 # libssh2 -> src/lib/libssh2_<arch>.lib
 if (-not $SkipLibssh2) {
     if ($libssh2LibX64) { Copy-IfDifferent $libssh2LibX64 (Join-Path $libDestDir 'libssh2_x64.lib') }
     if ($libssh2LibX86) { Copy-IfDifferent $libssh2LibX86 (Join-Path $libDestDir 'libssh2_x86.lib') }
-}
-
-# argon2 -> src/lib/argon2_a_<arch>.lib (matching existing committed name).
-if (-not $SkipArgon2) {
-    if ($argon2LibX64) { Copy-IfDifferent $argon2LibX64 (Join-Path $libDestDir 'argon2_a_x64.lib') }
-    if ($argon2LibX86) { Copy-IfDifferent $argon2LibX86 (Join-Path $libDestDir 'argon2_a_x86.lib') }
 }
 
 # libssh2 public headers -> src/include/libssh2/

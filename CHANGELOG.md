@@ -53,6 +53,13 @@ this fork's 10.0.2.2. Each entry names where it came from.
   verified for unencrypted keys too, and the decrypted key is wiped from
   memory. *From wesmar/sftp 10.3.0.0.*
 
+### Changes
+
+- **No more argon2 library.** Argon2 for PuTTY keys of format 3 comes from
+  OpenSSL (3.2 and later), which the plugin already carries; the separate
+  argon2 submodule and its build step are gone.
+  *From wesmar/sftp 10.3.0.0, on OpenSSL 3.5 here.*
+
 ## 10.0.2.3 — unreleased
 
 ### Features

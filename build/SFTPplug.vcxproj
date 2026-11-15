@@ -134,14 +134,14 @@
     <Link>
       <TargetMachine>MachineX64</TargetMachine>
       <MinimumRequiredVersion>6.00</MinimumRequiredVersion>
-      <AdditionalDependencies>argon2_a_x64.lib;libssh2_x64.lib;libcrypto_x64.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>libssh2_x64.lib;libcrypto_x64.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Platform)'=='Win32'">
     <Link>
       <TargetMachine>MachineX86</TargetMachine>
       <MinimumRequiredVersion>6.00</MinimumRequiredVersion>
-      <AdditionalDependencies>argon2_a_x86.lib;libssh2_x86.lib;libcrypto_x86.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>libssh2_x86.lib;libcrypto_x86.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <!-- Source Files -->

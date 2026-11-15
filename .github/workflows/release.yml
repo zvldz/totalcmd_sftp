@@ -26,7 +26,7 @@ jobs:
       - name: Checkout with submodules
         uses: actions/checkout@v4
         with:
-          # openssl, libssh2, argon2 sources live as submodules and are
+          # openssl and libssh2 sources live as submodules and are
           # rebuilt from source on every run (cached below).
           submodules: recursive
           # Full history so `git describe` and CHANGELOG lookup work.
@@ -72,7 +72,7 @@ jobs:
         shell: pwsh
         run: choco install nasm -y --no-progress
 
-      - name: Build dependencies (OpenSSL, libssh2, argon2) — FULL from source
+      - name: Build dependencies (OpenSSL, libssh2) — FULL from source
         shell: pwsh
         # Every release build compiles the third-party stack from scratch,
         # deliberately NOT using any cache. Locally we skip this step
