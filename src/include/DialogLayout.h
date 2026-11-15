@@ -79,6 +79,7 @@ void LayoutJumpHostDialog(HWND hDlg);
 void LayoutProxyDialog(HWND hDlg);
 void LayoutPropertiesDialog(HWND hDlg);
 void LayoutDownloadErrorDialog(HWND hDlg);
+void LayoutMoreSettingsDialog(HWND hDlg);
 
 } // namespace DlgLayout
 

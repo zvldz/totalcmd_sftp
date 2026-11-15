@@ -617,6 +617,13 @@ void LayoutDownloadErrorDialog(HWND hDlg)
     InvalidateRect(hDlg, nullptr, TRUE);
 }
 
+void LayoutMoreSettingsDialog(HWND hDlg)
+{
+    FitToText(hDlg);
+    FixClippedRows(hDlg);
+    InvalidateRect(hDlg, nullptr, TRUE);
+}
+
 } // namespace DlgLayout
 
 // ---------------------------------------------------------------------------

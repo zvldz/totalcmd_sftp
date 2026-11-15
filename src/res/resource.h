@@ -575,6 +575,27 @@
 #define IDS_DOWNLOAD_SKIP_ALL           12151
 #define IDS_LOG_DOWNLOAD_SKIPPED        12152  // log line before the name of a skipped file
 
+// ---------------------------------------------------------------------------
+// More session settings: the "More..." button of the connection dialog
+// ---------------------------------------------------------------------------
+#define IDD_MORE_SETTINGS               119
+#define IDC_MORE_BUTTON                 1122
+#define IDC_MORE_SFTPSERVER_LABEL       1123
+#define IDC_MORE_SFTPSERVER             1124
+#define IDC_MORE_SFTPSERVER_HINT        1125
+#define IDS_DLG_MORE_BUTTON             12153
+#define IDS_MORE_DLG_CAPTION            12154
+#define IDS_MORE_SFTPSERVER             12155
+#define IDS_MORE_SFTPSERVER_HINT        12156
+#define IDC_MORE_SENDCMD_LABEL          1126
+#define IDC_MORE_SENDCMD                1127
+#define IDC_MORE_SENDCMD_MODE           1128
+#define IDC_MORE_SENDCMD_HINT           1129
+#define IDS_MORE_SENDCMD                12157
+#define IDS_MORE_SENDCMD_HINT           12158
+#define IDS_MORE_SENDCMD_WAIT           12159
+#define IDS_MORE_SENDCMD_NOWAIT         12160
+
 // Next default values for new objects
 //
 #ifdef APSTUDIO_INVOKED

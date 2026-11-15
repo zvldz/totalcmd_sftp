@@ -290,6 +290,7 @@ int wmain(int argc, wchar_t** argv)
         {"proxy", IDD_PROXY, kProxyDialogCaption, kProxyDialogStrings, DlgLayout::LayoutProxyDialog, Variant::Ssh},
         {"properties", IDD_PROPERTIES, kPropertiesDialogCaption, kPropertiesDialogStrings, DlgLayout::LayoutPropertiesDialog, Variant::Ssh},
         {"download-error", IDD_DOWNLOAD_ERROR, kDownloadErrorDialogCaption, kDownloadErrorDialogStrings, DlgLayout::LayoutDownloadErrorDialog, Variant::Ssh},
+        {"more-settings", IDD_MORE_SETTINGS, kMoreSettingsDialogCaption, kMoreSettingsDialogStrings, DlgLayout::LayoutMoreSettingsDialog, Variant::Ssh},
     };
 
     // Every language light, then English and Russian once more in the dark

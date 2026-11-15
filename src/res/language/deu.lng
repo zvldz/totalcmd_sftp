@@ -398,6 +398,14 @@
 12150=Überspringen
 12151=Alle überspringen
 12152=Nach einem Downloadfehler übersprungen:
+12153=Mehr...
+12154=Weitere Sitzungseinstellungen
+12155=SFTP-Server-Befehl:
+12156=Leer: das Standard-Subsystem sftp des Servers. Für Server ohne dieses (OpenWrt, Dropbear) der Pfad zu dessen SFTP-Server, z. B. /usr/libexec/sftp-server.
+12157=Befehl nach der Anmeldung:
+12158=Läuft nach jeder Anmeldung auf dem Server, außer im Nur-SCP-Modus. Die Ausgabe erscheint im Protokollfenster.
+12159=Warten und Ausgabe anzeigen
+12160=Ohne Warten starten
 12089=SFTP
 12104=(manuell)
 12105= (fehlt)

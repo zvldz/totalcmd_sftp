@@ -84,6 +84,13 @@
   <li>Jump Host is disabled for PHP Agent, PHP Shell, and LAN Pair modes</li>
 </ul>
 
+<h3>More session settings (More... button)</h3>
+<p>Settings a session rarely needs, next to the Help button. Available in <code>SSH (SFTP/SCP)</code> mode without <i>Use SCP for everything</i>; saved with the session when the connection dialog is closed with OK.</p>
+<ul>
+  <li><b>SFTP server command</b> (<code>sftpservercommand</code>) — a command that starts the SFTP server on the host, run instead of requesting the <code>sftp</code> subsystem (the same as <code>sftp -s</code> in OpenSSH). For hosts that have an SFTP server binary but no subsystem configured, such as OpenWrt or Dropbear: <code>/usr/libexec/sftp-server</code>. Empty: the standard subsystem.</li>
+  <li><b>Command after login</b> (<code>sendcommand</code>) — runs on the server after every login, except in SCP-only mode; its output goes to Total Commander's log window. <i>Wait for it and show its output</i> runs it in a shell until it ends; <i>Start it without waiting</i> starts it and goes on (<code>sendcommandmode=2</code>).</li>
+</ul>
+
 <h3>LAN Pair Controls</h3>
 <ul>
   <li><b>Role:</b> Auto / Receiver / Donor — controls which side initiates the connection; see <a href="lan-pair.html">LAN Pair</a> for details</li>
@@ -179,11 +186,6 @@
   <li>Sessions from SecureCRT, PuTTY, WinSCP, FileZilla and KiTTY appear in the <code>[Imports]</code> folder in the plugin root</li>
   <li>Cached session lists live next to <code>sftpplug.ini</code>, so imported entries are available right after Total Commander starts</li>
   <li>Custom locations added through <code>[Add custom location...]</code> are stored per source in <code>sftpplug.ini</code></li>
-</ul>
-
-<h3>Keys without a dialog field</h3>
-<ul>
-  <li><code>sftpservercommand</code> — a command that starts the SFTP server on the host, run instead of requesting the <code>sftp</code> subsystem (the same as <code>sftp -s</code> in OpenSSH). For hosts that have an SFTP server binary but no subsystem configured, such as OpenWrt or Dropbear: <code>sftpservercommand=/usr/libexec/sftp-server</code>. Empty or missing: the standard subsystem. Set it in the session's section of <code>sftpplug.ini</code>.</li>
 </ul>
 
 <div class="note">

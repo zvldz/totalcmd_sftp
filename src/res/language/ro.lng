@@ -397,6 +397,14 @@
 12150=Omite
 12151=Omite tot
 12152=Omis după o eroare la descărcare:
+12153=Mai mult...
+12154=Alte setări ale sesiunii
+12155=Comanda serverului SFTP:
+12156=Gol: subsistemul sftp standard al serverului. Pentru un server fără el (OpenWrt, Dropbear), calea serverului SFTP, de ex. /usr/libexec/sftp-server.
+12157=Comandă după autentificare:
+12158=Rulează pe server după fiecare autentificare, cu excepția modului doar SCP. Ieșirea apare în fereastra jurnalului.
+12159=Așteaptă și afișează ieșirea
+12160=Pornește fără așteptare
 12089=SFTP
 12104=(manual)
 12105= (lipsește)

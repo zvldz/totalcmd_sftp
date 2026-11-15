@@ -397,6 +397,14 @@
 12150=Preskočiť
 12151=Preskočiť všetko
 12152=Preskočené po chybe sťahovania:
+12153=Ďalšie...
+12154=Ďalšie nastavenia relácie
+12155=Príkaz SFTP servera:
+12156=Prázdne: štandardný subsystém sftp servera. Pre server bez neho (OpenWrt, Dropbear) cesta k jeho SFTP serveru, napr. /usr/libexec/sftp-server.
+12157=Príkaz po prihlásení:
+12158=Spustí sa na serveri po každom prihlásení, okrem režimu iba SCP. Jeho výstup ide do okna protokolu.
+12159=Počkať a zobraziť výstup
+12160=Spustiť bez čakania
 12089=SFTP
 12104=(ručne)
 12105= (chýba)

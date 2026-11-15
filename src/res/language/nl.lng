@@ -397,6 +397,14 @@
 12150=Overslaan
 12151=Alles overslaan
 12152=Overgeslagen na een downloadfout:
+12153=Meer...
+12154=Meer sessie-instellingen
+12155=SFTP-serveropdracht:
+12156=Leeg: het standaard sftp-subsysteem van de server. Voor een server zonder (OpenWrt, Dropbear) het pad van de SFTP-server, bijv. /usr/libexec/sftp-server.
+12157=Opdracht na aanmelden:
+12158=Wordt na elke aanmelding op de server uitgevoerd, behalve in de modus alleen SCP. De uitvoer verschijnt in het logvenster.
+12159=Wachten en uitvoer tonen
+12160=Starten zonder wachten
 12089=SFTP
 12104=(handmatig)
 12105= (ontbreekt)

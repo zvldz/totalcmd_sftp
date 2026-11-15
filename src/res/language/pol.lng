@@ -386,6 +386,14 @@
 12150=Pomiń
 12151=Pomiń wszystkie
 12152=Pominięto po błędzie pobierania:
+12153=Więcej...
+12154=Więcej ustawień sesji
+12155=Polecenie serwera SFTP:
+12156=Puste: standardowy podsystem sftp serwera. Dla serwera bez niego (OpenWrt, Dropbear) ścieżka jego serwera SFTP, np. /usr/libexec/sftp-server.
+12157=Polecenie po zalogowaniu:
+12158=Uruchamiane na serwerze po każdym zalogowaniu, z wyjątkiem trybu tylko SCP. Wynik trafia do okna dziennika.
+12159=Czekaj i pokaż wynik
+12160=Uruchom bez czekania
 12089=SFTP
 12090=Szukam peera LAN Pair w sieci lokalnej...
 12091={} s

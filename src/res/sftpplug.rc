@@ -86,6 +86,7 @@ BEGIN
     LTEXT           "Proxy settings:",IDC_LABEL_PROXY_SETTINGS,5,273,295,8
     COMBOBOX        IDC_PROXYCOMBO,5,283,305,30,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
     PUSHBUTTON      "Help",IDC_PLUGINHELP,5,301,45,14
+    PUSHBUTTON      "More...",IDC_MORE_BUTTON,53,301,45,14
     DEFPUSHBUTTON   "OK",IDOK,204,301,50,14
     PUSHBUTTON      "Cancel",IDCANCEL,258,301,50,14
 END
@@ -187,6 +188,22 @@ BEGIN
     DEFPUSHBUTTON   "Skip",IDC_DOWNLOAD_SKIP,122,59,52,14
     PUSHBUTTON      "Skip all",IDC_DOWNLOAD_SKIP_ALL,178,59,56,14
     PUSHBUTTON      "Cancel",IDCANCEL,238,59,54,14
+END
+
+IDD_MORE_SETTINGS DIALOGEX 0, 0, 280, 152
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "More session settings"
+FONT 8, "MS Shell Dlg", 0, 0, 0x1
+BEGIN
+    LTEXT           "SFTP server command:",IDC_MORE_SFTPSERVER_LABEL,7,8,266,8
+    EDITTEXT        IDC_MORE_SFTPSERVER,7,19,266,12,ES_AUTOHSCROLL
+    LTEXT           "Empty: the server's standard sftp subsystem. For a server without it (OpenWrt, Dropbear), the path of its SFTP server, e.g. /usr/libexec/sftp-server.",IDC_MORE_SFTPSERVER_HINT,7,35,266,26
+    LTEXT           "Command after login:",IDC_MORE_SENDCMD_LABEL,7,66,266,8
+    EDITTEXT        IDC_MORE_SENDCMD,7,77,266,12,ES_AUTOHSCROLL
+    COMBOBOX        IDC_MORE_SENDCMD_MODE,7,93,266,40,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Runs on the server after each login, except in SCP-only mode. Its output goes to the log window.",IDC_MORE_SENDCMD_HINT,7,109,266,18
+    DEFPUSHBUTTON   "OK",IDOK,167,131,50,14
+    PUSHBUTTON      "Cancel",IDCANCEL,223,131,50,14
 END
 
 
@@ -814,6 +831,14 @@ BEGIN
     IDS_DOWNLOAD_SKIP       "Skip"
     IDS_DOWNLOAD_SKIP_ALL   "Skip all"
     IDS_LOG_DOWNLOAD_SKIPPED "Skipped after a download error:"
+    IDS_DLG_MORE_BUTTON     "More..."
+    IDS_MORE_DLG_CAPTION    "More session settings"
+    IDS_MORE_SFTPSERVER     "SFTP server command:"
+    IDS_MORE_SFTPSERVER_HINT "Empty: the server's standard sftp subsystem. For a server without it (OpenWrt, Dropbear), the path of its SFTP server, e.g. /usr/libexec/sftp-server."
+    IDS_MORE_SENDCMD        "Command after login:"
+    IDS_MORE_SENDCMD_HINT   "Runs on the server after each login, except in SCP-only mode. Its output goes to the log window."
+    IDS_MORE_SENDCMD_WAIT   "Wait for it and show its output"
+    IDS_MORE_SENDCMD_NOWAIT "Start it without waiting"
     IDS_DLG_LANPAIR_GROUP   " LAN Pair Session: "
     IDS_DLG_FILEMOD         "New files (Upload):"
     IDS_DLG_DIRMOD          "New folders:"

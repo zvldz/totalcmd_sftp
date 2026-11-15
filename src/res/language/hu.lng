@@ -397,6 +397,14 @@
 12150=Kihagyás
 12151=Összes kihagyása
 12152=Letöltési hiba miatt kihagyva:
+12153=Továbbiak...
+12154=További munkamenet-beállítások
+12155=SFTP-kiszolgáló parancs:
+12156=Üres: a kiszolgáló szabványos sftp alrendszere. Ha nincs ilyen (OpenWrt, Dropbear), az SFTP-kiszolgáló elérési útja, pl. /usr/libexec/sftp-server.
+12157=Parancs bejelentkezés után:
+12158=Minden bejelentkezés után lefut a kiszolgálón, kivéve csak SCP módban. A kimenete a naplóablakba kerül.
+12159=Várakozás és a kimenet megjelenítése
+12160=Indítás várakozás nélkül
 12089=SFTP
 12104=(kézi)
 12105= (hiányzik)

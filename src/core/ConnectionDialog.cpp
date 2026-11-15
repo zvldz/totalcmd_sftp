@@ -319,6 +319,7 @@ private:
     void    OnProxyButton();
     void    OnProxyComboChanged();
     void    OnPluginHelp();
+    void    OnMoreButton();
     void    OnCertHelp();
     void    OnPasswordHelp();
     void    OnUtf8Help();
@@ -1401,6 +1402,7 @@ void UpdateScpOnlyDependentControls(HWND hWnd)
         EnableWindow(certHelp, FALSE);
         EnableWindow(certHelpPriv, FALSE);
         EnableWindow(phpShellBtn, TRUE);
+        EnableWindow(GetDlgItem(hWnd, IDC_MORE_BUTTON), FALSE);
         const std::wstring pairBtn = LoadResStringW(IDS_BUTTON_PAIR);
         SetWindowTextW(phpShellBtn, pairBtn.empty() ? L"Pair..." : pairBtn.c_str());
         ShowWindow(GetDlgItem(hWnd, IDC_PHP_TAR),           SW_HIDE);
@@ -1457,6 +1459,7 @@ void UpdateScpOnlyDependentControls(HWND hWnd)
         EnableWindow(certHelp, FALSE);
         EnableWindow(certHelpPriv, FALSE);
         EnableWindow(phpShellBtn, phpShellMode ? TRUE : FALSE);
+        EnableWindow(GetDlgItem(hWnd, IDC_MORE_BUTTON), FALSE);
         EnableWindow(GetDlgItem(hWnd, IDC_PHP_TAR), (phpAgentMode || phpShellMode) ? TRUE : FALSE);
         const std::wstring shellBtn = LoadResStringW(IDS_BUTTON_SHELL);
         SetWindowTextW(phpShellBtn, shellBtn.empty() ? L"Shell..." : shellBtn.c_str());
@@ -1491,6 +1494,7 @@ void UpdateScpOnlyDependentControls(HWND hWnd)
     UpdateMainJumpControlStates(hWnd, true);
 
     EnableWindow(scpData, !scpOnly);
+    EnableWindow(GetDlgItem(hWnd, IDC_MORE_BUTTON), !scpOnly);
     EnableWindow(shellTransfer, scpOnly);
     if (!scpOnly)
         CheckDlgButton(hWnd, IDC_SHELLTRANSFER, BST_UNCHECKED);
@@ -2028,6 +2032,93 @@ static void OnProxyButtonCommand(HWND hWnd, pConnectSettings dlgConnectResults, 
     }
 }
 
+// "More session settings": settings a session rarely needs, edited on a
+// copy that the connection dialog takes over on OK.
+struct MoreSettings {
+    std::string serverCommand;   // sftpservercommand
+    std::string sendCommand;     // sendcommand, run after login
+    int sendCommandMode = 0;     // sendcommandmode: 0/1 wait and show output, 2 do not wait
+};
+
+static std::string TrimmedDlgItemText(HWND hWnd, int id)
+{
+    std::array<char, 1024> buf{};
+    GetDlgItemTextI(hWnd, id, buf.data(), static_cast<int>(buf.size() - 1));
+    const std::string value = buf.data();
+    const size_t first = value.find_first_not_of(" \t");
+    if (first == std::string::npos)
+        return {};
+    return value.substr(first, value.find_last_not_of(" \t") - first + 1);
+}
+
+static INT_PTR CALLBACK MoreSettingsDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+    auto* more = reinterpret_cast<MoreSettings*>(GetWindowLongPtr(hWnd, DWLP_USER));
+
+    switch (msg) {
+    case WM_INITDIALOG: {
+        more = reinterpret_cast<MoreSettings*>(lParam);
+        SetWindowLongPtr(hWnd, DWLP_USER, lParam);
+        if (!more) { EndDialog(hWnd, IDCANCEL); return 1; }
+        LocalizeDlgControls(hWnd, kMoreSettingsDialogCaption, kMoreSettingsDialogStrings);
+        // The profile reads both back into MAX_PATH buffers.
+        SendDlgItemMessageW(hWnd, IDC_MORE_SFTPSERVER, EM_LIMITTEXT, MAX_PATH - 2, 0);
+        SendDlgItemMessageW(hWnd, IDC_MORE_SENDCMD, EM_LIMITTEXT, MAX_PATH - 2, 0);
+        SetDlgItemTextI(hWnd, IDC_MORE_SFTPSERVER, more->serverCommand.c_str());
+        SetDlgItemTextI(hWnd, IDC_MORE_SENDCMD, more->sendCommand.c_str());
+        for (UINT id : { IDS_MORE_SENDCMD_WAIT, IDS_MORE_SENDCMD_NOWAIT }) {
+            const std::wstring item = LoadResStringW(id);
+            SendDlgItemMessageW(hWnd, IDC_MORE_SENDCMD_MODE, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(item.c_str()));
+        }
+        SendDlgItemMessageW(hWnd, IDC_MORE_SENDCMD_MODE, CB_SETCURSEL, more->sendCommandMode == 2 ? 1 : 0, 0);
+        DlgLayout::OnInitDialog(hWnd);
+        DlgLayout::LayoutMoreSettingsDialog(hWnd);
+
+        // Center dialog over parent.
+        RECT r1{}, r2{};
+        if (GetWindowRect(hWnd, &r1) && GetWindowRect(GetParent(hWnd), &r2)) {
+            int w = r2.right - r2.left, h = r2.bottom - r2.top;
+            int dw = r1.right - r1.left, dh = r1.bottom - r1.top;
+            SetWindowPos(hWnd, nullptr,
+                r2.left + (w - dw) / 2, r2.top + (h - dh) / 2,
+                0, 0, SWP_NOZORDER | SWP_NOSIZE);
+        }
+        return 1;
+    }
+    case DlgLayout::kDpiChangedMessage:
+        PostMessage(hWnd, DlgLayout::kRelayoutMessage, 0, 0);
+        return 0;
+    case DlgLayout::kRelayoutMessage:
+        DlgLayout::LayoutMoreSettingsDialog(hWnd);
+        return 1;
+    case WM_COMMAND:
+        if (!more) break;
+        switch (LOWORD(wParam)) {
+        case IDOK: {
+            more->serverCommand = TrimmedDlgItemText(hWnd, IDC_MORE_SFTPSERVER);
+            more->sendCommand = TrimmedDlgItemText(hWnd, IDC_MORE_SENDCMD);
+            // Modes 0 and 1 both wait; a stored 1 stays as long as waiting is chosen.
+            const bool noWait = SendDlgItemMessageW(hWnd, IDC_MORE_SENDCMD_MODE, CB_GETCURSEL, 0, 0) == 1;
+            if (noWait)
+                more->sendCommandMode = 2;
+            else if (more->sendCommandMode == 2)
+                more->sendCommandMode = 0;
+            EndDialog(hWnd, IDOK);
+            return 1;
+        }
+        case IDCANCEL:
+            EndDialog(hWnd, IDCANCEL);
+            return 1;
+        default:
+            break;
+        }
+        break;
+    default:
+        break;
+    }
+    return 0;
+}
+
 static bool OnJumpButtonCommand(HWND hWnd, pConnectSettings dlgConnectResults)
 {
     if (!dlgConnectResults) return false;
@@ -2352,6 +2443,9 @@ INT_PTR ConnectionDialog::OnCommand(WPARAM wParam, LPARAM /*lParam*/)
         if (HIWORD(wParam) == CBN_SELCHANGE)
             OnProxyComboChanged();
         break;
+    case IDC_MORE_BUTTON:
+        OnMoreButton();
+        break;
     case IDC_PLUGINHELP:
         OnPluginHelp();
         break;
@@ -2622,6 +2716,17 @@ void ConnectionDialog::OnOk()
         IniWriteString(targetProfile.data(), "scponly",         m_settings->scponly              ? "1" : nullptr, dlgIniFileName);
         IniWriteString(targetProfile.data(), "shelltransfer",   m_settings->shell_transfer_dd    ? "1" : nullptr, dlgIniFileName);
         IniWriteString(targetProfile.data(), "shelltransferforce", m_settings->shell_transfer_force ? "1" : nullptr, dlgIniFileName);
+        IniWriteString(targetProfile.data(), "sftpservercommand",
+            m_settings->sftpservercommand.empty() ? nullptr : m_settings->sftpservercommand.c_str(), dlgIniFileName);
+        IniWriteString(targetProfile.data(), "sendcommand",
+            m_settings->connectsendcommand.empty() ? nullptr : m_settings->connectsendcommand.c_str(), dlgIniFileName);
+        if (m_settings->sendcommandmode != 0) {
+            std::array<char, 16> modeBuf{};
+            _itoa_s(m_settings->sendcommandmode, modeBuf.data(), modeBuf.size(), 10);
+            IniWriteString(targetProfile.data(), "sendcommandmode", modeBuf.data(), dlgIniFileName);
+        } else {
+            IniWriteString(targetProfile.data(), "sendcommandmode", nullptr, dlgIniFileName);
+        }
         IniWriteString(targetProfile.data(), "pubkeyfile",   m_settings->pubkeyfile.empty()   ? nullptr : m_settings->pubkeyfile.c_str(),   dlgIniFileName);
         IniWriteString(targetProfile.data(), "privkeyfile",  m_settings->privkeyfile.empty()  ? nullptr : m_settings->privkeyfile.c_str(),  dlgIniFileName);
         IniWriteString(targetProfile.data(), "useagent",     m_settings->useagent             ? "1" : nullptr, dlgIniFileName);
@@ -2814,6 +2919,18 @@ void ConnectionDialog::OnProxyComboChanged()
         PostMessage(m_hWnd, WM_COMMAND, IDC_PROXYBUTTON, 0);
 }
 
+
+void ConnectionDialog::OnMoreButton()
+{
+    if (!m_settings) return;
+    MoreSettings more{m_settings->sftpservercommand, m_settings->connectsendcommand, m_settings->sendcommandmode};
+    if (ShowLocalizedDialogBoxParam(IDD_MORE_SETTINGS, m_hWnd, MoreSettingsDlgProc,
+                                    reinterpret_cast<LPARAM>(&more)) != IDOK)
+        return;
+    m_settings->sftpservercommand = more.serverCommand;
+    m_settings->connectsendcommand = more.sendCommand;
+    m_settings->sendcommandmode = more.sendCommandMode;
+}
 
 void ConnectionDialog::OnPluginHelp()
 {

@@ -46,6 +46,7 @@ inline constexpr DialogString kConnectionDialogStrings[] = {
     {IDC_PHP_TAR,              IDS_DLG_PHP_TAR},
     {IDC_LAN_TI,               IDS_LAN_TI},
     {IDC_PLUGINHELP,           IDS_BTN_HELP},
+    {IDC_MORE_BUTTON,          IDS_DLG_MORE_BUTTON},
     {IDOK,                     IDS_BTN_OK},
     {IDCANCEL,                 IDS_BTN_CANCEL},
 };
@@ -92,6 +93,16 @@ inline constexpr DialogString kPropertiesDialogStrings[] = {
     {IDC_PROP_LBL_SIZE,     IDS_PROP_LBL_SIZE},
     {IDC_PROP_LBL_MODIFIED, IDS_PROP_LBL_MODIFIED},
     {IDC_PROP_GRP_RAW,      IDS_PROP_GRP_RAW},
+};
+
+inline constexpr UINT kMoreSettingsDialogCaption = IDS_MORE_DLG_CAPTION;
+inline constexpr DialogString kMoreSettingsDialogStrings[] = {
+    {IDC_MORE_SFTPSERVER_LABEL, IDS_MORE_SFTPSERVER},
+    {IDC_MORE_SFTPSERVER_HINT,  IDS_MORE_SFTPSERVER_HINT},
+    {IDC_MORE_SENDCMD_LABEL,    IDS_MORE_SENDCMD},
+    {IDC_MORE_SENDCMD_HINT,     IDS_MORE_SENDCMD_HINT},
+    {IDOK,                      IDS_BTN_OK},
+    {IDCANCEL,                  IDS_BTN_CANCEL},
 };
 
 inline constexpr UINT kDownloadErrorDialogCaption = IDS_DOWNLOAD_ERROR_TITLE;

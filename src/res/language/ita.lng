@@ -397,6 +397,14 @@
 12150=Salta
 12151=Salta tutto
 12152=Saltato dopo un errore di download:
+12153=Altro...
+12154=Altre impostazioni sessione
+12155=Comando del server SFTP:
+12156=Vuoto: il sottosistema sftp standard del server. Per un server che non lo ha (OpenWrt, Dropbear), il percorso del suo server SFTP, ad es. /usr/libexec/sftp-server.
+12157=Comando dopo l'accesso:
+12158=Viene eseguito sul server dopo ogni accesso, tranne in modalità solo SCP. L'output va nella finestra del registro.
+12159=Attendi e mostra l'output
+12160=Avvia senza attendere
 12089=SFTP
 12104=(manuale)
 12105= (mancante)

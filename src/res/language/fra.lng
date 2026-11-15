@@ -398,6 +398,14 @@
 12150=Ignorer
 12151=Tout ignorer
 12152=Ignoré après une erreur de téléchargement :
+12153=Plus...
+12154=Autres paramètres de session
+12155=Commande du serveur SFTP :
+12156=Vide : le sous-système sftp standard du serveur. Pour un serveur qui ne l'a pas (OpenWrt, Dropbear), le chemin de son serveur SFTP, par ex. /usr/libexec/sftp-server.
+12157=Commande après connexion :
+12158=S'exécute sur le serveur après chaque connexion, sauf en mode SCP seul. Sa sortie va dans la fenêtre du journal.
+12159=Attendre et afficher sa sortie
+12160=La lancer sans attendre
 12089=SFTP
 12104=(manuel)
 12105= (introuvable)
