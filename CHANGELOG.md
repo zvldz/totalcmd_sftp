@@ -43,6 +43,15 @@ this fork's 10.0.2.2. Each entry names where it came from.
   looked up in DNS, and a SOCKS4 request is checked against its buffer.
   Proxy credentials are wiped from memory once sent.
   *From wesmar/sftp 10.3.0.0.*
+- **PuTTY keys are converted on OpenSSL, and more of them load.** An
+  encrypted key in PuTTY's format 2 never loaded: its MAC was checked over
+  the encrypted data, while PuTTY computes it over the decrypted one. About
+  one Ed25519 key in 256 was refused because its secret was stored shorter
+  than 32 bytes. The Argon2 settings of a format-3 key were taken as given,
+  so a crafted file could demand any amount of memory and time; they are
+  now capped. Every key is now rebuilt and checked by OpenSSL, the MAC is
+  verified for unencrypted keys too, and the decrypted key is wiped from
+  memory. *From wesmar/sftp 10.3.0.0.*
 
 ## 10.0.2.3 — unreleased
 

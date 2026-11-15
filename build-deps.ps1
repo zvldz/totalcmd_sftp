@@ -592,6 +592,18 @@ if (-not $SkipOpenSSL) {
     if (-not $X64Only) {
         Copy-IfDifferent (Join-Path $opensslOutX86 'lib\libcrypto.lib') (Join-Path $libDestDir 'libcrypto_x86.lib')
     }
+
+    # OpenSSL headers -> src/lib/include-<arch>/ for the plugin's own OpenSSL
+    # calls (the PPK converter). Per architecture: the generated
+    # configuration.h differs between x64 and x86.
+    $opensslHeaderSets = @(@{ Arch = 'x64'; Out = $opensslOutX64 })
+    if (-not $X64Only) { $opensslHeaderSets += @{ Arch = 'x86'; Out = $opensslOutX86 } }
+    foreach ($set in $opensslHeaderSets) {
+        $headerTarget = Join-Path $libDestDir "include-$($set.Arch)"
+        if (Test-Path $headerTarget) { Remove-Item -LiteralPath $headerTarget -Recurse -Force }
+        Copy-Item -LiteralPath (Join-Path $set.Out 'include') -Destination $headerTarget -Recurse
+        Write-OK "  -> src\lib\include-$($set.Arch)"
+    }
 }
 
 # libssh2 -> src/lib/libssh2_<arch>.lib
