@@ -19,6 +19,9 @@ this fork's 10.0.2.2. Each entry names where it came from.
   stack buffer overrun ends the process instead of running whatever
   overwrote the return address. Control Flow Guard and CET were already on.
   *From wesmar/sftp 10.3.0.0.*
+- **Control Flow Guard also in OpenSSL and libssh2.** The plugin's own code
+  was built with it, the two libraries it links were not, so the guard
+  stopped at their code. *From wesmar/sftp 10.3.0.0.*
 
 ### Fixes
 

@@ -346,9 +346,12 @@ exit /b 0
     #   no-ssl/tls/dtls : libssh2 only needs libcrypto, never the TLS stack
     #   no-fips        : avoid FIPS provider build
     #   /MT            : static C runtime (matches plugin link mode)
+    #   /guard:cf      : Control Flow Guard in the objects, as in the plugin's
+    #                    own code; without it the plugin's CFG stops at them
     $configureArgs = @(
         $vcArch
         '/MT'
+        '/guard:cf'
         # /FS serializes PDB writes inside cl.exe so parallel jom workers can
         # share the single ossl_static.pdb without "C1041" PDB-locking errors.
         '/FS'
@@ -441,7 +444,8 @@ function Build-Libssh2 {
     # /Z7 embeds debug info into each .obj (and thus into the resulting .lib).
     # When the plugin links libssh2_*.lib, those symbols flow into sftpplug.pdb,
     # so DbgHelp resolves stack frames that fall inside libssh2 code by name
-    # instead of showing "nearest_export + 0xNNNNN" offsets.
+    # instead of showing "nearest_export + 0xNNNNN" offsets. /guard:cf puts
+    # Control Flow Guard into its objects, as in the plugin's own code.
     $cmakeArgs = @(
         '-S', $libssh2Src
         '-B', $BuildDir
@@ -454,7 +458,7 @@ function Build-Libssh2 {
         # files leak /MD CRT imports (LNK2001 __imp_difftime64 / __imp_rewind).
         '-DCMAKE_POLICY_DEFAULT_CMP0091=NEW'
         '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded'
-        '-DCMAKE_C_FLAGS_RELEASE=/MT /O2 /Ob2 /DNDEBUG /Z7'
+        '-DCMAKE_C_FLAGS_RELEASE=/MT /O2 /Ob2 /DNDEBUG /Z7 /guard:cf'
         '-DCRYPTO_BACKEND=OpenSSL'
         '-DBUILD_SHARED_LIBS=OFF'
         '-DBUILD_EXAMPLES=OFF'
