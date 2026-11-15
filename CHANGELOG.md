@@ -60,6 +60,11 @@ This fork started from wesmar's stock release 1.0.0.17 and bumped to the
   with a session copied into the plugin from such a folder was refused as
   unreadable, and the PHP Shell history was not kept when the Windows
   profile folder had such a name.
+- **SecureCRT key paths with its own placeholders are found.** SecureCRT
+  writes `${VDS_USER_DATA_PATH}`, `${VDS_SSH_DATA_PATH}` (the Documents
+  folder) and `${VDS_CONFIG_PATH}` (its configuration folder) into key
+  paths, so one configuration works on any system. They were left as they
+  were, and the key was never found.
 
 ## 10.0.2.2 — 2026-11-03
 

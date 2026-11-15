@@ -55,6 +55,52 @@ bool PathExistsW(const std::wstring& wpath)
     return GetFileAttributesW(wpath.c_str()) != INVALID_FILE_ATTRIBUTES;
 }
 
+// The user's Documents folder in UTF-8, empty if Windows cannot say.
+std::string DocumentsFolder()
+{
+    wchar_t wpath[MAX_PATH] = {};
+    if (SHGetFolderPathW(nullptr, CSIDL_PERSONAL, nullptr, 0, wpath) != S_OK)
+        return {};
+    char utf8[MAX_PATH * 4] = {};
+    WideCharToMultiByte(CP_UTF8, 0, wpath, -1, utf8, sizeof(utf8), nullptr, nullptr);
+    return utf8;
+}
+
+// SecureCRT writes paths with its own placeholders so one configuration
+// works on Windows, macOS and Linux. On Windows ${VDS_CONFIG_PATH} is the
+// configuration folder (the one holding Sessions\), ${VDS_USER_DATA_PATH}
+// and ${VDS_SSH_DATA_PATH} the Documents folder. Any other ${...} is left
+// as written. The rest of such a path is written with '/', so a path with a
+// placeholder replaced comes back with Windows separators throughout.
+// `sessionsRoot` is the Sessions folder the session came from.
+std::string ExpandVanDykePath(const std::string& raw, const std::string& sessionsRoot)
+{
+    if (raw.find("${") == std::string::npos)
+        return raw;
+    const size_t slash = sessionsRoot.find_last_of("\\/");
+    const std::string config = slash == std::string::npos ? std::string() : sessionsRoot.substr(0, slash);
+    const std::string documents = DocumentsFolder();
+    const struct { std::string_view name; const std::string& value; } vars[] = {
+        { "${VDS_CONFIG_PATH}",    config    },
+        { "${VDS_USER_DATA_PATH}", documents },
+        { "${VDS_SSH_DATA_PATH}",  documents },
+    };
+    std::string out = raw;
+    bool replaced = false;
+    for (const auto& v : vars) {
+        if (v.value.empty())
+            continue;
+        for (size_t at = out.find(v.name); at != std::string::npos;
+             at = out.find(v.name, at + v.value.size())) {
+            out.replace(at, v.name.size(), v.value);
+            replaced = true;
+        }
+    }
+    if (replaced)
+        std::replace(out.begin(), out.end(), '/', '\\');
+    return out;
+}
+
 // Collect every SSH2 session under `root` into `out`. `sourceOrigin` becomes
 // the CachedSessionRef channel tag (either "standard" or the literal custom
 // path). No file name is reserved beyond the VanDyke defaults filtered by
@@ -112,7 +158,8 @@ std::string ResolveSessionPath(const std::string& channelRoot,
 // Copy the connect fields SecureCRT exposes into `out`. The password is left
 // out and prompted for on first connect; the route to the host is read
 // separately, from "Firewall Name".
-void FillConnectSettings(const VanDykeFile& file, tConnectSettings* out)
+void FillConnectSettings(const VanDykeFile& file, const std::string& sessionsRoot,
+                         tConnectSettings* out)
 {
     if (!out) return;
 
@@ -125,9 +172,10 @@ void FillConnectSettings(const VanDykeFile& file, tConnectSettings* out)
     }
 
     out->user        = GetString(file, "Username");
-    // Same route as the other adapters: expand any %VARS% first, then let
-    // the shared helper decide public vs private by extension.
-    AssignImportedKeyFile(ExpandEnv(GetString(file, "Identity Filename V2")),
+    // SecureCRT's own placeholders first, then any %VARS% as in the other
+    // adapters; the shared helper decides public vs private by extension.
+    AssignImportedKeyFile(ExpandEnv(ExpandVanDykePath(GetString(file, "Identity Filename V2"),
+                                                      sessionsRoot)),
                           out->privkeyfile, out->pubkeyfile);
 
     // "Output Transformer Name" = "UTF-8" is the common modern encoding.
@@ -196,7 +244,8 @@ bool FillJumpFromSession(const std::string& channelRoot,
     if (port != 0 && port <= 0xFFFF)
         out->jump_port = static_cast<unsigned short>(port);
     out->jump_user = GetString(jump, "Username");
-    AssignImportedKeyFile(ExpandEnv(GetString(jump, "Identity Filename V2")),
+    AssignImportedKeyFile(ExpandEnv(ExpandVanDykePath(GetString(jump, "Identity Filename V2"),
+                                                      channelRoot)),
                           out->jump_privkeyfile, out->jump_pubkeyfile);
     return true;
 }
@@ -285,7 +334,7 @@ bool SecureCrtAdapter::LoadSettings(const ExternalSessionEntry& entry,
     const VanDykeFile file = ParseVanDykeFile(path);
     if (file.empty()) return false;
 
-    FillConnectSettings(file, out);
+    FillConnectSettings(file, channelRoot, out);
 
     // "Firewall Name" is how a session says it does not reach its host
     // directly. It holds "None" when there is nothing in the way, and
