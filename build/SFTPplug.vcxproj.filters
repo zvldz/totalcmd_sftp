@@ -43,6 +43,9 @@
     <ClCompile Include="..\src\core\DialogLayout.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\core\DialogText.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\src\core\ScpTransfer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -200,6 +203,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\src\include\DialogLayout.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\include\DialogStrings.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\include\DialogText.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\src\include\DllExceptionBarrier.h">

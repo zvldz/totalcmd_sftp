@@ -159,6 +159,17 @@ this fork's 10.0.2.2. Each entry names where it came from.
 
 ### Changes
 
+- **Dialogs sharp on every monitor and sized to their text.** The plugin's
+  windows (connection, proxy, jump host, properties, download error, LAN
+  Pair search) are per-monitor DPI aware: on a second screen with another
+  scale they are drawn at its DPI instead of being stretched, and they lay
+  out again when moved there. Each dialog grows until the loaded
+  language's texts fit, so labels no longer end cut off ("Use SSH agent
+  (Pageant" and many translated ones), group boxes share one right edge and
+  "Jump..." stays inside the window. On Windows 11 they get rounded corners
+  and the Mica caption. A layout test renders every dialog in every
+  language and checks for clipped, overlapping or outside controls.
+  *From wesmar/sftp 10.3.0.0.*
 - **No more argon2 library.** Argon2 for PuTTY keys of format 3 comes from
   OpenSSL (3.2 and later), which the plugin already carries; the separate
   argon2 submodule and its build step are gone.

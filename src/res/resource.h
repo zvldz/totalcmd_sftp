@@ -555,6 +555,9 @@
 #define IDS_PIMPORT_ERR_NO_PROXY        12140  // File has no [proxy] section with type and server
 #define IDS_PIMPORT_ERR_WRITE           12141  // Failed to write the proxy record to sftpplug.ini
 #define IDS_PIMPORT_EXISTS              12142  // The same route already has a record; none was added
+#define IDS_DLG_LAN_TIMEOUT             12143  // LAN Pair: session timeout label
+#define IDS_DLG_LAN_TIMEOUT_HINT        12144  // LAN Pair: "(0 = no limit)"
+#define IDS_DLG_PROTO_AUTO              12145  // protocol radio "Auto"
 #define IDS_LOG_PPK_ERR_LIMITS          12146  // .ppk asks for Argon2 parameters beyond the caps
 #define IDS_LOG_PPK_ERR_INCONSISTENT    12147  // .ppk key parts do not belong together
 

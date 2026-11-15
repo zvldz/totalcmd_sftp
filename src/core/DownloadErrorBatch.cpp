@@ -1,10 +1,11 @@
 #include "global.h"
 #include <windows.h>
-#include <array>
 #include <string>
 #include "DownloadErrorBatch.h"
+#include "DialogLayout.h"
+#include "DialogStrings.h"
+#include "DialogText.h"
 #include "fsplugin.h"
-#include "LngLoader.h"
 #include "PluginEntryPoints.h"
 #include "UnicodeHelpers.h"
 #include "res/resource.h"
@@ -14,31 +15,20 @@ namespace {
 thread_local unsigned t_batchDepth = 0;
 thread_local bool t_skipAll = false;
 
-// The string for id from the .lng file or the resources; empty if neither has it.
-std::wstring ResString(UINT id)
-{
-    std::array<WCHAR, 512> buf{};
-    if (!LngLoadStringW(hinst, id, buf.data(), static_cast<int>(buf.size())))
-        return {};
-    return buf.data();
-}
-
-void SetResText(HWND hWnd, UINT id)
-{
-    const std::wstring text = ResString(id);
-    if (!text.empty())
-        SetWindowTextW(hWnd, text.c_str());
-}
-
 INT_PTR CALLBACK DownloadErrorDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
 {
     switch (msg) {
+    case DlgLayout::kDpiChangedMessage:
+        PostMessageW(hDlg, DlgLayout::kRelayoutMessage, 0, 0);
+        return FALSE;
+    case DlgLayout::kRelayoutMessage:
+        DlgLayout::LayoutDownloadErrorDialog(hDlg);
+        return TRUE;
     case WM_INITDIALOG:
-        SetResText(hDlg, IDS_DOWNLOAD_ERROR_TITLE);
-        SetResText(GetDlgItem(hDlg, IDC_DOWNLOAD_ERROR_TEXT), IDS_DOWNLOAD_ERROR_TEXT);
-        SetResText(GetDlgItem(hDlg, IDC_DOWNLOAD_SKIP), IDS_DOWNLOAD_SKIP);
-        SetResText(GetDlgItem(hDlg, IDC_DOWNLOAD_SKIP_ALL), IDS_DOWNLOAD_SKIP_ALL);
+        LocalizeDlgControls(hDlg, kDownloadErrorDialogCaption, kDownloadErrorDialogStrings);
         SetDlgItemTextW(hDlg, IDC_DOWNLOAD_ERROR_PATH, reinterpret_cast<LPCWSTR>(lParam));
+        DlgLayout::OnInitDialog(hDlg);
+        DlgLayout::LayoutDownloadErrorDialog(hDlg);
         // Focus on Skip, so the read-only path does not open selected.
         SetFocus(GetDlgItem(hDlg, IDC_DOWNLOAD_SKIP));
         return FALSE;
@@ -70,13 +60,14 @@ HWND QuestionOwner() noexcept
 
 INT_PTR AskUser(LPCWSTR remoteName)
 {
+    DlgLayout::PerMonitorDpiScope dpiScope;
     return DialogBoxParamW(hinst, MAKEINTRESOURCEW(IDD_DOWNLOAD_ERROR), QuestionOwner(),
                            DownloadErrorDlgProc, reinterpret_cast<LPARAM>(remoteName ? remoteName : L""));
 }
 
 void LogSkipped(LPCWSTR remoteName)
 {
-    std::wstring line = ResString(IDS_LOG_DOWNLOAD_SKIPPED);
+    std::wstring line = LoadResStringW(IDS_LOG_DOWNLOAD_SKIPPED);
     if (line.empty())
         line = L"Skipped after a download error:";
     line += L' ';

@@ -37,6 +37,8 @@ extern void LanFileServerSetTrustedInstaller(bool enabled);
 #include "ProfileSettings.h"
 #include "LngLoader.h"
 #include "DialogLayout.h"
+#include "DialogStrings.h"
+#include "DialogText.h"
 
 // Forward declaration - implemented in PluginHelp.cpp
 std::wstring GetPluginVersionW();
@@ -103,106 +105,6 @@ static void UpdateMainJumpControlStates(HWND hWnd, bool sshMode)
     EnableWindow(GetDlgItem(hWnd, IDC_JUMP_BUTTON), (sshMode && jumpChecked) ? TRUE : FALSE);
 }
 
-static void LocalizeDlgControls(HWND hWnd, UINT captionStrId,
-    std::initializer_list<std::pair<int, UINT>> controls);
-
-// Tighten and right-align the protocol radio buttons to maximize label width.
-static void ArrangeProtocolButtons(HWND hDlg)
-{
-    const int ids[] = { IDC_PROTOAUTO, IDC_PROTOV4, IDC_PROTOV6 };
-    RECT rDlg{};
-    GetClientRect(hDlg, &rDlg);
-
-    RECT rBase = { 0, 0, 4, 4 };
-    MapDialogRect(hDlg, &rBase);
-    const int gap = rBase.right / 2;
-
-    int right = rDlg.right - gap;
-
-    for (int i = 2; i >= 0; --i) {
-        HWND hw = GetDlgItem(hDlg, ids[i]);
-        if (!hw) continue;
-        RECT r;
-        GetWindowRect(hw, &r);
-        MapWindowPoints(NULL, hDlg, (LPPOINT)&r, 2);
-        
-        const int textW = DlgLayout::MeasureText(hDlg, hw);
-        const int actualBoxW = r.bottom - r.top; 
-        const int w = textW + actualBoxW + gap;
-        
-        right -= w;
-        SetWindowPos(hw, NULL, right, r.top, w, r.bottom - r.top, SWP_NOZORDER);
-        right -= gap;
-    }
-}
-
-// Position the LAN Pair Session timeout and TrustedInstaller checkbox.
-static void ArrangeLanTimeoutRow(HWND hDlg)
-{
-    HWND hLabel   = GetDlgItem(hDlg, IDC_LAN_TIMEOUT_LABEL);
-    HWND hEdit    = GetDlgItem(hDlg, IDC_LAN_TIMEOUT);
-    HWND hHint    = GetDlgItem(hDlg, IDC_LAN_TIMEOUT_HINT);
-    HWND hTi      = GetDlgItem(hDlg, IDC_LAN_TI);
-    HWND hSystem  = GetDlgItem(hDlg, IDC_SYSTEM);
-
-    if (!hLabel || !hEdit || !hHint || !hTi || !hSystem)
-        return;
-
-    const RECT rLabel = DlgLayout::GetRect(hDlg, IDC_LAN_TIMEOUT_LABEL);
-    const RECT rEdit  = DlgLayout::GetRect(hDlg, IDC_LAN_TIMEOUT);
-    const RECT rHint  = DlgLayout::GetRect(hDlg, IDC_LAN_TIMEOUT_HINT);
-    const RECT rTi    = DlgLayout::GetRect(hDlg, IDC_LAN_TI);
-    const RECT rSystem= DlgLayout::GetRect(hDlg, IDC_SYSTEM);
-    RECT rDlg{};
-    GetClientRect(hDlg, &rDlg);
-
-    const int gap = DlgLayout::kGap;
-
-    const int szLabel = DlgLayout::MeasureText(hDlg, hLabel);
-    const int labelX  = rLabel.left;
-    const int labelW  = szLabel + gap;
-
-    DlgLayout::Move(hDlg, IDC_LAN_TIMEOUT_LABEL, labelX, rLabel.top, labelW, rLabel.bottom - rLabel.top);
-
-    const int editX = labelX + labelW;
-    const int editW = rEdit.right - rEdit.left;
-    DlgLayout::Move(hDlg, IDC_LAN_TIMEOUT, editX, rEdit.top, editW, rEdit.bottom - rEdit.top);
-
-    const int szHint = DlgLayout::MeasureText(hDlg, hHint);
-    const int hintX  = editX + editW + gap;
-    const int hintW  = szHint + gap;
-    DlgLayout::Move(hDlg, IDC_LAN_TIMEOUT_HINT, hintX, rHint.top, hintW, rHint.bottom - rHint.top);
-
-    const int tiX = rSystem.left;
-    const int tiW = rDlg.right - gap - tiX;
-    if (tiW > 0)
-        DlgLayout::Move(hDlg, IDC_LAN_TI, tiX, rTi.top, tiW, rTi.bottom - rTi.top);
-}
-
-// Position the PHP TAR checkbox 4px to the right of the permissions-row right edit.
-// Must be called after ArrangePermissionsRow so IDC_DIRMOD is already at its final position.
-static void ArrangePhpTarCheckbox(HWND hDlg)
-{
-    HWND hTar    = GetDlgItem(hDlg, IDC_PHP_TAR);
-    HWND hDirmod = GetDlgItem(hDlg, IDC_DIRMOD);
-    if (!hTar || !hDirmod)
-        return;
-
-    const RECT rTar    = DlgLayout::GetRect(hDlg, IDC_PHP_TAR);
-    const RECT rDirmod = DlgLayout::GetRect(hDlg, IDC_DIRMOD);
-    RECT rDlg{};
-    GetClientRect(hDlg, &rDlg);
-
-    const int gap = DlgLayout::kGap;
-    const int h   = rTar.bottom - rTar.top;
-    const int x   = rDirmod.right + gap * 3;
-    const int w   = rDlg.right - gap - x;
-    if (w <= 0)
-        return;
-
-    DlgLayout::Move(hDlg, IDC_PHP_TAR, x, rTar.top, w, h);
-}
-
 // Jump Host settings dialog procedure.
 static INT_PTR CALLBACK JumpHostDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -216,20 +118,7 @@ static INT_PTR CALLBACK JumpHostDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
 
         pConnectSettings cs = ctx->cs;
 
-        LocalizeDlgControls(hWnd, IDS_JUMP_DLG_CAPTION, {
-            { IDC_JUMP_GROUP,        IDS_JUMP_DLG_GROUP    },
-            { IDC_JUMP_LABEL_HOST,   IDS_JUMP_DLG_HOST     },
-            { IDC_JUMP_LABEL_PORT,   IDS_JUMP_DLG_PORT     },
-            { IDC_JUMP_LABEL_USER,   IDS_JUMP_DLG_USER     },
-            { IDC_JUMP_LABEL_PASS,   IDS_JUMP_DLG_PASS     },
-            { IDC_JUMP_LABEL_PUBKEY, IDS_JUMP_DLG_PUBKEY   },
-            { IDC_JUMP_LABEL_PRIVKEY,IDS_JUMP_DLG_PRIVKEY  },
-            { IDC_JUMP_USEAGENT,     IDS_JUMP_DLG_USEAGENT },
-            { IDC_JUMP_CRYPTPASS,    IDS_DLG_CRYPTPASS     },
-            { IDC_JUMP_EDITPASS,     IDS_DLG_CHANGEPASS    },
-            { IDOK,                  IDS_BTN_OK            },
-            { IDCANCEL,              IDS_BTN_CANCEL        },
-        });
+        LocalizeDlgControls(hWnd, kJumpHostDialogCaption, kJumpHostDialogStrings);
 
         // With a reference the resolver decides what the jump host is, so show
         // exactly that rather than the session's own unused jump_* fields.
@@ -274,6 +163,8 @@ static INT_PTR CALLBACK JumpHostDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
             EnableWindow(GetDlgItem(hWnd, IDC_JUMP_CRYPTPASS), FALSE);
 
         UpdateJumpControlStates(hWnd, fromSession);
+        DlgLayout::OnInitDialog(hWnd);
+        DlgLayout::LayoutJumpHostDialog(hWnd);
 
         // Center dialog over parent.
         RECT r1{}, r2{};
@@ -286,6 +177,13 @@ static INT_PTR CALLBACK JumpHostDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
         }
         return 1;
     }
+
+    case DlgLayout::kDpiChangedMessage:
+        PostMessage(hWnd, DlgLayout::kRelayoutMessage, 0, 0);
+        return 0;
+    case DlgLayout::kRelayoutMessage:
+        DlgLayout::LayoutJumpHostDialog(hWnd);
+        return 1;
 
     case WM_COMMAND:
         if (!ctx) break;
@@ -531,38 +429,6 @@ static std::wstring Utf8ToWide(const std::string& s)
     std::wstring out(static_cast<size_t>(len - 1), L'\0');
     MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, s.c_str(), -1, out.data(), len);
     return out;
-}
-
-static std::wstring LoadResStringW(UINT id)
-{
-    const char* lngStr = LngGetString(id);
-    if (lngStr)
-        return Utf8ToWide(std::string(lngStr));
-    std::array<wchar_t, 1024> buf{};
-    const int n = LoadStringW(hinst, id, buf.data(), static_cast<int>(buf.size() - 1));
-    if (n <= 0)
-        return {};
-    return std::wstring(buf.data(), static_cast<size_t>(n));
-}
-
-// Sets a dialog control's text from LNG/RC. No-op if no translation is found.
-static void LocalizeDlgControl(HWND hWnd, int ctrlId, UINT strId)
-{
-    std::wstring s = LoadResStringW(strId);
-    if (!s.empty())
-        SetDlgItemTextW(hWnd, ctrlId, s.c_str());
-}
-
-// Translates all named controls in a dialog from LNG/RC string table.
-// Call from WM_INITDIALOG after the dialog is fully initialized.
-static void LocalizeDlgControls(HWND hWnd, UINT captionStrId,
-    std::initializer_list<std::pair<int, UINT>> controls)
-{
-    std::wstring caption = LoadResStringW(captionStrId);
-    if (!caption.empty())
-        SetWindowTextW(hWnd, caption.c_str());
-    for (const auto& [ctrlId, strId] : controls)
-        LocalizeDlgControl(hWnd, ctrlId, strId);
 }
 
 // Repositions label + checkbox + button on one row based on actual text widths.
@@ -869,6 +735,8 @@ static INT_PTR CALLBACK PairingProgressDlgProc(HWND hDlg, UINT msg, WPARAM wPara
             ? std::format(L"{} s", p->secondsLeft)
             : FormatBracesW(secsTemplW, { std::wstring_view(secsNumW) });
         SetDlgItemTextW(hDlg, IDC_PAIRING_COUNTDOWN, secsW.c_str());
+        DlgLayout::OnInitDialog(hDlg);
+        DlgLayout::FitToText(hDlg);
 
         SetTimer(hDlg, 1, 1000, nullptr);
         return TRUE;
@@ -1357,6 +1225,7 @@ static void RebuildSystemAndEncodingCombos(HWND hWnd, ConnectDialogContext* dlgC
 
 static INT_PTR ShowLocalizedDialogBoxParam(int dialogId, HWND parent, DLGPROC dlgProc, LPARAM dlgParam) noexcept
 {
+    DlgLayout::PerMonitorDpiScope dpiScope;
     const LANGID langId = GetConfiguredUiLanguageId();
     if (langId != 0) {
         WORD bestLang = langId;
@@ -1547,7 +1416,7 @@ void UpdateScpOnlyDependentControls(HWND hWnd)
         ShowWindow(GetDlgItem(hWnd, IDC_FILEMOD),           SW_HIDE);
         ShowWindow(GetDlgItem(hWnd, IDC_DIRMOD_LABEL),      SW_HIDE);
         ShowWindow(GetDlgItem(hWnd, IDC_DIRMOD),            SW_HIDE);
-        ArrangeLanTimeoutRow(hWnd);
+        DlgLayout::LayoutConnectionDialog(hWnd);
         SendMessage(hWnd, WM_SETREDRAW, TRUE, 0);
         RedrawWindow(hWnd, nullptr, nullptr, RDW_ERASE | RDW_FRAME | RDW_INVALIDATE | RDW_ALLCHILDREN);
         return;
@@ -1593,6 +1462,7 @@ void UpdateScpOnlyDependentControls(HWND hWnd)
         SetWindowTextW(phpShellBtn, shellBtn.empty() ? L"Shell..." : shellBtn.c_str());
         UpdateCertSectionState(hWnd);
         UpdateMainJumpControlStates(hWnd, false);
+        DlgLayout::LayoutConnectionDialog(hWnd);
         SendMessage(hWnd, WM_SETREDRAW, TRUE, 0);
         RedrawWindow(hWnd, nullptr, nullptr, RDW_ERASE | RDW_FRAME | RDW_INVALIDATE | RDW_ALLCHILDREN);
         return;
@@ -1625,6 +1495,8 @@ void UpdateScpOnlyDependentControls(HWND hWnd)
     if (!scpOnly)
         CheckDlgButton(hWnd, IDC_SHELLTRANSFER, BST_UNCHECKED);
 
+    // Visibility and the Shell/Pair caption may have changed.
+    DlgLayout::LayoutConnectionDialog(hWnd);
     SendMessage(hWnd, WM_SETREDRAW, TRUE, 0);
     RedrawWindow(hWnd, nullptr, nullptr, RDW_ERASE | RDW_FRAME | RDW_INVALIDATE | RDW_ALLCHILDREN);
 }
@@ -1771,20 +1643,7 @@ INT_PTR WINAPI ProxyDlgProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lPara
             return 1;
         }
         SetWindowLongPtr(hWnd, DWLP_USER, lParam);
-        LocalizeDlgControls(hWnd, IDS_PROXY_DLG_CAPTION, {
-            { IDC_PROXY_GROUP,      IDS_PROXY_DLG_GROUP   },
-            { IDC_NOPROXY,          IDS_PROXY_DLG_NOPROXY },
-            { IDC_OTHERPROXY,       IDS_PROXY_DLG_HTTP    },
-            { IDC_SOCKS4APROXY,     IDS_PROXY_DLG_SOCKS4A },
-            { IDC_SOCKS5PROXY,      IDS_PROXY_DLG_SOCKS5  },
-            { IDC_PROXY_LABEL_HOST, IDS_PROXY_DLG_HOST    },
-            { IDC_PROXY_LABEL_USER, IDS_PROXY_DLG_USER    },
-            { IDC_PROXY_LABEL_PASS, IDS_PROXY_DLG_PASS    },
-            { IDC_CRYPTPASS,        IDS_DLG_CRYPTPASS     },
-            { IDC_EDITPASS,         IDS_DLG_CHANGEPASS    },
-            { IDOK,                 IDS_BTN_OK            },
-            { IDCANCEL,             IDS_BTN_CANCEL        },
-        });
+        LocalizeDlgControls(hWnd, kProxyDialogCaption, kProxyDialogStrings);
         LoadProxySettingsFromNr(ctx->proxynr, &ctx->connectData, ctx->iniFileName);
 
         switch (ConnectData.proxytype) {
@@ -1830,6 +1689,9 @@ INT_PTR WINAPI ProxyDlgProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lPara
         }
         
 
+        DlgLayout::OnInitDialog(hWnd);
+        DlgLayout::LayoutProxyDialog(hWnd);
+
         // Center the dialog relative to its parent window.
         if (GetWindowRect(hWnd, &rt1) && GetWindowRect(GetParent(hWnd), &rt2)) {
             w = rt2.right  - rt2.left;
@@ -1842,6 +1704,12 @@ INT_PTR WINAPI ProxyDlgProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lPara
         }
         return 1;
     }
+    case DlgLayout::kDpiChangedMessage:
+        PostMessage(hWnd, DlgLayout::kRelayoutMessage, 0, 0);
+        return 0;
+    case DlgLayout::kRelayoutMessage:
+        DlgLayout::LayoutProxyDialog(hWnd);
+        return 1;
     case WM_SHOWWINDOW: {
         if (ctx && ctx->focusset)
             SetFocus(GetDlgItem(hWnd, ctx->focusset));
@@ -2221,6 +2089,14 @@ INT_PTR ConnectionDialog::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
 {
     switch (msg) {
     case WM_INITDIALOG:   return OnInitDialog(lParam);
+    case DlgLayout::kDpiChangedMessage:
+        // The dialog manager rescales the dialog after this message; the
+        // text-driven layout runs once that is done.
+        PostMessage(m_hWnd, DlgLayout::kRelayoutMessage, 0, 0);
+        return 0;
+    case DlgLayout::kRelayoutMessage:
+        DlgLayout::LayoutConnectionDialog(m_hWnd);
+        return TRUE;
     case WM_SHOWWINDOW:   return OnShowWindow(LOWORD(wParam));
     case WM_COMMAND:      return OnCommand(wParam, lParam);
     case WM_APP_LAN_PEER: return OnLanPeerMessage(wParam, lParam);
@@ -2238,39 +2114,7 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
     LPCSTR dlgIniFileName = m_ctx->iniFileName;
     int* dlgFocusset = &m_ctx->focusset;
 
-    LocalizeDlgControls(m_hWnd, IDS_DLG_CAPTION, {
-        { IDC_LABEL_CONNECTTO,    IDS_DLG_CONNECTTO         },
-        { IDC_LABEL_USERNAME,     IDS_DLG_USERNAME          },
-        { IDC_PASSLABEL,          IDS_JUMP_DLG_PASS         },
-        { IDC_USEAGENT,           IDS_DLG_USEAGENT          },
-        { IDC_EDITPASS,           IDS_DLG_CHANGEPASS        },
-        { IDC_CRYPTPASS,          IDS_DLG_CRYPTPASS         },
-        { IDC_LABEL_CERTGROUP,    IDS_DLG_CERTGROUP         },
-        { IDC_STATICPUB,          IDS_DLG_PUBKEY            },
-        { IDC_STATICPEM,          IDS_DLG_PRIVKEY           },
-        { IDC_COMPRESS,           IDS_DLG_COMPRESS          },
-        { IDC_DETAILED_LOG,       IDS_DLG_DETAILED_LOG      },
-        { IDC_SHELLTRANSFER,      IDS_DLG_SHELLTRANSFER     },
-        { IDC_SCP_DATA,           IDS_DLG_SCP_DATA          },
-        { IDC_SCP_ALL,            IDS_DLG_SCP_ALL           },
-        { IDC_LABEL_TRANSFER,     IDS_DLG_TRANSFER          },
-        { IDC_SYSTEMLABEL,        IDS_DLG_SYSTEM            },
-        { IDC_CODEPAGELABEL,      IDS_DLG_ENCODING          },
-        { IDC_PERMISSIONS_GROUP,  IDS_DLG_PERMISSIONS_GROUP },
-        { IDC_LANPAIR_GROUP,      IDS_DLG_LANPAIR_GROUP     },
-        { IDC_FILEMOD_LABEL,      IDS_DLG_FILEMOD           },
-        { IDC_DIRMOD_LABEL,       IDS_DLG_DIRMOD            },
-        { IDC_LABEL_SESSION,      IDS_DLG_SESSION           },
-        { IDC_LABEL_JUMPHOST_GRP, IDS_DLG_JUMPHOST_GRP      },
-        { IDC_JUMP_ENABLE,        IDS_DLG_USE_JUMPHOST      },
-        { IDC_JUMP_BUTTON,        IDS_DLG_JUMP_BUTTON       },
-        { IDC_LABEL_PROXY_SETTINGS, IDS_DLG_PROXY_SETTINGS  },
-        { IDC_PHP_TAR,              IDS_DLG_PHP_TAR         },
-        { IDC_LAN_TI,               IDS_LAN_TI              },
-        { IDC_PLUGINHELP,         IDS_BTN_HELP              },
-        { IDOK,                   IDS_BTN_OK                },
-        { IDCANCEL,               IDS_BTN_CANCEL            },
-    });
+    LocalizeDlgControls(m_hWnd, kConnectionDialogCaption, kConnectionDialogStrings);
 
     // Append version to dialog title: "Połącz z serwerem SFTP v1.0.0.x"
     {
@@ -2282,17 +2126,8 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
         }
     }
 
-    ArrangeInlineRow(m_hWnd, IDC_LABEL_JUMPHOST_GRP, IDC_JUMP_ENABLE, IDC_JUMP_BUTTON,
-                     IDC_JUMP_SESSION_PICK);
-    ArrangePasswordRow(m_hWnd, IDC_PASSLABEL, IDC_PASSWORDHELP, IDC_USEAGENT);
-    ArrangePermissionsRow(m_hWnd, IDC_FILEMOD_LABEL, IDC_FILEMOD, IDC_DIRMOD_LABEL, IDC_DIRMOD, IDC_PERMISSIONS_GROUP);
-    ArrangePhpTarCheckbox(m_hWnd);
-    ArrangeProtocolButtons(m_hWnd);
-    ArrangeExpandLabel(m_hWnd, IDC_LABEL_CONNECTTO, IDC_PROTOAUTO);
-    ArrangeExpandLabel(m_hWnd, IDC_CODEPAGELABEL,   IDC_UTF8HELP);
-    ArrangeExpandLabel(m_hWnd, IDC_LABEL_TRANSFER,  IDC_TRANSFERMODE);
-    ArrangeExpandLabel(m_hWnd, IDC_SYSTEMLABEL,     IDC_SYSTEM);
-    ArrangeLabelFillButton(m_hWnd, IDC_LABEL_SESSION, IDC_SESSIONNAME, IDC_PHPSHELL);
+    DlgLayout::OnInitDialog(m_hWnd);
+    DlgLayout::LayoutConnectionDialog(m_hWnd);
 
 
     if (m_ctx->lanPeerId.empty())

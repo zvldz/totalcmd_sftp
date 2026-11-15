@@ -387,6 +387,9 @@
 12140=Proxy nie je možné importovať: súbor neobsahuje sekciu [proxy] s typom a serverom.
 12141=Proxy nie je možné importovať: zápis do sftpplug.ini zlyhal.
 12142=Táto proxy už v [Proxies] je (rovnaký typ, server a používateľ). Nový záznam nebol vytvorený.
+12143=Časový limit relácie (min):
+12144=(0 = bez obmedzenia)
+12145=Auto
 12146=Súbor .ppk požaduje parametre Argon2 nad bezpečné limity.
 12147=Súbor .ppk obsahuje kľúč, ktorého časti k sebe nepatria.
 12148=Chyba sťahovania
