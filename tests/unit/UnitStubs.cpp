@@ -20,3 +20,20 @@ std::wstring narrow_to_wide(std::string_view a, int codepage)
 }
 
 } // namespace unicode_util
+
+// No Total Commander here, so no password store either.
+bool HaveCryptProc() noexcept
+{
+    return false;
+}
+
+extern "C" LPSTR strlcpy(LPSTR p, LPCSTR p2, size_t maxlen)
+{
+    if (!p || !maxlen)
+        return p;
+    size_t i = 0;
+    for (; p2 && p2[i] && i < maxlen - 1; ++i)
+        p[i] = p2[i];
+    p[i] = '\0';
+    return p;
+}

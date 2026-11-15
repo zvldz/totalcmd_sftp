@@ -110,9 +110,9 @@ this fork's 10.0.2.2. Each entry names where it came from.
   argon2 submodule and its build step are gone.
   *From wesmar/sftp 10.3.0.0, on OpenSSL 3.5 here.*
 - **Unit tests.** The PPK converter (against 20 puttygen keys), text-mode
-  line endings, the terminal filter, wildcard matching and the LAN Pair key are covered by
-  unit tests, run on every release build before the plugin is built.
-  *From wesmar/sftp 10.3.0.0.*
+  line endings, the terminal filter, wildcard matching, stored-password
+  encryption and the LAN Pair key are covered by unit tests, run on every
+  release build before the plugin is built. *From wesmar/sftp 10.3.0.0.*
 - **Faster uploads through the shell.** When the shell takes base64 spread
   over several lines, each command now carries 48 KiB instead of 1 KiB; a
   six-byte probe asks first, and a shell that does not take it keeps the
