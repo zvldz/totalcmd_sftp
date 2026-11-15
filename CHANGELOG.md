@@ -8,6 +8,12 @@ detail.
 This fork started from wesmar's stock release 1.0.0.17 and bumped to the
 `10.x` line to make divergence visible in TC's plugin manager.
 
+## 10.4.0.0 — unreleased
+
+Fixes and improvements taken over from
+[wesmar/sftp 10.3.0.0](https://github.com/wesmar/sftp), which is based on
+this fork's 10.0.2.2. Each entry names where it came from.
+
 ## 10.0.2.3 — unreleased
 
 ### Features
