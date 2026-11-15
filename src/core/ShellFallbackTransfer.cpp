@@ -16,9 +16,14 @@
 #include "TextConversion.h"
 #include "res/resource.h"
 
-// Keep command length safely below shell line limits on restricted hosts.
-// 1024 bytes -> 1368 base64 chars (+ command overhead).
+// An upload carries its data inside the command line, and the shell reads
+// that line through a terminal, which holds at most 4095 bytes of one line.
+// A shell that takes base64 spread over lines inside one quoted word gets
+// 48 KiB per command in lines of 76 characters; any other gets one line of
+// 1 KiB (1368 characters plus the command around them).
 static constexpr size_t SHELL_DD_UPLOAD_CHUNK_BYTES  = 1024;
+static constexpr size_t SHELL_DD_UPLOAD_LARGE_CHUNK  = 48 * 1024;
+static constexpr size_t SHELL_B64_LINE_CHARS         = 76;
 static constexpr size_t SHELL_DD_DOWNLOAD_BLOCK      = 65536;
 
 #define SHELL_DD_LOG(fmt, ...) SFTP_LOG("SHELL_DD", fmt, ##__VA_ARGS__)
@@ -40,6 +45,19 @@ static std::string ShellB64Encode(std::span<const uint8_t> data)
         out += kB64Chars[(b >> 12) & 0x3F];
         out += (i + 1 < len) ? kB64Chars[(b >> 6) & 0x3F] : '=';
         out += (i + 2 < len) ? kB64Chars[b & 0x3F]        : '=';
+    }
+    return out;
+}
+
+// Breaks base64 text into lines; `base64 -d` skips the line ends.
+static std::string ShellB64WrapLines(const std::string& b64)
+{
+    std::string out;
+    out.reserve(b64.size() + b64.size() / SHELL_B64_LINE_CHARS + 1);
+    for (size_t i = 0; i < b64.size(); i += SHELL_B64_LINE_CHARS) {
+        if (i)
+            out += '\n';
+        out.append(b64, i, SHELL_B64_LINE_CHARS);
     }
     return out;
 }
@@ -161,12 +179,16 @@ static bool ShellExecPersistentProcessLines(
     _snprintf_s(endMarker.data(), endMarker.size(), _TRUNCATE, "__WFX_DD_END__%u", seq);
     const size_t endMarkerLen = strlen(endMarker.data());
 
+    // The end marker goes out split by an empty string, "__WFX_DD_""END__n":
+    // the shell joins it when the command runs, but a terminal that still
+    // echoes (a host without `stty`) never shows it whole - so the echo of a
+    // command's last line cannot pass for the command having finished.
     std::string fullCmd = "echo \"";
     fullCmd += beginMarker.data();
     fullCmd += "\"; ";
     fullCmd += payload;
-    fullCmd += "; echo \"";
-    fullCmd += endMarker.data();
+    fullCmd += "; echo \"__WFX_DD_\"\"";
+    fullCmd += endMarker.data() + strlen("__WFX_DD_");
     fullCmd += "\":$?\n";
 
     if (!ShellSendPersistentCommand(cs, fullCmd)) {
@@ -628,7 +650,24 @@ static int ShellDdUploadRaw(
     return SFTP_OK;
 }
 
-// ---- base64 upload: one channel per chunk via printf | base64 -d ----
+// Whether the shell decodes base64 spread over lines inside one quoted word,
+// asked with six bytes before an upload rather than learned from a damaged one.
+static bool ShellTakesMultiLineBase64(pConnectSettings cs)
+{
+    std::vector<std::string> out;
+    int status = -1;
+    if (!ShellExecPersistentCollectLines(cs, "printf '%s' 'QUJD\nREVG' | base64 -d | wc -c", out, &status) ||
+        status != 0)
+        return false;
+    for (const auto& line : out) {
+        const char* p = ShellTrimLeft(line.c_str());
+        if (p[0] == '6' && (p[1] == '\0' || static_cast<unsigned char>(p[1]) <= ' '))
+            return true;
+    }
+    return false;
+}
+
+// ---- base64 upload: one command per chunk via printf | base64 -d ----
 
 static int ShellDdUploadBase64(
     pConnectSettings cs,
@@ -655,7 +694,6 @@ static int ShellDdUploadBase64(
     }
 
     bool firstChunk = (resumeFrom == 0);
-    std::vector<uint8_t> readBuf(SHELL_DD_UPLOAD_CHUNK_BYTES);
     text_conversion::CrLfToLf toLf;
     std::vector<char> converted;
     const SYSTICKS starttime = get_sys_ticks();
@@ -665,12 +703,18 @@ static int ShellDdUploadBase64(
         return SFTP_FAILED;
     }
 
+    const bool multiLine = fileSize - resumeFrom > static_cast<int64_t>(SHELL_DD_UPLOAD_CHUNK_BYTES) &&
+                           ShellTakesMultiLineBase64(cs);
+    const size_t chunkBytes = multiLine ? SHELL_DD_UPLOAD_LARGE_CHUNK : SHELL_DD_UPLOAD_CHUNK_BYTES;
+    SHELL_DD_LOG("b64 UL: %zu bytes per command", chunkBytes);
+    std::vector<uint8_t> readBuf(chunkBytes);
+
     // In text mode a CR ending one chunk waits for the next to show whether
     // an LF follows; end of file releases it. A chunk that converts to
     // nothing sends no command.
     for (;;) {
         DWORD bytesRead = 0;
-        if (!ReadFile(localfile, readBuf.data(), (DWORD)SHELL_DD_UPLOAD_CHUNK_BYTES, &bytesRead, nullptr))
+        if (!ReadFile(localfile, readBuf.data(), static_cast<DWORD>(chunkBytes), &bytesRead, nullptr))
             break;  // a short read, reported below
         const bool atEof = (bytesRead == 0);
         const uint8_t* data = readBuf.data();
@@ -688,6 +732,8 @@ static int ShellDdUploadBase64(
             continue;
         }
         std::string b64 = ShellB64Encode(std::span<const uint8_t>(data, dataLen));
+        if (multiLine)
+            b64 = ShellB64WrapLines(b64);
 
         // ">" truncates/creates on the first chunk; ">>" appends on all subsequent ones.
         const char* redirect = firstChunk ? ">" : ">>";

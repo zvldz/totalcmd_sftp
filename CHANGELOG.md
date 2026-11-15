@@ -113,6 +113,12 @@ this fork's 10.0.2.2. Each entry names where it came from.
   line endings, the terminal filter, wildcard matching and the LAN Pair key are covered by
   unit tests, run on every release build before the plugin is built.
   *From wesmar/sftp 10.3.0.0.*
+- **Faster uploads through the shell.** When the shell takes base64 spread
+  over several lines, each command now carries 48 KiB instead of 1 KiB; a
+  six-byte probe asks first, and a shell that does not take it keeps the
+  single-line 1 KiB form. The command's end marker is sent split, so a
+  terminal that still echoes cannot pass the echo for the end.
+  *From wesmar/sftp 10.3.0.0.*
 
 ## 10.0.2.3 — unreleased
 
