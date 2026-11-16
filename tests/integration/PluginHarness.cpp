@@ -7,8 +7,13 @@
 //   session      section of that ini to connect with
 //   remote-base  existing writable remote directory, e.g. /tmp
 //   mode         the transfer mode the session is set up for (sftp, scp,
-//                scponly, shell, text, nosub); "text" also runs the
+//                scponly, shell, text, text-scp, text-scponly, nosub,
+//                nosub-bad, postcmd, key-*); the text* modes also run the
 //                text-mode (CRLF <-> LF) checks
+//
+// Environment: SFTP_IT_POSTCMD_EXPECT, the line the post-login command
+// prints (mode postcmd); SFTP_IT_RESTART_CMD, a command that restarts the
+// server mid-run, after which the session has to reconnect (mode nosub).
 //
 // Non-destructive by construction: everything the run creates lives in
 // <remote-base>/sftpplug-it-<random>, and only that directory is removed.
@@ -23,6 +28,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cwchar>
 #include <fstream>
 #include <map>
@@ -104,10 +110,22 @@ bool EnvIs(const wchar_t* name, const wchar_t* value)
 
 int WINAPI OnProgress(int, LPCWSTR, LPCWSTR, int) { return 0; }
 
+// What the plugin writes to Total Commander's log window.
+std::vector<std::wstring> g_logLines;
+
 void WINAPI OnLog(int, int, LPCWSTR text)
 {
+    if (text)
+        g_logLines.emplace_back(text);
     if (g_verbose && text)
         std::printf("      log: %s\n", Narrow(text).c_str());
+}
+
+std::wstring EnvString(const wchar_t* name)
+{
+    wchar_t buf[1024] = {};
+    const DWORD n = GetEnvironmentVariableW(name, buf, 1024);
+    return n > 0 && n < 1024 ? std::wstring(buf, n) : std::wstring();
 }
 
 BOOL WINAPI OnRequest(int, int type, LPCWSTR title, LPCWSTR text, LPWSTR returned, int maxlen)
@@ -283,8 +301,8 @@ int wmain(int argc, wchar_t** argv)
     const std::wstring session = argv[3];
     std::wstring remoteBase = argv[4];
     const std::wstring mode = argv[5];
-    const bool textChecks = mode == L"text";
-    const bool shellMode = mode == L"scponly" || mode == L"shell";
+    const bool textChecks = mode.rfind(L"text", 0) == 0;
+    const bool shellMode = mode == L"scponly" || mode == L"shell" || mode == L"text-scponly";
     g_verbose = EnvIs(L"SFTP_IT_VERBOSE", L"1");
 
     for (auto& c : remoteBase)
@@ -309,10 +327,39 @@ int wmain(int argc, wchar_t** argv)
     const std::wstring dir = root + L"\\" + runName;
     std::printf("session %s, remote directory %s\n", Narrow(session).c_str(), Narrow(dir).c_str());
 
+    if (mode == L"nosub-bad") {
+        // A server without the sftp subsystem and a server command that
+        // does not exist: the connection fails, and soon.
+        const ULONGLONG start = GetTickCount64();
+        bool listedBad = true;
+        ListDir(root, listedBad);
+        const ULONGLONG seconds = (GetTickCount64() - start) / 1000;
+        Check(!listedBad, "a wrong SFTP server command fails to connect");
+        Check(seconds < 30, "and gives up in " + std::to_string(seconds) + " s, no hang");
+        std::printf("%d passed, %d failed, %d known\n", g_passed, g_failed, g_known);
+        return g_failed == 0 ? 0 : 1;
+    }
+
     bool listed = false;
     ListDir(root, listed);
     if (!Check(listed && g_unexpectedPrompts == 0, "connect and list " + Narrow(remoteBase)))
         return 1;
+
+    if (mode == L"postcmd") {
+        // The command's output reaches the log as whole lines, a Cyrillic
+        // word at the end of one included.
+        const std::wstring expect = EnvString(L"SFTP_IT_POSTCMD_EXPECT");
+        bool found = false;
+        for (const auto& line : g_logLines) {
+            std::wstring t = line;
+            while (!t.empty() && (t.back() == L'\r' || t.back() == L'\n' || t.back() == L' '))
+                t.pop_back();
+            if (!expect.empty() && t.size() >= expect.size() &&
+                t.compare(t.size() - expect.size(), expect.size(), expect) == 0)
+                found = true;
+        }
+        Check(found, "the post-login command's output is in the log, whole (" + Narrow(expect) + ")");
+    }
     if (!Check(g_plugin.MkDirW(dir.c_str()) == TRUE, "create the run directory"))
         return 1;
 
@@ -466,6 +513,24 @@ int wmain(int argc, wchar_t** argv)
         Check(get == FS_FILE_OK && Sha256File(target) == Sha256File(local + L"text.txt"),
               "text download restores CRLF line ends");
         g_plugin.ExecuteFileW(nullptr, modeTarget.data(), L"mode I");
+    }
+
+    if (mode == L"nosub") {
+        const std::wstring restart = EnvString(L"SFTP_IT_RESTART_CMD");
+        if (!restart.empty()) {
+            // The server goes away under the open session; the next request
+            // has to reconnect, and on this server only the server command
+            // can start SFTP.
+            const int rc = _wsystem(restart.c_str());
+            Check(rc == 0, "restart the server (rc=" + std::to_string(rc) + ")");
+            bool again = false;
+            for (int attempt = 0; attempt < 3 && !again; ++attempt) {
+                if (attempt)
+                    Sleep(2000);
+                ListDir(dir, again);
+            }
+            Check(again, "after a server restart the session reconnects through the server command");
+        }
     }
 
     // Cleanup: only what this run created.

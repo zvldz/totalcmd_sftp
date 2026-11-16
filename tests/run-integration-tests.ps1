@@ -18,10 +18,16 @@ Everything a run creates on the server lives in one directory under
 -RemoteBase, and only that directory is removed.
 
 .PARAMETER Modes
-sftp, scp, scponly, shell, text, nosub, key-utf8, key-cp1251 (default:
-all). The key-* modes log in with a key whose passphrase is a Cyrillic
-word, stored as UTF-8 or as cp1251 bytes; the second only means something
-where the ANSI code page is 1251.
+sftp, scp, scponly, shell, text, text-scp, text-scponly, nosub, nosub-bad,
+postcmd, key-utf8, key-cp1251 (default: all).
+  text*      text mode (CRLF <-> LF) over SFTP, SCP and SCP-only
+  nosub      SFTP through sftpservercommand; the server is restarted
+             mid-run and the session has to reconnect through the command
+  nosub-bad  a wrong sftpservercommand: fails, and without hanging
+  postcmd    a post-login command printing a Cyrillic word: whole in the log
+  key-*      a key whose passphrase is a Cyrillic word, stored as UTF-8 or
+             as cp1251 bytes; the second only means something where the
+             ANSI code page is 1251
 
 .EXAMPLE
 .\tests\run-integration-tests.ps1
@@ -29,7 +35,7 @@ where the ANSI code page is 1251.
 #>
 param(
     [ValidateSet('x64', 'x86', 'both')] [string]$Arch = 'both',
-    [string[]]$Modes = @('sftp', 'scp', 'scponly', 'shell', 'text', 'nosub', 'key-utf8', 'key-cp1251'),
+    [string[]]$Modes = @('sftp', 'scp', 'scponly', 'shell', 'text', 'text-scp', 'text-scponly', 'nosub', 'nosub-bad', 'postcmd', 'key-utf8', 'key-cp1251'),
     [string]$RemoteBase = '/tmp',
     [switch]$VerboseLog
 )
@@ -43,7 +49,7 @@ $KeyFileUtf8 = Join-Path $Bench 'keys\id_ed25519_utf8'
 $KeyFileCp1251 = Join-Path $Bench 'keys\id_ed25519_cp1251'
 
 $Modes = @($Modes | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
-$knownModes = 'sftp', 'scp', 'scponly', 'shell', 'text', 'nosub', 'key-utf8', 'key-cp1251'
+$knownModes = 'sftp', 'scp', 'scponly', 'shell', 'text', 'text-scp', 'text-scponly', 'nosub', 'nosub-bad', 'postcmd', 'key-utf8', 'key-cp1251'
 foreach ($m in $Modes) { if ($m -notin $knownModes) { throw "Unknown mode '$m'. Known: $($knownModes -join ', ')" } }
 
 # ---------------------------------------------------------------------------
@@ -70,6 +76,13 @@ try {
 # ---------------------------------------------------------------------------
 # Sessions, one per mode
 # ---------------------------------------------------------------------------
+# A Cyrillic word for the post-login command, built from code points so the
+# script stays ASCII, which Windows PowerShell would read as ANSI.
+$Privet = -join [char[]](0x43F, 0x440, 0x438, 0x432, 0x435, 0x442)
+$env:SFTP_IT_POSTCMD_EXPECT = $Privet
+# The nosub mode restarts its server mid-run.
+$env:SFTP_IT_RESTART_CMD = "docker compose -f `"$(Join-Path $Bench 'docker-compose.yml')`" restart ssh-nosub"
+
 $base = [ordered]@{ server = '127.0.0.1:2222'; user = 'tester'; privkeyfile = $KeyFile; transfermode = '0'; utf8 = '1' }
 $overrides = @{
     sftp    = @{ scpfordata = '0'; scponly = '0'; shelltransfer = '0'; shelltransferforce = '0'; unixlinebreaks = '0' }
@@ -79,6 +92,12 @@ $overrides = @{
     text    = @{ scpfordata = '0'; scponly = '0'; shelltransfer = '0'; shelltransferforce = '0'; unixlinebreaks = '1' }
     nosub   = @{ scpfordata = '0'; scponly = '0'; shelltransfer = '0'; shelltransferforce = '0'; unixlinebreaks = '0'
                  server = '127.0.0.1:2223'; sftpservercommand = '/usr/lib/openssh/sftp-server' }
+    'text-scp'     = @{ scpfordata = '1'; scponly = '0'; shelltransfer = '0'; shelltransferforce = '0'; unixlinebreaks = '1' }
+    'text-scponly' = @{ scpfordata = '1'; scponly = '1'; shelltransfer = '0'; shelltransferforce = '0'; unixlinebreaks = '1' }
+    'nosub-bad'    = @{ scpfordata = '0'; scponly = '0'; shelltransfer = '0'; shelltransferforce = '0'; unixlinebreaks = '0'
+                        server = '127.0.0.1:2223'; sftpservercommand = '/nonexistent/sftp-server' }
+    postcmd        = @{ scpfordata = '0'; scponly = '0'; shelltransfer = '0'; shelltransferforce = '0'; unixlinebreaks = '0'
+                        sendcommand = "echo $Privet" }
     'key-utf8'   = @{ scpfordata = '0'; scponly = '0'; shelltransfer = '0'; shelltransferforce = '0'; unixlinebreaks = '0'
                       privkeyfile = $KeyFileUtf8 }
     'key-cp1251' = @{ scpfordata = '0'; scponly = '0'; shelltransfer = '0'; shelltransferforce = '0'; unixlinebreaks = '0'
