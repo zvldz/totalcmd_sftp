@@ -82,6 +82,20 @@ struct ListingExtra {
 using DirectoryExtras = std::unordered_map<std::wstring, ListingExtra>;
 
 struct tConnectSettings {
+    tConnectSettings() = default;
+    tConnectSettings(tConnectSettings&&) = default;
+    tConnectSettings& operator=(tConnectSettings&&) = default;
+    // The secrets are wiped with the object, a moved-from one included:
+    // whatever a short string kept in place is overwritten too.
+    ~tConnectSettings()
+    {
+        for (std::string* s : { &password, &account_password, &key_passphrase, &proxypassword,
+                                &jump_password, &jump_key_passphrase, &jump_entered_password }) {
+            s->resize(s->capacity());
+            SecureZeroMemory(s->data(), s->size());
+        }
+    }
+
     std::string DisplayName;
     std::string IniFileName;
     std::string server;

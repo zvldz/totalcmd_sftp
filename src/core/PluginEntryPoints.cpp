@@ -885,9 +885,27 @@ static void StatusInfo(const std::string& remoteDir, int InfoStartEnd, int InfoO
                     TarDownloadSessionBegin(nullptr);  // cs filled in by first FsGetFileW
 #endif
             }
-            const char* oldpass = inherited.password.empty() ? nullptr : inherited.password.c_str();
-            pConnectSettings serverid = SftpConnectToServer(displayName.data(), inifilename, oldpass,
-                                                           nullptr, &inherited);
+            pConnectSettings serverid = nullptr;
+            if (sftp::IsVirtualSessionAlias(displayName.data())) {
+                // A session from [Imports] keeps its fields in the scan cache,
+                // not in our INI; its password comes from the panel's
+                // connection or, failing that, from the source.
+                const auto info = sftp::LookupVirtualSession(displayName.data());
+                const std::string& cachePath = sftp::GetImportCache().CacheFilePath();
+                if (!info || cachePath.empty())
+                    return;
+                std::string password = inherited.password.empty()
+                    ? LoadImportedPassword(info->sourceId, info->cacheSection, info->displayName)
+                    : inherited.password;
+                serverid = SftpConnectToServer(info->cacheSection.c_str(), cachePath.c_str(),
+                                               password.empty() ? nullptr : password.c_str(),
+                                               displayName.data(), &inherited);
+                SecureZeroMemory(password.data(), password.size());
+            } else {
+                const char* oldpass = inherited.password.empty() ? nullptr : inherited.password.c_str();
+                serverid = SftpConnectToServer(displayName.data(), inifilename, oldpass,
+                                               nullptr, &inherited);
+            }
             if (serverid)
                 SetServerIdForName(displayName.data(), static_cast<SERVERID>(serverid));
         }

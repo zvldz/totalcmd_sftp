@@ -53,6 +53,20 @@ From this version the plugin comes in two builds: **classic**
   Commander asks for it). Before, the file carried the stored form,
   which no other machine can read, or none at all. An [Imports] session
   copied out carries the source program's password.
+- **A key passphrase is no longer sent to the server as the password.** A
+  password field holding the key's passphrase (the plain form, not
+  `"password","passphrase"`) was offered to the server as the account
+  password once the server turned the key down. When it is seen to open
+  the key, the password is asked for instead; the same for a jump host.
+- **One-time codes get no stored password.** A keyboard-interactive
+  prompt for a PASSCODE (RSA SecurID, Duo), token or verification code
+  took the stored password, and a code typed there was kept and replayed
+  as the password on reconnect. A jump host answers with its password
+  only once per login.
+- **Passwords are wiped from memory with the connection**, and a password
+  the server makes you change during a background transfer is saved the
+  way the session keeps its own — before, it went into `sftpplug.ini`
+  even for a session whose password is under the master password.
 - **PHP Agent and LAN Pair moved to a separate extra build.** They open
   the machine to the network in ways SSH does not: LAN Pair runs a file
   server on it, PHP Agent drives a script on a web server, with a shell.
@@ -178,6 +192,10 @@ From this version the plugin comes in two builds: **classic**
   backslash, as Total Commander names the target of a copy, was not
   recognised as a folder and was connected to as a session; so was the
   target of a background copy. Closing the dialog let the import go on.
+- **A background transfer of an [Imports] session no longer opens the
+  connection dialog.** It looked for the session in the own list, found
+  nothing and asked for a new one; it now connects the way Enter on it
+  does, with the password the panel's connection has.
 - **A session file copied onto a session of the same name asks to
   overwrite it** instead of failing with "Error uploading file". The
   replaced session is disconnected, and passwords the file does not

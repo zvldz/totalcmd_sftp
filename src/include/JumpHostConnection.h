@@ -32,6 +32,9 @@ struct JumpHostSettings {
     // host, the passphrase only unlocks privkeyfile.
     std::string password;
     std::string keyPassphrase;
+    // The stored secret said which of the two it is (SplitStoredSecret);
+    // otherwise both hold the same guess.
+    bool        secretLabelled = false;
     // Set instead of the two above when the secret is kept in TC's password
     // manager: the name it is kept under, loaded only when connecting.
     std::string passwordStoreName;

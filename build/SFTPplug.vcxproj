@@ -153,6 +153,7 @@
     <ClCompile Include="..\src\core\ConnectionDialog.cpp" />
     <ClCompile Include="..\src\core\DialogLayout.cpp" />
     <ClCompile Include="..\src\core\DialogText.cpp" />
+    <ClCompile Include="..\src\core\AuthSecrets.cpp" />
     <ClCompile Include="..\src\core\SftpAuth.cpp" />
     <ClCompile Include="..\src\core\ScpTransfer.cpp" />
     <ClCompile Include="..\src\core\ShellFallbackTransfer.cpp" />

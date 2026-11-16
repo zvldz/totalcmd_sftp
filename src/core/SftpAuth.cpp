@@ -18,42 +18,6 @@
 
 #define AUTH_LOG(fmt, ...) SFTP_LOG("AUTH", fmt, ##__VA_ARGS__)
 
-static bool PromptLooksLikePasswordRequest(char* promptTextLower) noexcept
-{
-    if (!promptTextLower || !promptTextLower[0])
-        return false;
-    // Must contain "pass".
-    if (!strstr(promptTextLower, "pass"))
-        return false;
-    // Exclude common OTP prompts.
-    if (strstr(promptTextLower, "oath") || strstr(promptTextLower, "one time") || strstr(promptTextLower, "one-time"))
-        return false;
-    return true;
-}
-
-StoredSecret SplitStoredSecret(const std::string& stored)
-{
-    StoredSecret out;
-    if (stored.size() >= 2 && stored.front() == '"' && stored.back() == '"') {
-        const size_t sep = stored.find("\",\"");
-        // The passphrase runs from after the separator up to the closing quote.
-        if (sep >= 1 && sep != std::string::npos && sep + 3 <= stored.size() - 1) {
-            out.accountPassword = stored.substr(1, sep - 1);
-            out.keyPassphrase   = stored.substr(sep + 3, stored.size() - sep - 4);
-            out.labelled        = true;
-            return out;
-        }
-    }
-    // Nothing labels the two halves of a plain string, so it stands for
-    // whichever secret is asked for: a profile carrying only a passphrase is
-    // as common as one carrying only a password. Trying it as a passphrase
-    // costs nothing — that use never leaves the machine — while the quoted
-    // form above is what states which secret is which.
-    out.accountPassword = stored;
-    out.keyPassphrase   = stored;
-    return out;
-}
-
 extern "C"
 void kbd_callback(LPCSTR name, int name_len,
                   LPCSTR instruction, int instruction_len, int num_prompts,
@@ -317,6 +281,20 @@ static bool ConvertPpkInEitherEncoding(const char* ppkPath, const char* passphra
         AUTH_LOG("PPK conversion with the passphrase in the system codepage: converted=%d", converted);
     }
     return converted;
+}
+
+// Whether a PuTTY key file is protected by a passphrase: its header names
+// the cipher, "none" when it is not.
+static bool PpkIsEncrypted(const char* ppkPath)
+{
+    std::string text;
+    if (!ReadKeyFile(ppkPath, text))
+        return false;
+    const size_t at = text.find("Encryption:");
+    const bool encrypted = at != std::string::npos &&
+                           text.compare(at + 11, 5, " none") != 0;
+    SecureZeroMemory(text.data(), text.size());
+    return encrypted;
 }
 
 // A PuTTY key is converted in memory into `outConvertedPem`; its public half
@@ -668,6 +646,10 @@ int SftpAuthPubKeyOn(const SshAuthTarget& target, LPCSTR progressbuf, int progre
     };
     auth = tryKey(passphrasePtr);
     AUTH_LOG("userauthPubkeyFromMemory result=%d", auth);
+    // A PuTTY key opened during conversion, with the passphrase held, when
+    // its header names a cipher.
+    bool keyOpenedWithPassphrase = convertedPpk && !target.keyPassphrase->empty() &&
+                                   PpkIsEncrypted(privkeyfile.data());
     // A key that would not open with the passphrase as typed (both errors are
     // raised while reading the key, before the server is asked) gets the same
     // passphrase in the system codepage, as Windows tools encrypt with it.
@@ -678,6 +660,13 @@ int SftpAuthPubKeyOn(const SshAuthTarget& target, LPCSTR progressbuf, int progre
         SecureZeroMemory(acp.data(), acp.size());
         AUTH_LOG("userauthPubkeyFromMemory with the passphrase in the system codepage: result=%d", auth);
     }
+    // Both errors are raised while reading the key, before the server is
+    // asked; anything else means the passphrase opened it.
+    if (isencrypted && passphrasePtr && passphrasePtr[0] &&
+        auth != LIBSSH2_ERROR_KEYFILE_AUTH_FAILED && auth != LIBSSH2_ERROR_FILE)
+        keyOpenedWithPassphrase = true;
+    if (target.keyOpened)
+        *target.keyOpened = keyOpenedWithPassphrase;
     if (auth) {
         cleanupConvertedIfNeeded();
         char* errMsg = nullptr;
@@ -720,9 +709,11 @@ int SftpAuthPubKeyOn(const SshAuthTarget& target, LPCSTR progressbuf, int progre
 // Bind the public-key flow to the target server. A failure here is a dead
 // end for key auth, so it may raise a dialog — unlike a jump host, which
 // still has password and keyboard-interactive left to try.
-int SftpAuthPubKey(pConnectSettings ConnectSettings, LPCSTR progressbuf, int progress, int * ploop, SYSTICKS * plasttime, int * auth_pw)
+int SftpAuthPubKey(pConnectSettings ConnectSettings, LPCSTR progressbuf, int progress, int * ploop, SYSTICKS * plasttime, int * auth_pw,
+                   bool* keyOpened)
 {
     SshAuthTarget target;
+    target.keyOpened   = keyOpened;
     target.session     = ConnectSettings->session.get();
     target.host        = ConnectSettings->server;
     target.user        = ConnectSettings->user;

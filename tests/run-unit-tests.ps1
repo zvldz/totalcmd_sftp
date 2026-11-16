@@ -29,7 +29,8 @@ $UnitSources = @(
     'src\core\PpkConverter.cpp',
     'src\core\TerminalText.cpp',
     'src\core\WildcardMatch.cpp',
-    'src\core\PasswordCrypto.cpp'
+    'src\core\PasswordCrypto.cpp',
+    'src\core\AuthSecrets.cpp'
 )
 $SystemLibs = 'ws2_32.lib crypt32.lib advapi32.lib user32.lib bcrypt.lib'
 

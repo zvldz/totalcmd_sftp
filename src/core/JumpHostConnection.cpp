@@ -94,8 +94,9 @@ JumpConfig ResolveJumpConfig(pConnectSettings cs, LPCSTR iniFileName)
             out.endpoint.passwordStoreName = cs->jump_session_ref;
         } else {
             const StoredSecret secret = SplitStoredSecret(ref.password);
-            out.endpoint.password      = secret.accountPassword;
-            out.endpoint.keyPassphrase = secret.keyPassphrase;
+            out.endpoint.password       = secret.accountPassword;
+            out.endpoint.keyPassphrase  = secret.keyPassphrase;
+            out.endpoint.secretLabelled = secret.labelled;
         }
         out.endpoint.pubkeyfile  = ref.pubkeyfile;
         out.endpoint.privkeyfile = ref.privkeyfile;
@@ -114,8 +115,9 @@ JumpConfig ResolveJumpConfig(pConnectSettings cs, LPCSTR iniFileName)
             out.endpoint.passwordStoreName = JumpPasswordStoreName(cs->DisplayName);
         } else {
             const StoredSecret secret = SplitStoredSecret(cs->jump_password);
-            out.endpoint.password      = secret.accountPassword;
-            out.endpoint.keyPassphrase = secret.keyPassphrase;
+            out.endpoint.password       = secret.accountPassword;
+            out.endpoint.keyPassphrase  = secret.keyPassphrase;
+            out.endpoint.secretLabelled = secret.labelled;
         }
         out.endpoint.pubkeyfile  = cs->jump_pubkeyfile;
         out.endpoint.privkeyfile = cs->jump_privkeyfile;
@@ -142,10 +144,14 @@ static void   jmp_free(LPVOID p, LPVOID* /*ab*/)    { free(p); }
 // as soon as that is over.
 struct JmpKbdCtx {
     const std::string* password = nullptr;
+    // The password goes out once per authentication: a server asking again
+    // has refused it, and repeating it only counts towards a lockout.
+    bool               sent     = false;
 };
 
-// Keyboard-interactive callback for jump host: echo the stored password only for
-// password-looking prompts; send an empty string for OTP/MFA prompts.
+// Keyboard-interactive callback for jump host: the stored password answers
+// the first password prompt (or an empty one, which some servers send for
+// it); one-time-code prompts and anything after get an empty answer.
 extern "C" static void jmp_kbd_callback(
     LPCSTR /*name*/,   int /*name_len*/,
     LPCSTR /*instr*/,  int /*instr_len*/,
@@ -157,8 +163,7 @@ extern "C" static void jmp_kbd_callback(
     auto* ctx = static_cast<JmpKbdCtx*>(*abstract);
     for (int i = 0; i < num_prompts; i++) {
         const char* pw = "";
-        if (ctx && ctx->password && !ctx->password->empty()) {
-            // Copy and lowercase the prompt text to check if it looks like a password prompt.
+        if (ctx && ctx->password && !ctx->password->empty() && !ctx->sent) {
             std::array<char, 256> lower{};
             const size_t copyLen = min(
                 prompts ? static_cast<size_t>(prompts[i].length) : size_t{0},
@@ -166,12 +171,10 @@ extern "C" static void jmp_kbd_callback(
             if (copyLen > 0) memcpy(lower.data(), prompts[i].text, copyLen);
             lower[copyLen] = '\0';
             _strlwr_s(lower.data(), lower.size());
-            const bool isPass = strstr(lower.data(), "pass") != nullptr
-                             && !strstr(lower.data(), "oath")
-                             && !strstr(lower.data(), "one time")
-                             && !strstr(lower.data(), "one-time");
-            if (isPass || copyLen == 0)
+            if (copyLen == 0 || PromptLooksLikePasswordRequest(lower.data())) {
                 pw = ctx->password->c_str();
+                ctx->sent = true;
+            }
         }
         responses[i].text   = _strdup(pw);
         responses[i].length = static_cast<unsigned int>(strlen(pw));
@@ -450,13 +453,23 @@ static bool AuthJumpHost(
     // --- 2. Public key auth ---
     if (canPubkey && !jump.privkeyfile.empty()) {
         ShowStatusId(IDS_LOG_JUMP_PUBKEY_TRY, nullptr, true);
+        bool keyOpened = false;
+        authTarget.keyOpened = &keyOpened;
         if (SftpAuthPubKeyOn(authTarget, "Jump host: public key auth...",
                              progress, &loop, &lasttime, nullptr,
                              AuthFailureUi::StatusOnly) == 0) {
             ShowStatusId(IDS_LOG_JUMP_PUBKEY_OK, nullptr, true);
             return true;
         }
+        authTarget.keyOpened = nullptr;
         ShowStatusId(IDS_LOG_JUMP_PUBKEY_FAIL, nullptr, true);
+        // The unlabelled secret opened the key, so it is the key's
+        // passphrase, not the password: the password is asked for instead.
+        if (keyOpened && !jump.secretLabelled && !jump.password.empty() &&
+            cs->jump_key_passphrase == jump.password) {
+            SFTP_LOG("JUMP", "Stored secret opened the key: not offered as the password");
+            jump.password.clear();
+        }
     }
 
     // No stored password, but the server takes one: ask, as for the target.

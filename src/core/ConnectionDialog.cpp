@@ -3223,6 +3223,17 @@ pConnectSettings SftpConnectToServer(LPCSTR DisplayName, LPCSTR inifilename,
             // For now, allow the flow to continue but mark for LanPair handling
             ConnectSettings.passSaveMode = sftp::PassSaveMode::empty;
         }
+        // Where a password the server makes us change is saved follows how
+        // the profile keeps its own, decided before a password handed in
+        // from elsewhere takes its place. An imported session (only those
+        // pass a logging alias) lives in the scan cache, which must not hold
+        // passwords, and one never saved stays unsaved.
+        if (ConnectSettings.useagent || ConnectSettings.password.empty() || loggingAliasName)
+            ConnectSettings.passSaveMode = sftp::PassSaveMode::empty;
+        else if (ConnectSettings.password == "\001")
+            ConnectSettings.passSaveMode = sftp::PassSaveMode::crypt;
+        else
+            ConnectSettings.passSaveMode = sftp::PassSaveMode::plain;
         if (overridepass)
             ConnectSettings.password = overridepass;
         // Carried from the connection that already answered these prompts.
@@ -3238,16 +3249,7 @@ pConnectSettings SftpConnectToServer(LPCSTR DisplayName, LPCSTR inifilename,
             if (!inherited->proxyPassword.empty())
                 ConnectSettings.proxypassword = inherited->proxyPassword;
         }
-        // An imported session (only those pass a logging alias) lives in the
-        // scan cache, which must not hold passwords: a password the server
-        // makes it change is not written back there.
-        if (ConnectSettings.useagent || ConnectSettings.password.empty() || loggingAliasName) {
-            ConnectSettings.passSaveMode = sftp::PassSaveMode::empty;
-        } else {
-            ConnectSettings.passSaveMode = sftp::PassSaveMode::plain;
-        }
         if (HaveCryptProc() && ConnectSettings.password == "\001") {
-            ConnectSettings.passSaveMode = sftp::PassSaveMode::crypt;
             std::array<char, MAX_PATH> passwordBuf{};
             int rc = CryptProcI(PluginNumber, CryptoNumber, FS_CRYPT_LOAD_PASSWORD, DisplayName, passwordBuf.data(), static_cast<int>(passwordBuf.size() - 1));
             if (rc != FS_FILE_OK) {

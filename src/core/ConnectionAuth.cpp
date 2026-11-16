@@ -112,19 +112,20 @@ int PerformAuthentication(
     // downstream reads account_password or key_passphrase by name. A
     // passphrase already remembered from an earlier attempt on this
     // connection survives, so reconnects do not prompt again.
-    {
-        const StoredSecret secret = SplitStoredSecret(ConnectSettings->password);
-        // Reconnects run this again on the same settings, so a secret entered
-        // at a prompt during an earlier attempt must not be wiped by a stored
-        // form that does not carry one.
+    // An unlabelled secret is only a guess at either; a value already held —
+    // entered at a prompt in an earlier attempt, or carried over from the
+    // panel's connection — outranks it.
+    const StoredSecret secret = SplitStoredSecret(ConnectSettings->password);
+    if (secret.labelled) {
         if (!secret.accountPassword.empty())
             ConnectSettings->account_password = secret.accountPassword;
-        if (secret.labelled) {
-            if (!secret.keyPassphrase.empty())
-                ConnectSettings->key_passphrase = secret.keyPassphrase;
-        } else if (ConnectSettings->key_passphrase.empty()) {
+        if (!secret.keyPassphrase.empty())
             ConnectSettings->key_passphrase = secret.keyPassphrase;
-        }
+    } else {
+        if (ConnectSettings->account_password.empty())
+            ConnectSettings->account_password = secret.accountPassword;
+        if (ConnectSettings->key_passphrase.empty())
+            ConnectSettings->key_passphrase = secret.keyPassphrase;
     }
 
     // A private key entered in the public-key field is still the key to log
@@ -197,8 +198,19 @@ int PerformAuthentication(
     } else if ((auth_pw & SSH_AUTH_PUBKEY) && ConnectSettings->privkeyfile[0]) {
         progress = 65;
         LogProcI(PluginNumber, MSGTYPE_DETAILS, "=== Calling SftpAuthPubKey ===");
-        int rc = SftpAuthPubKey(ConnectSettings, progressbuf, progress, &loop, &lasttime, &auth_pw);
+        bool keyOpened = false;
+        int rc = SftpAuthPubKey(ConnectSettings, progressbuf, progress, &loop, &lasttime, &auth_pw,
+                                &keyOpened);
         auth = (rc < 0) ? LIBSSH2_ERROR_FILE : 0;
+        // The unlabelled secret opened the key, so it is the key's
+        // passphrase: offered to the server as the password it would be
+        // disclosed. The password is asked for instead.
+        if (rc < 0 && keyOpened && !secret.labelled && !secret.accountPassword.empty() &&
+            ConnectSettings->key_passphrase == secret.accountPassword &&
+            ConnectSettings->account_password == secret.accountPassword) {
+            SFTP_LOG("AUTH", "Stored secret opened the key: not offered as the password");
+            ConnectSettings->account_password.clear();
+        }
         if (rc == -LIBSSH2_ERROR_FILE) {
             SFTP_LOG("CONN", "Public-key auth aborted due to local key file error.");
             return SFTP_FAILED;

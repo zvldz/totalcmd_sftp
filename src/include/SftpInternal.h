@@ -218,7 +218,14 @@ struct SshAuthTarget {
     std::string           pubkeyfile;
     std::string           privkeyfile;
     std::function<void()> waitIo;
+    // Set by public-key auth: whether keyPassphrase opened privkeyfile,
+    // whatever the server then said of the key.
+    bool*                 keyOpened     = nullptr;
 };
+
+// Whether a keyboard-interactive prompt (lowercased) asks for the account
+// password, as opposed to a one-time code.
+bool PromptLooksLikePasswordRequest(const char* promptTextLower) noexcept;
 
 // What a failed attempt should look like to the user. A host with further
 // methods left to try reports quietly; a dead end says so with a dialog.
@@ -240,7 +247,8 @@ int SftpAuthPageant(pConnectSettings ConnectSettings,
 
 int SftpAuthPubKey(pConnectSettings ConnectSettings,
                    LPCSTR progressbuf, int progress,
-                   int* ploop, SYSTICKS* plasttime, int* auth_pw);
+                   int* ploop, SYSTICKS* plasttime, int* auth_pw,
+                   bool* keyOpened = nullptr);
 
 // Whether the file at `path` (expanded the way key paths are at connect)
 // holds a private key, judged by its contents rather than by which field

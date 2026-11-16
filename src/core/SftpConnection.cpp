@@ -807,8 +807,9 @@ int SftpConnect(pConnectSettings ConnectSettings)
             }
             const StoredSecret secret = SplitStoredSecret(stored);
             SecureZeroMemory(stored.data(), stored.size());
-            jump.password      = secret.accountPassword;
-            jump.keyPassphrase = secret.keyPassphrase;
+            jump.password       = secret.accountPassword;
+            jump.keyPassphrase  = secret.keyPassphrase;
+            jump.secretLabelled = secret.labelled;
         }
 
         // Target is the server configured in the profile (resolved already

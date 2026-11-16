@@ -52,6 +52,9 @@
     <ClCompile Include="..\src\core\ShellFallbackTransfer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\core\AuthSecrets.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\src\core\SftpAuth.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
