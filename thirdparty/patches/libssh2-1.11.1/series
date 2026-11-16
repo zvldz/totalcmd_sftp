@@ -17,3 +17,6 @@ CVE-2026-58051.patch
 # through an "exec" of a server command, for hosts without the "sftp"
 # subsystem (OpenWrt / Dropbear). Not upstream; carried until libssh2 has it.
 sftpplug-sftp-init-command.patch
+# The plugin's own fixes in libssh2 itself, after everything above.
+sftpplug-transport-payload-reset.patch
+sftpplug-symlink-status-id.patch

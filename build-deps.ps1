@@ -157,8 +157,10 @@ function Invoke-SubmodulePatches([string]$Path, [string]$Tag) {
     order its series file lists. Patches are bound to that tag: a submodule on
     any other tag is refused, and a tag with no patch folder gets none, so a
     version bump never inherits backports written for the previous release.
-    The set is applied as a whole: git apply is all-or-nothing, and checking
-    it in reverse tells an already patched tree from a pristine one.
+    A patch may build on an earlier one, so they go in one at a time; one
+    that does not apply undoes the others. A tree with changes counts as
+    patched only when it equals the series applied to HEAD, which is worked
+    out in a temporary index without touching the files.
     #>
     $patchDir = Join-Path $patchesRoot $Tag
     $series   = Join-Path $patchDir 'series'
@@ -174,8 +176,6 @@ function Invoke-SubmodulePatches([string]$Path, [string]$Tag) {
         Write-Step "$Path : series for $Tag is empty"
         return
     }
-    $reverse = @($forward[($forward.Count - 1)..0])
-
     Push-Location $Path
     $savedPref = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
@@ -184,15 +184,38 @@ function Invoke-SubmodulePatches([string]$Path, [string]$Tag) {
         if ($LASTEXITCODE -ne 0 -or -not $describe -or $describe.Trim() -ne $Tag) {
             throw "$Path is not on $Tag; refusing to apply patches written for it."
         }
-        & git apply --check @forward 2>$null
-        if ($LASTEXITCODE -eq 0) {
-            & git apply @forward
-            if ($LASTEXITCODE -ne 0) { throw "git apply failed in $Path" }
+        $changed = & git status --porcelain --untracked-files=no
+        if (-not $changed) {
+            foreach ($patch in $forward) {
+                & git apply $patch
+                if ($LASTEXITCODE -ne 0) {
+                    & git checkout -- . 2>$null
+                    throw "$(Split-Path -Leaf $patch) does not apply in $Path"
+                }
+            }
             Write-OK "$Path : applied $($forward.Count) patches for $Tag"
             return
         }
-        & git apply --reverse --check @reverse 2>$null
-        if ($LASTEXITCODE -eq 0) {
+
+        $tempIndex = Join-Path ([System.IO.Path]::GetTempPath()) "sftpplug-patch-index-$PID"
+        $env:GIT_INDEX_FILE = $tempIndex
+        try {
+            & git read-tree HEAD
+            $isPatched = $LASTEXITCODE -eq 0
+            foreach ($patch in $forward) {
+                if (-not $isPatched) { break }
+                & git apply --cached $patch 2>$null
+                $isPatched = $LASTEXITCODE -eq 0
+            }
+            if ($isPatched) {
+                & git diff --quiet
+                $isPatched = $LASTEXITCODE -eq 0
+            }
+        } finally {
+            Remove-Item Env:GIT_INDEX_FILE -ErrorAction SilentlyContinue
+            Remove-Item $tempIndex -Force -ErrorAction SilentlyContinue
+        }
+        if ($isPatched) {
             Write-Step "$Path : $($forward.Count) patches for $Tag already applied"
             return
         }

@@ -137,6 +137,11 @@ void EncryptString(LPCTSTR pszPlain, LPTSTR pszEncrypted, UINT cchEncrypted)
         return;
 
     std::string plain(pszPlain);
+    // The copy of the password is wiped however the function ends.
+    struct WipeOnExit {
+        std::string& s;
+        ~WipeOnExit() { SecureZeroMemory(s.data(), s.size()); }
+    } wipePlain{ plain };
 
     // Try DPAPI first
     DataBlob blob;

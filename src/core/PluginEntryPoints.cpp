@@ -975,10 +975,10 @@ void WINAPI FsSetDefaultParams(FsDefaultParamStruct * dps)
 {
     sftp::DllExceptionBarrier _barrier;
     sftp::dll_invoke_void(_barrier, [&] {
-        if (dps) {
-            // Detect wincmd.ini from registry, falling back to the path derived from dps->DefaultIniName.
-            DetectAndApplyLanguage(dps->DefaultIniName);
-        }
+        if (!dps)
+            return;
+        // Detect wincmd.ini from registry, falling back to the path derived from dps->DefaultIniName.
+        DetectAndApplyLanguage(dps->DefaultIniName);
 
         strlcpy(inifilename, dps->DefaultIniName, MAX_PATH-1);
         LPSTR p = strrchr(inifilename, '\\');

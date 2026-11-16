@@ -57,6 +57,9 @@ static constexpr DWORD PAGEANT_TIMEOUT_MS       = 20000;
 static constexpr DWORD SOCKET_POLL_MS           = 50;
 static constexpr DWORD SOCKET_READ_POLL_MS      = 1000;
 static constexpr DWORD PROGRESS_UPDATE_MS       = 100;
+// How long a remote file's close waits for the server's answer; a server
+// flushing a large write-back cache to slow storage can take a while.
+static constexpr DWORD SFTP_CLOSE_TIMEOUT_MS    = 30000;
 
 // Reconnect timeout, used by ReconnectSFTPChannelIfNeeded. Disconnect needs no
 // such budget: SSH_MSG_DISCONNECT is fire-and-forget per RFC 4253 §11.1, so

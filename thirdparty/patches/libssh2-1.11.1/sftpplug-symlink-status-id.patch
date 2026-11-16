@@ -1,0 +1,23 @@
+From: numbereleven-a
+Subject: [PATCH] sftp: skip the request id in a symlink STATUS reply
+
+The CVE-2025-15661 backport reads the first u32 after the packet type of an
+SSH_FXP_STATUS reply as the status code, but that u32 is the request id; the
+code follows it. A failed readlink/realpath set last_errno to the request
+id, and with an id of 0 reported success without filling the target.
+---
+diff --git a/src/sftp.c b/src/sftp.c
+index 72d0c00..50ef644 100644
+--- a/src/sftp.c
++++ b/src/sftp.c
+@@ -3941,7 +3941,9 @@ static int sftp_symlink(LIBSSH2_SFTP *sftp, const char *path,
+     }
+ 
+     if(packet_type == SSH_FXP_STATUS) {
+-        if(_libssh2_get_u32(&buf, &tmp_u32)) {
++        /* the request id comes first, then the status code */
++        if(_libssh2_get_u32(&buf, &tmp_u32) ||
++           _libssh2_get_u32(&buf, &tmp_u32)) {
+             LIBSSH2_FREE(session, data);
+             return _libssh2_error(session, LIBSSH2_ERROR_SFTP_PROTOCOL,
+                                   "SFTP Protocol Error (code)");

@@ -1181,7 +1181,11 @@ int WINAPI FsExecuteFileW(HWND MainWin, LPWSTR RemoteName, LPCWSTR Verb)
                 const size_t prefixLen = SessionPrefixWideLen(r.displayName);
                 if (prefixLen == 0 || prefixLen + 1 > wcslen(RemoteName))
                     return FS_EXEC_ERROR;
+                // A target that does not fit is refused: cut short it would
+                // name another folder, and TC would open that instead.
                 RemoteName[1 + prefixLen] = 0;
+                if (wcslen(RemoteName) + wcslen(remotedir.data()) >= wdirtypemax - 1)
+                    return FS_EXEC_ERROR;
                 wcslcat(RemoteName, remotedir.data(), wdirtypemax-1);
                 ReplaceSlashByBackslashW(RemoteName);
                 return FS_EXEC_SYMLINK;
@@ -1310,7 +1314,11 @@ int WINAPI FsExecuteFileW(HWND MainWin, LPWSTR RemoteName, LPCWSTR Verb)
                 if (prefixLen == 0 || prefixLen + 1 > wcslen(RemoteName) ||
                     1 + prefixLen + wcslen(remotedir.data()) >= wdirtypemax - 1)
                     return FS_EXEC_ERROR;
+                // A target that does not fit is refused: cut short it would
+                // name another folder, and TC would open that instead.
                 RemoteName[1 + prefixLen] = 0;
+                if (wcslen(RemoteName) + wcslen(remotedir.data()) >= wdirtypemax - 1)
+                    return FS_EXEC_ERROR;
                 wcslcat(RemoteName, remotedir.data(), wdirtypemax-1);
                 ReplaceSlashByBackslashW(RemoteName);
                 return FS_EXEC_SYMLINK;
@@ -1547,7 +1555,7 @@ static int CopyBetweenSessions(LPCWSTR OldName, LPCWSTR NewName,
         ProgressSlice _slice(src, 0, 50, OldName, NewName);
         rc = SftpDownloadFileW(src, srcRel.c_str(), tempFile.data(), true,
                                ri ? ri->Size64 : 0,
-                               ri ? &ri->LastWriteTime : nullptr, false);
+                               ri ? &ri->LastWriteTime : nullptr, false, true);
     }
     SFTP_LOG("ENTRY", "CopyBetweenSessions download rc=%d", rc);
     if (rc != SFTP_OK) {
@@ -1560,7 +1568,7 @@ static int CopyBetweenSessions(LPCWSTR OldName, LPCWSTR NewName,
         // progress belong to that one.
         SessionContextGuard _dstGuard(dst);
         ProgressSlice _slice(dst, 50, 50, OldName, NewName);
-        rc = SftpUploadFileW(dst, tempFile.data(), dstRel.c_str(), false, true);
+        rc = SftpUploadFileW(dst, tempFile.data(), dstRel.c_str(), false, true, true);
     }
     SFTP_LOG("ENTRY", "CopyBetweenSessions upload rc=%d", rc);
     DeleteFileW(tempFile.data());

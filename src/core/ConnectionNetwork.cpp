@@ -129,7 +129,9 @@ bool InitializeSftpSubsystemIfNeeded(pConnectSettings ConnectSettings, int progr
             sftpInitTimedOut = true;
             break;
         }
-        IsSocketReadable(ConnectSettings->sock);
+        // Waits in the direction libssh2 is blocked on: a request still
+        // being sent waits for the socket to take it, not for a reply.
+        WaitForSshIo(ConnectSettings, SOCKET_READ_POLL_MS);
     } while (!ConnectSettings->sftpsession);
 
     if (!ConnectSettings->sftpsession) {

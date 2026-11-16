@@ -2705,7 +2705,14 @@ void ConnectionDialog::OnOk()
     std::array<char, MAX_PATH> strbuf{};
     int cp = 0, cbline = 0;
 
+    // The stored fingerprint identifies one machine, as for the jump host:
+    // pointing the session at another host or port drops it, or the next
+    // connect would report the new host's key as the old one changed.
+    const std::string previousServer = m_settings->server;
     GetDlgItemTextI(m_hWnd, IDC_CONNECTTO, m_settings->server);
+    const bool serverChanged = _stricmp(previousServer.c_str(), m_settings->server.c_str()) != 0;
+    if (serverChanged)
+        m_settings->savedfingerprint.clear();
     GetDlgItemTextI(m_hWnd, IDC_USERNAME,  m_settings->user);
     GetDlgItemTextI(m_hWnd, IDC_PASSWORD,  m_settings->password);
     if (IsDlgButtonChecked(m_hWnd, IDC_PROTOV4))
@@ -2887,6 +2894,8 @@ void ConnectionDialog::OnOk()
             m_settings->saveonlyprofile = true;
         std::array<char, 16> buf{};
         IniWriteString(targetProfile.data(), "server",   m_settings->server.c_str(),  dlgIniFileName);
+        if (serverChanged)
+            IniWriteString(targetProfile.data(), "fingerprint", nullptr, dlgIniFileName);
         IniWriteString(targetProfile.data(), "user",     m_settings->user.c_str(),    dlgIniFileName);
         _itoa_s(m_settings->protocoltype, buf.data(), buf.size(), 10);
         IniWriteString(targetProfile.data(), "protocol", m_settings->protocoltype == 0 ? nullptr : buf.data(), dlgIniFileName);
@@ -3293,6 +3302,7 @@ pConnectSettings SftpConnectToServer(LPCSTR DisplayName, LPCSTR inifilename,
                 return nullptr;
             }
             ConnectSettings.password = passwordBuf.data();
+            SecureZeroMemory(passwordBuf.data(), passwordBuf.size());
         }
         if (HaveCryptProc() && ConnectSettings.proxypassword == "\001") {
             std::array<char, 64> proxyentry{};
@@ -3309,6 +3319,7 @@ pConnectSettings SftpConnectToServer(LPCSTR DisplayName, LPCSTR inifilename,
                 return nullptr;
             }
             ConnectSettings.proxypassword = proxyPasswordBuf.data();
+            SecureZeroMemory(proxyPasswordBuf.data(), proxyPasswordBuf.size());
         }
         // Clear proxy credentials when proxy type is disabled.
         if (ConnectSettings.proxytype == sftp::Proxy::notused) {

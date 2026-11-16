@@ -1,6 +1,7 @@
 #include "global.h"
 #include <windows.h>
 #include <stdio.h>
+#include <vector>
 #include "ServerRegistry.h"
 #include "CoreUtils.h"
 #include "SftpInternal.h"
@@ -267,8 +268,25 @@ int CopyMoveServerInIniW(LPCSTR oldservername, LPCSTR newservername,
     const std::wstring woldsect = unicode_util::internal_to_wide(oldservername);
     const std::wstring wnewsect = unicode_util::internal_to_wide(newservername);
 
-    std::array<wchar_t, 1024> captlist{};
-    IniGetString(woldsect.c_str(), nullptr, L"", captlist.data(), static_cast<DWORD>(captlist.size() - 1), inifilename);
+    // Read whole, however long: a key list or a value cut short would be
+    // copied cut, and a move would then delete the full original. The read
+    // reports size - 1 (a value) or size - 2 (a list) when it had to cut.
+    const auto readWhole = [&](LPCWSTR key) {
+        std::vector<wchar_t> buf(4096);
+        for (;;) {
+            const DWORD got = IniGetString(woldsect.c_str(), key, L"", buf.data(),
+                                           static_cast<DWORD>(buf.size()), inifilename);
+            if (got + 2 < buf.size() || buf.size() >= 1024 * 1024)
+                return buf;
+            buf.assign(buf.size() * 2, L'\0');
+        }
+    };
+    std::vector<wchar_t> captlist;
+    try {
+        captlist = readWhole(nullptr);
+    } catch (...) {
+        return FS_FILE_READERROR;
+    }
     if (captlist[0]) {
         if (!OverWrite) {
             std::array<wchar_t, 100> testlist{};
@@ -285,9 +303,12 @@ int CopyMoveServerInIniW(LPCSTR oldservername, LPCSTR newservername,
         bool written = true;
         wchar_t* pcapt = captlist.data();
         while (pcapt[0] && written) {
-            std::array<wchar_t, 4096> valuebuf{};
-            IniGetString(woldsect.c_str(), pcapt, L"", valuebuf.data(), static_cast<DWORD>(valuebuf.size() - 1), inifilename);
-            written = IniWriteString(wnewsect.c_str(), pcapt, valuebuf.data(), inifilename) != FALSE;
+            try {
+                const std::vector<wchar_t> valuebuf = readWhole(pcapt);
+                written = IniWriteString(wnewsect.c_str(), pcapt, valuebuf.data(), inifilename) != FALSE;
+            } catch (...) {
+                written = false;
+            }
             pcapt += wcslen(pcapt) + 1;
         }
         if (!written) {

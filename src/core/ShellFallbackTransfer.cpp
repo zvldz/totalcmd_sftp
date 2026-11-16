@@ -938,13 +938,19 @@ int ShellDdUploadFile(
 
     ShowStatusId(IDS_LOG_SHELL_UL_START, nullptr, true);
 
-    // For resume: query the actual remote byte count so we skip the right amount.
+    // For resume: query the actual remote byte count so we skip the right
+    // amount. Resuming continues a remote file that is a prefix of this one;
+    // a size that cannot be read, or one larger than the local file, means it
+    // is not, and starting over would replace a different file the user meant
+    // to continue. Refused, as the SFTP path refuses it.
     if (resumeFrom > 0) {
         int64_t remoteSize = ShellGetRemoteFileSize(cs, remotePath);
-        if (remoteSize >= 0 && remoteSize <= fileSize)
-            resumeFrom = remoteSize;
-        else
-            resumeFrom = 0;
+        if (remoteSize < 0 || remoteSize > fileSize) {
+            SHELL_DD_LOG("UL resume refused: remote=%lld local=%lld",
+                         (long long)remoteSize, (long long)fileSize);
+            return SFTP_WRITEFAILED;
+        }
+        resumeFrom = remoteSize;
     }
 
     if (!cs->shell_dd_b64only) {

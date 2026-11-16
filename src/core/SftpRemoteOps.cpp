@@ -826,7 +826,7 @@ int SftpCreateDirectoryW(pConnectSettings cs, LPCWSTR Path)
         rc = cs->sftpsession->mkdir(dirStr.c_str(), cs->dirmod);
         if (rc == 0)
             break;
-        int delta = get_ticks_between(cs->findstarttime);
+        int delta = get_ticks_between(start);
         if (delta > kSftpProgressStartMs && aborttime == -1) {
             if (EscapePressed())
                 aborttime = get_sys_ticks() + kSftpAbortGraceMs;
@@ -1016,11 +1016,13 @@ int SftpRenameMoveFileW(pConnectSettings cs, LPCWSTR OldName, LPCWSTR NewName, b
         // branch's return, so a shell-driven move would replace whatever was
         // already there without Total Commander ever asking. `test -e` answers
         // that question here instead.
-        // Only `test -e` answering 1 means the name is free; a probe that
+        // Only the probe answering 1 means the name is free; a probe that
         // could not run leaves the question open, and `mv` would replace.
+        // `test -e` follows links, so a link whose target is gone is asked
+        // about with `test -L`.
         if (!Overwrite) {
-            std::wstring probeW = L"test -e '";
-            probeW += string_util::ShellQuoteSingleW(newW.c_str()) + L"'";
+            const std::wstring quoted = string_util::ShellQuoteSingleW(newW.c_str());
+            std::wstring probeW = L"test -e '" + quoted + L"' || test -L '" + quoted + L"'";
             if (SftpQuoteCommand2W(cs, nullptr, probeW.c_str(), nullptr, 0) != 1)
                 return SFTP_EXISTS;
         }
@@ -1047,6 +1049,15 @@ int SftpRenameMoveFileW(pConnectSettings cs, LPCWSTR OldName, LPCWSTR NewName, b
         } while (lrc == LIBSSH2_ERROR_EAGAIN);
         if (lrc >= 0)
             return SFTP_EXISTS;
+        // Only "no such file" means the name is free. Any other failure —
+        // no permission to look, a lost connection — leaves it unknown, and
+        // the rename could replace what is there without asking.
+        const unsigned long fx =
+            (lrc == LIBSSH2_ERROR_SFTP_PROTOCOL) ? cs->sftpsession->lastError() : 0;
+        if (fx != LIBSSH2_FX_NO_SUCH_FILE) {
+            SFTP_LOG("SFTP", "rename: target check failed rc=%d fx=%lu", lrc, fx);
+            return SFTP_FAILED;
+        }
     }
 
     int rc = 0;
@@ -1111,11 +1122,20 @@ int SftpSetDateTimeW(pConnectSettings cs, LPCWSTR RemoteName, LPFILETIME LastWri
     if (!CopyRemotePathW2A(cs, RemoteName, nameA.data(), nameA.size()))
         return SFTP_FAILED;
 
+    // SFTP sets both times at once; the access time is kept as the server
+    // has it, and takes the new modification time only when it cannot be read.
+    LIBSSH2_SFTP_ATTRIBUTES current{};
+    int rc = 0;
+    do {
+        rc = cs->sftpsession->stat(nameA.data(), &current);
+        if (rc == LIBSSH2_ERROR_EAGAIN)
+            IsSocketReadable(cs->sock);
+    } while (rc == LIBSSH2_ERROR_EAGAIN);
+
     LIBSSH2_SFTP_ATTRIBUTES attr{};
     attr.flags = LIBSSH2_SFTP_ATTR_ACMODTIME;
     attr.mtime = GetUnixTime(LastWriteTime);
-    attr.atime = attr.mtime;
-    int rc = 0;
+    attr.atime = (rc == 0 && (current.flags & LIBSSH2_SFTP_ATTR_ACMODTIME)) ? current.atime : attr.mtime;
     do {
         rc = cs->sftpsession->setstat(nameA.data(), &attr);
         if (rc == LIBSSH2_ERROR_EAGAIN)

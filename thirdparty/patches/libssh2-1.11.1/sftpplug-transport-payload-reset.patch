@@ -1,0 +1,62 @@
+From: zvldz (two of the five sites first fixed by numbereleven-a)
+Subject: [PATCH] transport: reset the packet buffer after freeing it on error
+
+When decryption, decompression or a bounds check fails, fullpacket() and
+_libssh2_transport_read() free p->payload and return, leaving the pointer
+and p->total_num set. libssh2_session_free() frees session->packet.payload
+again whenever total_num is non-zero, so a corrupt or hostile stream ends
+in a double free. The pointer and the size are cleared with the buffer.
+---
+diff --git a/src/transport.c b/src/transport.c
+index 35c2baf..b71189a 100644
+--- a/src/transport.c
++++ b/src/transport.c
+@@ -160,6 +160,8 @@ decrypt(LIBSSH2_SESSION * session, unsigned char *source,
+                                         &session->remote.crypt_abstract,
+                                         lowerfirstlast)) {
+             LIBSSH2_FREE(session, p->payload);
++            p->payload = NULL;
++            p->total_num = 0;
+             return LIBSSH2_ERROR_DECRYPT;
+         }
+ 
+@@ -244,6 +246,8 @@ fullpacket(LIBSSH2_SESSION * session, int encrypted /* 1 or 0 */ )
+ 
+                 if(p->total_num < mac_len + 4 + (size_t)blocksize) {
+                     LIBSSH2_FREE(session, p->payload);
++                    p->payload = NULL;
++                    p->total_num = 0;
+                     return LIBSSH2_ERROR_DECRYPT;
+                 }
+                 decrypt_size = (ssize_t)(p->total_num - mac_len - 4);
+@@ -315,8 +319,11 @@ fullpacket(LIBSSH2_SESSION * session, int encrypted /* 1 or 0 */ )
+                                               session->fullpacket_payload_len,
+                                               &session->remote.comp_abstract);
+             LIBSSH2_FREE(session, p->payload);
+-            if(rc)
++            p->payload = NULL;
++            if(rc) {
++                p->total_num = 0;
+                 return rc;
++            }
+ 
+             p->payload = data;
+             session->fullpacket_payload_len = data_len;
+@@ -701,6 +708,8 @@ int _libssh2_transport_read(LIBSSH2_SESSION * session)
+                     else {
+                         if(p->payload)
+                             LIBSSH2_FREE(session, p->payload);
++                        p->payload = NULL;
++                        p->total_num = 0;
+                         return LIBSSH2_ERROR_OUT_OF_BOUNDARY;
+                     }
+                 }
+@@ -860,6 +869,8 @@ int _libssh2_transport_read(LIBSSH2_SESSION * session)
+             else {
+                 if(p->payload)
+                     LIBSSH2_FREE(session, p->payload);
++                p->payload = NULL;
++                p->total_num = 0;
+                 return LIBSSH2_ERROR_OUT_OF_BOUNDARY;
+             }
+ 

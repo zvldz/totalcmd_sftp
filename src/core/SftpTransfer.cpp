@@ -103,13 +103,14 @@ private:
     HANDLE handle_ = INVALID_HANDLE_VALUE;
 };
 
-// RAII wrapper for remote SFTP handle. ~Libssh2SftpHandle() also drains close
-// (bounded tight loop), so this wrapper is functionally optional — kept as a
-// readability aid that makes the close point in the upload/download flow
-// explicit.
+// RAII wrapper for a remote SFTP handle. Close() sends SSH_FXP_CLOSE and
+// waits on the socket for the server's answer: only then has the server
+// closed the file, and for an upload the answer is where a failed final
+// write shows. A close that times out or is cancelled leaves the rest to
+// ~Libssh2SftpHandle().
 class RemoteSftpFile {
 public:
-    explicit RemoteSftpFile(std::unique_ptr<ISftpHandle> h) : handle_(std::move(h)) {}
+    RemoteSftpFile(std::unique_ptr<ISftpHandle> h, pConnectSettings cs) : handle_(std::move(h)), cs_(cs) {}
     ~RemoteSftpFile() { if (handle_) Close(); }
 
     RemoteSftpFile(const RemoteSftpFile&) = delete;
@@ -120,16 +121,15 @@ public:
 
     int Close() {
         if (!handle_) return 0;
-        int rc;
-        do {
-            rc = handle_->close();
-        } while (rc == LIBSSH2_ERROR_EAGAIN);
+        const int rc = WaitForOperation([this] { return handle_->close(); },
+                                        SFTP_CLOSE_TIMEOUT_MS, cs_);
         handle_.reset();
         return rc;
     }
 
 private:
     std::unique_ptr<ISftpHandle> handle_;
+    pConnectSettings cs_;
 };
 
 // RAII wrapper for remote SCP channel. Adds explicit timeout-driven close
@@ -314,7 +314,7 @@ int DownloadLoop(pConnectSettings cs, Handle& remote, LocalFile& local,
 } // anonymous namespace
 
 int SftpDownloadFileW(pConnectSettings cs, LPCWSTR RemoteName, LPCWSTR LocalName,
-                      bool alwaysOverwrite, int64_t filesize, LPFILETIME ft, bool Resume)
+                      bool alwaysOverwrite, int64_t filesize, LPFILETIME ft, bool Resume, bool binary)
 {
     if (!cs) return SFTP_FAILED;
 #if SFTP_EXTRA
@@ -325,7 +325,7 @@ int SftpDownloadFileW(pConnectSettings cs, LPCWSTR RemoteName, LPCWSTR LocalName
     // Converted text has different offsets on each side, so a text file is
     // never continued: a resume asked for becomes a transfer from the start.
     // Decided first, since a resume also picks the transfer path below.
-    bool textMode = (cs->unixlinebreaks == 1) && SftpDetermineTransferModeW(RemoteName);
+    bool textMode = !binary && (cs->unixlinebreaks == 1) && SftpDetermineTransferModeW(RemoteName);
     if (textMode && Resume) {
         SFTP_LOG("SFTP", "Download: text mode, resume becomes a full transfer");
         Resume = false;
@@ -472,7 +472,7 @@ int SftpDownloadFileW(pConnectSettings cs, LPCWSTR RemoteName, LPCWSTR LocalName
             }
         }
     } else {
-        RemoteSftpFile remoteSftp(std::move(sftpHandle));
+        RemoteSftpFile remoteSftp(std::move(sftpHandle), cs);
         int64_t dummyRemain = 0; // not used for SFTP
         ret = DownloadLoop(cs, remoteSftp, local, RemoteName, LocalName,
                            textMode, filesize, loaded, dummyRemain);
@@ -489,7 +489,7 @@ int SftpDownloadFileW(pConnectSettings cs, LPCWSTR RemoteName, LPCWSTR LocalName
 }
 
 int SftpUploadFileW(pConnectSettings cs, LPCWSTR LocalName, LPCWSTR RemoteName,
-                    bool Resume, bool setattr)
+                    bool Resume, bool setattr, bool binary)
 {
     if (!cs) return SFTP_FAILED;
 #if SFTP_EXTRA
@@ -500,7 +500,7 @@ int SftpUploadFileW(pConnectSettings cs, LPCWSTR LocalName, LPCWSTR RemoteName,
     // Converted text has different offsets on each side, so a text file is
     // never continued: a resume asked for becomes a transfer from the start.
     // Decided first, since a resume also picks the transfer path below.
-    bool textMode = (cs->unixlinebreaks == 1) && SftpDetermineTransferModeW(LocalName);
+    bool textMode = !binary && (cs->unixlinebreaks == 1) && SftpDetermineTransferModeW(LocalName);
     if (textMode && Resume) {
         SFTP_LOG("SFTP", "Upload: text mode, resume becomes a full transfer");
         Resume = false;
@@ -732,6 +732,19 @@ int SftpUploadFileW(pConnectSettings cs, LPCWSTR LocalName, LPCWSTR RemoteName,
             SFTP_LOG("SCP", "Upload not acknowledged: %s", err.c_str());
             if (!err.empty())
                 ShowStatus(err.c_str());
+            ret = SFTP_WRITEFAILED;
+        }
+    }
+
+    // The upload is done only when the server has closed the file: its answer
+    // to the close carries the result of the last writes, and until then the
+    // file may still be open on the server. Times and permissions are set
+    // after that, on the closed file.
+    if (sftpHandle) {
+        RemoteSftpFile remoteSftp(std::move(sftpHandle), cs);
+        const int closeRc = remoteSftp.Close();
+        if (closeRc != 0 && ret == SFTP_OK) {
+            SFTP_LOG("SFTP", "Upload: closing the remote file failed rc=%d", closeRc);
             ret = SFTP_WRITEFAILED;
         }
     }

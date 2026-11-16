@@ -396,6 +396,46 @@ From this version the plugin comes in two builds: **classic**
     their old place anyway. They now stay where they were, and the error
     is reported.
   - A rename that changes only the case of a name did nothing.
+- **An upload is finished only when the server has closed the file.** The
+  SFTP upload reported success with the remote file still open and closed
+  it later without waiting, so the server could keep it open, and an error
+  in the last writes, which shows in the answer to the close, went unseen.
+  It now waits for that answer, reports a failed close, and sets the time
+  and permissions on the closed file.
+  *Found by numbereleven-a.*
+- **libssh2: no double free on a corrupt stream.** When decryption,
+  decompression or a bounds check failed, the packet buffer was freed and
+  freed again when the session ended — a server sending garbage could
+  crash Total Commander. Fixed at all five places in our patch series
+  (numbereleven-a fixed two). Also from there: a failed symlink or
+  realpath request took the request number for the error code.
+- **Copying between two sessions keeps the bytes.** With text mode on
+  automatic and Unix line breaks set, a text file copied from one server to
+  another arrived with Windows line breaks: the download converted it by
+  its name, the upload from the temporary file did not convert it back.
+  The copy is now binary on both legs. *Found by numbereleven-a.*
+- **Smaller fixes, from a review of numbereleven-a's fork.**
+  - Copying or renaming a session reads its keys and values whole, however
+    long; a cut list would have lost keys, and a move then deleted the
+    original.
+  - Renaming without overwriting refuses when the server cannot say
+    whether the target exists, and in shell mode a broken link counts as
+    existing; both used to be replaced without asking.
+  - A shell-mode resume onto a remote file larger than the local one, or
+    of unknown size, is refused as in SFTP mode instead of starting over.
+  - The shell terminal opens with echo off, also on hosts without `stty`.
+  - The "quote" command's exit status is read after the command has
+    ended; SCP-mode listings wait on the connection instead of sleeping
+    and keep long lines (link targets) whole.
+  - Changing a session's host or port in the dialog drops its stored host
+    key fingerprint, as for the jump host, instead of warning on the next
+    connect that the key changed.
+  - Setting a file's time keeps its access time.
+  - A symlink target too long for the path is refused instead of cut to
+    another folder.
+  - SFTP start-up waits in the direction the connection is blocked in;
+    the jump-host socket is closed when its session cannot be created;
+    password buffers are wiped after use.
 - **Session import fixes.**
   - PuTTY, KiTTY, WinSCP: "use Pageant" was taken from agent forwarding,
     so a Pageant user got a password prompt; it now comes from "Attempt

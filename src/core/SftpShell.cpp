@@ -282,7 +282,10 @@ bool EnsureScpShell(pConnectSettings cs)
         // carries the end marker, and the reading stops before any output is
         // seen — a listing then looks like an empty directory and a transfer
         // like an empty file.
-        return channel->requestPty("vt102", 5, "", 0, 1000, 40, 8000, 480);
+        // The terminal starts with echo off (ECHO = 0, then TTY_OP_END), so
+        // even a host without `stty` does not send the commands back.
+        static constexpr char kModes[] = { 53, 0, 0, 0, 0, 0 };
+        return channel->requestPty("vt102", 5, kModes, sizeof(kModes), 1000, 40, 8000, 480);
     }, kScpPtyOpenTimeoutMs, cs);
 
     if (ptyRc < 0 && ptyRc != LIBSSH2_ERROR_EAGAIN) {
@@ -409,14 +412,16 @@ bool ScpReadCommandOutput(pConnectSettings cs, const char* endMarker,
     const std::string beginMarkerStr(beginMarker ? beginMarker : "");
     const bool hasBegin = !beginMarkerStr.empty();
 
-    std::array<char, 4096> line{};
+    // A listing line holds a name and, for a link, its target: two paths of
+    // up to 4096 bytes each, so the line buffer leaves room for both.
+    std::vector<char> line(65536);
     const auto start = std::chrono::steady_clock::now();
     bool gotBegin = !hasBegin;
     bool gotEnd = false;
 
     while (ReadChannelLine(cs->scpShellChannel.get(),
                            line.data(), line.size() - 1,
-                           cs->scpShellMsgBuf, cs->scpShellErrBuf))
+                           cs->scpShellMsgBuf, cs->scpShellErrBuf, cs->sock))
     {
         std::string lineStr(line.data());
         StripEscapeSequences(lineStr);
@@ -627,9 +632,14 @@ int SftpQuoteCommand2(pConnectSettings cs, const char* remotedir, const char* cm
 
     // The loop also ends on its timeouts. A command that never finished has
     // no exit status, and the channel reports 0 for one that never came —
-    // which would pass a hung `mv` or `cp` for a success.
+    // which would pass a hung `mv` or `cp` for a success. The status arrives
+    // after the output ends and before the channel closes.
     if (!channel->eof()) {
         SFTP_LOG("SHELL", "Quote command timed out before it finished");
+        return -1;
+    }
+    if (WaitForOperation([&] { return channel->waitClosed(); }, kShellCloseTimeoutMs, cs) != 0) {
+        SFTP_LOG("SHELL", "Quote command: no exit status");
         return -1;
     }
 
@@ -741,7 +751,7 @@ int SftpQuoteCommand2W(pConnectSettings cs, LPCWSTR remotedir, LPCWSTR cmd,
         SFTP_LOG("SHELL", "Quote command cancelled before it finished");
         return -1;
     }
-    if (WaitForOperation([&] { return channel->waitClosed(); }, kShellCloseTimeoutMs, nullptr) != 0) {
+    if (WaitForOperation([&] { return channel->waitClosed(); }, kShellCloseTimeoutMs, cs) != 0) {
         SFTP_LOG("SHELL", "Quote command: no exit status");
         return -1;
     }
