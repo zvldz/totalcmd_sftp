@@ -50,6 +50,7 @@ public:
     int eof() override;
     int waitEof() override;
     int channelClose() override;
+    int waitClosed() override;
     int channelFree() override;
     int flush() override;
     int getExitStatus() override;

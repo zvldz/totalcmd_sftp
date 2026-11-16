@@ -134,20 +134,29 @@ static bool FitsA2W(int codepage, LPCSTR s, size_t outmax) noexcept
     return needed > 0 && static_cast<size_t>(needed) < outmax;
 }
 
-void CopyStringW2A(pConnectSettings ConnectSettings, LPCWSTR instr, LPSTR outstr, size_t outmax) noexcept
+// A name the session's codepage cannot hold is not converted either. Windows
+// would otherwise pick a look-alike or '?': two names collapsing into one, or
+// a fullwidth apostrophe arriving as a quote inside a shell command.
+bool CopyStringW2A(pConnectSettings ConnectSettings, LPCWSTR instr, LPSTR outstr, size_t outmax) noexcept
 {
     if (!outstr || outmax == 0)
-        return;
+        return false;
+    outstr[0] = '\0';
     const int codepage = ConnectSettings->utf8names > 0 ? CP_UTF8 : ConnectSettings->codepage;
-    if (!instr || !FitsW2A(codepage, instr, outmax)) {
-        outstr[0] = '\0';
-        return;
-    }
+    if (!instr || !FitsW2A(codepage, instr, outmax))
+        return false;
     if (ConnectSettings->utf8names > 0) {
         ConvUTF16toUTF8(instr, 0, outstr, outmax);
-    } else {
-        walcopyCP(ConnectSettings->codepage, outstr, instr, outmax - 1);
+        return true;
     }
+    BOOL usedDefault = FALSE;
+    const int n = WideCharToMultiByte(codepage, WC_NO_BEST_FIT_CHARS, instr, -1, outstr,
+                                      static_cast<int>(outmax), nullptr, &usedDefault);
+    if (n <= 0 || usedDefault) {
+        outstr[0] = '\0';
+        return false;
+    }
+    return true;
 }
 
 void CopyStringA2W(pConnectSettings ConnectSettings, LPCSTR instr, LPWSTR outstr, size_t outmax, bool useCVT) noexcept

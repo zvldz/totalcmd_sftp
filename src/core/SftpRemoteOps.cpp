@@ -305,7 +305,8 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
     }
 
     std::string dirStr(wdirtypemax, '\0');
-    CopyStringW2A(cs, remotedir, dirStr.data(), dirStr.size());
+    if (!CopyStringW2A(cs, remotedir, dirStr.data(), dirStr.size()))
+        return SFTP_FAILED;
     dirStr.resize(strlen(dirStr.c_str()));
     std::replace(dirStr.begin(), dirStr.end(), '\\', '/');
     if (dirStr.size() > 1 && dirStr.back() != '/')
@@ -366,10 +367,8 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
             // The path goes to the shell exactly as it is.
             const std::string& listTarget = dirStr;
 
-            static unsigned scpListSeq = 1;
-            const unsigned markerSeq = scpListSeq++;
-            std::string beginMarker  = std::string(kScpListBeginMarker) + "_" + std::to_string(markerSeq);
-            std::string endMarker    = std::string(kScpListEndMarker)   + "_" + std::to_string(markerSeq);
+            const std::string beginMarker = ShellMarker(kScpListBeginMarker);
+            const std::string endMarker   = ShellMarker(kScpListEndMarker);
             // `ls` appends its exit status to the end marker, which the reader
             // hands back. Everything stays on one line on purpose: the shell
             // echoes the command back, and an echo long enough to wrap arrives
@@ -377,47 +376,30 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
             // and cut the reading short before any output was seen.
             // `env` sets the locale and zone in any shell, csh included, and
             // runs the real `ls` past any alias: English month names, times
-            // in UTC. GNU `ls` on a terminal quotes names with spaces or
-            // quotes in them ('a b'); QUOTING_STYLE=literal keeps them bare,
-            // and other `ls` builds ignore it.
+            // in UTC. LC_ALL, not LC_TIME, since a user's LC_ALL would
+            // override the latter. GNU `ls` also follows TIME_STYLE and
+            // BLOCK_SIZE from the environment (ISO dates, sizes as "4.0K"),
+            // so both are set back to what the parser reads. On a terminal it
+            // quotes names with spaces or quotes in them ('a b');
+            // QUOTING_STYLE=literal keeps them bare. Other `ls` builds ignore
+            // all three.
             // On a terminal `ls` also prints every byte its locale cannot
             // show as `?` — all of a non-ASCII name where the locale is not
             // UTF-8 — so its output goes through `cat` and the names arrive
             // as the bytes they are. The pipe hides the status of `ls`; the
             // one reported is whether the directory exists and is readable.
             const std::string quotedTarget = "'" + string_util::ShellQuoteSingle(listTarget) + "'";
-            std::string command = "echo \"" + beginMarker + "\"; env TZ=UTC0 LC_TIME=C QUOTING_STYLE=literal ls -la " +
+            std::string command = "echo \"" + beginMarker + "\"; env TZ=UTC0 LC_ALL=C TIME_STYLE=locale BLOCK_SIZE=1 LS_BLOCK_SIZE=1 QUOTING_STYLE=literal ls -la " +
                                   quotedTarget + " | cat; test -d " + quotedTarget + " && test -r " + quotedTarget +
                                   "; echo \"" + endMarker + "\":$?\n";
             SFTP_LOG("FIND", "SCP listing '%s'", listTarget.c_str());
 
-            // Write command
-            bool writeFailed = false;
-            {
-                const auto writeStart = std::chrono::steady_clock::now();
-                size_t written = 0;
-                while (written < command.size()) {
-                    int rc = static_cast<int>(channel->write(command.data() + written, command.size() - written));
-                    if (rc > 0) {
-                        written += rc;
-                        continue;
-                    }
-                    if (rc != LIBSSH2_ERROR_EAGAIN) {
-                        writeFailed = true;
-                        break;
-                    }
-                    const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::steady_clock::now() - writeStart).count();
-                    if (elapsed > kScpWriteTimeoutMs) {
-                        writeFailed = true;
-                        break;
-                    }
-                    IsSocketReadable(cs->sock);
-                }
-            }
+            // A name the terminal would act on is not listed at all.
+            if (!ShellCommandIsSafe(command))
+                return SFTP_FAILED;
 
-            // Instead of immediately throwing an error, we force a restart on the next iteration.
-            if (writeFailed) {
+            // A failed write restarts the shell on the next iteration.
+            if (!WriteShellCommand(cs, command, kScpWriteTimeoutMs)) {
                 // Close the dead channel; on the next iteration EnsureScpShell will
                 // re-open it (or detect a broken socket via IsSocketError and reconnect).
                 // Do NOT touch cs->sock here — it is shared by the whole session.
@@ -755,7 +737,8 @@ int SftpCreateDirectoryW(pConnectSettings cs, LPCWSTR Path)
     ShowStatusW(display.c_str());
 
     std::string dirStr(wdirtypemax, '\0');
-    CopyStringW2A(cs, Path, dirStr.data(), dirStr.size());
+    if (!CopyStringW2A(cs, Path, dirStr.data(), dirStr.size()))
+        return SFTP_FAILED;
     dirStr.resize(strlen(dirStr.c_str()));
     std::replace(dirStr.begin(), dirStr.end(), '\\', '/');
 
@@ -834,7 +817,8 @@ int SftpDeleteFileW(pConnectSettings cs, LPCWSTR RemoteName, bool isdir)
     ShowStatusW(display.c_str());
 
     std::string nameStr(wdirtypemax, '\0');
-    CopyStringW2A(cs, RemoteName, nameStr.data(), nameStr.size());
+    if (!CopyStringW2A(cs, RemoteName, nameStr.data(), nameStr.size()))
+        return SFTP_FAILED;
     nameStr.resize(strlen(nameStr.c_str()));
     std::replace(nameStr.begin(), nameStr.end(), '\\', '/');
 
@@ -865,12 +849,8 @@ int SftpDeleteFileW(pConnectSettings cs, LPCWSTR RemoteName, bool isdir)
         // and drops the line it arrived on, so the status was never read and
         // every deletion reported success.
         auto runDelete = [&](const std::string& target) -> bool {
-            static unsigned scpDeleteSeq = 1;
-            const unsigned seq = scpDeleteSeq++;
-            const std::string beginMarker =
-                std::string(kScpListBeginMarker) + "_RM_" + std::to_string(seq);
-            const std::string endMarker =
-                std::string(kScpListEndMarker) + "_RM_" + std::to_string(seq);
+            const std::string beginMarker = ShellMarker(kScpListBeginMarker);
+            const std::string endMarker   = ShellMarker(kScpListEndMarker);
 
             // The command opens by echoing a marker of its own, exactly as the
             // listing does. Without it the shell's echo of the command line —
@@ -894,26 +874,8 @@ int SftpDeleteFileW(pConnectSettings cs, LPCWSTR RemoteName, bool isdir)
                 cmd += " < /dev/null";
             cmd += "; echo \"" + endMarker + "\":$?\n";
 
-            ISshChannel* channel = cs->scpShellChannel.get();
-            if (!channel)
+            if (!WriteShellCommand(cs, cmd, kScpWriteTimeoutMs))
                 return false;
-
-            const auto writeStart = std::chrono::steady_clock::now();
-            size_t written = 0;
-            while (written < cmd.size()) {
-                int rc = static_cast<int>(channel->write(cmd.data() + written, cmd.size() - written));
-                if (rc > 0) {
-                    written += rc;
-                    continue;
-                }
-                if (rc != LIBSSH2_ERROR_EAGAIN)
-                    return false;
-                const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-                    std::chrono::steady_clock::now() - writeStart).count();
-                if (elapsed > kScpWriteTimeoutMs)
-                    return false;
-                IsSocketReadable(cs->sock);
-            }
 
             std::vector<std::string> lines;
             std::string endLine;
@@ -974,8 +936,9 @@ int SftpRenameMoveFileW(pConnectSettings cs, LPCWSTR OldName, LPCWSTR NewName, b
 
     std::string oldNameA(wdirtypemax, '\0');
     std::string newNameA(wdirtypemax, '\0');
-    CopyStringW2A(cs, OldName, oldNameA.data(), oldNameA.size());
-    CopyStringW2A(cs, NewName, newNameA.data(), newNameA.size());
+    if (!CopyStringW2A(cs, OldName, oldNameA.data(), oldNameA.size()) ||
+        !CopyStringW2A(cs, NewName, newNameA.data(), newNameA.size()))
+        return SFTP_FAILED;
     ReplaceBackslashBySlash(oldNameA.data());
     ReplaceBackslashBySlash(newNameA.data());
     oldNameA.resize(strlen(oldNameA.c_str()));
@@ -1047,7 +1010,8 @@ int SftpSetAttrW(pConnectSettings cs, LPCWSTR RemoteName, int NewAttr)
         return SFTP_FAILED;
 
     std::string nameStr(wdirtypemax, '\0');
-    CopyStringW2A(cs, RemoteName, nameStr.data(), nameStr.size());
+    if (!CopyStringW2A(cs, RemoteName, nameStr.data(), nameStr.size()))
+        return SFTP_FAILED;
     nameStr.resize(strlen(nameStr.c_str()));
     std::replace(nameStr.begin(), nameStr.end(), '\\', '/');
 
@@ -1087,7 +1051,8 @@ int SftpSetDateTimeW(pConnectSettings cs, LPCWSTR RemoteName, LPFILETIME LastWri
         return SFTP_FAILED;
 
     std::string nameA(wdirtypemax, '\0');
-    CopyStringW2A(cs, RemoteName, nameA.data(), nameA.size());
+    if (!CopyStringW2A(cs, RemoteName, nameA.data(), nameA.size()))
+        return SFTP_FAILED;
     ReplaceBackslashBySlash(nameA.data());
 
     LIBSSH2_SFTP_ATTRIBUTES attr{};
@@ -1118,11 +1083,13 @@ bool SftpChmodW(pConnectSettings cs, LPCWSTR RemoteName, LPCWSTR chmod)
     if (!cs || !RemoteName || !chmod || !chmod[0])
         return false;
 
-    // Total Commander sends the mode as octal digits ("755", "4755").
-    wchar_t* end = nullptr;
-    const unsigned long mode = wcstoul(chmod, &end, 8);
-    if (!end || *end != L'\0' || mode > 07777)
+    // Total Commander sends the mode as octal digits ("755", "4755"). The
+    // text is checked before it is read: wcstoul would also take a sign or
+    // leading spaces, and the shell form below pastes it into a command.
+    const size_t digits = wcslen(chmod);
+    if (digits > 4 || wcsspn(chmod, L"01234567") != digits)
         return false;
+    const unsigned long mode = wcstoul(chmod, nullptr, 8);
 
     std::wstring pathW(RemoteName);
     std::replace(pathW.begin(), pathW.end(), L'\\', L'/');
@@ -1131,7 +1098,8 @@ bool SftpChmodW(pConnectSettings cs, LPCWSTR RemoteName, LPCWSTR chmod)
     // server that offers no shell. SCP mode has only the shell.
     if (!cs->scponly && cs->sftpsession) {
         std::string pathA(wdirtypemax, '\0');
-        CopyStringW2A(cs, pathW.c_str(), pathA.data(), pathA.size());
+        if (!CopyStringW2A(cs, pathW.c_str(), pathA.data(), pathA.size()))
+            return false;
         pathA.resize(strlen(pathA.c_str()));
         LIBSSH2_SFTP_ATTRIBUTES attrs{};
         attrs.flags       = LIBSSH2_SFTP_ATTR_PERMISSIONS;
@@ -1170,7 +1138,8 @@ bool SftpLinkFolderTargetW(pConnectSettings cs, LPWSTR RemoteName, size_t maxlen
     // Real SFTP symlink: resolve via readlink + realpath.
     if (!isTildeHome && cs->sftpsession) {
         std::array<char, wdirtypemax> pathA{};
-        CopyStringW2A(cs, RemoteName, pathA.data(), pathA.size() - 1);
+        if (!CopyStringW2A(cs, RemoteName, pathA.data(), pathA.size() - 1))
+            return false;
         // Normalize separators to forward slashes.
         for (char* p = pathA.data(); *p; ++p)
             if (*p == '\\') *p = '/';
@@ -1231,30 +1200,10 @@ bool SftpLinkFolderTargetW(pConnectSettings cs, LPWSTR RemoteName, size_t maxlen
     if (cs->scponly) {
         if (!EnsureScpShell(cs))
             return false;
-        ISshChannel* channel = cs->scpShellChannel.get();
-        if (!channel)
+        const std::string endMarker = ShellMarker(kScpListEndMarker);
+        const std::string cmd = "echo ~; echo \"" + endMarker + "\"\n";
+        if (!WriteShellCommand(cs, cmd, kScpWriteTimeoutMs))
             return false;
-
-        static unsigned homeSeq = 1;
-        const unsigned seq = homeSeq++;
-        std::string endMarker = std::string(kScpListEndMarker) + "_H_" + std::to_string(seq);
-        std::string cmd = "echo ~; echo \"" + endMarker + "\"\n";
-
-        size_t written = 0;
-        const auto t0 = std::chrono::steady_clock::now();
-        while (written < cmd.size()) {
-            int n = static_cast<int>(channel->write(cmd.data() + written, cmd.size() - written));
-            if (n > 0) {
-                written += n;
-                continue;
-            }
-            if (n != LIBSSH2_ERROR_EAGAIN)
-                return false;
-            if (std::chrono::duration_cast<std::chrono::milliseconds>(
-                    std::chrono::steady_clock::now() - t0).count() > kScpWriteTimeoutMs)
-                return false;
-            IsSocketReadable(cs->sock);
-        }
 
         std::vector<std::string> lines;
         ScpReadCommandOutput(cs, endMarker.c_str(), lines, kScpReadTimeoutMs);
@@ -1465,14 +1414,14 @@ void SftpShowPropertiesW(pConnectSettings cs, LPCWSTR remotename)
         LIBSSH2_SFTP_ATTRIBUTES attrs{};
         if (!cs->scponly && cs->sftpsession) {
             std::string pathA(wdirtypemax, '\0');
-            CopyStringW2A(cs, pathW.c_str(), pathA.data(), pathA.size());
+            const bool converted = CopyStringW2A(cs, pathW.c_str(), pathA.data(), pathA.size());
             pathA.resize(strlen(pathA.c_str()));
-            int src = 0;
-            do {
+            int src = converted ? LIBSSH2_ERROR_EAGAIN : LIBSSH2_ERROR_FILE;
+            while (src == LIBSSH2_ERROR_EAGAIN) {
                 src = cs->sftpsession->lstat(pathA.c_str(), &attrs);
                 if (src == LIBSSH2_ERROR_EAGAIN)
                     IsSocketReadable(cs->sock);
-            } while (src == LIBSSH2_ERROR_EAGAIN);
+            }
             if (src != 0)
                 attrs.flags = 0;
         }

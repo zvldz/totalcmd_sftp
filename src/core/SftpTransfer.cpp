@@ -340,6 +340,8 @@ int SftpDownloadFileW(pConnectSettings cs, LPCWSTR RemoteName, LPCWSTR LocalName
     ShowTransferStart(useScp, RemoteName, IDS_DOWNLOAD);
 
     std::string remotePath = ToRemotePathA(cs, RemoteName);
+    if (remotePath.empty())
+        return SFTP_FAILED;
 
     if (!ReconnectSFTPChannelIfNeeded(cs))
         return SFTP_FAILED;
@@ -503,6 +505,8 @@ int SftpUploadFileW(pConnectSettings cs, LPCWSTR LocalName, LPCWSTR RemoteName,
     ShowTransferStart(useScp, RemoteName, IDS_UPLOAD);
 
     std::string remotePath = ToRemotePathA(cs, RemoteName);
+    if (remotePath.empty())
+        return SFTP_WRITEFAILED;
 
     if (forceShellFallback) {
         int64_t shellUploaded = 0;

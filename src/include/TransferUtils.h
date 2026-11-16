@@ -7,6 +7,8 @@
 int GetPercent(int64_t offset, int64_t filesize);
 bool IsValidFileHandle(HANDLE hf) noexcept;
 bool AskUserYesNo(pConnectSettings ConnectSettings, LPCSTR title, LPCSTR message);
+// The remote path in the session's encoding, '/'-separated. Empty when the
+// name cannot be represented there: the caller fails rather than send it.
 std::string ToRemotePathA(pConnectSettings cs, LPCWSTR pathW);
 
 // The same remote path, ready to be pasted into a command line the plugin

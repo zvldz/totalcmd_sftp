@@ -6,6 +6,8 @@
 #include <vector>
 #include <algorithm>
 #include <chrono>
+#include <random>
+#include <string_view>
 #include "SftpClient.h"
 #include "PluginEntryPoints.h"
 #include "fsplugin.h"
@@ -109,14 +111,19 @@ void StripEscapeSequences(LPSTR msgbuf)
     StripEscapeSequencesLocalA(msgbuf);
 }
 
-void DisconnectShell(ISshChannel* channel)
+void DisconnectShell(ISshChannel* channel, int* exitStatus)
 {
+    if (exitStatus)
+        *exitStatus = -1;
     if (!channel)
         return;
     WaitForOperation([channel] { return channel->flush(); }, kShellFlushTimeoutMs, nullptr);
     WaitForOperation([channel] { return channel->sendEof(); }, kShellEofTimeoutMs, nullptr);
     WaitForOperation([channel] { return channel->waitEof(); }, kShellEofTimeoutMs, nullptr);
     WaitForOperation([channel] { return channel->channelClose(); }, kShellCloseTimeoutMs, nullptr);
+    if (exitStatus &&
+        WaitForOperation([channel] { return channel->waitClosed(); }, kShellCloseTimeoutMs, nullptr) == 0)
+        *exitStatus = channel->getExitStatus();
     // Explicit drained channelFree() — see DisconnectShell rationale.
     WaitForOperation([channel] { return channel->channelFree(); }, kShellFreeTimeoutMs, nullptr);
 }
@@ -330,6 +337,54 @@ bool EnsureScpShell(pConnectSettings cs)
         cs->scpShellErrBuf.clear();
     }
     return true;
+}
+
+bool ShellCommandIsSafe(std::string_view command) noexcept
+{
+    for (const char ch : command) {
+        const unsigned char c = static_cast<unsigned char>(ch);
+        if ((c < 0x20 && c != '\n') || c == 0x7F)
+            return false;
+    }
+    return true;
+}
+
+bool WriteShellCommand(pConnectSettings cs, const std::string& command, DWORD timeoutMs)
+{
+    if (!cs || !cs->scpShellChannel)
+        return false;
+    if (!ShellCommandIsSafe(command)) {
+        SFTP_LOG("SHELL", "Command with a control character not sent");
+        ShowStatus("A name contains a control character; not sent to the shell");
+        return false;
+    }
+    const auto start = std::chrono::steady_clock::now();
+    size_t written = 0;
+    while (written < command.size()) {
+        const int rc = static_cast<int>(cs->scpShellChannel->write(command.data() + written,
+                                                                   command.size() - written));
+        if (rc > 0) {
+            written += static_cast<size_t>(rc);
+            continue;
+        }
+        if (rc != LIBSSH2_ERROR_EAGAIN)
+            return false;
+        if (std::chrono::steady_clock::now() - start > std::chrono::milliseconds(timeoutMs))
+            return false;
+        if (cs->sock != INVALID_SOCKET)
+            IsSocketReadable(cs->sock);
+        else
+            Sleep(25);
+    }
+    return true;
+}
+
+std::string ShellMarker(const char* base)
+{
+    std::random_device rd;
+    char nonce[17];
+    _snprintf_s(nonce, sizeof(nonce), _TRUNCATE, "%08x%08x", rd(), rd());
+    return std::string(base) + nonce;
 }
 
 void CloseScpShell(pConnectSettings cs)
@@ -621,25 +676,20 @@ int SftpQuoteCommand2W(pConnectSettings cs, LPCWSTR remotedir, LPCWSTR cmd,
     if (!cs)
         return -1;
 
+    // Converted strictly: a character the session's codepage lacks would
+    // otherwise become a look-alike, a fullwidth apostrophe a real quote in
+    // the middle of the command.
     std::string dirname, cmdname;
-    if (cs->utf8names) {
+    {
         std::string tmp(wdirtypemax, '\0');
         if (remotedir) {
-            wcslcpytoutf8(tmp.data(), remotedir, tmp.size() - 1);
+            if (!CopyStringW2A(cs, remotedir, tmp.data(), tmp.size()))
+                return -1;
             dirname = tmp.c_str();
         }
-        std::string tmp2(wdirtypemax, '\0');
-        wcslcpytoutf8(tmp2.data(), cmd, tmp2.size() - 1);
-        cmdname = tmp2.c_str();
-    } else {
-        std::string tmp(wdirtypemax, '\0');
-        if (remotedir) {
-            walcopyCP(cs->codepage, tmp.data(), remotedir, tmp.size() - 1);
-            dirname = tmp.c_str();
-        }
-        std::string tmp2(wdirtypemax, '\0');
-        walcopyCP(cs->codepage, tmp2.data(), cmd, tmp2.size() - 1);
-        cmdname = tmp2.c_str();
+        if (!CopyStringW2A(cs, cmd, tmp.data(), tmp.size()))
+            return -1;
+        cmdname = tmp.c_str();
     }
 
     std::replace(dirname.begin(), dirname.end(), '\\', '/');

@@ -1305,7 +1305,9 @@ int WINAPI FsExecuteFileW(HWND MainWin, LPWSTR RemoteName, LPCWSTR Verb)
                 if (rq.kind == PathKind::SessionWithSubpath || rq.kind == PathKind::SessionLeaf) {
                     std::array<WCHAR, wdirtypemax> quoteRemotedir{};
                     pConnectSettings serverid = GetServerIdAndRelativePathFromPathW(RemoteName, quoteRemotedir.data(), quoteRemotedir.size() - 1);
-                    if (serverid && SftpQuoteCommand2W(serverid, quoteRemotedir.data(), Verb+6, nullptr, 0) != 0)
+                    // 0 is the command's exit status when it succeeded; -1 is
+                    // a command that could not be run or did not finish.
+                    if (serverid && SftpQuoteCommand2W(serverid, quoteRemotedir.data(), Verb+6, nullptr, 0) == 0)
                         return FS_EXEC_OK;
                 }
             }

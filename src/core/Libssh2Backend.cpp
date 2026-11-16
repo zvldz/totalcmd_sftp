@@ -128,6 +128,11 @@ int Libssh2Channel::waitEof()
     return libssh2_channel_wait_eof(channel_);
 }
 
+int Libssh2Channel::waitClosed()
+{
+    return libssh2_channel_wait_closed(channel_);
+}
+
 int Libssh2Channel::channelClose()
 {
     return libssh2_channel_close(channel_);

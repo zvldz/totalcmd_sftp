@@ -58,6 +58,9 @@ struct ISshChannel {
     virtual int eof() = 0;
     virtual int waitEof() = 0;
     virtual int channelClose() = 0;
+    // Waits for the server's close. A command's exit status arrives after
+    // its output ends and before this, so it is final only once this is done.
+    virtual int waitClosed() = 0;
     virtual int channelFree() = 0;
     virtual int flush() = 0;
     virtual int getExitStatus() = 0;

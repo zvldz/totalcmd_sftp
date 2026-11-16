@@ -94,6 +94,18 @@ From this version the plugin comes in two builds: **classic**
   - FileZilla: a `filezilla.xml` that exists but cannot be read was taken
     as "no proxy"; the session is now refused. KiTTY reads a session file
     once, so a file locked between two reads cannot hide its proxy.
+- **A file name can no longer rewrite a shell command.**
+  - SCP-only and shell-transfer sessions send commands to a shell on a
+    terminal, whose line handling acts on control characters before the
+    shell sees the quotes: a name holding ^U, ^C or DEL could replace the
+    command with one of its own. A command with such a character is not
+    sent; the operation fails.
+  - In a session with a codepage other than UTF-8, a character the
+    codepage lacks was replaced by a look-alike: a fullwidth apostrophe
+    became a real quote inside the command, and two names could become
+    one. Such a name is now refused instead of altered.
+  - The markers that delimit a command's output are random, so a file
+    named like one can no longer end a listing early.
 - **PHP Agent and LAN Pair moved to a separate extra build.** They open
   the machine to the network in ways SSH does not: LAN Pair runs a file
   server on it, PHP Agent drives a script on a web server, with a shell.
@@ -219,6 +231,17 @@ From this version the plugin comes in two builds: **classic**
   backslash, as Total Commander names the target of a copy, was not
   recognised as a folder and was connected to as a session; so was the
   target of a background copy. Closing the dialog let the import go on.
+- **Shell transfers notice a refused file.** A download of a file the
+  server would not let `cat` read was saved empty and reported done; an
+  upload the server refused (no permission, disk full) was reported done
+  too, and a move then deleted the local file. Both now fail.
+- **SCP-only listings ignore the user's `ls` settings.** An `LC_ALL`, a
+  `TIME_STYLE` or a `BLOCK_SIZE` in the server's environment changed the
+  dates or sizes `ls` printed, and the listing came out wrong.
+- **The quote command reports failure.** "quote" in Total Commander's
+  command line reported success for a command that failed, and failure
+  for one that worked. A mode for chmod that is not plain octal digits is
+  refused.
 - **A background transfer of an [Imports] session no longer opens the
   connection dialog.** It looked for the session in the own list, found
   nothing and asked for a new one; it now connects the way Enter on it

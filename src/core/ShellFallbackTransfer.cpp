@@ -100,31 +100,6 @@ static std::unique_ptr<ISshChannel> OpenShellDdChannel(pConnectSettings cs, cons
     return {};
 }
 
-static bool ShellSendPersistentCommand(pConnectSettings cs, const std::string& command)
-{
-    if (!cs || !cs->scpShellChannel)
-        return false;
-    const size_t cmdLen = command.size();
-    size_t written = 0;
-    const SYSTICKS writeStart = get_sys_ticks();
-    while (written < cmdLen) {
-        int writeRc = cs->scpShellChannel->write(command.c_str() + written, cmdLen - written);
-        if (writeRc > 0) {
-            written += (size_t)writeRc;
-            continue;
-        }
-        if (writeRc != LIBSSH2_ERROR_EAGAIN)
-            return false;
-        if (get_ticks_between(writeStart) > 15000)
-            return false;
-        if (cs->sock != INVALID_SOCKET)
-            IsSocketReadable(cs->sock);
-        else
-            Sleep(25);
-    }
-    return true;
-}
-
 static const char* ShellTrimLeft(const char* p) noexcept
 {
     while (p && *p && static_cast<unsigned char>(*p) <= 0x20)
@@ -169,15 +144,13 @@ static bool ShellExecPersistentProcessLines(
     cs->scpShellMsgBuf.clear();
     cs->scpShellErrBuf.clear();
 
-    static unsigned shellDdSeq = 1;
-    const unsigned seq = shellDdSeq++;
-    std::array<char, 128> beginMarker{};
-    std::array<char, 128> endMarker{};
-    // Use per-command markers to safely parse output when a shared shell channel
-    // may contain prompt noise, echoed commands, or delayed lines from previous commands.
-    _snprintf_s(beginMarker.data(), beginMarker.size(), _TRUNCATE, "__WFX_DD_BEGIN__%u", seq);
-    _snprintf_s(endMarker.data(), endMarker.size(), _TRUNCATE, "__WFX_DD_END__%u", seq);
-    const size_t endMarkerLen = strlen(endMarker.data());
+    // Per-command markers keep this command's output apart from prompt noise,
+    // echoed commands and late lines of earlier ones on the shared channel.
+    if (!ShellCommandIsSafe(payload))
+        return false;
+    const std::string beginMarker = ShellMarker("__WFX_DD_BEGIN__");
+    const std::string endMarker   = ShellMarker("__WFX_DD_END__");
+    const size_t endMarkerLen = endMarker.size();
 
     // The end marker goes out split by an empty string, "__WFX_DD_""END__n":
     // the shell joins it when the command runs, but a terminal that still
@@ -191,7 +164,7 @@ static bool ShellExecPersistentProcessLines(
     fullCmd += endMarker.data() + strlen("__WFX_DD_");
     fullCmd += "\":$?\n";
 
-    if (!ShellSendPersistentCommand(cs, fullCmd)) {
+    if (!WriteShellCommand(cs, fullCmd, 15000)) {
         CloseScpShell(cs);
         return false;
     }
@@ -426,7 +399,14 @@ static int ShellDdDownloadRaw(
         }
     }
 
-    DisconnectShell(ch.get());
+    // A file that cannot be read gives no output at all, which alone would
+    // pass for an empty file; `cat` says otherwise in its exit status.
+    int status = -1;
+    DisconnectShell(ch.get(), &status);
+    if (status != 0) {
+        SHELL_DD_LOG("raw download: remote command exit status %d", status);
+        return SFTP_READFAILED;
+    }
     ShowTransferSpeedIfLarge("Shell-raw DL", *outSizeLoaded - resumeFrom, starttime);
     return SFTP_OK;
 }
@@ -645,7 +625,15 @@ static int ShellDdUploadRaw(
         WaitForSshIo(cs);
     }
 
-    DisconnectShell(ch.get());
+    // The server refusing the file (no permission, disk full) shows only in
+    // the exit status of `cat`; taken for success, a move would delete the
+    // local file.
+    int status = -1;
+    DisconnectShell(ch.get(), &status);
+    if (status != 0) {
+        SHELL_DD_LOG("raw upload: remote command exit status %d", status);
+        return SFTP_WRITEFAILED;
+    }
     ShowTransferSpeedIfLarge("Shell-raw UL", *outSizeLoaded - resumeFrom, starttime);
     return SFTP_OK;
 }

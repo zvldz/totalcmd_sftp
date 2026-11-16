@@ -9,6 +9,7 @@
 #include <mutex>
 #include <vector>
 #include <string>
+#include <string_view>
 #include <chrono>
 #include <cstdint>  // for int8_t
 #include <functional>
@@ -89,7 +90,9 @@ extern thread_local char global_detectcrlf;     // 0=no, 1=yes, -1=detecting
 // ---------------------------------------------------------------------------
 bool  EscapePressed() noexcept;
 void  wcslcpytoutf8(LPSTR utf8str, LPCWSTR utf16str, size_t maxlen);
-void  CopyStringW2A(pConnectSettings cs, LPCWSTR instr, LPSTR outstr, size_t outmax) noexcept;
+// False, with an empty result, when the name does not fit or holds a
+// character the session's codepage cannot represent.
+bool  CopyStringW2A(pConnectSettings cs, LPCWSTR instr, LPSTR outstr, size_t outmax) noexcept;
 void  CopyStringA2W(pConnectSettings cs, LPCSTR instr, LPWSTR outstr, size_t outmax, bool useCVT = true) noexcept;
 bool  ProgressLoop(LPCSTR progresstext, int start, int end, int* loopval, SYSTICKS* lasttime);
 void  SftpLogLastError(LPCSTR errtext, int errnr);
@@ -263,9 +266,25 @@ std::unique_ptr<ISshChannel> ConnectChannel(ISshSession* session, SOCKET sock = 
 bool  SendChannelCommand(ISshSession* session, ISshChannel* channel, LPCSTR command, SOCKET sock = INVALID_SOCKET);
 bool  SendChannelCommandNoEof(ISshSession* session, ISshChannel* channel, LPCSTR command, SOCKET sock = INVALID_SOCKET);
 bool  GetChannelCommandReply(ISshSession* session, ISshChannel* channel, LPCSTR command, SOCKET sock = INVALID_SOCKET);
-void  DisconnectShell(ISshChannel* channel);
+// Closes an exec or shell channel. `exitStatus`, when given, receives the
+// command's exit status once the server has closed the channel, or -1 when
+// it did not close in time.
+void  DisconnectShell(ISshChannel* channel, int* exitStatus = nullptr);
 bool  EnsureScpShell(pConnectSettings cs);
 void  CloseScpShell(pConnectSettings cs);
+// The persistent shell runs on a terminal, whose line discipline acts on
+// control bytes (^U kills the line, ^C interrupts, DEL erases) before the
+// shell sees any quoting, so a file name carrying one could rewrite the
+// command around it; a TAB invokes completion in an interactive shell, a CR
+// the terminal turns into a newline. A command is safe to send when it holds
+// no control byte but the newline, which inside quotes is part of the word.
+bool  ShellCommandIsSafe(std::string_view command) noexcept;
+// Writes `command` to the persistent shell; false, without writing, for one
+// that is not safe, and false when the channel fails or `timeoutMs` passes.
+bool  WriteShellCommand(pConnectSettings cs, const std::string& command, DWORD timeoutMs);
+// A marker for the start or end of a command's output: `base` and a random
+// part, so neither a file name nor anything the server prints can match it.
+std::string ShellMarker(const char* base);
 // Reads a shell command's output up to its end marker. `endLineOut`, when
 // given, receives the marker line itself: a command that appends its exit
 // status there has no other way to report it, since the line is not part of
