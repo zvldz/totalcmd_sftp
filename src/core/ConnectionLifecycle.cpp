@@ -85,6 +85,7 @@ int CleanupFailedConnect(
 
     // SFTP subsystem — destructor sends FXP_SHUTDOWN with bounded retry.
     cs->sftpsession.reset();
+    ++cs->sftpGeneration;
     *ioProgress = 90;
 
     // SSH session — fire-and-forget DISCONNECT (no ack expected per RFC 4253);

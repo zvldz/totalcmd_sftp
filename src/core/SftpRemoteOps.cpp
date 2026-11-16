@@ -39,8 +39,12 @@ struct ScpListState {
     size_t nextIndex = 0;
 };
 
+// One listing in progress, whatever produced it: SCP / shell / PHP entries
+// collected up front (listingState), or an open SFTP directory (sftpDir).
 struct ScpData {
     uint32_t magic;
+    std::unique_ptr<ISftpHandle> sftpDir;
+    unsigned sftpGeneration = 0;   // cs->sftpGeneration when sftpDir opened
     std::unique_ptr<ISshChannel> channel;
     std::array<char, 2048> msgbuf;
     std::array<char, 2048> errbuf;
@@ -320,6 +324,7 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
         state->entries = std::move(entries);
         scpd->listingState = std::move(state);
         *davdataptr = scpd.release();
+        ++cs->openFindHandles;
         wcslcpy(cs->lastactivepath, remotedir, _countof(cs->lastactivepath) - 1);
         return SFTP_OK;
     }
@@ -498,6 +503,7 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
             state->entries = std::move(entries);
             scpd->listingState = std::move(state);
             *davdataptr = scpd.release();
+            ++cs->openFindHandles;
             wcslcpy(cs->lastactivepath, remotedir, _countof(cs->lastactivepath) - 1);
             cs->listingExtras[ListingDirKey(remotedir)] = std::move(extras);
 
@@ -568,7 +574,12 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
         return SFTP_FAILED;
     }
 
-    *davdataptr = dirhandle.release();
+    auto dirData = std::make_unique<ScpData>();
+    dirData->magic = kScpDataMagic;
+    dirData->sftpDir = std::move(dirhandle);
+    dirData->sftpGeneration = cs->sftpGeneration;
+    *davdataptr = dirData.release();
+    ++cs->openFindHandles;
     wcslcpy(cs->lastactivepath, remotedir, _countof(cs->lastactivepath) - 1);
     // Refilled entry by entry as SftpFindNextFileW reads the directory.
     cs->listingExtras[ListingDirKey(remotedir)].clear();
@@ -578,15 +589,19 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
 int SftpFindNextFileW(pConnectSettings cs, LPVOID davdataptr, LPWIN32_FIND_DATAW FindData) noexcept
 {
     ScpData* scpd = AsScpData(davdataptr);
-    if (scpd && scpd->listingState) {
+    if (!scpd)
+        return SFTP_FAILED;
+    if (scpd->listingState) {
         if (scpd->listingState->nextIndex >= scpd->listingState->entries.size())
             return SFTP_FAILED;
         *FindData = scpd->listingState->entries[scpd->listingState->nextIndex++];
         return SFTP_OK;
     }
 
-    ISftpHandle* dirhandle = static_cast<ISftpHandle*>(davdataptr);
-    if (!dirhandle)
+    // An SFTP session dropped since the directory was opened (a reconnect
+    // in a nested listing) took the handle with it: the listing ends here.
+    ISftpHandle* dirhandle = scpd->sftpDir.get();
+    if (!dirhandle || scpd->sftpGeneration != cs->sftpGeneration)
         return SFTP_FAILED;
 
     std::array<char, 512> name{};
@@ -697,18 +712,18 @@ const ListingExtra* FindListingExtra(pConnectSettings cs, std::wstring_view relP
 
 int SftpFindClose(pConnectSettings cs, LPVOID davdataptr)
 {
-    ScpData* scpd = AsScpData(davdataptr);
-    if (scpd) {
-        delete scpd;
-        return SFTP_OK;
-    }
-
-    ISftpHandle* dirhandle = static_cast<ISftpHandle*>(davdataptr);
-    if (!dirhandle)
+    std::unique_ptr<ScpData> scpd(AsScpData(davdataptr));
+    if (!scpd)
         return SFTP_FAILED;
+    if (cs && cs->openFindHandles > 0)
+        --cs->openFindHandles;
 
-    if (!cs) {
-        delete dirhandle;
+    ISftpHandle* dirhandle = scpd->sftpDir.get();
+    if (!dirhandle)
+        return SFTP_OK;
+    // Opened under an SFTP session that is gone: its handle went with it.
+    if (!cs || scpd->sftpGeneration != cs->sftpGeneration) {
+        dirhandle->abandon();
         return SFTP_OK;
     }
 
@@ -726,7 +741,6 @@ int SftpFindClose(pConnectSettings cs, LPVOID davdataptr)
         }
         IsSocketReadable(cs->sock);
     }
-    delete dirhandle;
     return SFTP_OK;
 }
 
@@ -1495,6 +1509,7 @@ void SftpSetTransferModeW(LPCWSTR mode)
     WCHAR ch = mode[0];
     if (ch >= L'a' && ch <= L'z')
         ch = static_cast<WCHAR>(ch - (L'a' - L'A'));
+    std::lock_guard<std::mutex> lock(g_transferModeMutex);
     Global_TransferMode = static_cast<char>(ch & 0xFF);
     if (Global_TransferMode == 'X') {
         wcslcpy(Global_TextTypes.data(), mode + 1, Global_TextTypes.size() - 1);

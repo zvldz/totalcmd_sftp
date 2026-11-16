@@ -24,13 +24,26 @@
 //   language\zh-cn.lng (Chinese Simplified)
 
 #include <windows.h>
+#include <atomic>
+#include <memory>
+#include <mutex>
 #include <string>
 #include <unordered_map>
+#include <vector>
 #include <array>
 #include "LngLoader.h"
 
-// Map from resource id to translated string value.
-static std::unordered_map<UINT, std::string> g_lngMap;
+using LngMap = std::unordered_map<UINT, std::string>;
+
+// The translation in use: resource id -> UTF-8 text; null = built-in
+// English. Any thread reads it without a lock and keeps pointers into it,
+// so a published map is never changed or freed: switching the language
+// publishes a new map and keeps the earlier ones (a few per session) until
+// the plugin is unloaded.
+static std::atomic<const LngMap*> g_lngMap{nullptr};
+static std::mutex g_lngLoadMutex;                    // serialises loads
+static std::vector<std::unique_ptr<LngMap>> g_lngMaps;  // every map loaded
+static std::string g_lngLoadedPath;                  // file of g_lngMap; "" = none
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -108,7 +121,7 @@ static const char* LangIdToTcCode(LANGID id) noexcept
 // Internal file loader
 // ---------------------------------------------------------------------------
 
-static void LoadLngFromPath(const std::string& lngPath) noexcept
+static void LoadLngFromPath(const std::string& lngPath, LngMap& map) noexcept
 {
     HANDLE hFile = CreateFileA(lngPath.c_str(), GENERIC_READ, FILE_SHARE_READ,
                                nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
@@ -152,7 +165,7 @@ static void LoadLngFromPath(const std::string& lngPath) noexcept
         UINT id = 0;
         std::string text;
         if (ParseLngLine(line, id, text))
-            g_lngMap.emplace(id, std::move(text));
+            map.emplace(id, std::move(text));
 
         pos = end + 1;
     }
@@ -175,39 +188,54 @@ static std::string GetPluginLangDir(HINSTANCE hPluginInst) noexcept
 // Public API
 // ---------------------------------------------------------------------------
 
+// Publishes the translation in `lngPath` ("" = built-in English). The same
+// file is not loaded again, so calling this on every root listing is cheap.
+static void PublishLanguage(const std::string& lngPath) noexcept
+{
+    std::lock_guard<std::mutex> lock(g_lngLoadMutex);
+    if (lngPath == g_lngLoadedPath)
+        return;
+    g_lngLoadedPath = lngPath;
+    if (lngPath.empty()) {
+        g_lngMap.store(nullptr);
+        return;
+    }
+    try {
+        auto map = std::make_unique<LngMap>();
+        LoadLngFromPath(lngPath, *map);
+        g_lngMap.store(map.get());
+        g_lngMaps.push_back(std::move(map));
+    } catch (...) {
+        g_lngMap.store(nullptr);
+    }
+}
+
+static std::string LngPathForCode(const char* code, HINSTANCE hPluginInst) noexcept
+{
+    if (!code || !code[0])
+        return {};
+    const std::string dir = GetPluginLangDir(hPluginInst);
+    return dir.empty() ? std::string() : dir + code + ".lng";
+}
+
 void LngLoadForLanguage(LANGID langId, HINSTANCE hPluginInst) noexcept
 {
-    g_lngMap.clear();
-
-    const char* code = LangIdToTcCode(langId);
-    if (!code)
-        return;  // English or unknown — use built-in RC strings
-
-    const std::string dir = GetPluginLangDir(hPluginInst);
-    if (dir.empty())
-        return;
-
-    LoadLngFromPath(dir + code + ".lng");
+    // English or a language without a .lng: the built-in RC strings.
+    PublishLanguage(LngPathForCode(LangIdToTcCode(langId), hPluginInst));
 }
 
 void LngLoadByCode(const char* code, HINSTANCE hPluginInst) noexcept
 {
-    g_lngMap.clear();
-
-    if (!code || !code[0])
-        return;
-
-    const std::string dir = GetPluginLangDir(hPluginInst);
-    if (dir.empty())
-        return;
-
-    LoadLngFromPath(dir + code + ".lng");
+    PublishLanguage(LngPathForCode(code, hPluginInst));
 }
 
 const char* LngGetString(UINT id) noexcept
 {
-    const auto it = g_lngMap.find(id);
-    if (it == g_lngMap.end())
+    const LngMap* map = g_lngMap.load();
+    if (!map)
+        return nullptr;
+    const auto it = map->find(id);
+    if (it == map->end())
         return nullptr;
     return it->second.c_str();
 }

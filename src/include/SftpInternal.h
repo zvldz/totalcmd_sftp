@@ -6,6 +6,7 @@
 #include "SftpClient.h"
 #include "UnicodeHelpers.h"
 #include <array>
+#include <mutex>
 #include <vector>
 #include <string>
 #include <chrono>
@@ -78,7 +79,10 @@ extern LPCSTR        g_pszKey;
 // Transfer-mode globals (defined in SftpConnection.cpp, used by Transfer+Shell)
 extern char          Global_TransferMode;   // 'I'=Binary, 'A'=Ansi, 'X'=Auto
 extern std::array<WCHAR, 1024> Global_TextTypes;
-extern char          global_detectcrlf;     // 0=no, 1=yes, -1=detecting
+// Guards Global_TransferMode and Global_TextTypes: set by the MODE command,
+// read by transfers on any thread.
+extern std::mutex    g_transferModeMutex;
+extern thread_local char global_detectcrlf;     // 0=no, 1=yes, -1=detecting
 
 // ---------------------------------------------------------------------------
 // Utility functions defined in SftpConnection.cpp

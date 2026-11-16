@@ -94,6 +94,7 @@ std::string BuildShellScpArgument(const std::string& path)
 
 bool SftpDetermineTransferModeW(LPCWSTR RemoteName)
 {
+    std::lock_guard<std::mutex> lock(g_transferModeMutex);
     if (Global_TransferMode == 'A')
         return true;
     if (Global_TransferMode == 'I')

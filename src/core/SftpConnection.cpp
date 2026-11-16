@@ -23,6 +23,7 @@
 #include "WindowsUserFeedback.h"
 #include <array>
 #include <atomic>
+#include <mutex>
 #include <condition_variable>
 #include <new>
 #include <fstream>
@@ -51,6 +52,18 @@
 
 // Global SSH backend instance (created once, never changes)
 static std::unique_ptr<ISshBackend> g_sshBackend;
+static std::once_flag g_sshBackendOnce;
+
+// Creates the backend and initialises libssh2 exactly once, whichever
+// thread connects first: libssh2's implicit initialisation inside the
+// first session is not thread-safe.
+static void EnsureSshBackend()
+{
+    std::call_once(g_sshBackendOnce, [] {
+        libssh2_init(0);
+        g_sshBackend = CreateSshBackend();
+    });
+}
 
 // Global LAN Pair file server: started when a LAN Pair session is opened,
 // serves all authenticated peers. Also the discovery service that
@@ -74,8 +87,9 @@ static constexpr int PROG_DONE            = 90;
 bool serverfieldchangedbyuser = false;
 char Global_TransferMode = 'I';  //I=Binary,  A=Ansi,  X=Auto
 std::array<WCHAR, 1024> Global_TextTypes{};
+std::mutex g_transferModeMutex;
 
-char global_detectcrlf = 0;
+thread_local char global_detectcrlf = 0;
 
 const bool SSH_ScpNo2GBLimit = true;
 const bool SSH_ScpNeedBlockingMode = false;   // Need to use blocking mode for SCP?
@@ -779,8 +793,7 @@ int SftpConnect(pConnectSettings ConnectSettings)
         // AFTER the jump host stage, so on a cold start (first connection of
         // the session is via ProxyJump) g_sshBackend is still null and the
         // jump session creation dereferences nullptr.
-        if (!g_sshBackend)
-            g_sshBackend = CreateSshBackend();
+        EnsureSshBackend();
 
         JumpHostSettings jump = jumpCfg.endpoint;
 
@@ -817,6 +830,7 @@ int SftpConnect(pConnectSettings ConnectSettings)
         if (hr != 0) return fail(hr);
     }
 
+    EnsureSshBackend();
     hr = InitializeSshSession(ConnectSettings, progress, loop, lasttime, g_sshBackend);
     if (hr != 0) return fail(hr);
 
@@ -917,6 +931,7 @@ int SftpCloseConnection(pConnectSettings ConnectSettings)
     // 3. SFTP subsystem (only present in SFTP mode). ~Libssh2SftpSession()
     //    sends SFTP_FXP_SHUTDOWN with a bounded retry.
     ConnectSettings->sftpsession.reset();
+    ++ConnectSettings->sftpGeneration;
 
     // 4. SSH session — send SSH_MSG_DISCONNECT once. RFC 4253 §11.1: server
     //    must not reply, so there is nothing to wait for. EAGAIN here means
@@ -999,6 +1014,7 @@ bool ReconnectSFTPChannelIfNeeded(pConnectSettings ConnectSettings)
                 rc=ConnectSettings->sftpsession->shutdown();
             } while (rc == LIBSSH2_ERROR_EAGAIN && get_ticks_between(starttime) < RECONNECT_SFTP_TIMEOUT_MS);
             ConnectSettings->sftpsession.reset();
+            ++ConnectSettings->sftpGeneration;
         }
 
         if (ConnectSettings->session)

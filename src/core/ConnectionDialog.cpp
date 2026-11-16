@@ -3079,12 +3079,16 @@ void ConnectionDialog::OnConnectToChanged()
 
 bool ShowConnectDialog(pConnectSettings ConnectSettings, LPCSTR DisplayName, LPCSTR inifilename)
 {
-    std::lock_guard<std::mutex> lock(g_connectDialogMutex);
+    // Guards the connection dialog's shared state. A background transfer
+    // asking for the proxy password must not hold it: the main thread's
+    // next connect would wait on it without pumping messages.
+    std::unique_lock<std::mutex> lock(g_connectDialogMutex);
     // Ensure this UI thread uses language selected in Total Commander.
     ApplyConfiguredUiLanguageForCurrentThread();
     LoadServerSettings(DisplayName, ConnectSettings, inifilename);
 
     if (ConnectSettings->dialogforconnection && !ConnectSettings->server.empty()) {
+        lock.unlock();
         if ((ConnectSettings->user.empty() ||
              !ConnectSettings->password.empty()) &&        // password saved
             (ConnectSettings->proxyuser.empty() ||   // no proxy auth is required
@@ -3147,6 +3151,12 @@ pConnectSettings SftpConnectToServer(LPCSTR DisplayName, LPCSTR inifilename,
             ConnectSettings.account_password    = inherited->accountPassword;
             ConnectSettings.key_passphrase      = inherited->keyPassphrase;
             ConnectSettings.jump_key_passphrase = inherited->jumpKeyPassphrase;
+            ConnectSettings.jump_entered_password = inherited->jumpPassword;
+            // The proxy password as the panel's connection resolved it: a
+            // background transfer does not ask for it, or for the master
+            // password, again.
+            if (!inherited->proxyPassword.empty())
+                ConnectSettings.proxypassword = inherited->proxyPassword;
         }
         // An imported session (only those pass a logging alias) lives in the
         // scan cache, which must not hold passwords: a password the server

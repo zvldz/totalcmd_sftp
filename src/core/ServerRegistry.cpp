@@ -58,46 +58,85 @@ SERVERID GetServerIdFromName(LPCSTR name, DWORD threadId) noexcept
     return entry ? entry->serverid : nullptr;
 }
 
-size_t DisconnectServerByName(LPCSTR name) noexcept
+// Drops the registry rows `match` selects and closes each distinct
+// connection among them once. Every thread owns its own connection object
+// (background transfers open their own), so the rows are not assumed to
+// share one. Closing happens outside the registry lock: libssh2 shutdown
+// can block on sending SSH_MSG_DISCONNECT, and holding the lock through it
+// would stall every other session.
+template <class Match>
+static size_t RemoveAndClose(Match match) noexcept
 {
-    if (!name || !name[0]) return 0;
-
-    pConnectSettings toClose = nullptr;
+    std::vector<pConnectSettings> toClose;
     size_t removed = 0;
     {
         std::lock_guard<std::mutex> lock(g_registryMutex);
-
-        // Collect the unique tConnectSettings pointer (any registry entry
-        // for the same session name must reference the same heap object —
-        // there is only one connection per DisplayName). Then drop every
-        // matching entry regardless of its thread/is_background flag so
-        // the session cannot leak on background-thread FsDisconnect calls.
         for (const auto& srv : g_servers) {
-            if (_stricmp(srv->name.c_str(), name) == 0) {
-                if (!toClose && srv->serverid)
-                    toClose = static_cast<pConnectSettings>(srv->serverid);
-                srv->serverid = nullptr;   // decouple before erase (defensive)
-            }
+            if (!match(*srv) || !srv->serverid)
+                continue;
+            auto cs = static_cast<pConnectSettings>(srv->serverid);
+            if (std::find(toClose.begin(), toClose.end(), cs) == toClose.end())
+                toClose.push_back(cs);
+            srv->serverid = nullptr;
         }
         const size_t before = g_servers.size();
         g_servers.erase(
             std::remove_if(g_servers.begin(), g_servers.end(),
-                [&](const std::unique_ptr<SERVERENTRY>& e) {
-                    return _stricmp(e->name.c_str(), name) == 0;
-                }),
+                [&](const std::unique_ptr<SERVERENTRY>& e) { return match(*e); }),
             g_servers.end());
         removed = before - g_servers.size();
     }
-
-    // SftpCloseConnection and delete happen outside the registry lock —
-    // libssh2 shutdown can block on socket send for the SSH_MSG_DISCONNECT
-    // packet, and holding the registry mutex through it would starve any
-    // parallel FsFindFirst on other sessions.
-    if (toClose) {
-        SftpCloseConnection(toClose);
-        delete toClose;
+    for (auto cs : toClose) {
+        SftpCloseConnection(cs);
+        delete cs;
     }
     return removed;
+}
+
+size_t DisconnectServerByName(LPCSTR name) noexcept
+{
+    if (!name || !name[0]) return 0;
+    // The panel's connection. Background transfers keep theirs: each closes
+    // its own when it ends, and closing it here would pull the connection
+    // out from under a running copy.
+    return RemoveAndClose([&](const SERVERENTRY& e) {
+        return !e.is_background && _stricmp(e.name.c_str(), name) == 0;
+    });
+}
+
+size_t DisconnectServerForThread(LPCSTR name, DWORD threadId) noexcept
+{
+    if (!name || !name[0]) return 0;
+    const bool is_bg = (threadId != mainthreadid && threadId != 0);
+    return RemoveAndClose([&](const SERVERENTRY& e) {
+        return e.is_background == is_bg && (!is_bg || e.threadid == threadId) &&
+               _stricmp(e.name.c_str(), name) == 0;
+    });
+}
+
+bool CopyMainThreadSecrets(LPCSTR name, RuntimeSecrets& out, bool* phpTar) noexcept
+{
+    if (phpTar)
+        *phpTar = false;
+    if (!name || !name[0])
+        return false;
+    // Read under the registry lock: a connection is removed from the
+    // registry under this lock before it is deleted, so it cannot be freed
+    // while being copied here.
+    std::lock_guard<std::mutex> lock(g_registryMutex);
+    const SERVERENTRY* entry = FindEntry(mainthreadid, name, false);
+    if (!entry || !entry->serverid)
+        return false;
+    const auto cs = static_cast<pConnectSettings>(entry->serverid);
+    out.password          = cs->password;
+    out.accountPassword   = cs->account_password;
+    out.keyPassphrase     = cs->key_passphrase;
+    out.jumpKeyPassphrase = cs->jump_key_passphrase;
+    out.jumpPassword      = cs->jump_entered_password;
+    out.proxyPassword     = cs->proxypassword;
+    if (phpTar)
+        *phpTar = IsPhpAgentTransport(cs) && cs->php_tar;
+    return true;
 }
 
 bool SetServerIdForName(LPCSTR name, SERVERID id) noexcept
@@ -453,8 +492,12 @@ std::string PathToDisplayNameW(LPCWSTR path) noexcept
     return NormaliseTcPath(narrow);
 }
 
+// The session names as they were when the enumeration started: background
+// rows inserted or rows erased by other threads meanwhile cannot make it
+// skip or repeat a session.
 struct ServerEnumContext {
-    size_t index;
+    std::vector<std::string> names;
+    size_t next = 0;
 };
 
 SERVERHANDLE FindFirstServer(LPSTR displayname, size_t maxlen) noexcept
@@ -462,31 +505,32 @@ SERVERHANDLE FindFirstServer(LPSTR displayname, size_t maxlen) noexcept
     if (!displayname || maxlen == 0)
         return nullptr;
 
-    std::lock_guard<std::mutex> lock(g_registryMutex);
-    for (size_t i = 0; i < g_servers.size(); ++i) {
-        if (!g_servers[i]->is_background) {
-            strlcpy(displayname, g_servers[i]->name.c_str(), maxlen);
-            auto ctx = std::make_unique<ServerEnumContext>(ServerEnumContext{i});
-            return static_cast<SERVERHANDLE>(ctx.release());
+    try {
+        auto ctx = std::make_unique<ServerEnumContext>();
+        {
+            std::lock_guard<std::mutex> lock(g_registryMutex);
+            for (const auto& srv : g_servers)
+                if (!srv->is_background)
+                    ctx->names.push_back(srv->name);
         }
+        if (ctx->names.empty())
+            return nullptr;
+        strlcpy(displayname, ctx->names[0].c_str(), maxlen);
+        ctx->next = 1;
+        return static_cast<SERVERHANDLE>(ctx.release());
+    } catch (...) {
+        return nullptr;
     }
-    return nullptr;
 }
 
 SERVERHANDLE FindNextServer(SERVERHANDLE searchhandle, LPSTR displayname, size_t maxlen) noexcept
 {
     if (!searchhandle || !displayname || maxlen == 0) return nullptr;
     auto ctx = static_cast<ServerEnumContext*>(searchhandle);
-    
-    std::lock_guard<std::mutex> lock(g_registryMutex);
-    for (size_t i = ctx->index + 1; i < g_servers.size(); ++i) {
-        if (!g_servers[i]->is_background) {
-            strlcpy(displayname, g_servers[i]->name.c_str(), maxlen);
-            ctx->index = i;
-            return searchhandle;
-        }
+    if (ctx->next < ctx->names.size()) {
+        strlcpy(displayname, ctx->names[ctx->next++].c_str(), maxlen);
+        return searchhandle;
     }
-    
     delete ctx;
     return nullptr;
 }

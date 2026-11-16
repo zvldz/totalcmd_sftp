@@ -105,6 +105,12 @@ struct tConnectSettings {
     SOCKET sock;
     std::unique_ptr<ISshSession>    session;
     std::unique_ptr<ISftpSession>   sftpsession;
+    // Bumped whenever sftpsession is dropped: a directory handle opened
+    // under an earlier one belongs to a freed session.
+    unsigned sftpGeneration = 0;
+    // Directory listings (find handles) open on this connection; while any
+    // is, the connection object must not be deleted under it.
+    int openFindHandles = 0;
     std::unique_ptr<ISshChannel>    scpShellChannel;
 
     bool useagent;
@@ -221,9 +227,22 @@ using pConnectSettings = tConnectSettings*;
 // and absent from the stored profile. A background transfer opens its own
 // connection to the same session, and without these it prompts for each one.
 struct RuntimeSecrets {
+    std::string password;           // the stored session password, as loaded
     std::string accountPassword;
     std::string keyPassphrase;
     std::string jumpKeyPassphrase;
+    std::string jumpPassword;       // typed at the jump host prompt
+    std::string proxyPassword;
+
+    RuntimeSecrets() = default;
+    RuntimeSecrets(const RuntimeSecrets&) = delete;
+    RuntimeSecrets& operator=(const RuntimeSecrets&) = delete;
+    ~RuntimeSecrets()
+    {
+        for (std::string* s : { &password, &accountPassword, &keyPassphrase,
+                                &jumpKeyPassphrase, &jumpPassword, &proxyPassword })
+            SecureZeroMemory(s->data(), s->size());
+    }
 };
 
 // `loggingAliasName`, when non-null, overrides the name reported to TC via

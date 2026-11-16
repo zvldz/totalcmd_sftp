@@ -57,8 +57,8 @@ char s_quickconnect[64];
 std::array<WCHAR, 32> s_f7newconnectionW{};
 std::array<WCHAR, 32> s_quickconnectW{};
 
-bool disablereading = false;   // disable reading of subdirs to delete whole drives
-bool g_inMultiOpTransfer = false;  // see header for purpose
+std::atomic<bool> disablereading{false};   // disable reading of subdirs to delete whole drives
+std::atomic<bool> g_inMultiOpTransfer{false};  // see header for purpose
 bool freportconnect = true;    // report connect to caller only on first connect
 bool CryptCheckPass = false;   // check 'store password encrypted' by default
 
@@ -190,11 +190,20 @@ static LANGID DetectTcUiLangIdFromIni(const char* tcIniPath) noexcept
     return 0;
 }
 
+// Set when sftpplug.ini [Configuration] Language= chose the language; TC's
+// own language setting is then not applied over it.
+static bool g_languageOverridden = false;
+
 static void ApplyLangId(LANGID langId) noexcept
 {
+    // The root listing re-applies TC's language on every visit; the cached
+    // names below are rewritten only when it really changed, since other
+    // threads read them.
+    if (langId == g_configuredUiLangId)
+        return;
     g_configuredUiLangId = langId;
 
-    // Load external .lng file (clears any previous load; English has no .lng file).
+    // Load external .lng file (English has no .lng file).
     LngLoadForLanguage(langId, hinst);
 
     SetThreadUILanguage(langId);
@@ -247,6 +256,8 @@ static LANGID LangNameToId(const wchar_t* name) noexcept
 
 void ApplyTcLanguageToPluginResources(const char* tcIniPath) noexcept
 {
+    if (g_languageOverridden)
+        return;
     LANGID langId = DetectTcUiLangIdFromIni(tcIniPath);
 
     // No match means TC runs a language this plugin ships no .lng for.
@@ -309,6 +320,12 @@ BOOL APIENTRY DllMain( HANDLE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
         wilcopy(s_quickconnect, s_quickconnectW.data(), countof(s_quickconnect) - 1);
     }
     if (ul_reason_for_call == DLL_PROCESS_DETACH) {
+        // Total Commander exiting: its other threads are already gone, maybe
+        // while holding a lock this cleanup would wait on, and Windows closes
+        // the sockets and frees the memory anyway. Clean up only when the
+        // plugin alone is unloaded.
+        if (lpReserved)
+            return TRUE;
         // Stop LAN services before CRT destroys global objects
 #if SFTP_EXTRA
         StopGlobalLanServices();
@@ -839,31 +856,28 @@ static void StatusInfo(const std::string& remoteDir, int InfoStartEnd, int InfoO
                         ShowStatusId(IDS_LOG_TAR_UPLOAD_FAIL, nullptr, false);
                 }
 #endif
-                DisconnectSessionPath(remoteDir);
+                // This thread's own connection only: the panel and other
+                // background transfers keep theirs.
+                std::array<char, MAX_PATH> endName{};
+                GetDisplayNameFromPath(RemoteDir, endName.data(), endName.size() - 1);
+                DisconnectServerForThread(endName.data(), GetCurrentThreadId());
                 return;
             }
             std::array<char, MAX_PATH> displayName{};
-            const char* oldpass = nullptr;
             RuntimeSecrets inherited;
             GetDisplayNameFromPath(RemoteDir, displayName.data(), displayName.size() - 1);
-            // get password from main thread
-            pConnectSettings oldserverid = static_cast<pConnectSettings>(GetServerIdFromName(displayName.data(), mainthreadid));
-            if (oldserverid) {
+            // The secrets the panel's connection already holds, copied
+            // under the registry lock.
+            bool phpTar = false;
+            if (CopyMainThreadSecrets(displayName.data(), inherited, &phpTar)) {
 #if SFTP_EXTRA
-                if (InfoOperation == FS_STATUS_OP_PUT_MULTI_THREAD
-                    && IsPhpAgentTransport(oldserverid) && oldserverid->php_tar)
+                if (InfoOperation == FS_STATUS_OP_PUT_MULTI_THREAD && phpTar)
                     TarUploadSessionBegin(nullptr);  // cs filled in by first FsPutFileW
-                if (InfoOperation == FS_STATUS_OP_GET_MULTI_THREAD
-                    && IsPhpAgentTransport(oldserverid) && oldserverid->php_tar)
+                if (InfoOperation == FS_STATUS_OP_GET_MULTI_THREAD && phpTar)
                     TarDownloadSessionBegin(nullptr);  // cs filled in by first FsGetFileW
 #endif
-                oldpass = oldserverid->password.c_str();
-                if (!oldpass[0])
-                    oldpass = nullptr;
-                inherited.accountPassword   = oldserverid->account_password;
-                inherited.keyPassphrase     = oldserverid->key_passphrase;
-                inherited.jumpKeyPassphrase = oldserverid->jump_key_passphrase;
             }
+            const char* oldpass = inherited.password.empty() ? nullptr : inherited.password.c_str();
             pConnectSettings serverid = SftpConnectToServer(displayName.data(), inifilename, oldpass,
                                                            nullptr, &inherited);
             if (serverid)
@@ -928,6 +942,7 @@ void WINAPI FsSetDefaultParams(FsDefaultParamStruct * dps)
                          langOverride.data(), static_cast<DWORD>(langOverride.size()),
                          inifilenameW);
             if (langOverride[0]) {
+                g_languageOverridden = true;
                 const LANGID overrideId = LangNameToId(langOverride.data());
                 if (overrideId != 0) {
                     ApplyLangId(overrideId);

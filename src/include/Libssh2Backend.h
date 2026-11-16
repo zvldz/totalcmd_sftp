@@ -25,6 +25,7 @@ public:
     void seek(size_t offset) override;
     size_t tell() override;
     int fstat(LIBSSH2_SFTP_ATTRIBUTES* attrs, int setstat) override;
+    void abandon() noexcept override { handle_ = nullptr; }
 
     LIBSSH2_SFTP_HANDLE* raw() const { return handle_; }
 private:

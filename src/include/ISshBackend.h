@@ -37,6 +37,9 @@ struct ISftpHandle {
     virtual void seek(size_t offset) = 0;
     virtual size_t tell() = 0;
     virtual int fstat(LIBSSH2_SFTP_ATTRIBUTES* attrs, int setstat) = 0;
+    // The SFTP session this handle belonged to is gone, and freed the handle
+    // with it: forget it without closing.
+    virtual void abandon() noexcept = 0;
 };
 
 // ---------------------------------------------------------------------------

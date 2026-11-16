@@ -26,6 +26,7 @@
 #include "ImportSourceRegistry.h"
 #include "ImportCache.h"
 #include "VirtualSessionRegistry.h"
+#include <mutex>
 #include "ProfileSettings.h"
 
 // Path of the most recent FsFindFirstW call that returned PATH_NOT_FOUND.
@@ -36,7 +37,9 @@
 // its RENMOV_MULTI status callback (which sometimes comes AFTER the first
 // FsMkDir). On user-initiated F7 the previous failed-find path is empty or
 // stale (TC didn't pre-check), so the dialog still opens normally.
-static std::wstring g_lastFailedFindPath;
+// Per thread: the failed lookup and the FsMkDir that follows it come
+// from the same thread.
+static thread_local std::wstring g_lastFailedFindPath;
 
 // RAII guard for a freshly-established server connection.
 // Prevents connection leaks on error paths without manual cleanup pairing.
@@ -546,15 +549,22 @@ static HANDLE BuildImportsSourceListing(const std::string& sourceId,
     // which keeps its sessions in the cache.
     if (atSourceRoot && adapter) {
         static std::unordered_map<std::string, std::string> s_lastStamp;
+        static std::mutex s_lastStampMutex;
         std::string stamp = adapter->ChangeStamp();
         for (const auto& path : LoadImportCustomPaths(sourceId.c_str(), inifilename))
             stamp += adapter->CustomPathStamp(unicode_util::internal_to_utf8(path));
         if (!stamp.empty()) {
-            const auto it = s_lastStamp.find(sourceId);
-            if (it == s_lastStamp.end() || it->second != stamp) {
+            bool changed = false;
+            {
+                std::lock_guard<std::mutex> lock(s_lastStampMutex);
+                const auto it = s_lastStamp.find(sourceId);
+                changed = it == s_lastStamp.end() || it->second != stamp;
+                if (changed)
+                    s_lastStamp[sourceId] = stamp;
+            }
+            if (changed) {
                 SFTP_LOG("IMPORT", "%s changed on disk, re-scanning", sourceId.c_str());
                 RefreshImportSource(sourceId);
-                s_lastStamp[sourceId] = stamp;
             }
         }
     }
@@ -960,13 +970,23 @@ HANDLE WINAPI FsFindFirstW(LPCWSTR Path, LPWIN32_FIND_DATAW FindData)
         // valid-looking pointer with a dead socket beneath — reusing it
         // sends libssh2 into an EAGAIN retry loop that TC surfaces as
         // "nothing happens on Enter". A cheap select+MSG_PEEK on the raw
-        // socket catches that state; on failure we drop the registry entry
-        // (across all threads, via DisconnectServerByName) so the block
-        // below re-runs the implicit connect from scratch.
+        // socket catches that state; on failure this thread's registry
+        // entry is dropped so the block below re-runs the implicit connect
+        // from scratch. Other threads' connections are not touched.
         if (wasconnected && !IsSessionAlive(serverid)) {
+            // A listing still open on this connection (an outer directory
+            // of a recursive search or copy) holds pointers into it: this
+            // nested listing fails instead, and the drop happens once
+            // that listing is closed.
+            if (serverid->openFindHandles > 0) {
+                SFTP_LOG("FIND", "Stale session for '%s' with %d listing(s) open — not dropped yet",
+                         displayName.data(), serverid->openFindHandles);
+                SetLastError(ERROR_PATH_NOT_FOUND);
+                return INVALID_HANDLE_VALUE;
+            }
             SFTP_LOG("FIND", "Stale session detected for '%s' — dropping and reconnecting",
                      displayName.data());
-            DisconnectServerByName(displayName.data());
+            DisconnectServerForThread(displayName.data(), GetCurrentThreadId());
             serverid = nullptr;
             wasconnected = false;
         }

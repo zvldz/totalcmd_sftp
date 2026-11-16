@@ -139,6 +139,18 @@ From this version the plugin comes in two builds: **classic**
 
 ### Fixes
 
+- **A background transfer ending no longer drops other connections.**
+  When one of several background copies on a session finished, it closed
+  every connection of that session: the other copies still running and
+  the panel's own, which then had to reconnect. Each now closes only its
+  own. A background copy also gets the jump host and proxy passwords the
+  panel's session already has, instead of asking for them again.
+- **Thread fixes for background transfers.** SSH library start-up, the
+  language strings, the server list, directory listing state and the
+  text-mode setting were shared between threads without protection; a
+  listing left open across a reconnect could close a handle of the new
+  connection. A language change in Total Commander no longer overrides
+  the language chosen in the plugin.
 - **The connection dialog keeps its width.** Two check boxes stacked
   beside the taller System list were taken for one row, their widths
   added up, and the dialog grew to about twice its width — more on every

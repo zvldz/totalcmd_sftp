@@ -25,18 +25,23 @@ int  CopyMoveServerInIni(LPCSTR oldservername, LPCSTR newservername, bool Move, 
 SERVERID GetServerIdFromName(LPCSTR servername, DWORD threadid) noexcept;
 bool SetServerIdForName(LPCSTR displayname, SERVERID newid) noexcept;
 
-// Thread-agnostic full disconnect: find every registry entry with `name`
-// across ALL threads (main + any background), close the underlying SSH
-// session exactly once (via the first non-null serverid), free the
-// tConnectSettings memory once, and drop every entry. Returns the number
-// of entries removed. Zero means the name was not registered anywhere.
-//
-// Used by FsDisconnect — TC can call the WFX disconnect entry from a
-// non-main thread, and the per-thread lookup pattern
-// `GetServerIdFromName(name, GetCurrentThreadId())` returns null in that
-// case even when the main-thread entry exists, so the connection would
-// otherwise be leaked.
+// Closes the panel's (main-thread) connection to session `name` and drops
+// its row, whichever thread calls it — TC can call FsDisconnect from a
+// background thread. Connections of running background transfers are left
+// alone; each is closed by DisconnectServerForThread when its transfer
+// ends. Returns the number of rows removed.
 size_t DisconnectServerByName(LPCSTR name) noexcept;
+
+// Closes the connection thread `threadId` holds for session `name` (the
+// main thread's or one background thread's) and drops its row.
+size_t DisconnectServerForThread(LPCSTR name, DWORD threadId) noexcept;
+
+// Copies the secrets the main-thread connection to `name` already holds,
+// for a background transfer opening its own connection. False when that
+// session is not connected. `phpTar` (optional) receives whether it is a
+// PHP Agent session with TAR batches.
+struct RuntimeSecrets;
+bool CopyMainThreadSecrets(LPCSTR name, RuntimeSecrets& out, bool* phpTar = nullptr) noexcept;
 
 // Path helpers
 void GetDisplayNameFromPath(LPCSTR Path, LPSTR DisplayName, size_t maxlen) noexcept;

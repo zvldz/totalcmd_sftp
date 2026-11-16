@@ -32,8 +32,10 @@
 #include <cwchar>
 #include <fstream>
 #include <map>
+#include <mutex>
 #include <random>
 #include <string>
+#include <thread>
 #include <vector>
 
 // Total Commander's plugin header uses an anonymous union.
@@ -61,6 +63,7 @@ struct Plugin {
     int (WINAPI* RenMovFileW)(LPCWSTR, LPCWSTR, BOOL, BOOL, RemoteInfoStruct*) = nullptr;
     int (WINAPI* ExecuteFileW)(HWND, LPWSTR, LPCWSTR) = nullptr;
     BOOL (WINAPI* Disconnect)(LPCSTR) = nullptr;
+    void (WINAPI* StatusInfoW)(LPCWSTR, int, int) = nullptr;
 
     template <class F> bool Bind(F& fn, const char* name)
     {
@@ -81,7 +84,8 @@ struct Plugin {
                Bind(FindFirstW, "FsFindFirstW") && Bind(FindNextW, "FsFindNextW") && Bind(FindClose, "FsFindClose") &&
                Bind(MkDirW, "FsMkDirW") && Bind(RemoveDirW, "FsRemoveDirW") && Bind(DeleteFileW, "FsDeleteFileW") &&
                Bind(PutFileW, "FsPutFileW") && Bind(GetFileW, "FsGetFileW") && Bind(RenMovFileW, "FsRenMovFileW") &&
-               Bind(ExecuteFileW, "FsExecuteFileW") && Bind(Disconnect, "FsDisconnect");
+               Bind(ExecuteFileW, "FsExecuteFileW") && Bind(Disconnect, "FsDisconnect") &&
+               Bind(StatusInfoW, "FsStatusInfoW");
     }
 } g_plugin;
 
@@ -111,15 +115,30 @@ bool EnvIs(const wchar_t* name, const wchar_t* value)
 
 int WINAPI OnProgress(int, LPCWSTR, LPCWSTR, int) { return 0; }
 
-// What the plugin writes to Total Commander's log window.
+// What the plugin writes to Total Commander's log window. Background
+// transfers log from their own threads.
 std::vector<std::wstring> g_logLines;
+std::mutex g_logMutex;
 
 void WINAPI OnLog(int, int, LPCWSTR text)
 {
-    if (text)
+    if (text) {
+        std::lock_guard<std::mutex> lock(g_logMutex);
         g_logLines.emplace_back(text);
+    }
     if (g_verbose && text)
         std::printf("      log: %s\n", Narrow(text).c_str());
+}
+
+// How many times the plugin reported a new connection in TC's log.
+int CountConnects()
+{
+    std::lock_guard<std::mutex> lock(g_logMutex);
+    int n = 0;
+    for (const auto& line : g_logLines)
+        if (line.rfind(L"CONNECT ", 0) == 0)
+            ++n;
+    return n;
 }
 
 std::wstring EnvString(const wchar_t* name)
@@ -546,6 +565,48 @@ int wmain(int argc, wchar_t** argv)
             }
             Check(again, "after a server restart the session reconnects through the server command");
         }
+    }
+
+    if (mode == L"sftp") {
+        // Two background transfers on the session, overlapping the way TC
+        // runs them: each opens its own connection at START and closes it
+        // at END. The first to end must not close the other's connection
+        // (still in use) or the panel's (still open).
+        HANDLE aListed = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+        HANDLE bListed = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+        HANDLE aEnded = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+        bool okA = false, okB1 = false, okB2 = false;
+        std::thread a([&] {
+            g_plugin.StatusInfoW(dir.c_str(), FS_STATUS_START, FS_STATUS_OP_GET_MULTI_THREAD);
+            ListDir(dir, okA);
+            SetEvent(aListed);
+            WaitForSingleObject(bListed, 60000);
+            g_plugin.StatusInfoW(dir.c_str(), FS_STATUS_END, FS_STATUS_OP_GET_MULTI_THREAD);
+            SetEvent(aEnded);
+        });
+        std::thread b([&] {
+            WaitForSingleObject(aListed, 60000);
+            g_plugin.StatusInfoW(dir.c_str(), FS_STATUS_START, FS_STATUS_OP_GET_MULTI_THREAD);
+            ListDir(dir, okB1);
+            SetEvent(bListed);
+            WaitForSingleObject(aEnded, 60000);
+            const int connects = CountConnects();
+            ListDir(dir, okB2);
+            okB2 = okB2 && CountConnects() == connects;
+            g_plugin.StatusInfoW(dir.c_str(), FS_STATUS_END, FS_STATUS_OP_GET_MULTI_THREAD);
+        });
+        a.join();
+        b.join();
+        CloseHandle(aListed);
+        CloseHandle(bListed);
+        CloseHandle(aEnded);
+        Check(okA && okB1, "two background transfers list the directory");
+        Check(okB2, "a background transfer keeps its connection when another one ends (no reconnect)");
+        const int connectsBefore = CountConnects();
+        bool okMain = false;
+        ListDir(dir, okMain);
+        Check(okMain && CountConnects() == connectsBefore,
+              "the panel's connection survives background transfers ending (no reconnect)");
     }
 
     // Cleanup: only what this run created.

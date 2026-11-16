@@ -1,5 +1,7 @@
 #pragma once
 
+#include <atomic>
+
 #include <array>
 #include <string>
 #include <windows.h>
@@ -17,14 +19,14 @@ extern char    g_wincmdIniPath[MAX_PATH];
 extern char    s_f7newconnection[32];
 extern std::array<WCHAR, 32> s_f7newconnectionW;
 extern std::array<WCHAR, 32> s_quickconnectW;
-extern bool    disablereading;
+extern std::atomic<bool> disablereading;
 extern bool    freportconnect;
 // True while TC is running a multi-step transfer through our plugin
 // (RENMOV_MULTI: bulk copy/move). FsMkDir checks this to tell apart
 // "user pressed F7 to create a new session" from "TC is auto-creating a
 // destination folder mid-transfer" — the latter must not pop the Edit
 // Session dialog.
-extern bool    g_inMultiOpTransfer;
+extern std::atomic<bool> g_inMultiOpTransfer;
 
 // Path helpers — defined in PluginEntryPoints.cpp, used across all entry-point TUs.
 pConnectSettings GetServerIdAndRelativePathFromPath(LPCSTR Path, LPSTR RelativePath, size_t maxlen);
