@@ -7,6 +7,7 @@
 #include <array>
 #include <memory>
 #include <chrono>
+#include <format>
 #include "SftpClient.h"
 #include "PluginEntryPoints.h"
 #include "fsplugin.h"
@@ -15,6 +16,7 @@
 #include "CoreUtils.h"
 #include "UnicodeHelpers.h"
 #include "SftpInternal.h"
+#include "TerminalText.h"
 #if SFTP_EXTRA
 #include "PhpAgentClient.h"
 #endif
@@ -137,8 +139,10 @@ bool ParseLsDate(const std::string& mon, const std::string& day,
 
 // Owner, group and link target from an `ls -l` style line, the shape of both
 // the SCP listing and SFTP's long entry. The link count has to be a number,
-// or the line is not in that shape and nothing is taken from it.
-void ExtrasFromLsLine(pConnectSettings cs, const char* line, ListingExtra& extra)
+// or the line is not in that shape and nothing is taken from it. `escaped`:
+// the names are in GNU's escape form (DecodeLsEscapedName).
+void ExtrasFromLsLine(pConnectSettings cs, const char* line, ListingExtra& extra,
+                      bool escaped = false)
 {
     std::vector<std::string_view> tokens;
     const std::string_view sv(line);
@@ -170,14 +174,19 @@ void ExtrasFromLsLine(pConnectSettings cs, const char* line, ListingExtra& extra
             std::string_view target = sv.substr(arrow + 4);
             while (!target.empty() && (target.back() == '\r' || target.back() == '\n'))
                 target.remove_suffix(1);
-            extra.linkTarget = widen(target);
+            extra.linkTarget = escaped ? widen(terminal_text::DecodeLsEscapedName(target))
+                                       : widen(target);
         }
     }
 }
 
-// Parse SCP listing line into WIN32_FIND_DATAW
+// One line of the SCP listing (`ls -la`) into WIN32_FIND_DATAW. The name is
+// everything after the time, past exactly one space: leading and trailing
+// spaces belong to it. `escaped`: GNU's escape form, in which no name holds a
+// bare space or newline, so the " -> " of a link and the end of the line are
+// unambiguous; a name printed as it is can only be taken at its word.
 bool ParseScpListingLine(pConnectSettings cs, const char* line, WIN32_FIND_DATAW& outData,
-                         ListingExtra* extra = nullptr)
+                         ListingExtra* extra = nullptr, bool escaped = false)
 {
     if (!cs || !line || !line[0])
         return false;
@@ -224,11 +233,16 @@ bool ParseScpListingLine(pConnectSettings cs, const char* line, WIN32_FIND_DATAW
             return false;
     }
 
-    // Find name start: after 8 tokens
-    size_t namePos = 0;
+    // A block or character device shows "major, minor" where a size would
+    // be, one word more before the date.
+    const bool device = (c0 == 'b' || c0 == 'c') && tokens.size() >= 10 &&
+                        tokens[4].back() == ',';
+    const size_t dateTok = device ? 6 : 5;
+    const int nameAfter = device ? 9 : 8;
+
     int tokCount = 0;
     pos = 0;
-    while (tokCount < 8 && pos < lineStr.size()) {
+    while (tokCount < nameAfter && pos < lineStr.size()) {
         while (pos < lineStr.size() && (lineStr[pos] == ' ' || lineStr[pos] == '\t'))
             ++pos;
         if (pos >= lineStr.size())
@@ -237,18 +251,19 @@ bool ParseScpListingLine(pConnectSettings cs, const char* line, WIN32_FIND_DATAW
             ++pos;
         ++tokCount;
     }
-    while (pos < lineStr.size() && (lineStr[pos] == ' ' || lineStr[pos] == '\t'))
-        ++pos;
-    if (pos >= lineStr.size())
+    if (tokCount < nameAfter || pos + 1 >= lineStr.size() || lineStr[pos] != ' ')
         return false;
-    std::string name = lineStr.substr(pos);
-    // Trim trailing whitespace
-    while (!name.empty() && (name.back() == ' ' || name.back() == '\t' || name.back() == '\r' || name.back() == '\n'))
+    std::string name = lineStr.substr(pos + 1);
+    while (!name.empty() && (name.back() == '\r' || name.back() == '\n'))
         name.pop_back();
-    // Remove symlink arrow
-    size_t arrow = name.find(" -> ");
-    if (arrow != std::string::npos)
-        name.resize(arrow);
+    // Only a link has a target after its name.
+    if (c0 == 'l') {
+        const size_t arrow = name.find(" -> ");
+        if (arrow != std::string::npos)
+            name.resize(arrow);
+    }
+    if (escaped)
+        name = terminal_text::DecodeLsEscapedName(name);
     if (name.empty())
         return false;
 
@@ -263,9 +278,9 @@ bool ParseScpListingLine(pConnectSettings cs, const char* line, WIN32_FIND_DATAW
         fd.dwReserved0 = mode;
     }
     // A date that does not parse leaves the field empty; the entry stays.
-    ParseLsDate(tokens[5], tokens[6], tokens[7], fd.ftLastWriteTime);
+    ParseLsDate(tokens[dateTok], tokens[dateTok + 1], tokens[dateTok + 2], fd.ftLastWriteTime);
 
-    if (c0 != 'd' && c0 != 'l' && tokens.size() > 4) {
+    if (c0 != 'd' && c0 != 'l' && !device && tokens.size() > 4) {
         unsigned long long sz = _strtoui64(tokens[4].c_str(), nullptr, 10);
         fd.nFileSizeHigh = static_cast<DWORD>(sz >> 32);
         fd.nFileSizeLow = static_cast<DWORD>(sz & 0xFFFFFFFFULL);
@@ -275,7 +290,7 @@ bool ParseScpListingLine(pConnectSettings cs, const char* line, WIN32_FIND_DATAW
         extra->mode  = (fd.dwFileAttributes & FS_ATTR_UNIXMODE) ? fd.dwReserved0 : 0;
         extra->size  = (static_cast<uint64_t>(fd.nFileSizeHigh) << 32) | fd.nFileSizeLow;
         extra->mtime = fd.ftLastWriteTime;
-        ExtrasFromLsLine(cs, lineStr.c_str(), *extra);
+        ExtrasFromLsLine(cs, lineStr.c_str(), *extra, escaped);
     }
 
     outData = fd;
@@ -379,17 +394,24 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
             // in UTC. LC_ALL, not LC_TIME, since a user's LC_ALL would
             // override the latter. GNU `ls` also follows TIME_STYLE and
             // BLOCK_SIZE from the environment (ISO dates, sizes as "4.0K"),
-            // so both are set back to what the parser reads. On a terminal it
-            // quotes names with spaces or quotes in them ('a b');
-            // QUOTING_STYLE=literal keeps them bare. Other `ls` builds ignore
-            // all three.
-            // On a terminal `ls` also prints every byte its locale cannot
-            // show as `?` — all of a non-ASCII name where the locale is not
-            // UTF-8 — so its output goes through `cat` and the names arrive
-            // as the bytes they are. The pipe hides the status of `ls`; the
-            // one reported is whether the directory exists and is readable.
+            // so both are set back to what the parser reads. QUOTING_STYLE=
+            // escape makes it write every space, newline and backslash in a
+            // name as an escape and every other unusual byte as \ooo: a line
+            // is then one entry, and the name is told from a link's target.
+            // Other `ls` builds ignore all three and print names as they are,
+            // which is why GNU is asked about once, with the first listing.
+            // The output goes through `cat`: on a terminal `ls` would turn
+            // what it cannot show into `?`. The pipe hides the status of
+            // `ls`; the one reported is whether the directory exists and is
+            // readable.
+            std::string probeMarker, probe;
+            if (cs->lsEscape < 0) {
+                probeMarker = ShellMarker("__WFX_PROBE__");
+                probe = "env LC_ALL=C ls --quoting-style=escape -d /; echo \"" + probeMarker + "\"; ";
+            }
             const std::string quotedTarget = "'" + string_util::ShellQuoteSingle(listTarget) + "'";
-            std::string command = "echo \"" + beginMarker + "\"; env TZ=UTC0 LC_ALL=C TIME_STYLE=locale BLOCK_SIZE=1 LS_BLOCK_SIZE=1 QUOTING_STYLE=literal ls -la " +
+            std::string command = "echo \"" + beginMarker + "\"; " + probe +
+                                  "env TZ=UTC0 LC_ALL=C TIME_STYLE=locale BLOCK_SIZE=1 LS_BLOCK_SIZE=1 QUOTING_STYLE=escape ls -la " +
                                   quotedTarget + " | cat; test -d " + quotedTarget + " && test -r " + quotedTarget +
                                   "; echo \"" + endMarker + "\":$?\n";
             SFTP_LOG("FIND", "SCP listing '%s'", listTarget.c_str());
@@ -420,9 +442,32 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
                     listStatus = atoi(endLine.c_str() + colon + 1);
             }
 
+            // GNU answers the probe with the name it was given, "/"; any other
+            // `ls` with an error about the option.
+            size_t firstListed = 0;
+            if (!probeMarker.empty()) {
+                const auto trimmed = [](const std::string& s) {
+                    const size_t at = s.find_first_not_of(" \t");
+                    return at == std::string::npos ? std::string_view() : std::string_view(s).substr(at);
+                };
+                for (size_t i = 0; i < lines.size(); ++i) {
+                    if (trimmed(lines[i]) != probeMarker)
+                        continue;
+                    bool gnu = false;
+                    for (size_t j = 0; j < i; ++j)
+                        gnu = gnu || trimmed(lines[j]) == "/";
+                    cs->lsEscape = gnu ? 1 : 0;
+                    firstListed = i + 1;
+                    SFTP_LOG("FIND", "SCP listing: ls escape form %s", gnu ? "yes" : "no");
+                    break;
+                }
+            }
+            const bool escaped = cs->lsEscape == 1;
+
             std::vector<WIN32_FIND_DATAW> entries;
             DirectoryExtras extras;
-            for (const auto& line : lines) {
+            for (size_t li = firstListed; li < lines.size(); ++li) {
+                const std::string& line = lines[li];
                 // The raw `ls` lines, as SFTP mode shows its long entries:
                 // what to look at when a listing parses wrong.
                 if (cs->detailedlog && !line.empty())
@@ -431,7 +476,7 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
                     continue;
                 WIN32_FIND_DATAW fd{};
                 ListingExtra extra;
-                if (ParseScpListingLine(cs, line.c_str(), fd, &extra)) {
+                if (ParseScpListingLine(cs, line.c_str(), fd, &extra, escaped)) {
                     if (wcscmp(fd.cFileName, L".") == 0 || wcscmp(fd.cFileName, L"..") == 0)
                         continue;
                     extras[fd.cFileName] = std::move(extra);
@@ -443,7 +488,10 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
                      listStatus, gotEnd ? 1 : 0, (int)lines.size(), (int)entries.size(),
                      lines.empty() ? "" : lines[0].c_str());
 
-			if (!gotEnd && entries.empty()) {
+            // A listing that never reached its end marker is cut short, not
+            // complete: shown, it would hide what it missed from a delete or
+            // a move.
+            if (!gotEnd) {
                 if (!cs->scpShellErrBuf.empty()) {
                     std::string err = cs->scpShellErrBuf;
                     StripEscapeSequences(err.data());
@@ -451,15 +499,11 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
                 } else {
                     ShowStatusId(IDS_LOG_SCP_LIST_FAIL, nullptr, true);
                 }
+                // Only the shell channel is closed; the next pass opens a new
+                // one on the same connection.
                 CloseScpShell(cs);
-
-                // Instead of immediately throwing an error, try reconnecting channel.
-                if (attempt == 0) {
-                    // FIX CLAUDE: Nie niszczymy gniazda TCP! Wystarczy, że CloseScpShell 
-                    // zamknęło kanał. W kolejnym cyklu EnsureScpShell otworzy nowy.
-                    // cs->sock = INVALID_SOCKET; <-- USUNIĘTE
+                if (attempt == 0)
                     continue;
-                }
                 return SFTP_FAILED;
             }
 
@@ -750,7 +794,9 @@ int SftpCreateDirectoryW(pConnectSettings cs, LPCWSTR Path)
     if (cs->scponly) {
         auto channel = ConnectChannel(cs->session.get(), cs->sock);
         if (channel) {
-            const std::string cmd = "mkdir '" + string_util::ShellQuoteSingle(dirStr) + "'";
+            // The session's mode for new folders, as SFTP's mkdir gets it.
+            const std::string cmd = std::format("mkdir -m {:o} '", (cs->dirmod ? cs->dirmod : 0755) & 07777) +
+                                    string_util::ShellQuoteSingle(dirStr) + "'";
             if (GetChannelCommandReply(cs->session.get(), channel.get(), cmd.c_str(), cs->sock))
                 return SFTP_OK;
         }
@@ -1200,13 +1246,16 @@ bool SftpLinkFolderTargetW(pConnectSettings cs, LPWSTR RemoteName, size_t maxlen
     if (cs->scponly) {
         if (!EnsureScpShell(cs))
             return false;
-        const std::string endMarker = ShellMarker(kScpListEndMarker);
-        const std::string cmd = "echo ~; echo \"" + endMarker + "\"\n";
+        // The begin marker takes the prompt the shell printed before it, so
+        // the line after it starts with the home directory.
+        const std::string beginMarker = ShellMarker(kScpListBeginMarker);
+        const std::string endMarker   = ShellMarker(kScpListEndMarker);
+        const std::string cmd = "echo \"" + beginMarker + "\"; echo ~; echo \"" + endMarker + "\"\n";
         if (!WriteShellCommand(cs, cmd, kScpWriteTimeoutMs))
             return false;
 
         std::vector<std::string> lines;
-        ScpReadCommandOutput(cs, endMarker.c_str(), lines, kScpReadTimeoutMs);
+        ScpReadCommandOutput(cs, endMarker.c_str(), lines, kScpReadTimeoutMs, beginMarker.c_str());
 
         for (const auto& line : lines) {
             if (line.find(kScpListEndMarker) != std::string::npos)

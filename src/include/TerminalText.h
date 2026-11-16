@@ -16,7 +16,9 @@ namespace terminal_text {
 // sequence at the end of the input is dropped.
 std::string StripControls(std::string_view in);
 
-// Decodes the \ooo octal escapes some ls builds use for unusual bytes.
-std::string DecodeOctalEscapes(std::string_view in);
+// A name as GNU `ls` prints it with QUOTING_STYLE=escape: a backslash before
+// a space, before another backslash and before the C escapes (\n, \t, ...),
+// and \ooo for every other byte outside printable ASCII. Back to the bytes.
+std::string DecodeLsEscapedName(std::string_view in);
 
 } // namespace terminal_text

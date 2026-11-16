@@ -167,6 +167,9 @@ struct tConnectSettings {
     bool scpserver64bittemporary;  // true=user allowed transfers>2GB
     std::string scpShellMsgBuf;
     std::string scpShellErrBuf;
+    // The server's `ls` prints names in GNU's escape form when asked to:
+    // -1 not known yet, 0 no, 1 yes. Asked with the first SCP listing.
+    signed char lsEscape = -1;
 
     // SCP runtime profile
     bool scp_echo_only_end;

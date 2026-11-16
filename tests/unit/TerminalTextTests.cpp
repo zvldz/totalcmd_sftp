@@ -3,7 +3,7 @@
 
 #include <string>
 
-using terminal_text::DecodeOctalEscapes;
+using terminal_text::DecodeLsEscapedName;
 using terminal_text::StripControls;
 
 TEST_CASE("terminal: systemd OSC 3008 context records terminated by ST")
@@ -36,11 +36,24 @@ TEST_CASE("terminal: UTF-8 text survives, including bytes 0x80-0x9F")
     CHECK_BYTES(StripControls("\x1B[1m" + utf8 + "\x1B[0m"), utf8);
 }
 
-TEST_CASE("terminal: octal escapes are decoded, other backslashes kept")
+TEST_CASE("terminal: backslashes in names are kept as they are")
 {
-    CHECK_BYTES(DecodeOctalEscapes("a\\040b"), "a b");
-    CHECK_BYTES(DecodeOctalEscapes("\\303\\263"), "\xC3\xB3");
-    CHECK_BYTES(DecodeOctalEscapes("keep \\9 \\x41 \\8 trail\\12"), "keep \\9 \\x41 \\8 trail\\12");
+    CHECK_BYTES(StripControls("a\\101b \\040 trail\\12"), "a\\101b \\040 trail\\12");
+}
+
+TEST_CASE("ls: escaped names decode to their bytes")
+{
+    // As GNU coreutils 9.7 prints them with LC_ALL=C QUOTING_STYLE=escape.
+    CHECK_BYTES(DecodeLsEscapedName("a\\ b"), "a b");
+    CHECK_BYTES(DecodeLsEscapedName("\\ lead"), " lead");
+    CHECK_BYTES(DecodeLsEscapedName("trail\\ "), "trail ");
+    CHECK_BYTES(DecodeLsEscapedName("back\\\\101slash"), "back\\101slash");
+    CHECK_BYTES(DecodeLsEscapedName("nl\\nfake"), "nl\nfake");
+    CHECK_BYTES(DecodeLsEscapedName("tab\\there"), "tab\there");
+    CHECK_BYTES(DecodeLsEscapedName("arrow\\ ->\\ x"), "arrow -> x");
+    CHECK_BYTES(DecodeLsEscapedName("q'uote"), "q'uote");
+    CHECK_BYTES(DecodeLsEscapedName("\\320\\272\\320\\270\\321\\200"), "\xD0\xBA\xD0\xB8\xD1\x80");
+    CHECK_BYTES(DecodeLsEscapedName("cut\\"), "cut\\");
 }
 
 TEST_CASE("property: stripped text never contains ESC and plain text is untouched")

@@ -235,6 +235,28 @@ From this version the plugin comes in two builds: **classic**
   server would not let `cat` read was saved empty and reported done; an
   upload the server refused (no permission, disk full) was reported done
   too, and a move then deleted the local file. Both now fail.
+- **SCP-only listings show every name as it is.**
+  - Spaces at the start or end of a name were dropped, so the file could
+    not be opened or deleted; a backslash followed by three digits was
+    read as a character code ("a\101b" listed as "aAb"); a name with
+    " -> " in it was cut there although it was no link; device files
+    came out with a shifted date.
+  - A name with a line break in it could show up as two entries, the
+    second one made up and pointing at another file. Where the server's
+    `ls` is GNU, it is now asked to escape such characters and the plugin
+    decodes them, so one entry is one file.
+  - A listing that did not finish is no longer shown as if complete.
+- **SCP-only and shell transfers on more servers.**
+  - The shell is switched to `/bin/sh` first, so a csh, tcsh or fish
+    login shell no longer breaks the commands.
+  - A base64 download from macOS, which writes the whole file on one
+    line, was cut short; the output is now wrapped.
+  - A large base64 download no longer fails after 90 seconds, and a
+    copy or move of a large file on the server is no longer reported
+    failed while still running.
+  - Creating a folder no longer fails because the server wrote a banner
+    to stderr, and it gets the session's folder mode.
+  - The home folder is found where the shell prints a prompt first.
 - **SCP-only listings ignore the user's `ls` settings.** An `LC_ALL`, a
   `TIME_STYLE` or a `BLOCK_SIZE` in the server's environment changed the
   dates or sizes `ls` printed, and the listing came out wrong.

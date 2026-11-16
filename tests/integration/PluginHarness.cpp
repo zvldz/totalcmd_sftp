@@ -800,6 +800,27 @@ int wmain(int argc, wchar_t** argv)
               "the panel's connection survives background transfers ending (no reconnect)");
     }
 
+    {
+        // Names the listing has to give back exactly: spaces at either end,
+        // two in the middle, an arrow in a name that is not a link. They are
+        // deleted with the rest below, by these names.
+        const std::wstring namesDir = NewTempDir(L"names");
+        WriteFileBytes(namesDir + L"n.txt", "name\n");
+        const wchar_t* odd[] = { L" lead", L"trail ", L"a  b", L"x -> y" };
+        bool uploaded = true;
+        for (const wchar_t* n : odd) {
+            std::wstring remote = dir + L"\\" + n;
+            uploaded = g_plugin.PutFileW((namesDir + L"n.txt").c_str(), remote.c_str(), 0) == FS_FILE_OK && uploaded;
+        }
+        DeleteFileW((namesDir + L"n.txt").c_str());
+        RemoveDirectoryW(namesDir.c_str());
+        const auto listed = ListDir(dir, ok);
+        bool exact = ok;
+        for (const wchar_t* n : odd)
+            exact = exact && listed.count(n) == 1;
+        Check(uploaded && exact, "names with edge spaces and arrows are listed exactly");
+    }
+
     // Cleanup: only what this run created.
     entries = ListDir(dir, ok);
     for (const auto& e : entries)

@@ -169,7 +169,9 @@ static bool ShellExecPersistentProcessLines(
         return false;
     }
 
-    const SYSTICKS start = get_sys_ticks();
+    // `timeoutMs` counts from the last line received, not from the start: a
+    // large download is many lines, each arriving well within it.
+    SYSTICKS lastLine = get_sys_ticks();
     bool gotBeginMarker = false;
     bool gotEndMarker = false;
     std::array<char, 8192> line{};
@@ -220,10 +222,11 @@ static bool ShellExecPersistentProcessLines(
             CloseScpShell(cs);
             return false;
         }
-        if (get_ticks_between(start) > (int)timeoutMs) {
+        if (get_ticks_between(lastLine) > (int)timeoutMs) {
             CloseScpShell(cs);
             return false;
         }
+        lastLine = get_sys_ticks();
     }
     if (!gotBeginMarker || !gotEndMarker) {
         CloseScpShell(cs);
@@ -438,11 +441,16 @@ static int ShellDdDownloadBase64(
         payload += skipBuf;
         payload += " '";
         payload += quotedPath;
-        payload += "' 2>/dev/null | base64";
+        payload += "' 2>/dev/null | base64 | fold -w 76";
     } else {
-        payload = "base64 '";
+        // `fold`: macOS base64 writes one line for the whole file, longer
+        // than a line the reader takes. The pipeline's status is then
+        // fold's, so whether the file can be read is asked first.
+        payload = "test -r '";
         payload += quotedPath;
-        payload += "' 2>/dev/null";
+        payload += "' && base64 '";
+        payload += quotedPath;
+        payload += "' 2>/dev/null | fold -w 76";
     }
     SHELL_DD_LOG("b64 DL payload: %s", payload.c_str());
 

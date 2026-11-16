@@ -69,17 +69,31 @@ std::string StripControls(std::string_view s)
     return out;
 }
 
-std::string DecodeOctalEscapes(std::string_view s)
+std::string DecodeLsEscapedName(std::string_view s)
 {
     std::string out;
     out.reserve(s.size());
     for (size_t i = 0; i < s.size(); ++i) {
-        if (s[i] == '\\' && i + 3 < s.size() &&
-            s[i + 1] >= '0' && s[i + 1] <= '3' && s[i + 2] >= '0' && s[i + 2] <= '7' && s[i + 3] >= '0' && s[i + 3] <= '7') {
-            out.push_back(static_cast<char>((s[i + 1] - '0') * 64 + (s[i + 2] - '0') * 8 + (s[i + 3] - '0')));
-            i += 3;
-        } else {
+        if (s[i] != '\\' || i + 1 >= s.size()) {
             out.push_back(s[i]);
+            continue;
+        }
+        const char e = s[++i];
+        if (e >= '0' && e <= '7' && i + 2 < s.size() &&
+            s[i + 1] >= '0' && s[i + 1] <= '7' && s[i + 2] >= '0' && s[i + 2] <= '7') {
+            out.push_back(static_cast<char>(((e - '0') << 6) | ((s[i + 1] - '0') << 3) | (s[i + 2] - '0')));
+            i += 2;
+            continue;
+        }
+        switch (e) {
+            case 'n': out.push_back('\n'); break;
+            case 't': out.push_back('\t'); break;
+            case 'r': out.push_back('\r'); break;
+            case 'a': out.push_back('\a'); break;
+            case 'b': out.push_back('\b'); break;
+            case 'f': out.push_back('\f'); break;
+            case 'v': out.push_back('\v'); break;
+            default:  out.push_back(e);    break;   // "\ ", "\\", ...
         }
     }
     return out;
