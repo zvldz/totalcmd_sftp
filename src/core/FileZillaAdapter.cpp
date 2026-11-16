@@ -148,6 +148,11 @@ public:
 private:
     const char* m_p;
     const char* m_end;
+    // Nesting of the element being read. Real files nest a few levels
+    // (site folders); the limit keeps a crafted file from exhausting the
+    // stack of Total Commander's thread.
+    int m_depth = 0;
+    static constexpr int kMaxDepth = 64;
 
     bool Eof() const noexcept { return m_p >= m_end; }
 
@@ -304,8 +309,15 @@ private:
                 return true;
             }
             // Child element.
+            if (m_depth >= kMaxDepth) {
+                SFTP_LOG("FILEZILLA", "  XML: nesting deeper than %d levels, file skipped", kMaxDepth);
+                return false;
+            }
             XmlNode child;
-            if (!ReadElement(child)) return false;
+            ++m_depth;
+            const bool childOk = ReadElement(child);
+            --m_depth;
+            if (!childOk) return false;
             node.children.push_back(std::move(child));
         }
     }

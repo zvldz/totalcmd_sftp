@@ -36,6 +36,15 @@ this fork's 10.0.2.2. Each entry names where it came from.
   encrypted with machine-wide DPAPI, so any other account on the computer
   could decrypt them. Keys stored earlier keep working. Reported in
   [wesmar/sftp#9](https://github.com/wesmar/sftp/issues/9).
+- **A crafted FileZilla file can no longer crash Total Commander.** The
+  importer read nested XML elements with no depth limit, so a file nested
+  deep enough overflowed the stack. Files nested deeper than 64 levels are
+  now skipped, with a line in the log. *wesmar/sftp#9.*
+- **No silent fallback to weak password storage.** When Windows could not
+  encrypt a password with DPAPI, the plugin saved it XOR-ed with a key
+  published in its source. Now the password is not saved, the log says
+  why, and it is asked for on the next connect. Passwords saved in the old
+  format are still read. *wesmar/sftp#9.*
 - **Stack buffer checks are on.** The plugin is built with `/GS`, so a
   stack buffer overrun ends the process instead of running whatever
   overwrote the return address. Control Flow Guard and CET were already on.

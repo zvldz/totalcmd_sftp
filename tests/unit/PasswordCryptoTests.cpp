@@ -52,6 +52,15 @@ TEST_CASE("password: legacy XOR format of older releases still reads")
     CHECK_BYTES(Decrypt("017024"), "ab");   // 'a' ^ 'p' = 17, 'b' ^ 'z' = 24
 }
 
+TEST_CASE("password: no weaker format when DPAPI cannot be stored")
+{
+    // A DPAPI value never fits in 64 bytes; the password is then not
+    // stored at all, rather than in the legacy XOR format.
+    std::vector<char> out(64, 'z');
+    EncryptString("secret", out.data(), static_cast<UINT>(out.size()));
+    CHECK_BYTES(std::string(out.data()), "");
+}
+
 TEST_CASE("password: plain prefix and malformed values")
 {
     CHECK_BYTES(Decrypt("plain:abc def"), "abc def");
