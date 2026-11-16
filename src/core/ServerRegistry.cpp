@@ -458,9 +458,18 @@ PathResolution ResolvePathKind(LPCSTR path) noexcept
     }
 
     // No session matches; folder iff at least one session lives under it.
-    if (RegistryHasAnyUnderFolder(norm)) {
+    // TC names a folder with a trailing separator too ("\ha\" before a copy
+    // into it).
+    std::string folder = norm;
+    while (!folder.empty() && folder.back() == '/')
+        folder.pop_back();
+    if (folder.empty()) {
         out.kind = PathKind::Folder;
-        out.displayName = norm;
+        return out;
+    }
+    if (RegistryHasAnyUnderFolder(folder)) {
+        out.kind = PathKind::Folder;
+        out.displayName = std::move(folder);
     }
     return out;
 }

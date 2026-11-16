@@ -173,6 +173,16 @@ From this version the plugin comes in two builds: **classic**
 
 ### Fixes
 
+- **Copying a session file into the plugin no longer opens the dialog
+  for a new session.** A folder of sessions named with a trailing
+  backslash, as Total Commander names the target of a copy, was not
+  recognised as a folder and was connected to as a session; so was the
+  target of a background copy. Closing the dialog let the import go on.
+- **A session file copied onto a session of the same name asks to
+  overwrite it** instead of failing with "Error uploading file". The
+  replaced session is disconnected, and passwords the file does not
+  bring leave the password manager. An upload into a session not yet
+  open in the copying thread no longer fails the same way.
 - **A background transfer ending no longer drops other connections.**
   When one of several background copies on a session finished, it closed
   every connection of that session: the other copies still running and

@@ -384,24 +384,14 @@ static int ImportProxyFromUpload(LPCWSTR LocalName)
 static std::optional<int> TryImportSessionFromUpload(
     LPCWSTR LocalName, LPCWSTR RemoteName, BOOL OverWrite)
 {
-    std::array<WCHAR, wdirtypemax> probeDir{};
-    pConnectSettings probeServer = GetServerIdAndRelativePathFromPathW(
-        RemoteName, probeDir.data(), probeDir.size() - 1);
-    if (probeServer)
-        return std::nullopt;
-
-    // probeServer == null means "not registered in this thread's g_servers
-    // slot". The path may still resolve to a real saved session (present in
-    // the global registry but not yet opened in this thread) or to a session
-    // sub-path. Only paths that resolve to nothing at all are legitimate
-    // session-import targets; anything else is an ordinary upload whose
-    // auto-connect will happen elsewhere.
+    // A path inside a session is an ordinary upload, connected on demand by
+    // the caller. A path naming a saved session itself is an import over it:
+    // TC asks before overwriting, then calls again with OverWrite.
     const PathResolution pr = ResolvePathKindW(RemoteName);
-    if (pr.kind == PathKind::SessionLeaf ||
-        pr.kind == PathKind::SessionWithSubpath)
-    {
-        return FS_FILE_WRITEERROR;
-    }
+    if (pr.kind == PathKind::SessionWithSubpath)
+        return std::nullopt;
+    if (pr.kind == PathKind::SessionLeaf && !OverWrite)
+        return FS_FILE_EXISTS;
 
     // Any validation failure surfaces through ShowPluginMessage, so TC does
     // not stack its generic "Error uploading file" popup on top. Returned as
@@ -480,8 +470,13 @@ static std::optional<int> TryImportSessionFromUpload(
     if (display.empty())
         return abortWithMessage(IDS_SIMPORT_ERR_EMPTY_DEST);
 
-    if (!OverWrite && sftp::IniSectionExists(display, inifilename))
-        return FS_FILE_EXISTS;
+    if (sftp::IniSectionExists(display, inifilename)) {
+        if (!OverWrite)
+            return FS_FILE_EXISTS;
+        // Replaced, not edited: a connection open with the old settings
+        // must not go on using them.
+        DisconnectSessionPath("\\" + display);
+    }
 
     if (!CopyIniSectionAcrossFiles(chosenSection.c_str(),
             LocalName, display.c_str(), inifilename))
@@ -625,6 +620,9 @@ static void AdoptPasswordFromFile(LPCSTR srcSection, LPCWSTR srcIni, const char*
                  saved ? "saved in" : "not saved in");
     SecureZeroMemory(plain.data(), plain.size());
     IniWriteString(dstSection, key, saved ? "!" : nullptr, inifilename);
+    // A session or record this one replaced may have left an entry there.
+    if (!saved)
+        DeletePasswordFromStore(storeName);
 }
 
 // The local record for a proxy an imported session goes through: the one

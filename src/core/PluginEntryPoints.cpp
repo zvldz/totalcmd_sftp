@@ -863,6 +863,14 @@ static void StatusInfo(const std::string& remoteDir, int InfoStartEnd, int InfoO
                 DisconnectServerForThread(endName.data(), GetCurrentThreadId());
                 return;
             }
+            // Only a transfer into or out of a saved session needs a
+            // connection. One into the plugin root or a folder of sessions
+            // is a session file being imported: there is nothing to connect
+            // to, and connecting to the folder's name would open the dialog
+            // for a new session.
+            const PathKind kind = ResolvePathKind(RemoteDir).kind;
+            if (kind != PathKind::SessionLeaf && kind != PathKind::SessionWithSubpath)
+                return;
             std::array<char, MAX_PATH> displayName{};
             RuntimeSecrets inherited;
             GetDisplayNameFromPath(RemoteDir, displayName.data(), displayName.size() - 1);

@@ -436,8 +436,13 @@ int wmain(int argc, wchar_t** argv)
         // in the password manager, the INI holding "!".
         WriteFileBytes(local + L"in.ini", "[x]\r\nserver=127.0.0.1:1\r\nuser=u\r\n"
                                           "password=plain:secret1\r\njumppassword=plain:jsecret\r\n");
+        // TC copies in the background the way it does everything else:
+        // START and END around it, for the plugin root. Nothing there to
+        // connect to (with a connection dialog this run would hang).
+        g_plugin.StatusInfoW(L"\\", FS_STATUS_START, FS_STATUS_OP_PUT_MULTI_THREAD);
         Check(g_plugin.PutFileW((local + L"in.ini").c_str(), L"\\it-imp.ini", 0) == FS_FILE_OK,
               "a session file is copied into the plugin");
+        g_plugin.StatusInfoW(L"\\", FS_STATUS_END, FS_STATUS_OP_PUT_MULTI_THREAD);
         Check(iniValue(L"it-imp", L"password") == L"!" && iniValue(L"it-imp", L"jumppassword") == L"!",
               "its passwords are not in the INI, only \"!\"");
         Check(StoreValue(L"it-imp") == L"secret1" && StoreValue(L"it-imp$$jump") == L"jsecret",
@@ -482,6 +487,32 @@ int wmain(int argc, wchar_t** argv)
         Check(g_plugin.DeleteFileW(L"\\it-imp3") != FALSE, "a session is deleted");
         Check(StoreValue(L"it-imp3") == L"(none)" && StoreValue(L"it-imp3$$jump") == L"(none)",
               "its passwords leave the password manager");
+
+        // A file copied onto a saved session: TC is told it exists, asks,
+        // and copies again with overwrite. The old passwords go with the old
+        // settings.
+        WriteFileBytes(local + L"in2.ini", "[x]\r\nserver=127.0.0.1:3\r\npassword=plain:secret9\r\n");
+        Check(g_plugin.PutFileW((local + L"in2.ini").c_str(), L"\\it-imp2", 0) == FS_FILE_EXISTS,
+              "a session file onto a saved session reports that it exists");
+        Check(g_plugin.PutFileW((local + L"in2.ini").c_str(), L"\\it-imp2", FS_COPYFLAGS_OVERWRITE) == FS_FILE_OK,
+              "and replaces it when told to overwrite");
+        Check(StoreValue(L"it-imp2") == L"secret9" && StoreValue(L"it-imp2$$jump") == L"(none)" &&
+              iniValue(L"it-imp2", L"server") == L"127.0.0.1:3",
+              "the replaced session has the file's settings and passwords only");
+        DeleteFileW((local + L"in2.ini").c_str());
+
+        // A folder of sessions named with a trailing separator, as TC does
+        // before copying a file into it, is listed, not connected to.
+        Check(g_plugin.PutFileW((local + L"in.ini").c_str(), L"\\it-fold\\s1.ini", 0) == FS_FILE_OK,
+              "a session file is copied into a folder of sessions");
+        {
+            WIN32_FIND_DATAW fd{};
+            const HANDLE h = g_plugin.FindFirstW(L"\\it-fold\\", &fd);
+            Check(h != INVALID_HANDLE_VALUE, "the folder lists with a trailing separator");
+            if (h != INVALID_HANDLE_VALUE)
+                g_plugin.FindClose(h);
+        }
+        g_plugin.DeleteFileW(L"\\it-fold\\s1");
 
         g_plugin.DeleteFileW(L"\\it-imp2");
         g_plugin.DeleteFileW(L"\\it-victim");
