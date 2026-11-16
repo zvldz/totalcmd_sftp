@@ -409,6 +409,7 @@
 12161=LAN Pair : l'ordinateur "{}" ({}) demande l'accès à tous les lecteurs de cet ordinateur.\n\nAutoriser ? Répondez Oui uniquement si vous associez vous-même ces ordinateurs en ce moment.
 12162=LAN Pair : l'autre ordinateur n'a pas autorisé cette connexion.
 12163=LAN Pair : un mot de passe est défini sur l'autre ordinateur. Saisissez ici le même mot de passe.
+12164=Attention : http:// simple – le mot de passe du PHP Agent est envoyé en clair à chaque requête. Utilisez https://.
 12089=SFTP
 12104=(manuel)
 12105= (introuvable)

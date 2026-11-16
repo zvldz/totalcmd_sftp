@@ -340,6 +340,10 @@ static int SendSimpleRequest(
     headers += L"\r\nX-SFTP-AUTH: ";
     headers += unicode_util::utf8_to_wstring(cs->password);
     headers += L"\r\n";
+    // A body here is form fields; PHP reads them into $_POST only with
+    // this content type.
+    if (body && bodyLen)
+        headers += L"Content-Type: application/x-www-form-urlencoded\r\n";
 
     BOOL ok = WinHttpSendRequest(h.request, headers.c_str(), (DWORD)-1L,
                                  (LPVOID)body, bodyLen, bodyLen, 0);
@@ -625,6 +629,16 @@ static int StreamUploadFromFile(
 int PhpAgentProbe(pConnectSettings cs)
 {
     PHP_LOG("Probe start url='%s'", (cs && !cs->server.empty()) ? cs->server.c_str() : "");
+    // The password goes with every request; over plain HTTP to another
+    // machine anyone on the path can read it. Said in TC's log on every
+    // connect, the connection itself is not refused.
+    AgentUrl probeUrl;
+    if (ParseAgentUrl(cs, &probeUrl) && !probeUrl.secure &&
+        probeUrl.host != L"localhost" && probeUrl.host != L"127.0.0.1" && probeUrl.host != L"::1" &&
+        probeUrl.host != L"[::1]") {
+        PHP_LOG("Probe: plain HTTP to a remote host, the password is sent unencrypted");
+        ShowStatusId(IDS_PHP_HTTP_WARNING, nullptr, true);
+    }
     DWORD code = 0;
     std::string body;
     int rc = SendSimpleRequest(cs, L"GET", L"PROBE", L"op=PROBE", nullptr, 0, &code, &body);
@@ -1767,17 +1781,22 @@ int PhpShellExecuteCommand(pConnectSettings cs,
     if (!cs || !command || !command[0])
         return SFTP_FAILED;
 
-    std::wstring query = L"op=SHELL_EXEC&cwd=";
+    // The command and the directory go in the request body, not the URL,
+    // so they do not end up in web server and proxy access logs.
+    std::wstring form = L"cwd=";
     if (inCwdAbs && !inCwdAbs->empty())
-        query += UrlEncodeUtf8(*inCwdAbs);
+        form += UrlEncodeUtf8(*inCwdAbs);
     else
-        query += L".";
-    query += L"&cmd=";
-    query += UrlEncodeUtf8(command);
+        form += L".";
+    form += L"&cmd=";
+    form += UrlEncodeUtf8(command);
+    // UrlEncodeUtf8 leaves only ASCII, so the narrowing copy is exact.
+    const std::string formBody(form.begin(), form.end());
 
     DWORD code = 0;
     std::string body;
-    int rc = SendSimpleRequest(cs, L"POST", L"SHELL_EXEC", query, nullptr, 0, &code, &body);
+    int rc = SendSimpleRequest(cs, L"POST", L"SHELL_EXEC", L"op=SHELL_EXEC",
+                               formBody.data(), static_cast<DWORD>(formBody.size()), &code, &body);
     if (rc != SFTP_OK)
         return rc;
     if (!IsHttpSuccess(code)) {

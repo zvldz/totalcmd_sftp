@@ -409,6 +409,7 @@
 12161=LAN Pair: el equipo "{}" ({}) solicita acceso a todas las unidades de este equipo.\n\n¿Permitirlo? Responda Sí solo si está emparejando ahora mismo esos equipos.
 12162=LAN Pair: el otro equipo no permitió esta conexión.
 12163=LAN Pair: el otro equipo tiene una contraseña. Introduzca aquí la misma contraseña.
+12164=Advertencia: http:// sin cifrar: la contraseña del PHP Agent se envía sin cifrar en cada solicitud. Use https://.
 12089=SFTP
 12104=(manual)
 12105= (no encontrada)

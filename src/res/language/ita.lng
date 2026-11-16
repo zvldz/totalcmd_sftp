@@ -408,6 +408,7 @@
 12161=LAN Pair: il computer "{}" ({}) chiede l'accesso a tutte le unità di questo computer.\n\nConsentire? Rispondi Sì solo se stai abbinando tu stesso questi computer in questo momento.
 12162=LAN Pair: l'altro computer non ha consentito questa connessione.
 12163=LAN Pair: sull'altro computer è impostata una password. Inserisci qui la stessa password.
+12164=Attenzione: http:// semplice – la password del PHP Agent viene inviata in chiaro a ogni richiesta. Usa https://.
 12089=SFTP
 12104=(manuale)
 12105= (mancante)

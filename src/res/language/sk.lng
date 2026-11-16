@@ -408,6 +408,7 @@
 12161=LAN Pair: počítač "{}" ({}) žiada o prístup ku všetkým jednotkám tohto počítača.\n\nPovoliť? Odpovedzte Áno, len ak práve sami párujete tieto počítače.
 12162=LAN Pair: druhý počítač toto pripojenie nepovolil.
 12163=LAN Pair: na druhom počítači je nastavené heslo. Zadajte sem rovnaké heslo.
+12164=Upozornenie: obyčajné http:// – heslo PHP Agent sa posiela nešifrovane s každou požiadavkou. Použite https://.
 12089=SFTP
 12104=(ručne)
 12105= (chýba)

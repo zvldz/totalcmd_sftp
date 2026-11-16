@@ -408,6 +408,7 @@
 12161=LAN Pair: a(z) "{}" ({}) számítógép hozzáférést kér a számítógép összes meghajtójához.\n\nEngedélyezi? Csak akkor válaszoljon Igennel, ha éppen most Ön párosítja ezeket a számítógépeket.
 12162=LAN Pair: a másik számítógép nem engedélyezte ezt a kapcsolatot.
 12163=LAN Pair: a másik számítógépen jelszó van beállítva. Adja meg itt ugyanazt a jelszót.
+12164=Figyelem: egyszerű http:// – a PHP Agent jelszava minden kérésnél titkosítatlanul megy át. Használjon https://-t.
 12089=SFTP
 12104=(kézi)
 12105= (hiányzik)

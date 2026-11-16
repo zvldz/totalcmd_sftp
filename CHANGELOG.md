@@ -45,6 +45,18 @@ this fork's 10.0.2.2. Each entry names where it came from.
   published in its source. Now the password is not saved, the log says
   why, and it is asked for on the next connect. Passwords saved in the old
   format are still read. *wesmar/sftp#9.*
+- **PHP Agent: shell commands off by default.** A freshly deployed
+  `sftp.php` (agent 1.0.3) refuses `SHELL_EXEC`, so its password gives
+  file access only. PHP Shell needs `AGENT_ALLOW_SHELL = true` in the file
+  or `TC_SFTP_AGENT_ALLOW_SHELL=1` in the web server's environment.
+  *wesmar/sftp#9.*
+- **PHP Shell commands no longer in the URL.** The command and the
+  directory are sent in the request body, so they stay out of web server
+  and proxy access logs. *wesmar/sftp#9.*
+- **Warning for PHP Agent over plain HTTP.** Connecting to an `http://`
+  agent on another machine writes a warning to the log: the password goes
+  unencrypted with every request. The connection is not refused.
+  *wesmar/sftp#9.*
 - **Stack buffer checks are on.** The plugin is built with `/GS`, so a
   stack buffer overrun ends the process instead of running whatever
   overwrote the return address. Control Flow Guard and CET were already on.

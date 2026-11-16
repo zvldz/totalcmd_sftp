@@ -115,7 +115,7 @@ X-SFTP-Signature: HMAC-SHA256(METHOD\nOPERATION\nPATH\nTIMESTAMP\nNONCE, psk)
 </ul>
 
 <div class="warn">
-  <b>The shell is not confined.</b> <code>SHELL_EXEC</code> runs any command as the web server user, outside <code>AGENT_ROOT</code> too. Whoever holds the password has that access. Set <code>const AGENT_ALLOW_SHELL = false;</code> in <code>sftp.php</code> when the shell is not needed.
+  <b>The shell is not confined.</b> <code>SHELL_EXEC</code> runs any command as the web server user, outside <code>AGENT_ROOT</code> too. Whoever holds the password has that access. It is off by default; turn it on with <code>const AGENT_ALLOW_SHELL = true;</code> in <code>sftp.php</code> or <code>TC_SFTP_AGENT_ALLOW_SHELL=1</code> in the web server's environment, only where it is needed.
 </div>
 
 <h2>URL Format</h2>
@@ -149,14 +149,14 @@ GET https://example.com/sftp.php?op=PROBE
 Response without the password:
 {
   "ok": true,
-  "agent": { "name": "TC PHP Agent", "version": "1.0.2" },
+  "agent": { "name": "TC PHP Agent", "version": "1.0.3" },
   "capabilities": { "recommended_chunk_size": 1048576 }
 }
 
 Response with a valid X-SFTP-Auth header:
 {
   "ok": true,
-  "agent": { "name": "TC PHP Agent", "version": "1.0.2" },
+  "agent": { "name": "TC PHP Agent", "version": "1.0.3" },
   "capabilities": { "recommended_chunk_size": 1048576, "operations": [...], ... },
   "runtime": { "php_version": "8.2", "sapi": "apache2handler" },
   "ini": { "upload_max_filesize": "256M", ... }
@@ -314,7 +314,10 @@ Response:
 
 <h3>SHELL_EXEC - Execute Command</h3>
 <pre>
-POST https://example.com/sftp.php?op=SHELL_EXEC&cmd=ls+-la&cwd=/var/www
+POST https://example.com/sftp.php?op=SHELL_EXEC
+Content-Type: application/x-www-form-urlencoded
+
+cwd=/var/www&amp;cmd=ls%20-la
 
 Response:
 {
@@ -327,7 +330,7 @@ Response:
   "stderr_b64": "base64_encoded_errors"
 }
 </pre>
-<p>With <code>AGENT_ALLOW_SHELL = false</code> the agent answers HTTP 403 <code>SHELL_DISABLED</code>.</p>
+<p>The plugin sends <code>cmd</code> and <code>cwd</code> in the body, so they stay out of access logs. With the shell off (the default: <code>AGENT_ALLOW_SHELL = false</code> and no <code>TC_SFTP_AGENT_ALLOW_SHELL=1</code> in the environment) the agent answers HTTP 403 <code>SHELL_DISABLED</code>.</p>
 
 <h2>PHP Shell Console</h2>
 
@@ -386,12 +389,12 @@ Response:
 <h3>Agent Constants</h3>
 <pre>
 AGENT_NAME = 'TC PHP Agent'
-AGENT_VERSION = '1.0.2'
+AGENT_VERSION = '1.0.3'
 AGENT_PSK = 'CHANGE_ME_TO_LONG_RANDOM_SECRET'
 AGENT_PSK_SALT = ''
 AGENT_PSK_SHA256 = ''
 AGENT_ROOT = __DIR__  (or custom path)
-AGENT_ALLOW_SHELL = true  (false refuses SHELL_EXEC)
+AGENT_ALLOW_SHELL = false  (true allows SHELL_EXEC; so does TC_SFTP_AGENT_ALLOW_SHELL=1 in the environment)
 AGENT_NONCE_TTL = 300
 AGENT_DEFAULT_CHUNK = 262144
 AGENT_MAX_LIST_ITEMS = 20000

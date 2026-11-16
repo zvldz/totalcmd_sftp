@@ -598,6 +598,7 @@
 #define IDS_LAN_ASK_NEW_PEER            12161
 #define IDS_LAN_ERR_DENIED              12162
 #define IDS_LAN_ERR_PASSWORD_REQUIRED   12163
+#define IDS_PHP_HTTP_WARNING            12164
 
 // Next default values for new objects
 //

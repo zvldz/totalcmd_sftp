@@ -32,7 +32,9 @@ if (!function_exists('str_ends_with')) {
  *
  * AGENT_ROOT confines file operations only. SHELL_EXEC runs any command as
  * the web server user, so whoever holds the PSK can reach everything that
- * user can; set AGENT_ALLOW_SHELL to false when the shell is not needed.
+ * user can. It is off by default; PHP Shell mode needs it on: set
+ * AGENT_ALLOW_SHELL to true, or the environment variable
+ * TC_SFTP_AGENT_ALLOW_SHELL to 1.
  */
 
 // ---------------------------------------------------------------------
@@ -40,13 +42,14 @@ if (!function_exists('str_ends_with')) {
 // ---------------------------------------------------------------------
 
 const AGENT_NAME = 'TC PHP Agent';
-const AGENT_VERSION = '1.0.2';
+const AGENT_VERSION = '1.0.3';
 const AGENT_PSK = 'CHANGE_ME_TO_LONG_RANDOM_SECRET';
 const AGENT_PSK_SALT = '';
 const AGENT_PSK_SHA256 = '';
 const AGENT_PSK_ENV_KEYS = ['TC_SFTP_AGENT_PSK', 'SFTP_AGENT_PSK', 'AGENT_PSK'];
 const AGENT_ROOT = __DIR__;
-const AGENT_ALLOW_SHELL = true;
+const AGENT_ALLOW_SHELL = false;
+const AGENT_ALLOW_SHELL_ENV = 'TC_SFTP_AGENT_ALLOW_SHELL';
 const AGENT_NONCE_TTL = 300; // seconds
 const AGENT_REPLAY_DIR = '._sftp_agent_nonce_cache';
 const AGENT_DEFAULT_CHUNK = 262144; // 256 KiB
@@ -958,9 +961,23 @@ function op_hash(): void
     ok(['path' => $relPath, 'algo' => $algo, 'hash' => $hash]);
 }
 
+// Shell commands are allowed by the constant in this file or by the
+// server's environment (AGENT_ALLOW_SHELL_ENV set to 1).
+function agent_shell_allowed(): bool
+{
+    if (AGENT_ALLOW_SHELL) {
+        return true;
+    }
+    $v = getenv(AGENT_ALLOW_SHELL_ENV);
+    if (!is_string($v) || $v === '') {
+        $v = (string)($_SERVER[AGENT_ALLOW_SHELL_ENV] ?? ($_ENV[AGENT_ALLOW_SHELL_ENV] ?? ''));
+    }
+    return trim($v) === '1';
+}
+
 function op_shell_exec(): void
 {
-    if (!AGENT_ALLOW_SHELL) {
+    if (!agent_shell_allowed()) {
         fail(403, 'SHELL_DISABLED', 'Shell execution is disabled in the agent');
     }
     $cmd = trim((string)get_param('cmd', ''));
@@ -1570,7 +1587,7 @@ function collect_capabilities(array $ini): array
     $ops = [
         'LIST', 'STAT', 'GET', 'PUT', 'FINALIZE', 'DELETE', 'MKDIR', 'RMDIR', 'RENAME', 'HASH'
     ];
-    $shellMethod = AGENT_ALLOW_SHELL ? pick_shell_method($disabled) : '';
+    $shellMethod = agent_shell_allowed() ? pick_shell_method($disabled) : '';
     if ($shellMethod !== '') {
         $ops[] = 'SHELL_EXEC';
     }

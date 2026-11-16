@@ -172,7 +172,7 @@ http://192.168.1.10/sftp.php         (local testing only — no encryption)
 <p>Uses the same <code>sftp.php</code> file — no separate deployment needed.</p>
 
 <div class="warn">
-  <b>The shell is not confined to the agent root.</b> File operations stay inside the folder <code>sftp.php</code> lives in (<code>AGENT_ROOT</code>), but shell commands run as the web server user and reach everything that user can. Anyone holding the password gets that access. If you do not need the shell, open <code>sftp.php</code> and set <code>const AGENT_ALLOW_SHELL = false;</code> — the agent then refuses <code>SHELL_EXEC</code> and the password gives file access only.
+  <b>The shell is not confined to the agent root.</b> File operations stay inside the folder <code>sftp.php</code> lives in (<code>AGENT_ROOT</code>), but shell commands run as the web server user and reach everything that user can. Anyone holding the password gets that access. That is why the shell is off by default: the agent refuses <code>SHELL_EXEC</code> and the password gives file access only. To use PHP Shell, set <code>const AGENT_ALLOW_SHELL = true;</code> in <code>sftp.php</code>, or <code>TC_SFTP_AGENT_ALLOW_SHELL=1</code> in the web server's environment.
 </div>
 
 <h2>Server requirements</h2>

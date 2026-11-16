@@ -14,6 +14,15 @@
   <li>Colored output: prompt/command/output separation.</li>
 </ul>
 
+<h2>Turning the shell on in the agent</h2>
+<p>Shell commands are off in <code>sftp.php</code> by default, and the agent answers <code>SHELL_DISABLED</code>. To use the console, turn them on on the server, in one of two ways:</p>
+<ul>
+  <li>in <code>sftp.php</code>: <code>const AGENT_ALLOW_SHELL = true;</code></li>
+  <li>or in the web server's environment: <code>TC_SFTP_AGENT_ALLOW_SHELL=1</code> (for example <code>SetEnv TC_SFTP_AGENT_ALLOW_SHELL 1</code> in Apache).</li>
+</ul>
+<p>Commands run as the web server user and are not confined to the agent root: whoever holds the password gets that access. Turn the shell on only where you need it.</p>
+<p>The command and the working directory are sent in the request body, not in the URL, so they do not appear in web server or proxy access logs. Use <code>https://</code>: over plain HTTP the password and the commands travel unencrypted.</p>
+
 <h2>Open behavior</h2>
 <p>The <code>Shell...</code> button validates PHP auth first. On auth errors, console does not open and an explicit error is shown.</p>
 
