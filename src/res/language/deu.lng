@@ -406,6 +406,9 @@
 12158=Läuft nach jeder Anmeldung auf dem Server, außer im Nur-SCP-Modus. Die Ausgabe erscheint im Protokollfenster.
 12159=Warten und Ausgabe anzeigen
 12160=Ohne Warten starten
+12161=LAN Pair: Computer "{}" ({}) fordert Zugriff auf alle Laufwerke dieses Computers.\n\nZulassen? Antworten Sie nur mit Ja, wenn Sie gerade selbst diese Computer koppeln.
+12162=LAN Pair: Der andere Computer hat diese Verbindung nicht zugelassen.
+12163=LAN Pair: Auf dem anderen Computer ist ein Passwort gesetzt. Geben Sie hier dasselbe Passwort ein.
 12089=SFTP
 12104=(manuell)
 12105= (fehlt)

@@ -49,8 +49,9 @@
 // Global SSH backend instance (created once, never changes)
 static std::unique_ptr<ISshBackend> g_sshBackend;
 
-// Global LAN Pair file server: started at plugin init, serves all authenticated peers.
-// Also the discovery service that announces this machine's presence.
+// Global LAN Pair file server: started when a LAN Pair session is opened,
+// serves all authenticated peers. Also the discovery service that
+// announces this machine's presence.
 static std::unique_ptr<LanFileServer>    g_lanFileServer;
 static std::unique_ptr<lanpair::DiscoveryService> g_lanDiscovery;
 
@@ -428,6 +429,32 @@ static std::string MakeLanPeerId()
     return std::string(host); // hostname only — stable across TC restarts
 }
 
+// A peer with no trust key asks for access while this machine has no LAN
+// Pair password: the user decides. The question comes from a server thread,
+// not from Total Commander, so it stays on top; the default answer is No.
+bool AskNewLanPeer(const std::string& peerId, const std::string& ip)
+{
+    std::string text = LngStrU8(IDS_LAN_ASK_NEW_PEER,
+        "LAN Pair: computer \"{}\" ({}) asks for access to all drives of this computer.\n\n"
+        "Allow it? Answer Yes only if you are pairing with that computer right now.");
+    // The peer id comes from the network: shown shortened, and the search
+    // for the next placeholder starts after it.
+    const std::string shownId = peerId.substr(0, 64);
+    size_t pos = 0;
+    for (const std::string* arg : { &shownId, &ip }) {
+        pos = text.find("{}", pos);
+        if (pos == std::string::npos) break;
+        text.replace(pos, 2, *arg);
+        pos += arg->size();
+    }
+    const std::wstring textW = unicode_util::utf8_to_wstring(text);
+    const int rc = MessageBoxW(nullptr, textW.c_str(), L"LAN Pair",
+        MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2 | MB_TOPMOST | MB_SETFOREGROUND | MB_SYSTEMMODAL);
+    SFTP_LOG("LAN", "new peer \"%s\" from %s: %s", shownId.c_str(), ip.c_str(),
+             rc == IDYES ? "allowed" : "refused");
+    return rc == IDYES;
+}
+
 void StartGlobalLanServices(bool startServer)
 {
     if (startServer && (!g_lanFileServer || !g_lanFileServer->isRunning())) {
@@ -443,6 +470,7 @@ void StartGlobalLanServices(bool startServer)
                 !storedPw.empty()) {
                 g_lanFileServer->setPassword(storedPw);
             }
+            g_lanFileServer->setNewPeerApprover(AskNewLanPeer);
         }
     }
 
@@ -465,6 +493,11 @@ void LanFileServerSetPassword(const std::string& pw)
 {
     if (g_lanFileServer)
         g_lanFileServer->setPassword(pw);
+}
+
+bool LanFileServerIsRunning()
+{
+    return g_lanFileServer && g_lanFileServer->isRunning();
 }
 
 void LanFileServerSetTrustedInstaller(bool enabled)
@@ -571,8 +604,17 @@ static int LanPairConnect(pConnectSettings cs)
         &err);
 
     if (!session) {
-        std::string msg = LngStrU8(IDS_LAN_ERR_CONN_FAILED, "LAN Pair: connection failed");
-        if (!err.message.empty()) msg += " \xe2\x80\x94 " + err.message;
+        std::string msg;
+        if (err.message.find("FAIL password-required") != std::string::npos) {
+            msg = LngStrU8(IDS_LAN_ERR_PASSWORD_REQUIRED,
+                "LAN Pair: the other computer has a password. Enter the same password here.");
+        } else if (err.message.find("FAIL denied") != std::string::npos) {
+            msg = LngStrU8(IDS_LAN_ERR_DENIED,
+                "LAN Pair: the other computer did not allow this connection.");
+        } else {
+            msg = LngStrU8(IDS_LAN_ERR_CONN_FAILED, "LAN Pair: connection failed");
+            if (!err.message.empty()) msg += " \xe2\x80\x94 " + err.message;
+        }
         if (cs->feedback) cs->feedback->ShowError(msg.c_str());
         return SFTP_FAILED;
     }

@@ -405,6 +405,9 @@
 12158=Viene eseguito sul server dopo ogni accesso, tranne in modalità solo SCP. L'output va nella finestra del registro.
 12159=Attendi e mostra l'output
 12160=Avvia senza attendere
+12161=LAN Pair: il computer "{}" ({}) chiede l'accesso a tutte le unità di questo computer.\n\nConsentire? Rispondi Sì solo se stai abbinando tu stesso questi computer in questo momento.
+12162=LAN Pair: l'altro computer non ha consentito questa connessione.
+12163=LAN Pair: sull'altro computer è impostata una password. Inserisci qui la stessa password.
 12089=SFTP
 12104=(manuale)
 12105= (mancante)

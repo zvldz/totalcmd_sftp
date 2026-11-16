@@ -9,6 +9,8 @@
 
 // Declared in SftpConnection.cpp
 extern void LanFileServerSetTrustedInstaller(bool enabled);
+extern bool LanFileServerIsRunning();
+extern bool AskNewLanPeer(const std::string& peerId, const std::string& ip);
 #include <new>
 #include <unordered_map>
 #include <vector>
@@ -806,8 +808,17 @@ static void HandleLanPairAction(HWND hWnd, ConnectDialogContext* dlgCtx, pConnec
             return true;
         }
 
+        // An open LAN Pair session already holds the port with its file
+        // server, which answers pairing requests the same way.
+        if (LanFileServerIsRunning()) {
+            const std::wstring s = LoadResStringW(IDS_LAN_MSG_RECEIVER_RUNNING);
+            ShowStatusW(s.empty() ? L"LAN Pair receiver already running." : s.c_str());
+            return true;
+        }
+
         lanpair::PairServerConfig cfg{};
         cfg.port = 45846;
+        cfg.approveNewPeer = AskNewLanPeer;
         cfg.peerId = dlgCtx->lanPeerId;
         cfg.displayName = WideToUtf8(dlgCtx->lanDisplayName);
         cfg.role = lanpair::PairRole::Receiver;

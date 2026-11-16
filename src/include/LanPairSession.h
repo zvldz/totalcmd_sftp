@@ -1,5 +1,6 @@
 #pragma once
 #include "LanPair.h"
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -117,6 +118,10 @@ public:
 
     // Enable or disable TrustedInstaller impersonation for incoming file operations.
     void setTrustedInstaller(bool enabled) noexcept;
+
+    // Asks the user whether a peer without a trust key (peer id, IP) may pair
+    // without a password. Without an approver such peers are refused.
+    void setNewPeerApprover(std::function<bool(const std::string&, const std::string&)> approver) noexcept;
 
 private:
     struct Impl;

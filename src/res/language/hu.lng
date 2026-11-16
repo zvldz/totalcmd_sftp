@@ -405,6 +405,9 @@
 12158=Minden bejelentkezés után lefut a kiszolgálón, kivéve csak SCP módban. A kimenete a naplóablakba kerül.
 12159=Várakozás és a kimenet megjelenítése
 12160=Indítás várakozás nélkül
+12161=LAN Pair: a(z) "{}" ({}) számítógép hozzáférést kér a számítógép összes meghajtójához.\n\nEngedélyezi? Csak akkor válaszoljon Igennel, ha éppen most Ön párosítja ezeket a számítógépeket.
+12162=LAN Pair: a másik számítógép nem engedélyezte ezt a kapcsolatot.
+12163=LAN Pair: a másik számítógépen jelszó van beállítva. Adja meg itt ugyanazt a jelszót.
 12089=SFTP
 12104=(kézi)
 12105= (hiányzik)

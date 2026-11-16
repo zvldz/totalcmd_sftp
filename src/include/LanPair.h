@@ -76,6 +76,9 @@ struct PairServerConfig {
     PairRole role = PairRole::Receiver;
     std::string password;
     std::chrono::milliseconds authTimeout{8000};
+    // Without a password: asked whether a peer without a trust key (peer id,
+    // IP) may pair. Without an approver such peers are refused.
+    std::function<bool(const std::string&, const std::string&)> approveNewPeer;
 };
 
 struct PairClientConfig {

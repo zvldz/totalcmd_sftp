@@ -405,6 +405,9 @@
 12158=Spustí se na serveru po každém přihlášení, kromě režimu jen SCP. Jeho výstup jde do okna protokolu.
 12159=Počkat a zobrazit výstup
 12160=Spustit bez čekání
+12161=LAN Pair: počítač "{}" ({}) žádá o přístup ke všem jednotkám tohoto počítače.\n\nPovolit? Odpovězte Ano, jen pokud právě sami párujete tyto počítače.
+12162=LAN Pair: druhý počítač toto připojení nepovolil.
+12163=LAN Pair: na druhém počítači je nastaveno heslo. Zadejte zde stejné heslo.
 12089=SFTP
 12104=(ručně)
 12105= (chybí)

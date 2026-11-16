@@ -20,6 +20,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <functional>
 #include <mutex>
 #include <algorithm>
 #include <memory>
@@ -310,6 +311,9 @@ AuthResult pair1Connect(
             return sendLine(s, auth.str());
         }
 
+        // Without a password the peer asks its user before answering, so the
+        // reply may take as long as that question stays open.
+        setSocketTimeout(s, 90000);
         return sendLine(s, "PAIR1 TRUSTNEW");
     };
 
@@ -469,9 +473,9 @@ std::unique_ptr<LanPairSession> LanPairSession::connect(
     if (ar.sock == INVALID_SOCKET) {
         const bool trustUnknown = err && err->message.find("trust-unknown") != std::string::npos;
         if (trustUnknown) {
-            // Server couldn't verify our stored key (e.g. DPAPI context mismatch after
-            // enabling TrustedInstaller).  Delete the stale client-side key and retry
-            // with TRUSTNEW so the peer issues a fresh shared secret.
+            // The server has no key for us (it lost or replaced its copy).
+            // Delete the stale client-side key and retry with TRUSTNEW: the
+            // peer issues a fresh shared secret if its user agrees.
             SFTP_LOG("LAN2", "trust-unknown: deleting stale client key, retrying with TRUSTNEW");
             lanpair::DpapiSecretStore::deleteSecret(
                 trustKeyForClient(remotePeerId, localPeerId), nullptr);
@@ -797,6 +801,9 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
     mutable std::mutex  passwordMu_;
     std::string         password_;
     std::atomic<bool>   trustedInstaller_{false};
+    std::mutex          approverMu_;
+    std::function<bool(const std::string&, const std::string&)> approver_;
+    std::atomic<bool>   approving_{false};
 
     // A finished std::thread stays joinable until someone joins it, so the
     // thread object cannot say on its own whether the work is over. The flag
@@ -819,7 +826,24 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
         }
     }
 
-    bool authenticateClient(SOCKET s, std::string& clientPeerId) {
+    // Asks the user about a peer that has no trust key. One question at a
+    // time: a peer arriving while one is open is refused, so a flood of
+    // requests cannot stack up dialogs.
+    bool approveNewPeer(const std::string& peerId, const std::string& ip) {
+        std::function<bool(const std::string&, const std::string&)> approver;
+        {
+            std::lock_guard<std::mutex> lk(approverMu_);
+            approver = approver_;
+        }
+        if (!approver) return false;
+        bool expected = false;
+        if (!approving_.compare_exchange_strong(expected, true)) return false;
+        const bool ok = approver(peerId, ip);
+        approving_.store(false);
+        return ok;
+    }
+
+    bool authenticateClient(SOCKET s, std::string& clientPeerId, const std::string& clientIp) {
         std::string line;
         if (!recvLine(s, &line)) return false;
 
@@ -901,6 +925,22 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
             lanpair::DpapiSecretStore::saveSecret(trustKey, raw, nullptr);
 
         } else if (auth.size() == 2 && auth[0] == "PAIR1" && auth[1] == "TRUSTNEW") {
+            // A peer without a key gets one only when something vouches for
+            // it: with a password set it has to prove it knows the password
+            // (AUTH above), without one the user of this machine decides.
+            bool havePassword = false;
+            {
+                std::lock_guard<std::mutex> lk(passwordMu_);
+                havePassword = !password_.empty();
+            }
+            if (havePassword) {
+                sendLine(s, "PAIR1 FAIL password-required");
+                return false;
+            }
+            if (!approveNewPeer(clientPeerId, clientIp)) {
+                sendLine(s, "PAIR1 FAIL denied");
+                return false;
+            }
             std::array<uint8_t, kDerivedKeySize> fresh{};
             if (!randomBytes(fresh.data(), fresh.size())) return false;
             key.assign(fresh.begin(), fresh.end());
@@ -1133,19 +1173,30 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
     }
 
     void handleClient(SOCKET client) {
-        if (trustedInstaller_.load(std::memory_order_relaxed)) {
-            AcquireTrustedInstallerToken();
-        }
-
         const BOOL keepAlive = TRUE;
         setsockopt(client, SOL_SOCKET, SO_KEEPALIVE,
                    reinterpret_cast<const char*>(&keepAlive), sizeof(keepAlive));
         setSocketTimeout(client, 300000); // 5 minutes for file operations
 
+        std::string clientIp;
+        sockaddr_in peer{};
+        int peerLen = sizeof(peer);
+        if (getpeername(client, reinterpret_cast<sockaddr*>(&peer), &peerLen) == 0) {
+            char ipBuf[INET_ADDRSTRLEN] = {};
+            if (inet_ntop(AF_INET, &peer.sin_addr, ipBuf, sizeof(ipBuf)))
+                clientIp = ipBuf;
+        }
+
         std::string clientPeerId;
-        if (!authenticateClient(client, clientPeerId)) {
+        if (!authenticateClient(client, clientPeerId, clientIp)) {
             closesocket(client);
             return;
+        }
+
+        // Only an authenticated peer gets the TrustedInstaller token. The
+        // trust keys are read before it, in the user's own profile.
+        if (trustedInstaller_.load(std::memory_order_relaxed)) {
+            AcquireTrustedInstallerToken();
         }
 
         std::string helloLine;
@@ -1233,8 +1284,10 @@ bool LanFileServer::start(uint16_t port, lanpair::PairError* err) noexcept {
         return false;
     }
 
+    // Exclusive: no other socket, of this or another process, can bind the
+    // same port and take over the connections.
     const BOOL yes = TRUE;
-    setsockopt(impl_->listenSock_, SOL_SOCKET, SO_REUSEADDR,
+    setsockopt(impl_->listenSock_, SOL_SOCKET, SO_EXCLUSIVEADDRUSE,
                reinterpret_cast<const char*>(&yes), sizeof(yes));
 
     sockaddr_in bindAddr{};
@@ -1285,4 +1338,11 @@ void LanFileServer::setPassword(const std::string& password) noexcept {
 void LanFileServer::setTrustedInstaller(bool enabled) noexcept {
     if (!impl_) return;
     impl_->trustedInstaller_.store(enabled, std::memory_order_relaxed);
+}
+
+void LanFileServer::setNewPeerApprover(
+    std::function<bool(const std::string&, const std::string&)> approver) noexcept {
+    if (!impl_) return;
+    std::lock_guard<std::mutex> lk(impl_->approverMu_);
+    impl_->approver_ = std::move(approver);
 }

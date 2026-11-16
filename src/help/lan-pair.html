@@ -28,28 +28,29 @@
   <tr><td><b>45846</b></td><td>TCP</td><td>Pairing handshake and file transfer session</td></tr>
 </table>
 <p>Both ports must be open in Windows Firewall on both machines. If peers do not appear in the discovery list, this is the first thing to check.</p>
+<p>Nothing listens on these ports until LAN Pair is used: the file server and discovery start when a LAN Pair session is opened (Auto or Donor) or when <b>Pair...</b> is clicked, and stop when Total Commander exits. A machine that only uses SSH, SFTP or PHP Agent sessions opens no LAN Pair ports.</p>
 
 <div class="note">
   <b>Firewall tip:</b> UDP broadcast (port 45845) is blocked between network segments and VLANs by default. LAN Pair discovery works reliably only within the same broadcast domain (same subnet/switch). If your machines are on different VLANs, peers will not be found via auto-discovery.
 </div>
 
 <h2>Trust model — first connection vs. subsequent connections</h2>
-<p>LAN Pair uses a <b>TOFU (Trust On First Use)</b> authentication model. You only need to enter a password once:</p>
+<p>A peer gets access to this machine only with a trust key. The first connection creates it in one of two ways:</p>
 <ol>
-  <li><b>First connection:</b> A pairing password is required. Both sides must use the same password.</li>
-  <li>On success, the plugin derives a cryptographic trust key (PBKDF2-HMAC-SHA256, 120,000 iterations) and stores it encrypted on disk via Windows DPAPI — bound to your Windows user account.</li>
-  <li><b>Subsequent connections:</b> The stored trust key is used automatically. No password prompt appears.</li>
+  <li><b>With a password:</b> both sides enter the same pairing password. The trust key is derived from it (PBKDF2-HMAC-SHA256, 120,000 iterations). A peer that does not know the password is refused.</li>
+  <li><b>Without a password:</b> the machine being connected to shows a question: <em>computer "NAME" (IP) asks for access to all drives of this computer. Allow it?</em> Only <b>Yes</b> creates a trust key; the default answer is No. Answer Yes only when you are pairing with that computer yourself right now. While one question is open, other new peers are refused.</li>
 </ol>
-<p>Trust is stored per peer pair. Removing a session or switching Windows accounts requires re-pairing with a password.</p>
+<p><b>Subsequent connections:</b> the stored trust key is used automatically, with no password and no question.</p>
+<p>Trust keys are stored per peer pair, encrypted with Windows DPAPI for your Windows user account: other accounts on the same machine cannot read them. Removing a session or switching Windows accounts requires pairing again.</p>
 
 <div class="note">
-  <b>Note:</b> The pairing password can be left empty if both machines agree on an empty password. In that case, trust is still established cryptographically — but an empty password offers no brute-force resistance. Use a real password on any network you do not fully control.
+  <b>Note:</b> on a machine with a pairing password set, a peer without a key always has to know that password; the question is not shown. Use a password on any network you do not fully control.
 </div>
 
 <h2>Roles</h2>
 <ul>
   <li><b>Auto</b> — guided 60-second pairing wizard; the plugin starts the local file server in the background and waits up to 60 seconds for a peer to appear, then prompts you to connect or stay as server.</li>
-  <li><b>Donor</b> — runs the local LAN Pair file server and waits for an incoming Receiver connection. Does <em>not</em> initiate outgoing connections — the other machine (configured as Receiver) must connect first. Use this on the machine whose files you want to access remotely.</li>
+  <li><b>Donor</b> — runs the local LAN Pair file server and waits for an incoming Receiver connection. The server starts when this session is opened in Total Commander, so open it once before the Receiver connects. Does <em>not</em> initiate outgoing connections — the other machine (configured as Receiver) must connect first. Use this on the machine whose files you want to access remotely.</li>
   <li><b>Receiver</b> — connects to the Donor's file server. Does <em>not</em> start a local file server. Use this on the machine that will browse and transfer files from the Donor.</li>
 </ul>
 <div class="note">
@@ -81,7 +82,7 @@
   <li>Choose <b>Auto</b>, <b>Receiver</b>, or <b>Donor</b> in the role dropdown.</li>
   <li>Optional: set <b>Session timeout</b> in minutes. <code>0</code> means no limit.</li>
   <li>Click <b>Pair...</b>.</li>
-  <li>On first use: enter the pairing password (must match on both sides).</li>
+  <li>On first use: enter the pairing password (must match on both sides), or leave it empty on both and answer <b>Yes</b> to the question on the other machine.</li>
   <li>When the peer is found and roles are confirmed, the session opens as a regular TC file panel.</li>
 </ol>
 
@@ -90,7 +91,7 @@
 
 <h3>How it works</h3>
 <ol>
-  <li>When a remote peer connects to the local LAN Pair file server, the server thread impersonates the TrustedInstaller service account before handling any commands.</li>
+  <li>When a remote peer connects to the local LAN Pair file server and has been authenticated, the server thread impersonates the TrustedInstaller service account before handling any commands. A peer that is not authenticated never gets it.</li>
   <li>While impersonating TrustedInstaller, all file operations (read, write, delete, rename, mkdir) run with TrustedInstaller privileges, bypassing the normal ownership restrictions.</li>
   <li>Impersonation is reverted automatically when the remote peer disconnects.</li>
 </ol>
@@ -160,10 +161,11 @@ lanparti=0
   <tr><td>Peers not found</td><td>Windows Firewall blocking UDP 45845 or machines on different subnets</td><td>Allow UDP 45845 inbound in Windows Firewall; verify both machines are on the same network segment</td></tr>
   <tr><td>Connection refused</td><td>Windows Firewall blocking TCP 45846</td><td>Allow TCP 45846 inbound on the Receiver machine</td></tr>
   <tr><td>Password rejected on first connect</td><td>Passwords do not match on both sides</td><td>Ensure both sides use exactly the same pairing password (case-sensitive)</td></tr>
-  <tr><td>Trust forgotten after reinstall</td><td>DPAPI trust keys are stored per Windows user/machine and lost on reinstall</td><td>Re-pair with password; trust will be rebuilt automatically</td></tr>
+  <tr><td>"The other computer did not allow this connection"</td><td>No password is set there and the question was answered No, was not answered in 90 seconds, or another question was already open</td><td>Try again and answer <b>Yes</b> on the other machine, or set the same pairing password on both</td></tr>
+  <tr><td>"The other computer has a password"</td><td>A pairing password is set there, none here</td><td>Enter the same pairing password in this session</td></tr>
+  <tr><td>Trust forgotten after reinstall</td><td>DPAPI trust keys are stored per Windows user and lost on reinstall</td><td>Pair again; trust will be rebuilt automatically</td></tr>
   <tr><td>Peers found but classic SMB works — LAN Pair does not</td><td>UDP broadcast not reaching the other machine (VLAN, managed switch isolation)</td><td>Check switch/VLAN settings; UDP broadcast must reach port 45845 on both sides</td></tr>
   <tr><td>TrustedInstaller files cannot be modified</td><td>TrustedInstaller option not enabled, or TC not running with SeDebugPrivilege</td><td>Enable the <b>Trusted Installer</b> checkbox in the connection settings on the machine that owns the files; run Total Commander as Administrator if needed</td></tr>
-  <tr><td>TrustedInstaller option enabled but pairing fails on first connect</td><td>Old DPAPI trust key was saved under a different user context and cannot be decrypted</td><td>Delete the matching <code>lanpair_trust_*.bin</code> file from the plugin directory and re-pair; trust will be rebuilt using machine-context encryption compatible with TrustedInstaller</td></tr>
 </table>
 
 <p><a href="index.html">Back to index</a></p>

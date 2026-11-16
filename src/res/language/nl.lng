@@ -405,6 +405,9 @@
 12158=Wordt na elke aanmelding op de server uitgevoerd, behalve in de modus alleen SCP. De uitvoer verschijnt in het logvenster.
 12159=Wachten en uitvoer tonen
 12160=Starten zonder wachten
+12161=LAN Pair: computer "{}" ({}) vraagt toegang tot alle stations van deze computer.\n\nToestaan? Antwoord alleen Ja als u deze computers nu zelf koppelt.
+12162=LAN Pair: de andere computer heeft deze verbinding niet toegestaan.
+12163=LAN Pair: op de andere computer is een wachtwoord ingesteld. Voer hier hetzelfde wachtwoord in.
 12089=SFTP
 12104=(handmatig)
 12105= (ontbreekt)

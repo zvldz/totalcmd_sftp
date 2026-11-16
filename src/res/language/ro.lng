@@ -405,6 +405,9 @@
 12158=Rulează pe server după fiecare autentificare, cu excepția modului doar SCP. Ieșirea apare în fereastra jurnalului.
 12159=Așteaptă și afișează ieșirea
 12160=Pornește fără așteptare
+12161=LAN Pair: computerul "{}" ({}) cere acces la toate unitățile acestui computer.\n\nPermiteți? Răspundeți Da doar dacă asociați chiar acum aceste computere.
+12162=LAN Pair: celălalt computer nu a permis această conexiune.
+12163=LAN Pair: pe celălalt computer este setată o parolă. Introduceți aici aceeași parolă.
 12089=SFTP
 12104=(manual)
 12105= (lipsește)

@@ -103,8 +103,9 @@ std::optional<std::vector<uint8_t>> dpapiProtect(std::span<const uint8_t> plain)
     in.cbData = static_cast<DWORD>(plain.size());
 
     DATA_BLOB out{};
+    // User scope: other accounts on this machine cannot decrypt the keys.
     if (!CryptProtectData(&in, L"sftpplug-lanpair", nullptr, nullptr, nullptr,
-                          CRYPTPROTECT_UI_FORBIDDEN | CRYPTPROTECT_LOCAL_MACHINE, &out))
+                          CRYPTPROTECT_UI_FORBIDDEN, &out))
         return std::nullopt;
 
     std::vector<uint8_t> enc(out.pbData, out.pbData + out.cbData);
@@ -443,6 +444,12 @@ struct PairServer::Impl {
                     sendLine(s, "PAIR1 FAIL trust-required");
                     return false;
                 }
+                // No password and no key: the user of this machine decides.
+                if (!cfg.approveNewPeer ||
+                    !cfg.approveNewPeer(clientPeerId, info ? info->remoteIp : std::string())) {
+                    sendLine(s, "PAIR1 FAIL denied");
+                    return false;
+                }
                 std::array<uint8_t, kDerivedKeySize> fresh{};
                 if (!randomBytes(fresh.data(), fresh.size())) return false;
                 key.assign(fresh.begin(), fresh.end());
@@ -521,8 +528,10 @@ bool PairServer::start(const PairServerConfig& cfg,
         return false;
     }
 
+    // Exclusive: no other socket, of this or another process, can bind the
+    // same port and take over the connections.
     const BOOL yes = TRUE;
-    setsockopt(impl_->listenSock, SOL_SOCKET, SO_REUSEADDR,
+    setsockopt(impl_->listenSock, SOL_SOCKET, SO_EXCLUSIVEADDRUSE,
                reinterpret_cast<const char*>(&yes), sizeof(yes));
 
     sockaddr_in bindAddr{};
@@ -690,6 +699,9 @@ bool PairClient::connectAndAuthenticate(const PairClientConfig& cfg,
                 return false;
             }
         } else {
+            // Without a password the peer asks its user before answering, so
+            // the reply may take as long as that question stays open.
+            setSocketTimeout(s, 90000);
             if (!sendLine(s, "PAIR1 TRUSTNEW")) {
                 closesocket(s);
                 setErr(err, WSAGetLastError(), "Cannot send trust request");

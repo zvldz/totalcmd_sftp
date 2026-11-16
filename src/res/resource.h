@@ -595,6 +595,9 @@
 #define IDS_MORE_SENDCMD_HINT           12158
 #define IDS_MORE_SENDCMD_WAIT           12159
 #define IDS_MORE_SENDCMD_NOWAIT         12160
+#define IDS_LAN_ASK_NEW_PEER            12161
+#define IDS_LAN_ERR_DENIED              12162
+#define IDS_LAN_ERR_PASSWORD_REQUIRED   12163
 
 // Next default values for new objects
 //

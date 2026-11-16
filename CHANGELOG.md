@@ -15,6 +15,27 @@ this fork's 10.0.2.2. Each entry names where it came from.
 
 ### Security
 
+- **LAN Pair no longer lets an unknown computer in.** Any machine on the
+  same network could connect to LAN Pair's file server, ask for a new
+  trust key and get it, with no password and no question, and then read,
+  write and delete files on every drive. Now a computer without a key is
+  let in only if it knows the pairing password or, when no password is
+  set, after the user answers Yes to a question naming it and its IP
+  (default No). The same applies to the receiver started by Pair...
+  Reported in [wesmar/sftp#8](https://github.com/wesmar/sftp/issues/8).
+- **LAN Pair ports are open only while LAN Pair is used.** The file server
+  and discovery started as soon as the plugin loaded, for everyone, even
+  without a single LAN Pair session. Now they start when a LAN Pair session
+  is opened or Pair... is clicked. A Donor has to open its session once
+  before the Receiver connects. The ports are bound exclusively, so no
+  other program can take them over. *wesmar/sftp#8.*
+- **LAN Pair's TrustedInstaller token only after authentication.** With
+  the Trusted Installer option on, the server took the token before
+  checking the peer. *wesmar/sftp#8.*
+- **LAN Pair trust keys readable only by your Windows account.** They were
+  encrypted with machine-wide DPAPI, so any other account on the computer
+  could decrypt them. Keys stored earlier keep working. Reported in
+  [wesmar/sftp#9](https://github.com/wesmar/sftp/issues/9).
 - **Stack buffer checks are on.** The plugin is built with `/GS`, so a
   stack buffer overrun ends the process instead of running whatever
   overwrote the return address. Control Flow Guard and CET were already on.

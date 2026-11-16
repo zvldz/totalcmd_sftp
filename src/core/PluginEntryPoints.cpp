@@ -32,7 +32,6 @@
 #include "VirtualSessionRegistry.h"
 
 // Declared in SftpConnection.cpp
-void StartGlobalLanServices(bool startServer = true);
 void StopGlobalLanServices();
 
 HINSTANCE hinst = nullptr;
@@ -554,8 +553,9 @@ static int _FsInit(int PluginNr)
     // Load language now in case FsSetDefaultParams was not called yet or registry lookup failed.
     DetectAndApplyLanguage(nullptr);
 
+    // LAN Pair's file server and discovery are not started here: they come
+    // up only when a LAN Pair session is opened (LanPairConnect).
     InitMultiServer();
-    StartGlobalLanServices();  // Start LAN Pair file server + discovery in background
     return 0;
 }
 

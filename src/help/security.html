@@ -45,7 +45,8 @@ icacls "C:\Program Files\Total Commander\wcx_ftp.ini" /grant "${env:USERNAME}:F"
 <ul>
   <li>Authentication uses PBKDF2-HMAC-SHA256 with <b>120,000 iterations</b> to derive a session key from the pairing password.</li>
   <li>Both sides exchange HMAC-SHA256 challenge-response proofs over TCP. Neither the password nor the derived key is transmitted in plain form.</li>
-  <li>On first successful connection the server issues a trust token (<b>TOFU — Trust On First Use</b>). The plugin stores this token encrypted via Windows DPAPI, keyed per peer-pair and per Windows user account.</li>
+  <li>A peer without a trust key gets one only if it proves the pairing password or, when no password is set, after the user of the machine being connected to answers Yes to a question naming the peer and its IP (default No). The plugin stores the key encrypted via Windows DPAPI in user scope, keyed per peer-pair: other Windows accounts on the machine cannot read it.</li>
+  <li>The LAN Pair ports are opened only when LAN Pair is used (a LAN Pair session or <b>Pair...</b>), with exclusive binding, and the TrustedInstaller token is taken only after a peer is authenticated.</li>
   <li>Subsequent connections use the stored DPAPI trust key — no password prompt.</li>
   <li>Session timeout is enforced between operations; active transfers are never killed mid-stream.</li>
   <li>All LAN Pair cryptography uses Windows BCrypt only — no third-party DLLs.</li>
