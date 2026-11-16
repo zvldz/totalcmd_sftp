@@ -8,14 +8,20 @@
 //   remote-base  existing writable remote directory, e.g. /tmp
 //   mode         the transfer mode the session is set up for (sftp, scp,
 //                scponly, shell, text, text-scp, text-scponly, nosub,
-//                nosub-bad, postcmd, key-*, classic-gate, secrets); the text* modes
-//                also run the text-mode (CRLF <-> LF) checks; secrets needs no
-//                server: it checks where passwords end up when sessions are
-//                imported, exported, copied, renamed and deleted
+//                nosub-bad, postcmd, key-*, classic-gate, secrets, jump-*,
+//                pass-store, socks5*, http-proxy, hostkey, netfail); the text*
+//                modes also run the text-mode (CRLF <-> LF) checks; secrets needs
+//                no server: it checks where passwords end up when sessions are
+//                imported, exported, copied, renamed and deleted; hostkey and
+//                netfail run checks of their own, the others the whole suite
+//                through their route
 //
 // Environment: SFTP_IT_POSTCMD_EXPECT, the line the post-login command
 // prints (mode postcmd); SFTP_IT_RESTART_CMD, a command that restarts the
-// server mid-run, after which the session has to reconnect (mode nosub).
+// server mid-run, after which the session has to reconnect (mode nosub);
+// SFTP_IT_HOSTKEY_CMD, one that gives the server a new host key and restarts
+// it (mode hostkey); SFTP_IT_STORE, "name=password|..." entries for Total
+// Commander's password manager, which the run then provides.
 //
 // Non-destructive by construction: everything the run creates lives in
 // <remote-base>/sftpplug-it-<random>, and only that directory is removed.
@@ -25,6 +31,7 @@
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
+#include <winsock2.h>
 #include <windows.h>
 #include <bcrypt.h>
 
@@ -45,6 +52,7 @@
 #include "fsplugin.h"
 
 #pragma comment(lib, "bcrypt.lib")
+#pragma comment(lib, "ws2_32.lib")
 
 namespace {
 
@@ -97,6 +105,7 @@ struct Plugin {
 // Callbacks
 // ---------------------------------------------------------------------------
 int g_unexpectedPrompts = 0;
+int g_hostKeyPrompts = 0;
 int g_messages = 0;
 std::wstring g_lastMessage;
 bool g_verbose = false;
@@ -161,6 +170,7 @@ BOOL WINAPI OnRequest(int, int type, LPCWSTR title, LPCWSTR text, LPWSTR returne
                               t.find(L"ingerprint") != std::wstring::npos;
     if ((type == RT_MsgYesNo || type == RT_MsgOKCancel) && aboutHostKey) {
         const bool accept = EnvIs(L"SFTP_IT_ACCEPT_NEW_HOSTKEY", L"1");
+        ++g_hostKeyPrompts;
         std::printf("      prompt (host key, %s): %s\n", accept ? "accepted" : "declined", Narrow(all).c_str());
         if (!accept)
             ++g_unexpectedPrompts;
@@ -227,6 +237,36 @@ std::wstring StoreValue(const std::wstring& key)
 {
     const auto it = g_store.find(key);
     return it == g_store.end() ? L"(none)" : it->second;
+}
+
+// A local TCP port that misbehaves: `closeAtOnce` closes every connection
+// as soon as it is accepted (a proxy that drops the client), otherwise each
+// connection is held open with nothing ever sent (a server that hangs).
+// Runs until the process ends.
+void ServeBadPort(unsigned short port, bool closeAtOnce)
+{
+    SOCKET listener = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    if (listener == INVALID_SOCKET || bind(listener, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) != 0 ||
+        listen(listener, 8) != 0) {
+        std::printf("FATAL cannot listen on %u\n", port);
+        return;
+    }
+    std::thread([listener, closeAtOnce] {
+        std::vector<SOCKET> held;
+        for (;;) {
+            SOCKET c = accept(listener, nullptr, nullptr);
+            if (c == INVALID_SOCKET)
+                return;
+            if (closeAtOnce)
+                closesocket(c);
+            else
+                held.push_back(c);
+        }
+    }).detach();
 }
 
 // ---------------------------------------------------------------------------
@@ -388,6 +428,26 @@ int wmain(int argc, wchar_t** argv)
     WideCharToMultiByte(CP_ACP, 0, (iniDir + L"\\fsplugin.ini").c_str(), -1, dps.DefaultIniName, MAX_PATH, nullptr, nullptr);
     g_plugin.SetDefaultParams(&dps);
 
+    // Passwords the run keeps in Total Commander's password manager, which
+    // is then offered to the plugin as TC offers it.
+    {
+        std::wstring entries = EnvString(L"SFTP_IT_STORE");
+        if (!entries.empty()) {
+            size_t at = 0;
+            while (at <= entries.size()) {
+                const size_t bar = entries.find(L'|', at);
+                const std::wstring entry = entries.substr(at, bar == std::wstring::npos ? std::wstring::npos : bar - at);
+                const size_t eq = entry.find(L'=');
+                if (eq != std::wstring::npos)
+                    g_store[entry.substr(0, eq)] = entry.substr(eq + 1);
+                if (bar == std::wstring::npos)
+                    break;
+                at = bar + 1;
+            }
+            g_plugin.SetCryptCallbackW(OnCrypt, 1, FS_CRYPTOPT_MASTERPASS_SET);
+        }
+    }
+
     // A random suffix keeps parallel or repeated runs apart.
     std::random_device rd;
     const std::wstring runName = L"sftpplug-it-" + std::to_wstring(rd() % 1000000000u);
@@ -417,6 +477,55 @@ int wmain(int argc, wchar_t** argv)
         Check(!listedGate, "a PHP Agent session is not connected by the classic build");
         Check(g_lastMessage.find(L"extra build") != std::wstring::npos,
               "the refusal names the extra build");
+        std::printf("%d passed, %d failed, %d known\n", g_passed, g_failed, g_known);
+        return g_failed == 0 ? 0 : 1;
+    }
+
+    if (mode == L"netfail") {
+        WSADATA wsa{};
+        WSAStartup(MAKEWORD(2, 2), &wsa);
+        ServeBadPort(2291, true);
+        ServeBadPort(2292, false);
+        const auto timed = [](const wchar_t* path, bool& listed) {
+            const ULONGLONG start = GetTickCount64();
+            ListDir(path, listed);
+            return (GetTickCount64() - start) / 1000;
+        };
+        bool listed = true;
+        ULONGLONG seconds = timed(L"\\it-netfail-close", listed);
+        Check(!listed && seconds < 15,
+              "a proxy that drops the connection fails it, in " + std::to_string(seconds) + " s");
+        listed = true;
+        seconds = timed(L"\\it-netfail-longproxy", listed);
+        Check(!listed && seconds < 15,
+              "a proxy name too long for its buffer is refused, in " + std::to_string(seconds) + " s");
+        listed = true;
+        seconds = timed(L"\\it-netfail-silent", listed);
+        Check(!listed && seconds < 45,
+              "a server that never answers the handshake is given up on, in " + std::to_string(seconds) + " s");
+        Check(g_unexpectedPrompts == 0, "no unexpected prompts");
+        std::printf("%d passed, %d failed, %d known\n", g_passed, g_failed, g_known);
+        return g_failed == 0 ? 0 : 1;
+    }
+
+    if (mode == L"hostkey") {
+        // The server gets a new host key while the session is open. The
+        // reconnect that follows has to ask about it, as the first connect
+        // did about the first key — not fail without a word.
+        bool listedHk = false;
+        ListDir(root, listedHk);
+        Check(listedHk, "connect and list");
+        const int promptsBefore = g_hostKeyPrompts;
+        const std::wstring cmd = EnvString(L"SFTP_IT_HOSTKEY_CMD");
+        Check(!cmd.empty() && _wsystem(cmd.c_str()) == 0, "the server gets a new host key");
+        bool again = false;
+        for (int attempt = 0; attempt < 10 && !again; ++attempt) {
+            Sleep(1000);
+            ListDir(root, again);
+        }
+        Check(again && g_hostKeyPrompts == promptsBefore + 1,
+              "the reconnect asks about the changed host key (" +
+              std::to_string(g_hostKeyPrompts - promptsBefore) + " question)");
         std::printf("%d passed, %d failed, %d known\n", g_passed, g_failed, g_known);
         return g_failed == 0 ? 0 : 1;
     }

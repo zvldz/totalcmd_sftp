@@ -6,9 +6,13 @@
 #   docker compose up -d --build           start both
 #   docker compose down                    stop and remove them
 #
-# ssh        port 2222, the usual "sftp" subsystem
+# ssh        port 2222, the usual "sftp" subsystem; also the jump host,
+#            reaching its own sshd as 127.0.0.1:22
 # ssh-nosub  port 2223, no subsystem: SFTP only through
 #            sftpservercommand=/usr/lib/openssh/sftp-server
+# ssh-hk     port 2224, whose host key a test replaces mid-run
+# proxy      SOCKS5 on 1080 (open) and 1081 (proxyuser / proxypass), HTTP
+#            CONNECT on 8888; they reach the server as ssh:22
 
 x-ssh: &ssh
   build: .
@@ -29,3 +33,21 @@ services:
       NO_SFTP_SUBSYSTEM: "1"
     ports:
       - "127.0.0.1:2223:22"
+
+  ssh-hk:
+    <<: *ssh
+    ports:
+      - "127.0.0.1:2224:22"
+
+  proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile.proxy
+    image: sftpplug-proxy-test
+    restart: "no"
+    depends_on:
+      - ssh
+    ports:
+      - "127.0.0.1:1080:1080"
+      - "127.0.0.1:1081:1081"
+      - "127.0.0.1:8888:8888"

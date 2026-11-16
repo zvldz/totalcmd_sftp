@@ -11,15 +11,20 @@ sftpplug.ini, so nothing of the user's own configuration is read or written.
 
 By default the servers are the Docker bench in tools\ssh-test, started here
 (keys are generated on first use):
-  127.0.0.1:2222  OpenSSH with the "sftp" subsystem
+  127.0.0.1:2222  OpenSSH with the "sftp" subsystem; also the jump host
   127.0.0.1:2223  the same without it, reached through sftpservercommand
+  127.0.0.1:2224  the same, given a new host key by the hostkey mode
+  127.0.0.1:1080  SOCKS5 proxy, 1081 the same with a user and password,
+                  8888 an HTTP CONNECT proxy, all in front of the first
 
 Everything a run creates on the server lives in one directory under
 -RemoteBase, and only that directory is removed.
 
 .PARAMETER Modes
 sftp, scp, scponly, shell, text, text-scp, text-scponly, nosub, nosub-bad,
-postcmd, key-utf8, key-cp1251, classic-gate, secrets (default: all).
+postcmd, key-utf8, key-cp1251, classic-gate, secrets, pass-store, jump-key,
+jump-pass, jump-ref, socks5, socks5-auth, http-proxy, hostkey, netfail
+(default: all).
   text*      text mode (CRLF <-> LF) over SFTP, SCP and SCP-only
   nosub      SFTP through sftpservercommand; the server is restarted
              mid-run and the session has to reconnect through the command
@@ -33,6 +38,16 @@ postcmd, key-utf8, key-cp1251, classic-gate, secrets (default: all).
   key-*      a key whose passphrase is a Cyrillic word, stored as UTF-8 or
              as cp1251 bytes; the second only means something where the
              ANSI code page is 1251
+  pass-store the password kept in Total Commander's password manager ("!")
+  jump-*     through the jump host: with a key, with its password in the
+             password manager, and named by a reference to another session
+             whose password is there
+  socks5*, http-proxy  through a proxy; socks5-auth with a user, its password
+             in the password manager
+  hostkey    the server's host key changes mid-run: the reconnect has to ask
+  netfail    no server: a proxy that drops the connection, a proxy name too
+             long for its buffer, a server that never answers the handshake;
+             each fails, and in time
 
 .EXAMPLE
 .\tests\run-integration-tests.ps1
@@ -40,7 +55,7 @@ postcmd, key-utf8, key-cp1251, classic-gate, secrets (default: all).
 #>
 param(
     [ValidateSet('x64', 'x86', 'both')] [string]$Arch = 'both',
-    [string[]]$Modes = @('sftp', 'scp', 'scponly', 'shell', 'text', 'text-scp', 'text-scponly', 'nosub', 'nosub-bad', 'postcmd', 'key-utf8', 'key-cp1251', 'classic-gate', 'secrets'),
+    [string[]]$Modes = @('sftp', 'scp', 'scponly', 'shell', 'text', 'text-scp', 'text-scponly', 'nosub', 'nosub-bad', 'postcmd', 'key-utf8', 'key-cp1251', 'classic-gate', 'secrets', 'pass-store', 'jump-key', 'jump-pass', 'jump-ref', 'socks5', 'socks5-auth', 'http-proxy', 'hostkey', 'netfail'),
     [string]$RemoteBase = '/tmp',
     [switch]$VerboseLog
 )
@@ -54,7 +69,7 @@ $KeyFileUtf8 = Join-Path $Bench 'keys\id_ed25519_utf8'
 $KeyFileCp1251 = Join-Path $Bench 'keys\id_ed25519_cp1251'
 
 $Modes = @($Modes | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
-$knownModes = 'sftp', 'scp', 'scponly', 'shell', 'text', 'text-scp', 'text-scponly', 'nosub', 'nosub-bad', 'postcmd', 'key-utf8', 'key-cp1251', 'classic-gate', 'secrets'
+$knownModes = 'sftp', 'scp', 'scponly', 'shell', 'text', 'text-scp', 'text-scponly', 'nosub', 'nosub-bad', 'postcmd', 'key-utf8', 'key-cp1251', 'classic-gate', 'secrets', 'pass-store', 'jump-key', 'jump-pass', 'jump-ref', 'socks5', 'socks5-auth', 'http-proxy', 'hostkey', 'netfail'
 foreach ($m in $Modes) { if ($m -notin $knownModes) { throw "Unknown mode '$m'. Known: $($knownModes -join ', ')" } }
 
 # ---------------------------------------------------------------------------
@@ -87,6 +102,10 @@ $Privet = -join [char[]](0x43F, 0x440, 0x438, 0x432, 0x435, 0x442)
 $env:SFTP_IT_POSTCMD_EXPECT = $Privet
 # The nosub mode restarts its server mid-run.
 $env:SFTP_IT_RESTART_CMD = "docker compose -f `"$(Join-Path $Bench 'docker-compose.yml')`" restart ssh-nosub"
+# The hostkey mode gives its server a new host key and restarts it.
+$env:SFTP_IT_HOSTKEY_CMD = "docker compose -f `"$(Join-Path $Bench 'docker-compose.yml')`" exec -T ssh-hk " +
+    "sh -c `"rm -f /etc/ssh/ssh_host_* && ssh-keygen -A >/dev/null`" && " +
+    "docker compose -f `"$(Join-Path $Bench 'docker-compose.yml')`" restart ssh-hk >nul 2>&1"
 
 $base = [ordered]@{ server = '127.0.0.1:2222'; user = 'tester'; privkeyfile = $KeyFile; transfermode = '0'; utf8 = '1' }
 $overrides = @{
@@ -110,6 +129,34 @@ $overrides = @{
     'key-cp1251' = @{ scpfordata = '0'; scponly = '0'; shelltransfer = '0'; shelltransferforce = '0'; unixlinebreaks = '0'
                       privkeyfile = $KeyFileCp1251 }
     secrets      = @{}
+    'pass-store' = @{ scpfordata = '0'; scponly = '0'; shelltransfer = '0'; shelltransferforce = '0'; unixlinebreaks = '0'
+                      privkeyfile = ''; password = '!' }
+    # The jump host is the bench itself; the target, as the bastion sees it,
+    # is its own sshd.
+    'jump-key'   = @{ scpfordata = '0'; scponly = '0'; shelltransfer = '0'; shelltransferforce = '0'; unixlinebreaks = '0'
+                      server = '127.0.0.1:22'; usejumphost = '1'; jumphost = '127.0.0.1'; jumpport = '2222'
+                      jumpuser = 'tester'; jumpprivkeyfile = $KeyFile }
+    'jump-pass'  = @{ scpfordata = '0'; scponly = '0'; shelltransfer = '0'; shelltransferforce = '0'; unixlinebreaks = '0'
+                      server = '127.0.0.1:22'; usejumphost = '1'; jumphost = '127.0.0.1'; jumpport = '2222'
+                      jumpuser = 'tester'; jumppassword = '!' }
+    'jump-ref'   = @{ scpfordata = '0'; scponly = '0'; shelltransfer = '0'; shelltransferforce = '0'; unixlinebreaks = '0'
+                      server = '127.0.0.1:22'; usejumphost = '1'; jumpsessionref = 'it-bastion' }
+    # Through a proxy the target is named as the proxy sees it.
+    socks5        = @{ scpfordata = '0'; scponly = '0'; shelltransfer = '0'; shelltransferforce = '0'; unixlinebreaks = '0'
+                       server = 'ssh:22'; proxynr = '1' }
+    'socks5-auth' = @{ scpfordata = '0'; scponly = '0'; shelltransfer = '0'; shelltransferforce = '0'; unixlinebreaks = '0'
+                       server = 'ssh:22'; proxynr = '2' }
+    'http-proxy'  = @{ scpfordata = '0'; scponly = '0'; shelltransfer = '0'; shelltransferforce = '0'; unixlinebreaks = '0'
+                       server = 'ssh:22'; proxynr = '3' }
+    hostkey       = @{ server = '127.0.0.1:2224' }
+    netfail       = @{}
+}
+# Passwords kept in Total Commander's password manager, per mode.
+$stores = @{
+    'pass-store'  = 'it-pass-store=tester'
+    'jump-pass'   = 'it-jump-pass$$jump=tester'
+    'jump-ref'    = 'it-bastion=tester'
+    'socks5-auth' = 'proxy2$$pass=proxypass'
 }
 # The passphrase is typed the same way for both keys; the plugin has to
 # find the bytes the key was protected with. Built from code points so the
@@ -127,6 +174,54 @@ foreach ($mode in $Modes) {
     foreach ($key in $overrides[$mode].Keys) { [void]$ini.AppendLine("$key=$($overrides[$mode][$key])") }
     [void]$ini.AppendLine()
 }
+# Sessions and proxy records the modes above refer to. Proxy types: 2 HTTP,
+# 4 SOCKS5.
+[void]$ini.Append(@"
+[it-bastion]
+server=127.0.0.1:2222
+user=tester
+password=!
+
+[it-netfail-close]
+server=127.0.0.1:2222
+user=tester
+privkeyfile=$KeyFile
+proxynr=4
+
+[it-netfail-longproxy]
+server=127.0.0.1:2222
+user=tester
+privkeyfile=$KeyFile
+proxynr=5
+
+[it-netfail-silent]
+server=127.0.0.1:2292
+user=tester
+privkeyfile=$KeyFile
+
+[proxy]
+proxytype=4
+proxyserver=127.0.0.1:1080
+
+[proxy2]
+proxytype=4
+proxyserver=127.0.0.1:1081
+proxyuser=proxyuser
+proxypassword=!
+
+[proxy3]
+proxytype=2
+proxyserver=127.0.0.1:8888
+
+[proxy4]
+proxytype=4
+proxyserver=127.0.0.1:2291
+
+[proxy5]
+proxytype=4
+proxyserver=$('p' * 260).example:1080
+
+"@)
 [System.IO.File]::WriteAllText((Join-Path $iniDir 'sftpplug.ini'), $ini.ToString(), [System.Text.UTF8Encoding]::new($false))
 
 # ---------------------------------------------------------------------------
@@ -174,6 +269,7 @@ try {
 
         foreach ($mode in $Modes) {
             Write-Host "=== $a / $mode ===" -ForegroundColor Cyan
+            $env:SFTP_IT_STORE = if ($stores.ContainsKey($mode)) { $stores[$mode] } else { '' }
             & $exe $plugin $iniDir "it-$mode" $RemoteBase $mode
             if ($LASTEXITCODE -ne 0) { $failures += "$a/$mode" }
         }
