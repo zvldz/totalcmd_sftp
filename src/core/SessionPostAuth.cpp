@@ -22,6 +22,12 @@ static void SaveAutoDetectResult(pConnectSettings cs, const char* key, int value
         IniWriteString(cs->DisplayName.c_str(), key, value ? "1" : "0", cs->IniFileName.c_str());
 }
 
+// A locale names UTF-8 as "UTF-8" or "utf8" (en_US.utf8), in any case.
+static bool NamesUtf8(char* upperText) noexcept
+{
+    return strstr(upperText, "UTF-8") || strstr(upperText, "UTF8");
+}
+
 int SftpSessionDetectUtf8(pConnectSettings ConnectSettings)
 {
     std::array<char, 8192> reply{};
@@ -31,14 +37,14 @@ int SftpSessionDetectUtf8(pConnectSettings ConnectSettings)
     if (SftpQuoteCommand2(ConnectSettings, nullptr, "echo $LC_ALL $LC_CTYPE $LANG", reply.data(), reply.size()-1, 3000, 8000) == 0) {
         ToUpperInPlace(reply.data());
         const bool noLocaleVars = reply.data()[strspn(reply.data(), " \t\r\n")] == 0;
-        if (strstr(reply.data(), "UTF-8")) {
+        if (NamesUtf8(reply.data())) {
             hr = AUTODETECT_ON;
         } else {
             reply[0] = 0;
             const int localeRc = SftpQuoteCommand2(ConnectSettings, nullptr, "locale", reply.data(), reply.size()-1, 3000, 8000);
             if (localeRc == 0) {
                 ToUpperInPlace(reply.data());
-                if (strstr(reply.data(), "UTF-8"))
+                if (NamesUtf8(reply.data()))
                     hr = AUTODETECT_ON;
             } else if (noLocaleVars) {
                 // No locale variable and no `locale` command — busybox on a
@@ -49,6 +55,13 @@ int SftpSessionDetectUtf8(pConnectSettings ConnectSettings)
                 hr = AUTODETECT_ON;
             }
         }
+    } else {
+        // No command runs at all: an SFTP-only account (internal-sftp). The
+        // server says nothing about its names, and UTF-8 is what SFTP servers
+        // use in practice. Nothing was found out, so nothing is saved: the
+        // next connection asks again.
+        SFTP_LOG("CONN", "UTF-8 detection: no shell, UTF-8 assumed for this connection");
+        return AUTODETECT_ON;
     }
     SaveAutoDetectResult(ConnectSettings, "utf8", hr);
     return hr;

@@ -1286,16 +1286,25 @@ int WINAPI FsExecuteFileW(HWND MainWin, LPWSTR RemoteName, LPCWSTR Verb)
                 pConnectSettings serverid = GetServerIdAndRelativePathFromPathW(RemoteName, remotedir.data(), remotedir.size() - 1);
                 if (!serverid)
                     return FS_EXEC_ERROR;
+                // A path cut to fit would name another folder, which may
+                // exist: a path too long is refused instead.
+                const size_t room = remotedir.size() - 1;
                 if (Verb[9] != '\\' && Verb[9] != '/') {     // relative path?
-                    wcslcatbackslash(remotedir.data(), remotedir.size() - 1);
-                    wcslcat(remotedir.data(), Verb+9, remotedir.size() - 1);
-                } else
-                    wcslcpy(remotedir.data(), Verb+9, remotedir.size() - 1);
+                    if (wcslen(remotedir.data()) + 1 + wcslen(Verb + 9) >= room)
+                        return FS_EXEC_ERROR;
+                    wcslcatbackslash(remotedir.data(), room);
+                    wcslcat(remotedir.data(), Verb+9, room);
+                } else {
+                    if (wcslen(Verb + 9) >= room)
+                        return FS_EXEC_ERROR;
+                    wcslcpy(remotedir.data(), Verb+9, room);
+                }
                 ReplaceSlashByBackslashW(remotedir.data());
 
                 // Truncate at the session boundary, then append the new dir.
                 const size_t prefixLen = SessionPrefixWideLen(rq.displayName);
-                if (prefixLen == 0 || prefixLen + 1 > wcslen(RemoteName))
+                if (prefixLen == 0 || prefixLen + 1 > wcslen(RemoteName) ||
+                    1 + prefixLen + wcslen(remotedir.data()) >= wdirtypemax - 1)
                     return FS_EXEC_ERROR;
                 RemoteName[1 + prefixLen] = 0;
                 wcslcat(RemoteName, remotedir.data(), wdirtypemax-1);
@@ -1793,6 +1802,12 @@ static bool FileExistsT(LPCWSTR LocalName)
     return true;
 }
 
+// The local file name for a remote one, made something Windows stores under
+// that name. A character Windows does not allow becomes '_'; so does a dot
+// or space at the end, which Windows would drop ("report." onto "report");
+// and a device name ("nul", "con.txt", "com1"), which would send the data
+// nowhere and let a move delete the source, gets its last letter replaced.
+// The buffer is Total Commander's, so the name keeps its length.
 static void SanitizeLocalFileNameW(LPWSTR localPath) noexcept
 {
     if (!localPath || !localPath[0])
@@ -1801,16 +1816,27 @@ static void SanitizeLocalFileNameW(LPWSTR localPath) noexcept
     const size_t slashPos = pathView.find_last_of(L"\\/");
     if (slashPos == std::wstring_view::npos || slashPos + 1 >= pathView.size())
         return;
-    wchar_t* filePart = localPath + slashPos + 1;
-    while (*filePart) {
-        if (static_cast<unsigned>(*filePart) < 32u) {
-            *filePart = L' ';
-        } else if (*filePart == L':' || *filePart == L'|' || *filePart == L'*' || *filePart == L'?' ||
-                   *filePart == L'\\' || *filePart == L'/' || *filePart == L'"') {
-            *filePart = L'_';
-        }
-        ++filePart;
+    wchar_t* const name = localPath + slashPos + 1;
+    for (wchar_t* p = name; *p; ++p) {
+        if (static_cast<unsigned>(*p) < 32u || wcschr(L"<>:\"|?*\\/", *p))
+            *p = L'_';
     }
+    const size_t len = wcslen(name);
+    if (len > 0 && (name[len - 1] == L'.' || name[len - 1] == L' '))
+        name[len - 1] = L'_';
+
+    size_t baseLen = wcscspn(name, L".");
+    while (baseLen > 0 && name[baseLen - 1] == L' ')
+        --baseLen;
+    const std::wstring_view base(name, baseLen);
+    auto is = [&](const wchar_t* dev) {
+        return base.size() == wcslen(dev) && _wcsnicmp(base.data(), dev, base.size()) == 0;
+    };
+    bool device = is(L"CON") || is(L"PRN") || is(L"AUX") || is(L"NUL") || is(L"CONIN$") || is(L"CONOUT$");
+    if (!device && base.size() == 4 && base[3] >= L'1' && base[3] <= L'9')
+        device = _wcsnicmp(base.data(), L"COM", 3) == 0 || _wcsnicmp(base.data(), L"LPT", 3) == 0;
+    if (device)
+        name[baseLen - 1] = L'_';
 }
 
 static int CreateHelpFileLocalW(LPCWSTR localName, bool overwrite)

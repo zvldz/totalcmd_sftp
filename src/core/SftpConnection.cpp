@@ -19,8 +19,10 @@
 #include "UnicodeHelpers.h"
 
 #include "SftpInternal.h"
+#include "Utf8Escape.h"
 #include "SshBackendFactory.h"
 #include "WindowsUserFeedback.h"
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <mutex>
@@ -142,13 +144,24 @@ bool CopyStringW2A(pConnectSettings ConnectSettings, LPCWSTR instr, LPSTR outstr
     if (!outstr || outmax == 0)
         return false;
     outstr[0] = '\0';
-    const int codepage = ConnectSettings->utf8names > 0 ? CP_UTF8 : ConnectSettings->codepage;
-    if (!instr || !FitsW2A(codepage, instr, outmax))
+    if (!instr)
         return false;
+    // UTF-8: bytes a name held that were not UTF-8 go back as they came
+    // (utf8_escape).
     if (ConnectSettings->utf8names > 0) {
-        ConvUTF16toUTF8(instr, 0, outstr, outmax);
-        return true;
+        try {
+            const std::string bytes = utf8_escape::Encode(instr);
+            if (bytes.size() >= outmax)
+                return false;
+            memcpy(outstr, bytes.c_str(), bytes.size() + 1);
+            return true;
+        } catch (...) {
+            return false;
+        }
     }
+    const int codepage = ConnectSettings->codepage;
+    if (!FitsW2A(codepage, instr, outmax))
+        return false;
     BOOL usedDefault = FALSE;
     const int n = WideCharToMultiByte(codepage, WC_NO_BEST_FIT_CHARS, instr, -1, outstr,
                                       static_cast<int>(outmax), nullptr, &usedDefault);
@@ -159,23 +172,44 @@ bool CopyStringW2A(pConnectSettings ConnectSettings, LPCWSTR instr, LPSTR outstr
     return true;
 }
 
-void CopyStringA2W(pConnectSettings ConnectSettings, LPCSTR instr, LPWSTR outstr, size_t outmax, bool useCVT) noexcept
+bool CopyRemotePathW2A(pConnectSettings ConnectSettings, LPCWSTR path, LPSTR outstr, size_t outmax) noexcept
+{
+    if (!outstr || outmax == 0)
+        return false;
+    outstr[0] = '\0';
+    if (!path)
+        return false;
+    try {
+        std::wstring slashed(path);
+        std::replace(slashed.begin(), slashed.end(), L'\\', L'/');
+        return CopyStringW2A(ConnectSettings, slashed.c_str(), outstr, outmax);
+    } catch (...) {
+        return false;
+    }
+}
+
+void CopyStringA2W(pConnectSettings ConnectSettings, LPCSTR instr, LPWSTR outstr, size_t outmax,
+                   [[maybe_unused]] bool useCVT) noexcept
 {
     if (!outstr || outmax == 0)
         return;
-    const int codepage = ConnectSettings->utf8names > 0 ? CP_UTF8 : ConnectSettings->codepage;
-    if (!instr || !FitsA2W(codepage, instr, outmax)) {
-        outstr[0] = L'\0';
+    outstr[0] = L'\0';
+    if (!instr)
+        return;
+    // UTF-8: a byte that is not part of valid UTF-8 is kept, as a stand-in
+    // CopyStringW2A turns back into it, rather than lost to U+FFFD.
+    if (ConnectSettings->utf8names > 0) {
+        try {
+            const std::wstring text = utf8_escape::Decode(instr);
+            if (text.size() < outmax)
+                memcpy(outstr, text.c_str(), (text.size() + 1) * sizeof(wchar_t));
+        } catch (...) {
+        }
         return;
     }
-    if (ConnectSettings->utf8names > 0) {
-        if (useCVT)
-            ConvUTF8toUTF16(instr, 0, outstr, outmax);
-        else
-            awlcopyCP(CP_UTF8, outstr, instr, outmax - 1);
-    } else {
-        awlcopyCP(ConnectSettings->codepage, outstr, instr, outmax - 1);
-    }
+    if (!FitsA2W(ConnectSettings->codepage, instr, outmax))
+        return;
+    awlcopyCP(ConnectSettings->codepage, outstr, instr, outmax - 1);
 }
 
 extern "C"

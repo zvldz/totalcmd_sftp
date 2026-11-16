@@ -30,7 +30,8 @@ $UnitSources = @(
     'src\core\TerminalText.cpp',
     'src\core\WildcardMatch.cpp',
     'src\core\PasswordCrypto.cpp',
-    'src\core\AuthSecrets.cpp'
+    'src\core\AuthSecrets.cpp',
+    'src\core\Utf8Escape.cpp'
 )
 $SystemLibs = 'ws2_32.lib crypt32.lib advapi32.lib user32.lib bcrypt.lib'
 

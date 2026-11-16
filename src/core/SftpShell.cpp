@@ -669,7 +669,7 @@ int SftpQuoteCommand2W(pConnectSettings cs, LPCWSTR remotedir, LPCWSTR cmd,
     {
         std::string tmp(wdirtypemax, '\0');
         if (remotedir) {
-            if (!CopyStringW2A(cs, remotedir, tmp.data(), tmp.size()))
+            if (!CopyRemotePathW2A(cs, remotedir, tmp.data(), tmp.size()))
                 return -1;
             dirname = tmp.c_str();
         }
@@ -677,8 +677,6 @@ int SftpQuoteCommand2W(pConnectSettings cs, LPCWSTR remotedir, LPCWSTR cmd,
             return -1;
         cmdname = tmp.c_str();
     }
-
-    std::replace(dirname.begin(), dirname.end(), '\\', '/');
 
     std::wstring display = L"Quote: ";
     display += cmd;

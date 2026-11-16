@@ -802,23 +802,61 @@ int wmain(int argc, wchar_t** argv)
 
     {
         // Names the listing has to give back exactly: spaces at either end,
-        // two in the middle, an arrow in a name that is not a link. They are
-        // deleted with the rest below, by these names.
+        // two in the middle, an arrow in a name that is not a link, and a
+        // byte that is not UTF-8 ("café" in cp1252: U+DCE9 stands for 0xE9).
+        // They are deleted with the rest below, by these names.
         const std::wstring namesDir = NewTempDir(L"names");
         WriteFileBytes(namesDir + L"n.txt", "name\n");
-        const wchar_t* odd[] = { L" lead", L"trail ", L"a  b", L"x -> y" };
+        const wchar_t* odd[] = { L" lead", L"trail ", L"a  b", L"x -> y", L"caf\xDCE9" };
         bool uploaded = true;
         for (const wchar_t* n : odd) {
             std::wstring remote = dir + L"\\" + n;
             uploaded = g_plugin.PutFileW((namesDir + L"n.txt").c_str(), remote.c_str(), 0) == FS_FILE_OK && uploaded;
         }
-        DeleteFileW((namesDir + L"n.txt").c_str());
-        RemoveDirectoryW(namesDir.c_str());
         const auto listed = ListDir(dir, ok);
         bool exact = ok;
-        for (const wchar_t* n : odd)
-            exact = exact && listed.count(n) == 1;
+        for (const wchar_t* n : odd) {
+            if (listed.count(n) == 1)
+                continue;
+            exact = false;
+            std::string units;
+            for (const wchar_t* p = n; *p; ++p) {
+                char hex[8];
+                std::snprintf(hex, sizeof(hex), "%04X ", static_cast<unsigned>(*p));
+                units += hex;
+            }
+            std::printf("      not listed: %s\n", units.c_str());
+        }
+        if (!exact) {
+            for (const auto& e : listed) {
+                std::string units;
+                for (wchar_t c : e.first) {
+                    char hex[8];
+                    std::snprintf(hex, sizeof(hex), "%04X ", static_cast<unsigned>(c));
+                    units += hex;
+                }
+                std::printf("      listed: %s\n", units.c_str());
+            }
+        }
         Check(uploaded && exact, "names with edge spaces and arrows are listed exactly");
+
+        // Names Windows would not store as they are: a device name sends the
+        // data nowhere, a trailing dot is dropped. They land under a name of
+        // the same length instead.
+        bool saved = true;
+        for (const auto& [remoteName, localName] : { std::pair{ L"nul", L"nu_" }, std::pair{ L"end.", L"end_" } }) {
+            const std::wstring remote = dir + L"\\" + remoteName;
+            std::wstring local = namesDir + remoteName;
+            local.resize(local.size() + 1);
+            saved = g_plugin.PutFileW((namesDir + L"n.txt").c_str(), remote.c_str(), 0) == FS_FILE_OK && saved;
+            RemoteInfoStruct ri = InfoFor(dir, remoteName);
+            saved = g_plugin.GetFileW(remote.c_str(), local.data(), FS_COPYFLAGS_OVERWRITE, &ri) == FS_FILE_OK &&
+                    LocalExists(namesDir + localName) && saved;
+            DeleteFileW((namesDir + localName).c_str());
+        }
+        Check(saved, "a remote name Windows cannot store is saved under one it can");
+        DeleteFileW((namesDir + L"n.txt").c_str());
+        RemoveDirectoryW(namesDir.c_str());
     }
 
     // Cleanup: only what this run created.

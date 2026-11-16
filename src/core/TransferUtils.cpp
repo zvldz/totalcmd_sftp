@@ -82,8 +82,7 @@ bool AskUserYesNo(pConnectSettings cs, LPCSTR title, LPCSTR message)
 std::string ToRemotePathA(pConnectSettings cs, LPCWSTR pathW)
 {
     std::array<char, wdirtypemax> tmp{};
-    CopyStringW2A(cs, pathW, tmp.data(), tmp.size());
-    ReplaceBackslashBySlash(tmp.data());
+    CopyRemotePathW2A(cs, pathW, tmp.data(), tmp.size());
     return std::string(tmp.data());
 }
 

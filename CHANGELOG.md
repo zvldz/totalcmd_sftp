@@ -94,6 +94,17 @@ From this version the plugin comes in two builds: **classic**
   - FileZilla: a `filezilla.xml` that exists but cannot be read was taken
     as "no proxy"; the session is now refused. KiTTY reads a session file
     once, so a file locked between two reads cannot hide its proxy.
+- **A remote name with a backslash is no longer shown.** Total Commander
+  takes `\` for a separator: "a\b" was handled as file b in folder a, F8
+  on it could delete another file, and a server could list
+  "..\..\x.bat" to have a download land outside the target folder. Such
+  names are skipped, with a line in the log.
+- **Downloads land where they belong.** A remote file named like a
+  device (`nul`, `con.txt`, `com1`) was written to the device — the data
+  went nowhere, the copy "succeeded", and a move then deleted the
+  original. A name ending in a dot or space lost it and could replace
+  another file; `<` and `>` were not allowed either. Such names are now
+  saved with the offending character replaced by `_`.
 - **A file name can no longer rewrite a shell command.**
   - SCP-only and shell-transfer sessions send commands to a shell on a
     terminal, whose line handling acts on control characters before the
@@ -235,6 +246,22 @@ From this version the plugin comes in two builds: **classic**
   server would not let `cat` read was saved empty and reported done; an
   upload the server refused (no permission, disk full) was reported done
   too, and a move then deleted the local file. Both now fail.
+- **File names in every encoding survive.**
+  - In a UTF-8 session, a name with bytes that are not UTF-8 (written by
+    an older program in another codepage) was shown with "�" and could
+    not be opened, renamed or deleted. It is now kept byte for byte.
+  - In a Shift-JIS, GBK or Big5 session, a character whose second byte
+    is the code of `\` was broken by the path handling.
+  - A server's locale named `en_US.utf8` (rather than `UTF-8`) was not
+    recognised as UTF-8, and a server without a shell (an SFTP-only
+    account) was saved as using the Windows codepage; it is now taken as
+    UTF-8 for the connection, and nothing is saved.
+  - One line in `sftpplug.ini` that is not UTF-8 made the plugin read the
+    whole file in the Windows codepage and save it back that way,
+    garbling every session name in another language. Only that line is
+    read that way now.
+  - A `cd` through the quote command to a path too long for the buffer
+    is refused instead of being cut to another folder.
 - **SCP-only listings show every name as it is.**
   - Spaces at the start or end of a name were dropped, so the file could
     not be opened or deleted; a backslash followed by three digits was

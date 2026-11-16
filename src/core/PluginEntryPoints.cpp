@@ -494,7 +494,16 @@ pConnectSettings GetServerIdAndRelativePathFromPathW(LPCWSTR Path, LPWSTR Relati
             GetServerIdFromName(r.displayName.c_str(), GetCurrentThreadId()));
     }
     if (serverid && !r.relative.empty()) {
-        const std::wstring wrel = unicode_util::internal_to_wide(r.relative);
+        // The part after the session name, taken from Total Commander's path
+        // itself rather than from the internal string: a remote name may hold
+        // units that encoding cannot carry (the stand-ins for bytes that are
+        // not UTF-8, utf8_escape), and they have to reach the server intact.
+        const std::wstring_view p(Path);
+        const size_t at = p.find_first_not_of(L"\\/");
+        const size_t nameLen = unicode_util::internal_to_wide(r.displayName).size();
+        const std::wstring wrel = at != std::wstring_view::npos && at + nameLen < p.size()
+            ? std::wstring(p.substr(at + nameLen))
+            : unicode_util::internal_to_wide(r.relative);
         wcslcpy(RelativePath, wrel.c_str(), maxlen - 1);
     } else {
         wcslcpy(RelativePath, L"\\", maxlen - 1);

@@ -320,10 +320,9 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
     }
 
     std::string dirStr(wdirtypemax, '\0');
-    if (!CopyStringW2A(cs, remotedir, dirStr.data(), dirStr.size()))
+    if (!CopyRemotePathW2A(cs, remotedir, dirStr.data(), dirStr.size()))
         return SFTP_FAILED;
     dirStr.resize(strlen(dirStr.c_str()));
-    std::replace(dirStr.begin(), dirStr.end(), '\\', '/');
     if (dirStr.size() > 1 && dirStr.back() != '/')
         dirStr += '/';
 
@@ -612,7 +611,24 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
     return SFTP_OK;
 }
 
+static int SftpFindNextEntryW(pConnectSettings cs, LPVOID davdataptr, LPWIN32_FIND_DATAW FindData) noexcept;
+
+// The next entry fit to show. A name holding '\' or '/' is passed over:
+// Total Commander takes either for a separator, so "a\b" would be handled as
+// b inside a, and a server could hand out "..\..\x" to have a download land
+// outside the target folder.
 int SftpFindNextFileW(pConnectSettings cs, LPVOID davdataptr, LPWIN32_FIND_DATAW FindData) noexcept
+{
+    for (;;) {
+        const int rc = SftpFindNextEntryW(cs, davdataptr, FindData);
+        if (rc != SFTP_OK || !wcspbrk(FindData->cFileName, L"\\/"))
+            return rc;
+        SFTP_LOG("FIND", "Entry with a path separator in its name skipped");
+        ShowStatusW((L"Skipped a name with a path separator: " + std::wstring(FindData->cFileName)).c_str());
+    }
+}
+
+static int SftpFindNextEntryW(pConnectSettings cs, LPVOID davdataptr, LPWIN32_FIND_DATAW FindData) noexcept
 {
     ScpData* scpd = AsScpData(davdataptr);
     if (!scpd)
@@ -781,10 +797,9 @@ int SftpCreateDirectoryW(pConnectSettings cs, LPCWSTR Path)
     ShowStatusW(display.c_str());
 
     std::string dirStr(wdirtypemax, '\0');
-    if (!CopyStringW2A(cs, Path, dirStr.data(), dirStr.size()))
+    if (!CopyRemotePathW2A(cs, Path, dirStr.data(), dirStr.size()))
         return SFTP_FAILED;
     dirStr.resize(strlen(dirStr.c_str()));
-    std::replace(dirStr.begin(), dirStr.end(), '\\', '/');
 
 #if SFTP_EXTRA
     if (IsPhpAgentTransport(cs))
@@ -863,10 +878,9 @@ int SftpDeleteFileW(pConnectSettings cs, LPCWSTR RemoteName, bool isdir)
     ShowStatusW(display.c_str());
 
     std::string nameStr(wdirtypemax, '\0');
-    if (!CopyStringW2A(cs, RemoteName, nameStr.data(), nameStr.size()))
+    if (!CopyRemotePathW2A(cs, RemoteName, nameStr.data(), nameStr.size()))
         return SFTP_FAILED;
     nameStr.resize(strlen(nameStr.c_str()));
-    std::replace(nameStr.begin(), nameStr.end(), '\\', '/');
 
 #if SFTP_EXTRA
     if (IsPhpAgentTransport(cs))
@@ -982,11 +996,9 @@ int SftpRenameMoveFileW(pConnectSettings cs, LPCWSTR OldName, LPCWSTR NewName, b
 
     std::string oldNameA(wdirtypemax, '\0');
     std::string newNameA(wdirtypemax, '\0');
-    if (!CopyStringW2A(cs, OldName, oldNameA.data(), oldNameA.size()) ||
-        !CopyStringW2A(cs, NewName, newNameA.data(), newNameA.size()))
+    if (!CopyRemotePathW2A(cs, OldName, oldNameA.data(), oldNameA.size()) ||
+        !CopyRemotePathW2A(cs, NewName, newNameA.data(), newNameA.size()))
         return SFTP_FAILED;
-    ReplaceBackslashBySlash(oldNameA.data());
-    ReplaceBackslashBySlash(newNameA.data());
     oldNameA.resize(strlen(oldNameA.c_str()));
     newNameA.resize(strlen(newNameA.c_str()));
 
@@ -1056,10 +1068,9 @@ int SftpSetAttrW(pConnectSettings cs, LPCWSTR RemoteName, int NewAttr)
         return SFTP_FAILED;
 
     std::string nameStr(wdirtypemax, '\0');
-    if (!CopyStringW2A(cs, RemoteName, nameStr.data(), nameStr.size()))
+    if (!CopyRemotePathW2A(cs, RemoteName, nameStr.data(), nameStr.size()))
         return SFTP_FAILED;
     nameStr.resize(strlen(nameStr.c_str()));
-    std::replace(nameStr.begin(), nameStr.end(), '\\', '/');
 
     // Fetch current permissions via lstat so we can do a RMW on the mode bits.
     LIBSSH2_SFTP_ATTRIBUTES attrs{};
@@ -1097,9 +1108,8 @@ int SftpSetDateTimeW(pConnectSettings cs, LPCWSTR RemoteName, LPFILETIME LastWri
         return SFTP_FAILED;
 
     std::string nameA(wdirtypemax, '\0');
-    if (!CopyStringW2A(cs, RemoteName, nameA.data(), nameA.size()))
+    if (!CopyRemotePathW2A(cs, RemoteName, nameA.data(), nameA.size()))
         return SFTP_FAILED;
-    ReplaceBackslashBySlash(nameA.data());
 
     LIBSSH2_SFTP_ATTRIBUTES attr{};
     attr.flags = LIBSSH2_SFTP_ATTR_ACMODTIME;
@@ -1144,7 +1154,7 @@ bool SftpChmodW(pConnectSettings cs, LPCWSTR RemoteName, LPCWSTR chmod)
     // server that offers no shell. SCP mode has only the shell.
     if (!cs->scponly && cs->sftpsession) {
         std::string pathA(wdirtypemax, '\0');
-        if (!CopyStringW2A(cs, pathW.c_str(), pathA.data(), pathA.size()))
+        if (!CopyRemotePathW2A(cs, pathW.c_str(), pathA.data(), pathA.size()))
             return false;
         pathA.resize(strlen(pathA.c_str()));
         LIBSSH2_SFTP_ATTRIBUTES attrs{};
@@ -1184,11 +1194,8 @@ bool SftpLinkFolderTargetW(pConnectSettings cs, LPWSTR RemoteName, size_t maxlen
     // Real SFTP symlink: resolve via readlink + realpath.
     if (!isTildeHome && cs->sftpsession) {
         std::array<char, wdirtypemax> pathA{};
-        if (!CopyStringW2A(cs, RemoteName, pathA.data(), pathA.size() - 1))
+        if (!CopyRemotePathW2A(cs, RemoteName, pathA.data(), pathA.size() - 1))
             return false;
-        // Normalize separators to forward slashes.
-        for (char* p = pathA.data(); *p; ++p)
-            if (*p == '\\') *p = '/';
 
         std::string targetBuf(wdirtypemax, '\0');
         int rc = 0;
@@ -1463,7 +1470,7 @@ void SftpShowPropertiesW(pConnectSettings cs, LPCWSTR remotename)
         LIBSSH2_SFTP_ATTRIBUTES attrs{};
         if (!cs->scponly && cs->sftpsession) {
             std::string pathA(wdirtypemax, '\0');
-            const bool converted = CopyStringW2A(cs, pathW.c_str(), pathA.data(), pathA.size());
+            const bool converted = CopyRemotePathW2A(cs, pathW.c_str(), pathA.data(), pathA.size());
             pathA.resize(strlen(pathA.c_str()));
             int src = converted ? LIBSSH2_ERROR_EAGAIN : LIBSSH2_ERROR_FILE;
             while (src == LIBSSH2_ERROR_EAGAIN) {

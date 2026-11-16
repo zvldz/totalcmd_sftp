@@ -93,6 +93,10 @@ void  wcslcpytoutf8(LPSTR utf8str, LPCWSTR utf16str, size_t maxlen);
 // False, with an empty result, when the name does not fit or holds a
 // character the session's codepage cannot represent.
 bool  CopyStringW2A(pConnectSettings cs, LPCWSTR instr, LPSTR outstr, size_t outmax) noexcept;
+// A remote path from Total Commander: '\' turned into '/' before the
+// conversion, where it is a character. After it, the byte 0x5C may be the
+// second half of a Shift-JIS, GBK or Big5 character.
+bool  CopyRemotePathW2A(pConnectSettings cs, LPCWSTR path, LPSTR outstr, size_t outmax) noexcept;
 void  CopyStringA2W(pConnectSettings cs, LPCSTR instr, LPWSTR outstr, size_t outmax, bool useCVT = true) noexcept;
 bool  ProgressLoop(LPCSTR progresstext, int start, int end, int* loopval, SYSTICKS* lasttime);
 void  SftpLogLastError(LPCSTR errtext, int errnr);

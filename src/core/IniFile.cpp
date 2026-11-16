@@ -59,8 +59,10 @@ void FromUtf8(std::string_view u, std::wstring& out) { out = ToWide(u, CP_UTF8);
 std::wstring PathOf(LPCSTR p)  { return p ? ToWide(p, CP_ACP) : std::wstring(); }
 std::wstring PathOf(LPCWSTR p) { return p ? std::wstring(p) : std::wstring(); }
 
-// File bytes → UTF-8 text. UTF-16 LE needs its BOM; anything that is not
-// valid UTF-8 is a legacy file in the system codepage.
+// File bytes → UTF-8 text. UTF-16 LE needs its BOM. A line that is not valid
+// UTF-8 is legacy text in the system codepage — decided line by line: one
+// such line, pasted in by hand say, must not turn the UTF-8 of every other
+// session name into codepage text that is then saved back as such.
 std::string DecodeFile(const std::string& raw)
 {
     const auto byte = [&raw](size_t i) { return static_cast<unsigned char>(raw[i]); };
@@ -74,10 +76,24 @@ std::string DecodeFile(const std::string& raw)
         return std::string(body.substr(3));
     if (body.empty())
         return {};
-    if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, body.data(),
-                            static_cast<int>(body.size()), nullptr, 0) > 0)
+    const auto isUtf8 = [](std::string_view s) {
+        return s.empty() || MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, s.data(),
+                                                static_cast<int>(s.size()), nullptr, 0) > 0;
+    };
+    if (isUtf8(body))
         return std::string(body);
-    return FromWide(ToWide(body, CP_ACP), CP_UTF8);
+    std::string out;
+    out.reserve(body.size() + body.size() / 4);
+    while (!body.empty()) {
+        const size_t eol = body.find('\n');
+        const std::string_view line = body.substr(0, eol == std::string_view::npos ? body.size() : eol + 1);
+        if (isUtf8(line))
+            out.append(line);
+        else
+            out.append(FromWide(ToWide(line, CP_ACP), CP_UTF8));
+        body.remove_prefix(line.size());
+    }
+    return out;
 }
 
 // ---------------------------------------------------------------------------
