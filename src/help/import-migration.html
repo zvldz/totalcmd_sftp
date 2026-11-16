@@ -133,7 +133,7 @@
   <li><b>OpenSSH</b> — nothing to import; the config holds no passwords.</li>
 </ul>
 
-<p>Whenever a password is imported it is re-protected with Windows DPAPI before being stored, exactly like a password you type into the plugin yourself. Nothing is written in plain text.</p>
+<p>An imported password is not stored by the plugin. It is read from the source program's file at the moment you connect, for that one session only, and kept in memory for the connection. The plugin's scan cache only notes that the source has a password. When you copy the session into your own list with <code>F5</code> and Total Commander's password manager is in use (a master password is set), the password is saved there, behind the master password; <code>sftpplug.ini</code> then holds only <code>password=!</code>, the mark that sends the plugin to the password manager. Without the password manager the password does not come along: it is asked for on every connection until you save it in the session's properties (<code>Alt+Enter</code>).</p>
 
 <h2>Key files</h2>
 

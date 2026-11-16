@@ -991,9 +991,12 @@ HANDLE WINAPI FsFindFirstW(LPCWSTR Path, LPWIN32_FIND_DATAW FindData)
                     SetLastError(ERROR_PATH_NOT_FOUND);
                     return INVALID_HANDLE_VALUE;
                 }
+                std::string password = LoadImportedPassword(
+                    info->sourceId, info->cacheSection, info->displayName);
                 new_serverid = SftpConnectToServer(
                     info->cacheSection.c_str(), cachePath.c_str(),
-                    nullptr, displayName.data());
+                    password.empty() ? nullptr : password.c_str(), displayName.data());
+                SecureZeroMemory(password.data(), password.size());
                 if (!new_serverid) {
                     g_lastFailedFindPath = Path;
                     SetLastError(ERROR_PATH_NOT_FOUND);

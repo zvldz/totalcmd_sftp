@@ -34,6 +34,11 @@ pConnectSettings GetServerIdAndRelativePathFromPathW(LPCWSTR Path, LPWSTR Relati
 // [Refresh] does (PluginEntryPointsFile.cpp).
 void RefreshImportSource(const std::string& sourceId);
 
+// The password of one imported session, read from its source for this
+// connect only; empty when the source has none (PluginEntryPointsFile.cpp).
+std::string LoadImportedPassword(const std::string& sourceId, const std::string& cacheSection,
+                                 const std::string& displayName);
+
 // Closes the session a TC path names; `root` is an internal string. What
 // FsDisconnect does, for callers inside the plugin.
 BOOL DisconnectSessionPath(const std::string& root);

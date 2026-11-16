@@ -271,8 +271,12 @@ static pConnectSettings ResolveTransferSession(LPCWSTR RemoteName,
         const std::string& cachePath = sftp::GetImportCache().CacheFilePath();
         if (!info || cachePath.empty())
             return nullptr;
+        std::string password = LoadImportedPassword(info->sourceId, info->cacheSection,
+                                                    info->displayName);
         fresh = SftpConnectToServer(info->cacheSection.c_str(), cachePath.c_str(),
-                                    nullptr, r.displayName.c_str());
+                                    password.empty() ? nullptr : password.c_str(),
+                                    r.displayName.c_str());
+        SecureZeroMemory(password.data(), password.size());
     } else {
         fresh = SftpConnectToServer(r.displayName.c_str(), inifilename, nullptr);
     }
@@ -571,7 +575,9 @@ static int ProxyRecordForDependency(const sftp::SessionDependency& dep, LPCSTR i
 // TC path the user copied to. The materialised session keeps what the
 // adapter cached (host, user, key file, encoding) plus, when the source
 // put a proxy the plugin speaks in front of it, that proxy as a local
-// record. The password is never carried; it is asked for on connect.
+// record. A password the source has goes only into Total Commander's
+// password manager, when one is in use; otherwise it is asked for on
+// connect.
 static int MaterialiseVirtualSession(const std::string& sourceId,
                                       const std::string& subPath,
                                       LPCWSTR NewName,
@@ -619,6 +625,22 @@ static int MaterialiseVirtualSession(const std::string& sourceId,
         const int proxynr = ProxyRecordForDependency(dep, inifilename);
         IniWriteString(newDisplay.c_str(), "proxynr",
                        std::to_string(proxynr).c_str(), inifilename);
+    }
+
+    // The source's password, behind TC's master password: into its password
+    // manager, the INI holding only the "!" that sends the plugin there. A
+    // store that refuses leaves no password at all rather than one in the INI.
+    if (HaveCryptProc() && CryptCheckPass) {
+        std::string password = LoadImportedPassword(sourceId, cacheSection, subPath);
+        if (!password.empty()) {
+            const bool saved = CryptProcI(PluginNumber, CryptoNumber, FS_CRYPT_SAVE_PASSWORD,
+                                          newDisplay.c_str(), password.data(), 0) == FS_FILE_OK;
+            SecureZeroMemory(password.data(), password.size());
+            if (saved)
+                IniWriteString(newDisplay.c_str(), "password", "!", inifilename);
+            SFTP_LOG("IMPORT", "password for '%s' %s TC's password manager", newDisplay.c_str(),
+                     saved ? "saved in" : "refused by");
+        }
     }
 
     // Sync g_servers so the new session shows up in the plugin panel on the
@@ -688,6 +710,55 @@ static void ApplyEnumerationToCache(sftp::IExternalSessionSource* adapter,
             return;
         }
     }
+}
+
+// The password of one imported session, read from its source at connect
+// time and kept in memory only; the cache holds just the mark that the
+// source has one. Empty when there is none or the source no longer has the
+// session — the standard prompt asks then.
+std::string LoadImportedPassword(const std::string& sourceId, const std::string& cacheSection,
+                                 const std::string& displayName)
+{
+    const std::string& cachePath = sftp::GetImportCache().CacheFilePath();
+    if (cachePath.empty())
+        return {};
+    std::array<char, 8> mark{};
+    IniGetString(cacheSection.c_str(), "_haspassword", "", mark.data(),
+                 static_cast<DWORD>(mark.size()), cachePath.c_str());
+    if (mark[0] != '1')
+        return {};
+    auto* adapter = sftp::GetImportSourceRegistry().Find(sourceId.c_str());
+    if (!adapter)
+        return {};
+    std::array<char, 1024> channel{};
+    IniGetString(cacheSection.c_str(), "_source", "", channel.data(),
+                 static_cast<DWORD>(channel.size()), cachePath.c_str());
+    const std::string channelTag = channel.data();
+    if (channelTag.empty())
+        return {};
+
+    sftp::EnumerationResult result = channelTag == "standard"
+        ? adapter->EnumerateStandard()
+        : adapter->EnumerateCustomPath(unicode_util::internal_to_utf8(channelTag));
+    if (result.status != sftp::EnumerationStatus::OkWithSessions)
+        return {};
+    for (const auto& entry : result.sessions) {
+        if (unicode_util::utf8_to_internal(entry.displayName) != displayName)
+            continue;
+        tConnectSettings settings{};
+        sftp::SessionDependency dependency;
+        if (!adapter->LoadSettings(entry, &settings, &dependency) || settings.password.empty())
+            return {};
+        // Adapters hand the password over encoded, as the INI stores it.
+        std::array<char, 1024> plain{};
+        DecryptString(settings.password.c_str(), plain.data(), static_cast<UINT>(plain.size()));
+        SecureZeroMemory(settings.password.data(), settings.password.size());
+        std::string out = plain.data();
+        SecureZeroMemory(plain.data(), plain.size());
+        SFTP_LOG("IMPORT", "password for '%s' read from source %s", displayName.c_str(), sourceId.c_str());
+        return out;
+    }
+    return {};
 }
 
 // Re-scan every configured channel of one import source (the standard

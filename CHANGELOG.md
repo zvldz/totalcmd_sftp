@@ -45,6 +45,16 @@ this fork's 10.0.2.2. Each entry names where it came from.
   published in its source. Now the password is not saved, the log says
   why, and it is asked for on the next connect. Passwords saved in the old
   format are still read. *wesmar/sftp#9.*
+- **Imported passwords no longer kept by the plugin.** Opening a KiTTY or
+  FileZilla source decrypted the password of every session in it and
+  stored them all in `sftpplug-imports-cache.ini`; copying a session with
+  F5 then put its password into `sftpplug.ini`, past Total Commander's
+  master password. Now the password of one session is read from the source
+  when that session is connected and kept in memory only. F5 puts it into
+  Total Commander's password manager when a master password is set, and
+  otherwise does not copy it: it is asked for on connect and can be saved
+  under Alt+Enter. Passwords already in the cache file are removed from
+  it. *wesmar/sftp#9.*
 - **PHP Agent: shell commands off by default.** A freshly deployed
   `sftp.php` (agent 1.0.3) refuses `SHELL_EXEC`, so its password gives
   file access only. PHP Shell needs `AGENT_ALLOW_SHELL = true` in the file

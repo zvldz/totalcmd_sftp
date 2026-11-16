@@ -134,10 +134,12 @@ void WriteSessionSection(const std::string& section,
         IniWriteString(section.c_str(), "scpfordata",
                         "1", iniPath.c_str());
 
-    // Password is stored DPAPI-obfuscated — the same shape sftpplug.ini uses.
+    // The password itself is never cached: only the mark that the source
+    // has one, which is read from the source for this one session when it
+    // is connected (LoadImportedPassword).
     if (!s->password.empty())
-        IniWriteString(section.c_str(), "password",
-                        s->password.c_str(), iniPath.c_str());
+        IniWriteString(section.c_str(), "_haspassword",
+                        "1", iniPath.c_str());
 
     // utf8names / unixlinebreaks are tri-state (-1 = auto, 0 = no, 1 = yes).
     // -1 means "not populated by the adapter" — skip.
@@ -273,6 +275,16 @@ void ImportCache::Load()
         // cannot recover it from the hashed channelTag alone.
         ref.sourceOrigin = ReadSourceTag(section, m_cachePath);
         m_sessions.push_back(std::move(ref));
+
+        // A cache written before passwords were kept out of it: the stored
+        // password is removed and only the mark is left.
+        std::array<char, 8> pw{};
+        IniGetString(section.c_str(), "password", "", pw.data(),
+                     static_cast<DWORD>(pw.size()), m_cachePath.c_str());
+        if (pw[0]) {
+            IniWriteString(section.c_str(), "password", nullptr, m_cachePath.c_str());
+            IniWriteString(section.c_str(), "_haspassword", "1", m_cachePath.c_str());
+        }
     }
 }
 
