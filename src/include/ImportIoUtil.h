@@ -30,7 +30,9 @@ using WalkFileCallback = std::function<bool(const std::wstring& fullPath,
 
 // Recursively enumerate `root`. Every regular file whose extension matches
 // `ext` (case-insensitive, without a leading dot; empty ⇒ any) is passed to
-// `onFile`. Symlinks and directories are traversed but never reported.
+// `onFile`. Directories are traversed but never reported; a junction or
+// symbolic link to a folder is not entered. The walk stops 32 folders deep
+// and after 20000 entries.
 void WalkDirectoryFiles(const std::wstring& root,
                         const std::wstring& ext,
                         WalkFileCallback     onFile);
@@ -83,6 +85,10 @@ bool BrowseForFile(HWND               owner,
 // exclusive by contract.
 bool ParseLineCodePage(const std::string& raw,
                        int& outUtf8, int& outCodepage) noexcept;
+
+// The session's server field: the host, with ":port" when the port is given
+// and not 22. An IPv6 literal is bracketed before a port follows it.
+std::string ComposeServer(const std::string& host, unsigned long port);
 
 // Fills the proxy part of `dep` — type, address, user — so the session can
 // be copied with its proxy. The port is spelled out only when it differs

@@ -128,9 +128,24 @@ constexpr std::string_view kKittySuffix = "KiTTY";
     return host + term + std::string(kKittySuffix);
 }
 
+// A wrong key still decodes to something; what it gives is full of control
+// bytes, which a typed password never has.
+[[nodiscard]] bool LooksTyped(const std::string& text) noexcept {
+    return std::none_of(text.begin(), text.end(), [](char ch) {
+        const auto c = static_cast<unsigned char>(ch);
+        return c < 0x20 || c == 0x7F;
+    });
+}
+
 [[nodiscard]] bool TryDecrypt(const std::string& enc, const std::string& key,
                               std::string& out) {
-    return !enc.empty() && !key.empty() && KittyDecryptBase64(enc, key, out);
+    if (enc.empty() || key.empty() || !KittyDecryptBase64(enc, key, out))
+        return false;
+    if (LooksTyped(out))
+        return true;
+    std::fill(out.begin(), out.end(), '\0');
+    out.clear();
+    return false;
 }
 
 } // namespace

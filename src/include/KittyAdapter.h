@@ -34,7 +34,7 @@ namespace sftp {
 //                                              AssignImportedKeyFile — routes
 //                                              `.pub` to pubkeyfile, all
 //                                              other paths to privkeyfile)
-//   AgentFwd / AuthAgent                     → useagent
+//   TryAgent (default 1)                     → useagent
 //   LineCodePage                             → utf8 / codepage (shared
 //                                              ParseLineCodePage)
 //   EnterSendsCrLf                           → unixlinebreaks

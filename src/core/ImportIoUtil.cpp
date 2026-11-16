@@ -59,13 +59,23 @@ std::string BuildRelPath(const std::string& parentRel,
     return parentRel + "/" + leafU8;
 }
 
+// A session tree is a few folders deep and holds at most a few thousand
+// files; past these limits the walk stops instead of running on.
+constexpr int    kMaxWalkDepth   = 32;
+constexpr size_t kMaxWalkEntries = 20000;
+
 // Depth-first recursion body. Stops the whole walk (returns false all the
-// way up) as soon as the visitor returns false.
+// way up) as soon as the visitor returns false or a limit is reached. A
+// junction or symbolic link to a folder is not entered: it can lead back up
+// the tree or somewhere else entirely.
 bool WalkImpl(const std::wstring& dir,
               const std::string&  parentRel,
               const std::wstring& ext,
-              WalkFileCallback&   onFile)
+              WalkFileCallback&   onFile,
+              int                 depth,
+              size_t&             entries)
 {
+    if (depth > kMaxWalkDepth) return true;
     const std::wstring pattern = dir + L"\\*";
     WIN32_FIND_DATAW fd{};
     HANDLE hFind = FindFirstFileW(pattern.c_str(), &fd);
@@ -80,9 +90,14 @@ bool WalkImpl(const std::wstring& dir,
             (name[1] == L'\0' || (name[1] == L'.' && name[2] == L'\0')))
             continue;
 
+        if (++entries > kMaxWalkEntries) {
+            keepGoing = false;
+            break;
+        }
         const std::wstring leaf(name);
         if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-            subdirs.push_back(dir + L"\\" + leaf);
+            if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT))
+                subdirs.push_back(dir + L"\\" + leaf);
             continue;
         }
 
@@ -107,7 +122,7 @@ bool WalkImpl(const std::wstring& dir,
             : sub.substr(slash + 1);
         const std::string childRel =
             BuildRelPath(parentRel, leafW, L"");  // no extension strip for dirs
-        if (!WalkImpl(sub, childRel, ext, onFile))
+        if (!WalkImpl(sub, childRel, ext, onFile, depth + 1, entries))
             return false;
     }
     return true;
@@ -204,6 +219,14 @@ bool ParseLineCodePage(const std::string& raw,
     return false;
 }
 
+std::string ComposeServer(const std::string& host, unsigned long port)
+{
+    if (port == 0 || port == 22 || host.empty())
+        return host;
+    const bool ipv6 = host.find(':') != std::string::npos && host.front() != '[';
+    return (ipv6 ? "[" + host + "]" : host) + ":" + std::to_string(port);
+}
+
 void DescribeProxy(Proxy type, const std::string& host, DWORD port,
                    const std::string& user, SessionDependency& dep)
 {
@@ -254,7 +277,8 @@ void WalkDirectoryFiles(const std::wstring& root,
                         WalkFileCallback     onFile)
 {
     if (root.empty() || !onFile) return;
-    WalkImpl(root, {}, ext, onFile);
+    size_t entries = 0;
+    WalkImpl(root, {}, ext, onFile, 0, entries);
 }
 
 namespace {

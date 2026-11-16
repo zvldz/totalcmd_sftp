@@ -20,7 +20,7 @@ namespace sftp {
 //   UserName          (REG_SZ)    → user (URL-decoded)
 //   PublicKeyFile     (REG_SZ)    → privkeyfile / pubkeyfile via
 //                                   AssignImportedKeyFile (env vars expanded)
-//   AgentFwd / AuthAgent (REG_DWORD) → useagent = 1 when non-zero
+//   TryAgent (REG_DWORD, default 1)  → useagent
 //   LineCodePage      (REG_SZ)    → utf8names / codepage via ParseLineCodePage
 //   EnterSendsCrLf    (REG_DWORD) → unixlinebreaks
 //

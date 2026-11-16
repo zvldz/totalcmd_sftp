@@ -8,6 +8,7 @@
 #include "ImportIoUtil.h"
 #include "UnicodeHelpers.h"
 
+#include <algorithm>
 #include <array>
 #include <cctype>
 #include <cstdio>
@@ -89,14 +90,23 @@ int ReadIniDword(const std::string& iniPath, const std::string& section,
 
 // A session name in UTF-8 back to the encoded name it is stored under.
 // WinSCP encodes UTF-8 bytes; an old ANSI configuration encodes the system
-// codepage, so both spellings are candidates.
+// codepage, so both spellings are candidates. A session in a folder is
+// stored as "folder/name" with the '/' kept, so each spelling is also tried
+// with "%2F" turned back into '/'.
 std::vector<std::string> SubKeyNames(const std::string& utf8Name)
 {
-    std::vector<std::string> out{ UrlEncode(utf8Name) };
-    const std::string acpKey = UrlEncode(unicode_util::wide_to_narrow(
-        unicode_util::utf8_to_wstring(utf8Name), CP_ACP));
-    if (acpKey != out.front())
-        out.push_back(acpKey);
+    std::vector<std::string> out;
+    const auto add = [&out](std::string key) {
+        if (std::find(out.begin(), out.end(), key) == out.end())
+            out.push_back(key);
+        for (size_t pos = 0; (pos = key.find("%2F", pos)) != std::string::npos; )
+            key.replace(pos, 3, "/");
+        if (std::find(out.begin(), out.end(), key) == out.end())
+            out.push_back(std::move(key));
+    };
+    add(UrlEncode(utf8Name));
+    add(UrlEncode(unicode_util::wide_to_narrow(
+        unicode_util::utf8_to_wstring(utf8Name), CP_ACP)));
     return out;
 }
 
@@ -205,13 +215,18 @@ EnumerationResult WinScpAdapter::EnumerateCustomPath(const std::string& path)
 
     // Enumerate every section name in the INI, keep only those matching
     // "Sessions\<name>". GetPrivateProfileSectionNames returns a
-    // double-NUL-terminated block; ~64 KB is enough for a portable
-    // config with hundreds of sessions.
+    // double-NUL-terminated block and reports size - 2 when it had to cut
+    // it, so the buffer grows until the whole list fits.
+    const std::wstring widePath = Utf8PathToWide(path);
     std::vector<wchar_t> sectBuf(65536);
-    const DWORD gotLen = GetPrivateProfileSectionNamesW(
-        sectBuf.data(),
-        static_cast<DWORD>(sectBuf.size() - 1),
-        Utf8PathToWide(path).c_str());
+    DWORD gotLen = 0;
+    for (;;) {
+        gotLen = GetPrivateProfileSectionNamesW(
+            sectBuf.data(), static_cast<DWORD>(sectBuf.size()), widePath.c_str());
+        if (gotLen + 2 < sectBuf.size() || sectBuf.size() >= 16u * 1024 * 1024)
+            break;
+        sectBuf.assign(sectBuf.size() * 2, L'\0');
+    }
     if (gotLen == 0) {
         r.status = EnumerationStatus::OkEmpty;
         return r;
@@ -308,8 +323,10 @@ bool WinScpAdapter::LoadSettings(const ExternalSessionEntry& entry,
         if (regString("UserName", userName))
             userName = PuttyUrlDecode(userName);
 
-        if (!regDword("AgentFwd", useAgent))
-            regDword("AuthAgent", useAgent);
+        // TryAgent is "authenticate with Pageant", on unless turned off;
+        // AgentFwd only forwards the agent to the server.
+        if (!regDword("TryAgent", useAgent))
+            useAgent = 1;
 
         if (regString("PublicKeyFile", keyFile))
             keyFile = ExpandEnv(PuttyUrlDecode(keyFile));
@@ -381,12 +398,8 @@ bool WinScpAdapter::LoadSettings(const ExternalSessionEntry& entry,
 
         userName = PuttyUrlDecode(iniString("UserName"));
 
-        const int agentRaw = iniDword("AgentFwd");
-        if (agentRaw >= 0) useAgent = static_cast<DWORD>(agentRaw);
-        else {
-            const int auth2 = iniDword("AuthAgent");
-            if (auth2 >= 0) useAgent = static_cast<DWORD>(auth2);
-        }
+        const int agentRaw = iniDword("TryAgent");
+        useAgent = agentRaw >= 0 ? static_cast<DWORD>(agentRaw) : 1;
 
         keyFile = ExpandEnv(PuttyUrlDecode(iniString("PublicKeyFile")));
 
@@ -425,14 +438,7 @@ bool WinScpAdapter::LoadSettings(const ExternalSessionEntry& entry,
     if (proto == FsProtoResult::Unsupported)
         return false;
 
-    if (hasPort && port > 0 && port != 22) {
-        char portBuf[16];
-        std::snprintf(portBuf, sizeof(portBuf), ":%lu",
-                      static_cast<unsigned long>(port));
-        out->server = host + portBuf;
-    } else {
-        out->server = host;
-    }
+    out->server = ComposeServer(host, hasPort ? port : 0);
     out->user     = userName;
     out->useagent = (useAgent != 0);
 

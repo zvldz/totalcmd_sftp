@@ -306,10 +306,18 @@ void ImportKittyPassword(const std::string& filePath,
         return;
     }
 
+    // KiTTY keeps the password in the system codepage; the plugin's
+    // passwords are UTF-8, as typed in its dialog.
+    std::wstring wide = unicode_util::narrow_to_wide(plain, CP_ACP);
+    std::string utf8 = unicode_util::wstring_to_utf8(wide);
+    sftp::ScopedWipe wipeUtf8(utf8);
+    SecureZeroMemory(wide.data(), wide.size() * sizeof(wchar_t));
+
     std::array<char, 1024> encBuf{};
-    EncryptString(plain.c_str(), encBuf.data(),
+    EncryptString(utf8.c_str(), encBuf.data(),
                   static_cast<UINT>(encBuf.size()));
     out->password = encBuf.data();
+    SecureZeroMemory(encBuf.data(), encBuf.size());
 }
 
 }  // namespace
@@ -407,9 +415,11 @@ bool KittyAdapter::LoadSettings(const ExternalSessionEntry& entry,
         keyFile = ExpandEnv(keyFile);
     KittyString(content, "LineCodePage", lineCodePage);
 
+    // TryAgent is "authenticate with Pageant", on unless turned off;
+    // AgentFwd only forwards the agent to the server.
     DWORD useAgent = 0;
-    if (!KittyDword(content, "AgentFwd", useAgent))
-        KittyDword(content, "AuthAgent", useAgent);
+    if (!KittyDword(content, "TryAgent", useAgent))
+        useAgent = 1;
 
     DWORD enterSendsCrLf = 0;
     const bool hasEnterSendsCrLf = KittyDword(content, "EnterSendsCrLf",
@@ -433,14 +443,7 @@ bool KittyAdapter::LoadSettings(const ExternalSessionEntry& entry,
     }
 
     // Compose the connect fields.
-    if (hasPort && port > 0 && port != 22) {
-        char portBuf[16];
-        std::snprintf(portBuf, sizeof(portBuf), ":%lu",
-                      static_cast<unsigned long>(port));
-        out->server = host + portBuf;
-    } else {
-        out->server = host;
-    }
+    out->server = ComposeServer(host, hasPort ? port : 0);
     out->user     = userName;
     out->useagent = (useAgent != 0);
 

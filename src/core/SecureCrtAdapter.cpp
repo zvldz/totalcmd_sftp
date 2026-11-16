@@ -145,9 +145,29 @@ void CollectSessions(const std::string& root,
 // Reverse the DisplayName-to-file mapping. DisplayName segments map 1:1
 // to on-disk folder segments (no name is treated as reserved). Returns
 // empty on miss.
+// A name that is a path below its folder: not absolute, no drive, no "..".
+// Names come from the session files, which may point anywhere otherwise.
+bool IsNameBelowRoot(const std::string& name)
+{
+    if (name.empty() || name.front() == '\\' || name.front() == '/' ||
+        name.find(':') != std::string::npos)
+        return false;
+    size_t start = 0;
+    while (start <= name.size()) {
+        size_t end = name.find_first_of("\\/", start);
+        if (end == std::string::npos) end = name.size();
+        if (name.compare(start, end - start, "..") == 0)
+            return false;
+        start = end + 1;
+    }
+    return true;
+}
+
 std::string ResolveSessionPath(const std::string& channelRoot,
                                 const std::string& displayName)
 {
+    if (!IsNameBelowRoot(displayName))
+        return {};
     std::string rel = displayName;
     std::replace(rel.begin(), rel.end(), '/', '\\');
     rel += ".ini";
@@ -166,9 +186,7 @@ void FillConnectSettings(const VanDykeFile& file, const std::string& sessionsRoo
     const std::string host = GetString(file, "Hostname");
     const uint32_t    port = GetDWord (file, "[SSH2] Port", 22);
     if (!host.empty()) {
-        out->server = (port != 22 && port != 0)
-            ? (host + ":" + std::to_string(port))
-            : host;
+        out->server = ComposeServer(host, port);
     }
 
     out->user        = GetString(file, "Username");
@@ -193,7 +211,7 @@ void DescribeFirewallRecord(const std::string& sessionsRoot,
                             SessionDependency& dep)
 {
     const size_t slash = sessionsRoot.find_last_of("\\/");
-    if (slash == std::string::npos)
+    if (slash == std::string::npos || !IsNameBelowRoot(name))
         return;
     const VanDykeFile record = ParseVanDykeFile(
         sessionsRoot.substr(0, slash) + "\\Firewalls\\" + name + ".ini");

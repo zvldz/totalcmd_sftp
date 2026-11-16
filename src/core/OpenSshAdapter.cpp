@@ -29,8 +29,9 @@ struct ConfigLine {
     std::vector<std::string> args;
 };
 
-// Include nesting is capped as `ssh` caps it, which also stops a file that
-// includes itself.
+// Include nesting is capped as `ssh` caps it. A file that is already being
+// read further up the chain is not read again, so an include loop ends at
+// once instead of repeating up to that depth.
 constexpr int kMaxIncludeDepth = 16;
 
 std::wstring Utf8ToWide(const std::string& s)
@@ -126,13 +127,16 @@ std::vector<std::string> SplitArgs(std::string_view s)
 // Files read while parsing, the config and its includes, for ChangeStamp.
 using VisitedFiles = std::vector<std::wstring>;
 
-void ParseFile(const std::wstring& path, std::vector<ConfigLine>& out, int depth,
-               VisitedFiles* visited = nullptr);
+// Files on the current include chain, outermost first.
+using IncludeChain = std::vector<std::wstring>;
+
+void ParseFileIn(const std::wstring& path, std::vector<ConfigLine>& out, int depth,
+                 VisitedFiles* visited, IncludeChain& chain);
 
 // `Include` takes paths relative to ~/.ssh and may hold wildcards; matches
 // are read in name order, as `ssh` reads them.
 void ExpandInclude(const std::string& pattern, std::vector<ConfigLine>& out, int depth,
-                   VisitedFiles* visited)
+                   VisitedFiles* visited, IncludeChain& chain)
 {
     std::string p = pattern;
     if (p.starts_with("~"))
@@ -158,19 +162,24 @@ void ExpandInclude(const std::string& pattern, std::vector<ConfigLine>& out, int
     FindClose(h);
     std::sort(files.begin(), files.end());
     for (const auto& f : files)
-        ParseFile(f, out, depth + 1, visited);
+        ParseFileIn(f, out, depth + 1, visited, chain);
 }
 
-void ParseFile(const std::wstring& path, std::vector<ConfigLine>& out, int depth,
-               VisitedFiles* visited)
+void ParseFileIn(const std::wstring& path, std::vector<ConfigLine>& out, int depth,
+                 VisitedFiles* visited, IncludeChain& chain)
 {
     if (depth > kMaxIncludeDepth)
         return;
+    for (const auto& open : chain) {
+        if (_wcsicmp(open.c_str(), path.c_str()) == 0)
+            return;
+    }
     if (visited)
         visited->push_back(path);
     std::string text;
     if (!ReadFileUtf8(path, text))
         return;
+    chain.push_back(path);
 
     size_t pos = 0;
     while (pos <= text.size()) {
@@ -199,11 +208,19 @@ void ParseFile(const std::wstring& path, std::vector<ConfigLine>& out, int depth
 
         if (cl.key == "include") {
             for (const auto& arg : cl.args)
-                ExpandInclude(arg, out, depth, visited);
+                ExpandInclude(arg, out, depth, visited, chain);
             continue;
         }
         out.push_back(std::move(cl));
     }
+    chain.pop_back();
+}
+
+void ParseFile(const std::wstring& path, std::vector<ConfigLine>& out, int depth,
+               VisitedFiles* visited = nullptr)
+{
+    IncludeChain chain;
+    ParseFileIn(path, out, depth, visited, chain);
 }
 
 // `ssh` pattern: '*' and '?' wildcards, compared without case.
@@ -461,7 +478,7 @@ bool OpenSshAdapter::LoadSettings(const ExternalSessionEntry& entry,
 
     const std::string host = c.hostName.empty() ? alias : ExpandTokens(c.hostName, alias, c.user);
     const std::string user = c.user.empty() ? LocalUserName() : c.user;
-    out->server = (c.port > 0 && c.port != 22) ? host + ":" + std::to_string(c.port) : host;
+    out->server = ComposeServer(host, c.port > 0 ? static_cast<unsigned long>(c.port) : 0);
     out->user   = user;
     // The config says nothing about encoding or line endings. Settling
     // them here spares the shell probes that would otherwise run on every

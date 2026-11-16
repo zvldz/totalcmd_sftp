@@ -47,9 +47,11 @@ bool ReadFileAsBytes(const std::wstring& path, std::string& out)
     if (h == INVALID_HANDLE_VALUE) return false;
 
     LARGE_INTEGER sz{};
-    if (!GetFileSizeEx(h, &sz) || sz.QuadPart <= 0 || sz.QuadPart > (64 * 1024 * 1024)) {
+    // Thousands of sites take a few megabytes; a bigger file is not one
+    // FileZilla wrote, and is refused rather than held in memory whole.
+    if (!GetFileSizeEx(h, &sz) || sz.QuadPart <= 0 || sz.QuadPart > (16 * 1024 * 1024)) {
         CloseHandle(h);
-        return false;   // Refuse absurdly large files — sitemanager.xml is tiny.
+        return false;
     }
     out.resize(static_cast<size_t>(sz.QuadPart));
     DWORD read = 0;
@@ -378,10 +380,9 @@ bool ProtocolIsSftp(int protoRaw) noexcept { return protoRaw == 1; }
 // subfolders in the panel.
 // -------------------------------------------------------------------------
 
-void CollectSessions(const XmlNode& node,
-                     const std::string& prefix,
-                     const std::string& sourceOrigin,
-                     EnumerationResult& r)
+using SiteList = std::vector<std::pair<std::string, const XmlNode*>>;
+
+void CollectSites(const XmlNode& node, const std::string& prefix, SiteList& out)
 {
     for (const auto& child : node.children) {
         if (_stricmp(child.name.c_str(), "Server") == 0) {
@@ -394,46 +395,61 @@ void CollectSessions(const XmlNode& node,
             std::string leaf = ElementDisplayName(child);
             if (leaf.empty()) leaf = ChildText(child, "Host");
             if (leaf.empty()) continue;
-            std::string full = prefix.empty() ? leaf : (prefix + "/" + leaf);
-
-            ExternalSessionEntry e;
-            e.displayName  = std::move(full);
-            e.sourceOrigin = sourceOrigin;
-            r.sessions.push_back(std::move(e));
+            out.emplace_back(prefix.empty() ? leaf : (prefix + "/" + leaf), &child);
         } else if (_stricmp(child.name.c_str(), "Folder") == 0) {
             std::string folderName = ElementDisplayName(child);
             if (folderName.empty()) folderName = "(unnamed)";
-            std::string newPrefix = prefix.empty()
-                ? folderName
-                : (prefix + "/" + folderName);
-            CollectSessions(child, newPrefix, sourceOrigin, r);
+            CollectSites(child, prefix.empty() ? folderName : (prefix + "/" + folderName), out);
         }
     }
 }
 
-// Locate a specific <Server> node by its flattened DisplayName path.
-// Returns nullptr when the path no longer matches — the sitemanager.xml
-// may have been edited between enumeration and the LoadSettings call.
-const XmlNode* FindServerByPath(const XmlNode& node,
-                                 const std::string& path,
-                                 const std::string& prefix)
+// Every SFTP site in the tree with the name it is listed under. FileZilla
+// lets two sites in one folder share a name, or differ only in case, which
+// the panel cannot tell apart; the later one gets " (2)", " (3)" and so on,
+// in the order the file lists them, so each stays reachable.
+SiteList ListSites(const XmlNode& servers)
 {
-    for (const auto& child : node.children) {
-        if (_stricmp(child.name.c_str(), "Server") == 0) {
-            std::string leaf = ElementDisplayName(child);
-            if (leaf.empty()) leaf = ChildText(child, "Host");
-            if (leaf.empty()) continue;
-            std::string full = prefix.empty() ? leaf : (prefix + "/" + leaf);
-            if (full == path) return &child;
-        } else if (_stricmp(child.name.c_str(), "Folder") == 0) {
-            std::string folderName = ElementDisplayName(child);
-            if (folderName.empty()) folderName = "(unnamed)";
-            std::string newPrefix = prefix.empty()
-                ? folderName
-                : (prefix + "/" + folderName);
-            const XmlNode* hit = FindServerByPath(child, path, newPrefix);
-            if (hit) return hit;
+    SiteList sites;
+    CollectSites(servers, "", sites);
+    std::vector<std::string> taken;
+    const auto isTaken = [&taken](const std::string& name) {
+        for (const auto& t : taken) {
+            if (_stricmp(t.c_str(), name.c_str()) == 0)
+                return true;
         }
+        return false;
+    };
+    for (auto& site : sites) {
+        std::string name = site.first;
+        for (int n = 2; isTaken(name); ++n)
+            name = site.first + " (" + std::to_string(n) + ")";
+        taken.push_back(name);
+        site.first = std::move(name);
+    }
+    return sites;
+}
+
+void CollectSessions(const XmlNode& servers,
+                     const std::string& sourceOrigin,
+                     EnumerationResult& r)
+{
+    for (auto& site : ListSites(servers)) {
+        ExternalSessionEntry e;
+        e.displayName  = std::move(site.first);
+        e.sourceOrigin = sourceOrigin;
+        r.sessions.push_back(std::move(e));
+    }
+}
+
+// Locate a specific <Server> node by the name it is listed under. Returns
+// nullptr when the name no longer matches — the sitemanager.xml may have
+// been edited between enumeration and the LoadSettings call.
+const XmlNode* FindServerByPath(const XmlNode& servers, const std::string& path)
+{
+    for (const auto& site : ListSites(servers)) {
+        if (site.first == path)
+            return site.second;
     }
     return nullptr;
 }
@@ -476,7 +492,7 @@ EnumerationResult EnumerateFile(const std::wstring& xmlPath,
         return r;
     }
 
-    CollectSessions(servers, "", sourceOrigin, r);
+    CollectSessions(servers, sourceOrigin, r);
 
     r.status = r.sessions.empty()
         ? EnumerationStatus::OkEmpty
@@ -619,7 +635,7 @@ bool FileZillaAdapter::LoadSettings(const ExternalSessionEntry& entry,
     XmlNode servers;
     if (!LoadServersRoot(xmlPath, servers)) return false;
 
-    const XmlNode* srv = FindServerByPath(servers, entry.displayName, "");
+    const XmlNode* srv = FindServerByPath(servers, entry.displayName);
     if (!srv) {
         SFTP_LOG("FILEZILLA", "LoadSettings: server not found for path='%s'",
                  entry.displayName.c_str());
@@ -645,13 +661,7 @@ bool FileZillaAdapter::LoadSettings(const ExternalSessionEntry& entry,
     const std::string portStr = ChildText(*srv, "Port");
     const int port = portStr.empty() ? 0 : std::atoi(portStr.c_str());
 
-    if (port > 0 && port != 22) {
-        char portBuf[16];
-        std::snprintf(portBuf, sizeof(portBuf), ":%d", port);
-        out->server = host + portBuf;
-    } else {
-        out->server = host;
-    }
+    out->server = ComposeServer(host, port > 0 && port <= 65535 ? static_cast<unsigned long>(port) : 0);
 
     const std::string user = ChildText(*srv, "User");
     if (!user.empty()) out->user = user;
@@ -702,6 +712,7 @@ bool FileZillaAdapter::LoadSettings(const ExternalSessionEntry& entry,
                 EncryptString(plain.c_str(), encBuf.data(),
                               static_cast<UINT>(encBuf.size()));
                 out->password = encBuf.data();
+                SecureZeroMemory(encBuf.data(), encBuf.size());
                 sftp::SecureWipe(plain);
             }
             sftp::SecureWipe(decoded);

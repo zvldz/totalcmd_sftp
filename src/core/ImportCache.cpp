@@ -252,16 +252,7 @@ void ImportCache::Load()
     // Enumerate every section in the cache INI, filter by our prefix,
     // reconstruct in-memory refs. Read _source tag inline to remember
     // channel provenance across TC restarts.
-    std::vector<char> buf(65536, '\0');
-    const DWORD len = IniGetSectionNames(buf.data(),
-                                          static_cast<DWORD>(buf.size()),
-                                          m_cachePath.c_str());
-    if (len == 0) return;
-
-    const char* p = buf.data();
-    while (*p) {
-        const std::string section(p);
-        p += section.size() + 1;
+    for (const std::string& section : IniSectionNameList(m_cachePath.c_str())) {
 
         std::string sourceId, channelTag, displayName;
         if (!ParseSectionName(section, sourceId, channelTag, displayName))

@@ -377,6 +377,27 @@ From this version the plugin comes in two builds: **classic**
     their old place anyway. They now stay where they were, and the error
     is reported.
   - A rename that changes only the case of a name did nothing.
+- **Session import fixes.**
+  - PuTTY, KiTTY, WinSCP: "use Pageant" was taken from agent forwarding,
+    so a Pageant user got a password prompt; it now comes from "Attempt
+    authentication using Pageant", on unless turned off.
+  - WinSCP: a session inside a folder could not be opened.
+  - An IPv6 address with a port other than 22 is written in brackets;
+    without them the port became part of the address.
+  - KiTTY: a password stored with the other of its two keys decoded to
+    garbage, which was sent as the password. A password with letters
+    outside English is converted from the system codepage, as the plugin
+    keeps passwords in UTF-8.
+  - FileZilla: two sites of the same name in one folder, or differing only
+    in case, were one entry; the later one is now listed as "name (2)".
+  - OpenSSH: an `Include` loop stops at once instead of being read again
+    sixteen levels deep.
+  - Session folders are walked at most 32 levels and 20000 entries deep,
+    and a junction or link to a folder is not followed.
+  - SecureCRT: a "Firewall Name" or tunnel session that points outside its
+    folder is not read.
+  - The import cache and a portable `WinSCP.ini` are read whole, however
+    many sessions they list.
 - **Session settings read back what was saved.** A stored password longer
   than the read buffer — a long one, or any password once encrypted — no
   longer loads empty. A file or folder mode that is not an octal number no

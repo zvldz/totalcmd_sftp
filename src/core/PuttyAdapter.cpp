@@ -422,8 +422,10 @@ bool PuttyAdapter::LoadSettings(const ExternalSessionEntry& entry,
         if (ReadRegString(key, "UserName", userName))
             userName = PuttyUrlDecode(userName);
 
-        if (!ReadRegDword(key, "AgentFwd", useAgent))
-            ReadRegDword(key, "AuthAgent", useAgent);
+        // TryAgent is "authenticate with Pageant", on unless turned off;
+        // AgentFwd only forwards the agent to the server.
+        if (!ReadRegDword(key, "TryAgent", useAgent))
+            useAgent = 1;
 
         if (ReadRegString(key, "PublicKeyFile", keyFile))
             keyFile = ExpandEnv(PuttyUrlDecode(keyFile));
@@ -475,9 +477,9 @@ bool PuttyAdapter::LoadSettings(const ExternalSessionEntry& entry,
         userName = PuttyUrlDecode(userName);
 
         bool hadAgent = false;
-        pickDword("AgentFwd", useAgent, hadAgent);
+        pickDword("TryAgent", useAgent, hadAgent);
         if (!hadAgent)
-            pickDword("AuthAgent", useAgent, hadAgent);
+            useAgent = 1;
 
         pickString("PublicKeyFile", keyFile);
         keyFile = ExpandEnv(PuttyUrlDecode(keyFile));
@@ -534,14 +536,7 @@ bool PuttyAdapter::LoadSettings(const ExternalSessionEntry& entry,
     // sentinel-based policy in ImportCache::WriteSessionSection means
     // fields we leave at their default (empty string, false, -1) never
     // reach the cache — no need to zero anything out explicitly.
-    if (hasPort && port > 0 && port != 22) {
-        char portBuf[16];
-        std::snprintf(portBuf, sizeof(portBuf), ":%lu",
-                      static_cast<unsigned long>(port));
-        out->server = host + portBuf;
-    } else {
-        out->server = host;
-    }
+    out->server = ComposeServer(host, hasPort ? port : 0);
     out->user = userName;
     out->useagent = (useAgent != 0);
 

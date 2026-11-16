@@ -21,7 +21,7 @@ namespace sftp {
 //   UserName        (REG_SZ)        → user (URL-decoded)
 //   PublicKeyFile   (REG_SZ)        → privkeyfile when .ppk / .pem,
 //                                     pubkeyfile when .pub
-//   AgentFwd / AuthAgent            → useagent = 1 when non-zero
+//   TryAgent (default 1)            → useagent
 //   FSProtocol == 0                 → default SFTP flow
 //   FSProtocol == 1                 → scponly = 1, scpfordata = 1,
 //                                     unixlinebreaks = 1 (WinSCP SCP)
