@@ -197,8 +197,7 @@ AuthResult pair1Connect(
     const std::string& localPeerId,
     const std::string& remotePeerId,
     const std::string& password,
-    lanpair::PairError* err,
-    bool               forceNew = false) noexcept
+    lanpair::PairError* err) noexcept
 {
     AuthResult result;
 
@@ -280,24 +279,23 @@ AuthResult pair1Connect(
     const std::string srvProofMaterial = "S|" + clientNonceHex + "|" + ch[6] + "|" + localPeerId + "|" + serverPeerId;
 
     std::vector<uint8_t> key;
+    bool sentTrustNew = false;
 
     auto sendAuthAndGetKey = [&]() -> bool {
         std::string trustSecret;
         const std::string trustKey = trustKeyForClient(serverPeerId, localPeerId);
 
-        if (!forceNew) {
-            if (!password.empty()) {
-                auto derived = derivePairKey(password, localPeerId, serverPeerId);
-                if (derived) {
-                    key = *derived;
-                    std::string raw(reinterpret_cast<const char*>(key.data()), key.size());
-                    lanpair::DpapiSecretStore::saveSecret(trustKey, raw, nullptr);
-                }
+        if (!password.empty()) {
+            auto derived = derivePairKey(password, localPeerId, serverPeerId);
+            if (derived) {
+                key = *derived;
+                std::string raw(reinterpret_cast<const char*>(key.data()), key.size());
+                lanpair::DpapiSecretStore::saveSecret(trustKey, raw, nullptr);
             }
+        }
 
-            if (key.empty() && lanpair::DpapiSecretStore::loadSecret(trustKey, &trustSecret, nullptr)) {
-                key.assign(trustSecret.begin(), trustSecret.end());
-            }
+        if (key.empty() && lanpair::DpapiSecretStore::loadSecret(trustKey, &trustSecret, nullptr)) {
+            key.assign(trustSecret.begin(), trustSecret.end());
         }
 
         if (!key.empty()) {
@@ -314,6 +312,7 @@ AuthResult pair1Connect(
         // Without a password the peer asks its user before answering, so the
         // reply may take as long as that question stays open.
         setSocketTimeout(s, 90000);
+        sentTrustNew = true;
         return sendLine(s, "PAIR1 TRUSTNEW");
     };
 
@@ -337,6 +336,13 @@ AuthResult pair1Connect(
     }
 
     if (ok[1] == "OKTRUST") {
+        // A new key is taken only in answer to our own request for one: a
+        // server answering AUTH with OKTRUST would replace the key we hold.
+        if (!sentTrustNew) {
+            closesocket(s);
+            if (err) { err->code = ERROR_ACCESS_DENIED; err->message = "Unexpected OKTRUST"; }
+            return result;
+        }
         if (ok.size() != 4) {
             closesocket(s);
             if (err) { err->code = ERROR_INVALID_DATA; err->message = "Bad OKTRUST"; }
@@ -471,27 +477,11 @@ std::unique_ptr<LanPairSession> LanPairSession::connect(
     AuthResult ar = pair1Connect(targetIp, targetPort,
                                  localPeerId, remotePeerId, password, err);
     if (ar.sock == INVALID_SOCKET) {
-        const bool trustUnknown = err && err->message.find("trust-unknown") != std::string::npos;
-        if (trustUnknown) {
-            // The server has no key for us (it lost or replaced its copy).
-            // Delete the stale client-side key and retry with TRUSTNEW: the
-            // peer issues a fresh shared secret if its user agrees.
-            SFTP_LOG("LAN2", "trust-unknown: deleting stale client key, retrying with TRUSTNEW");
-            lanpair::DpapiSecretStore::deleteSecret(
-                trustKeyForClient(remotePeerId, localPeerId), nullptr);
-            lanpair::PairError retryErr;
-            ar = pair1Connect(targetIp, targetPort,
-                              localPeerId, remotePeerId, password, &retryErr, true);
-            if (ar.sock != INVALID_SOCKET) {
-                if (err) { err->code = 0; err->message.clear(); }
-            } else {
-                if (err) *err = retryErr;
-            }
-        }
-        if (ar.sock == INVALID_SOCKET) {
-            SFTP_LOG("LAN2", "pair1Connect FAILED: %s", err ? err->message.c_str() : "?");
-            return nullptr;
-        }
+        // "trust-unknown" (the server has no key for us) is not answered by
+        // dropping our key and asking for a new one: anyone on the network
+        // can claim to be the peer and say it. The user pairs again instead.
+        SFTP_LOG("LAN2", "pair1Connect FAILED: %s", err ? err->message.c_str() : "?");
+        return nullptr;
     }
     SFTP_LOG("LAN2", "pair1Connect OK, sending LAN2 HELLO");
 

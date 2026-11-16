@@ -651,6 +651,7 @@ bool PairClient::connectAndAuthenticate(const PairClientConfig& cfg,
     }
 
     std::vector<uint8_t> key;
+    bool sentTrustNew = false;
     const std::string proofMaterial    = "C|" + clientNonceHex + "|" + ch[6] + "|" + cfg.peerId + "|" + serverPeerId;
     const std::string serverProofMaterial = "S|" + clientNonceHex + "|" + ch[6] + "|" + cfg.peerId + "|" + serverPeerId;
 
@@ -702,6 +703,7 @@ bool PairClient::connectAndAuthenticate(const PairClientConfig& cfg,
             // Without a password the peer asks its user before answering, so
             // the reply may take as long as that question stays open.
             setSocketTimeout(s, 90000);
+            sentTrustNew = true;
             if (!sendLine(s, "PAIR1 TRUSTNEW")) {
                 closesocket(s);
                 setErr(err, WSAGetLastError(), "Cannot send trust request");
@@ -719,11 +721,20 @@ bool PairClient::connectAndAuthenticate(const PairClientConfig& cfg,
     const auto ok = splitBySpace(line);
     if (ok.size() < 3 || ok[0] != "PAIR1" || (ok[1] != "OK" && ok[1] != "OKTRUST")) {
         closesocket(s);
-        setErr(err, ERROR_ACCESS_DENIED, "Authentication failed");
+        // The server's refusal ("PAIR1 FAIL <reason>") tells the caller what
+        // to offer the user next.
+        setErr(err, ERROR_ACCESS_DENIED, line.empty() ? "Authentication failed" : line);
         return false;
     }
 
     if (ok[1] == "OKTRUST") {
+        // A new key is taken only in answer to our own request for one: a
+        // server answering AUTH with OKTRUST would replace the key we hold.
+        if (!sentTrustNew) {
+            closesocket(s);
+            setErr(err, ERROR_ACCESS_DENIED, "Unexpected trust response");
+            return false;
+        }
         if (ok.size() != 4) {
             closesocket(s);
             setErr(err, ERROR_INVALID_DATA, "Invalid trust response");
@@ -859,6 +870,11 @@ bool deleteSecret(const std::string& key,
         return false;
     }
     return true;
+}
+
+bool forgetClientTrust(const std::string& serverPeerId,
+                       const std::string& clientPeerId) {
+    return deleteSecret(trustKeyForClient(serverPeerId, clientPeerId), nullptr);
 }
 
 } // namespace DpapiSecretStore

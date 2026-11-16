@@ -600,6 +600,8 @@
 #define IDS_LAN_ERR_PASSWORD_REQUIRED   12163
 #define IDS_PHP_HTTP_WARNING            12164
 #define IDS_ERR_SFTP_SERVER_CMD         12165  // SFTP server command failed: point at More...
+#define IDS_LAN_ASK_REPAIR              12166
+#define IDS_LAN_ERR_TRUST_UNKNOWN       12167
 
 // Next default values for new objects
 //

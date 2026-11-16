@@ -410,6 +410,8 @@
 12163=LAN Pair: a másik számítógépen jelszó van beállítva. Adja meg itt ugyanazt a jelszót.
 12164=Figyelem: egyszerű http:// – a PHP Agent jelszava minden kérésnél titkosítatlanul megy át. Használjon https://-t.
 12165=Az SFTP-kiszolgáló parancsa nem indított SFTP-munkamenetet. Ellenőrizze az elérési útját a kapcsolat beállításaiban a(z) „Továbbiak...” alatt, vagy törölje, hogy a kiszolgáló SFTP-alrendszere legyen használva.
+12166=A másik számítógép nem ismeri fel ezt. Újra párosítja őket? A másik számítógép megkérdezi a felhasználóját.
+12167=LAN Pair: a másik számítógép nem ismeri fel ezt. Párosítsa újra őket a kapcsolat beállításaiban a(z) „Párosítás...” gombbal.
 12089=SFTP
 12104=(kézi)
 12105= (hiányzik)

@@ -968,7 +968,26 @@ static void HandleLanPairAction(HWND hWnd, ConnectDialogContext* dlgCtx, pConnec
 
     lanpair::PairSessionInfo info{};
     lanpair::PairError err{};
-    const bool ok = client.connectAndAuthenticate(cfg, &info, &err);
+    bool ok = client.connectAndAuthenticate(cfg, &info, &err);
+    // The peer does not accept the key this machine holds for it. Pairing
+    // anew drops that key and asks the peer for a new one; its user has to
+    // agree there. Done only on the user's word, never on the peer's: any
+    // machine on the network can claim to be the peer and refuse the key.
+    if (!ok && cfg.password.empty() &&
+        (err.message.find("FAIL trust-unknown") != std::string::npos ||
+         err.message.find("FAIL bad-trust") != std::string::npos)) {
+        const std::wstring askW = LoadResStringW(IDS_LAN_ASK_REPAIR);
+        const std::wstring titleW = LoadResStringW(IDS_LAN_TITLE);
+        if (MessageBoxW(hWnd, askW.empty()
+                ? L"The other computer does not recognise this one. Pair them anew? The other computer will ask its user to allow it."
+                : askW.c_str(),
+                titleW.empty() ? L"LAN Pair" : titleW.c_str(),
+                MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2) == IDYES) {
+            lanpair::DpapiSecretStore::forgetClientTrust(peerId, cfg.peerId);
+            err = {};
+            ok = client.connectAndAuthenticate(cfg, &info, &err);
+        }
+    }
     if (!ok) {
         WindowsUserFeedback tempFeedback(hWnd);
         std::wstring msgTemplW = LoadResStringW(IDS_LAN_ERR_PAIR_FAILED);
@@ -3063,7 +3082,10 @@ pConnectSettings SftpConnectToServer(LPCSTR DisplayName, LPCSTR inifilename,
             ConnectSettings.key_passphrase      = inherited->keyPassphrase;
             ConnectSettings.jump_key_passphrase = inherited->jumpKeyPassphrase;
         }
-        if (ConnectSettings.useagent || ConnectSettings.password.empty()) {
+        // An imported session (only those pass a logging alias) lives in the
+        // scan cache, which must not hold passwords: a password the server
+        // makes it change is not written back there.
+        if (ConnectSettings.useagent || ConnectSettings.password.empty() || loggingAliasName) {
             ConnectSettings.passSaveMode = sftp::PassSaveMode::empty;
         } else {
             ConnectSettings.passSaveMode = sftp::PassSaveMode::plain;

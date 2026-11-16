@@ -28,7 +28,7 @@
   <tr><td><b>45846</b></td><td>TCP</td><td>Pairing handshake and file transfer session</td></tr>
 </table>
 <p>Both ports must be open in Windows Firewall on both machines. If peers do not appear in the discovery list, this is the first thing to check.</p>
-<p>Nothing listens on these ports until LAN Pair is used: the file server and discovery start when a LAN Pair session is opened (Auto or Donor) or when <b>Pair...</b> is clicked, and stop when Total Commander exits. A machine that only uses SSH, SFTP or PHP Agent sessions opens no LAN Pair ports.</p>
+<p>Nothing listens on these ports until LAN Pair is used: the file server and discovery start when a LAN Pair session is opened (Auto or Donor) or when <b>Pair...</b> is clicked. They stop when the last LAN Pair session closes. A Donor has no session of its own — the Receiver connects to it — so once its session is opened it serves until Total Commander exits. A machine that only uses SSH, SFTP or PHP Agent sessions opens no LAN Pair ports.</p>
 
 <div class="note">
   <b>Firewall tip:</b> UDP broadcast (port 45845) is blocked between network segments and VLANs by default. LAN Pair discovery works reliably only within the same broadcast domain (same subnet/switch). If your machines are on different VLANs, peers will not be found via auto-discovery.
@@ -162,6 +162,7 @@ lanparti=0
   <tr><td>Connection refused</td><td>Windows Firewall blocking TCP 45846</td><td>Allow TCP 45846 inbound on the Receiver machine</td></tr>
   <tr><td>Password rejected on first connect</td><td>Passwords do not match on both sides</td><td>Ensure both sides use exactly the same pairing password (case-sensitive)</td></tr>
   <tr><td>"The other computer did not allow this connection"</td><td>No password is set there and the question was answered No, was not answered in 90 seconds, or another question was already open</td><td>Try again and answer <b>Yes</b> on the other machine, or set the same pairing password on both</td></tr>
+  <tr><td>"The other computer does not recognise this one"</td><td>The other computer no longer has the key this one holds (it was reinstalled, its key was removed, or another machine answered under its name)</td><td>Click <b>Pair...</b> with that peer selected and answer Yes to pairing anew; the other computer asks its user to allow it. The plugin never does this on its own, since any machine on the network can claim to be the peer</td></tr>
   <tr><td>"The other computer has a password"</td><td>A pairing password is set there, none here</td><td>Enter the same pairing password in this session</td></tr>
   <tr><td>Trust forgotten after reinstall</td><td>DPAPI trust keys are stored per Windows user and lost on reinstall</td><td>Pair again; trust will be rebuilt automatically</td></tr>
   <tr><td>Peers found but classic SMB works — LAN Pair does not</td><td>UDP broadcast not reaching the other machine (VLAN, managed switch isolation)</td><td>Check switch/VLAN settings; UDP broadcast must reach port 45845 on both sides</td></tr>

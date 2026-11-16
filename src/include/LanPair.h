@@ -148,6 +148,11 @@ bool loadSecret(const std::string& key,
 bool deleteSecret(const std::string& key,
                   PairError* err = nullptr);
 
+// Drops the key this machine (clientPeerId) holds for a server peer, so the
+// next pairing asks that peer for a new one.
+bool forgetClientTrust(const std::string& serverPeerId,
+                       const std::string& clientPeerId);
+
 } // namespace DpapiSecretStore
 
 // Planned command channel — type tags used in LAN2 wire protocol

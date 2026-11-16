@@ -25,10 +25,21 @@ this fork's 10.0.2.2. Each entry names where it came from.
   Reported in [wesmar/sftp#8](https://github.com/wesmar/sftp/issues/8).
 - **LAN Pair ports are open only while LAN Pair is used.** The file server
   and discovery started as soon as the plugin loaded, for everyone, even
-  without a single LAN Pair session. Now they start when a LAN Pair session
-  is opened or Pair... is clicked. A Donor has to open its session once
-  before the Receiver connects. The ports are bound exclusively, so no
-  other program can take them over. *wesmar/sftp#8.*
+  without a single LAN Pair session, and ran until Total Commander exited.
+  Now they start when a LAN Pair session is opened or Pair... is clicked,
+  and stop when the last LAN Pair session closes. A Donor has to open its
+  session once before the Receiver connects, and then serves until Total
+  Commander exits. The TCP ports are bound exclusively, so no other
+  program can take them over; discovery's UDP port is still shared.
+  *wesmar/sftp#8.*
+- **LAN Pair no longer swaps its key for one from an impostor.** Any
+  machine on the network can answer discovery under the peer's name. When
+  it said it did not know this machine, the plugin deleted its real key on
+  its own, asked for a new one and took the impostor's; a server could
+  also replace the key in its answer. Now a new key is accepted only in
+  answer to the plugin's own request for one, and pairing anew is done
+  only when the user says so: Pair... asks first, and the other computer
+  asks its user too.
 - **LAN Pair's TrustedInstaller token only after authentication.** With
   the Trusted Installer option on, the server took the token before
   checking the peer. *wesmar/sftp#8.*
@@ -53,8 +64,9 @@ this fork's 10.0.2.2. Each entry names where it came from.
   when that session is connected and kept in memory only. F5 puts it into
   Total Commander's password manager when a master password is set, and
   otherwise does not copy it: it is asked for on connect and can be saved
-  under Alt+Enter. Passwords already in the cache file are removed from
-  it. *wesmar/sftp#9.*
+  under Alt+Enter. A new password the server makes an imported session
+  set is not written back either. Passwords already in the cache file are
+  removed from it. *wesmar/sftp#9.*
 - **PHP Agent: shell commands off by default.** A freshly deployed
   `sftp.php` (agent 1.0.3) refuses `SHELL_EXEC`, so its password gives
   file access only. PHP Shell needs `AGENT_ALLOW_SHELL = true` in the file
@@ -64,9 +76,9 @@ this fork's 10.0.2.2. Each entry names where it came from.
   directory are sent in the request body, so they stay out of web server
   and proxy access logs. *wesmar/sftp#9.*
 - **Warning for PHP Agent over plain HTTP.** Connecting to an `http://`
-  agent on another machine writes a warning to the log: the password goes
-  unencrypted with every request. The connection is not refused.
-  *wesmar/sftp#9.*
+  agent on another machine writes a warning to the log: the password still
+  goes with every request in a header, unencrypted over HTTP. The
+  connection is not refused; use `https://`. *wesmar/sftp#9.*
 - **Stack buffer checks are on.** The plugin is built with `/GS`, so a
   stack buffer overrun ends the process instead of running whatever
   overwrote the return address. Control Flow Guard and CET were already on.

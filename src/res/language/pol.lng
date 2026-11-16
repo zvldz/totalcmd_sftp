@@ -399,6 +399,8 @@
 12163=LAN Pair: na drugim komputerze ustawiono hasło. Wpisz tutaj to samo hasło.
 12164=Uwaga: zwykły http:// – hasło PHP Agent jest wysyłane bez szyfrowania w każdym żądaniu. Użyj https://.
 12165=Polecenie serwera SFTP nie uruchomiło sesji SFTP. Sprawdź jego ścieżkę w „Więcej...” w ustawieniach połączenia lub wyczyść je, aby użyć podsystemu SFTP serwera.
+12166=Drugi komputer nie rozpoznaje tego. Sparować je ponownie? Drugi komputer zapyta swojego użytkownika.
+12167=LAN Pair: drugi komputer nie rozpoznaje tego. Sparuj je ponownie przyciskiem „Paruj...” w ustawieniach połączenia.
 12089=SFTP
 12090=Szukam peera LAN Pair w sieci lokalnej...
 12091={} s

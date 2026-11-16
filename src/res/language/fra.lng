@@ -411,6 +411,8 @@
 12163=LAN Pair : un mot de passe est défini sur l'autre ordinateur. Saisissez ici le même mot de passe.
 12164=Attention : http:// simple – le mot de passe du PHP Agent est envoyé en clair à chaque requête. Utilisez https://.
 12165=La commande du serveur SFTP n'a pas démarré de session SFTP. Vérifiez son chemin sous « Plus... » dans les paramètres de connexion, ou videz-la pour utiliser le sous-système SFTP du serveur.
+12166=L'autre ordinateur ne reconnaît pas celui-ci. Les associer à nouveau ? L'autre ordinateur demandera l'accord de son utilisateur.
+12167=LAN Pair : l'autre ordinateur ne reconnaît pas celui-ci. Associez-les à nouveau avec « Pair... » dans les paramètres de connexion.
 12089=SFTP
 12104=(manuel)
 12105= (introuvable)

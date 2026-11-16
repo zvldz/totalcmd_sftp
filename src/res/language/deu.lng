@@ -411,6 +411,8 @@
 12163=LAN Pair: Auf dem anderen Computer ist ein Passwort gesetzt. Geben Sie hier dasselbe Passwort ein.
 12164=Warnung: einfaches http:// – das PHP-Agent-Passwort wird bei jeder Anfrage unverschlüsselt gesendet. Verwenden Sie https://.
 12165=Der SFTP-Serverbefehl hat keine SFTP-Sitzung gestartet. Prüfen Sie seinen Pfad unter „Mehr...“ in den Verbindungseinstellungen oder leeren Sie ihn, um das SFTP-Subsystem des Servers zu verwenden.
+12166=Der andere Computer erkennt diesen nicht. Neu koppeln? Der andere Computer fragt seinen Benutzer.
+12167=LAN Pair: Der andere Computer erkennt diesen nicht. Koppeln Sie sie neu mit „Paaren...“ in den Verbindungseinstellungen.
 12089=SFTP
 12104=(manuell)
 12105= (fehlt)

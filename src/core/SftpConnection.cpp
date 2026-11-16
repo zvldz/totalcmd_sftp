@@ -22,6 +22,7 @@
 #include "SshBackendFactory.h"
 #include "WindowsUserFeedback.h"
 #include <array>
+#include <atomic>
 #include <condition_variable>
 #include <new>
 #include <fstream>
@@ -512,12 +513,39 @@ void StopGlobalLanServices()
     if (g_lanFileServer) { g_lanFileServer->stop(); g_lanFileServer.reset(); }
 }
 
+// Open LAN Pair client sessions, and whether this machine was opened as a
+// Donor. The services run while a session is open; a Donor has no session
+// of its own (the Receiver connects to it), so once opened it serves until
+// Total Commander exits.
+static std::atomic<int>  g_lanSessionCount{0};
+static std::atomic<bool> g_lanDonorOpened{false};
+
+static void StopLanServicesIfUnused()
+{
+    if (g_lanSessionCount.load() <= 0 && !g_lanDonorOpened.load()) {
+        SFTP_LOG("LAN", "no LAN Pair session left: stopping file server and discovery");
+        StopGlobalLanServices();
+    }
+}
+
+// Drops a session's LAN Pair client and, with the last one gone, the services.
+static void ReleaseLanSession(pConnectSettings cs)
+{
+    if (!cs->lanSession)
+        return;
+    cs->lanSession->disconnect();
+    cs->lanSession.reset();
+    --g_lanSessionCount;
+    StopLanServicesIfUnused();
+}
+
 // Connect a LAN Pair session: run discovery to find the peer's current IP,
 // then connect + authenticate with DPAPI trust key.
 static int LanPairConnect(pConnectSettings cs)
 {
     // lan_pair_role: 0=mutual, 1=receiver (biorca), 2=donor (dawca)
     if (cs->lan_pair_role == 2) {
+        g_lanDonorOpened = true;
         StartGlobalLanServices(true);   // ensure our server is running for inbound connections
         if (cs->feedback)
             cs->feedback->ShowError(LngStrU8(IDS_LAN_ERR_DONOR_NO_CONNECT,
@@ -530,7 +558,16 @@ static int LanPairConnect(pConnectSettings cs)
     // If we already have an active session, nothing to do.
     if (cs->lanSession && cs->lanSession->isConnected())
         return SFTP_OK;
-    cs->lanSession.reset();
+    if (cs->lanSession) {
+        cs->lanSession.reset();
+        --g_lanSessionCount;
+    }
+    // A connect that ends without a session leaves no reason for the
+    // services this call started.
+    const auto fail = [] {
+        StopLanServicesIfUnused();
+        return SFTP_FAILED;
+    };
 
     ShowStatusId(IDS_LOG_LAN_DISCOVER, nullptr, true);
 
@@ -539,7 +576,7 @@ static int LanPairConnect(pConnectSettings cs)
     if (targetPeerId.empty()) {
         if (cs->feedback)
             cs->feedback->ShowError(LngStrU8(IDS_LAN_ERR_NO_PEER, "LAN Pair: no peer configured. Open connection settings and pair first.").c_str());
-        return SFTP_FAILED;
+        return fail();
     }
 
     std::string foundIp;
@@ -575,7 +612,7 @@ static int LanPairConnect(pConnectSettings cs)
     if (!found) {
         if (cs->feedback)
             cs->feedback->ShowError(LngStrU8(IDS_LAN_ERR_PEER_NOT_FOUND, "LAN Pair: peer not found on the network. Make sure the other computer is running.").c_str());
-        return SFTP_FAILED;
+        return fail();
     }
 
     cs->lan_pair_ip   = foundIp;
@@ -611,17 +648,21 @@ static int LanPairConnect(pConnectSettings cs)
         } else if (err.message.find("FAIL denied") != std::string::npos) {
             msg = LngStrU8(IDS_LAN_ERR_DENIED,
                 "LAN Pair: the other computer did not allow this connection.");
+        } else if (err.message.find("FAIL trust-unknown") != std::string::npos) {
+            msg = LngStrU8(IDS_LAN_ERR_TRUST_UNKNOWN,
+                "LAN Pair: the other computer does not recognise this one. Pair them again with Pair... in the connection settings.");
         } else {
             msg = LngStrU8(IDS_LAN_ERR_CONN_FAILED, "LAN Pair: connection failed");
             if (!err.message.empty()) msg += " \xe2\x80\x94 " + err.message;
         }
         if (cs->feedback) cs->feedback->ShowError(msg.c_str());
-        return SFTP_FAILED;
+        return fail();
     }
 
     session->setTimeoutMin(cs->lan_pair_timeout_min);
     session->setTrustedInstaller(cs->lan_pair_trusted_installer);
     cs->lanSession = std::move(session);
+    ++g_lanSessionCount;
 
     ShowStatusId(IDS_LOG_LAN_CONNECTED, nullptr, true);
     return SFTP_OK;
@@ -836,10 +877,7 @@ int SftpCloseConnection(pConnectSettings ConnectSettings)
         return SFTP_FAILED;
 
     // 1. LAN Pair (own transport, not SSH) — quick disconnect.
-    if (ConnectSettings->lanSession) {
-        ConnectSettings->lanSession->disconnect();
-        ConnectSettings->lanSession.reset();
-    }
+    ReleaseLanSession(ConnectSettings);
 
     // 2. SCP shell channel (only present in scponly mode). Destructor of
     //    Libssh2Channel sends SSH_MSG_CHANNEL_CLOSE/free with bounded retry.
