@@ -111,6 +111,9 @@ this fork's 10.0.2.2. Each entry names where it came from.
 
 ### Fixes
 
+- **A wrong SFTP server command is named as the cause.** When the command
+  set under More... did not start SFTP, the error suggested turning on SCP
+  for everything; it now points at the command.
 - **SCP text-mode download no longer overruns its buffer.** With text mode
   on, a file dense with line breaks grew past the read buffer as LF became
   CRLF and was written beyond it in memory — and the content comes from the

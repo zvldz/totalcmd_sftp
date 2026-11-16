@@ -843,6 +843,7 @@ BEGIN
     IDS_LAN_ERR_DENIED      "LAN Pair: the other computer did not allow this connection."
     IDS_LAN_ERR_PASSWORD_REQUIRED "LAN Pair: the other computer has a password. Enter the same password here."
     IDS_PHP_HTTP_WARNING    "Warning: plain http:// - the PHP Agent password is sent unencrypted with every request. Use https://."
+    IDS_ERR_SFTP_SERVER_CMD "The SFTP server command did not start an SFTP session. Check its path under More... in the connection settings, or clear it to use the server's SFTP subsystem."
     IDS_DLG_LANPAIR_GROUP   " LAN Pair Session: "
     IDS_DLG_FILEMOD         "New files (Upload):"
     IDS_DLG_DIRMOD          "New folders:"

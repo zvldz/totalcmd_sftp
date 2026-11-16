@@ -409,6 +409,7 @@
 12162=LAN Pair: celălalt computer nu a permis această conexiune.
 12163=LAN Pair: pe celălalt computer este setată o parolă. Introduceți aici aceeași parolă.
 12164=Atenție: http:// simplu – parola PHP Agent este trimisă necriptată la fiecare cerere. Folosiți https://.
+12165=Comanda serverului SFTP nu a pornit o sesiune SFTP. Verificați calea ei la „Mai mult...” în setările conexiunii sau goliți-o pentru a folosi subsistemul SFTP al serverului.
 12089=SFTP
 12104=(manual)
 12105= (lipsește)

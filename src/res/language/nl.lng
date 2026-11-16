@@ -409,6 +409,7 @@
 12162=LAN Pair: de andere computer heeft deze verbinding niet toegestaan.
 12163=LAN Pair: op de andere computer is een wachtwoord ingesteld. Voer hier hetzelfde wachtwoord in.
 12164=Waarschuwing: gewone http:// – het PHP Agent-wachtwoord wordt bij elk verzoek onversleuteld verzonden. Gebruik https://.
+12165=De SFTP-serveropdracht heeft geen SFTP-sessie gestart. Controleer het pad onder "Meer..." in de verbindingsinstellingen, of maak het leeg om het SFTP-subsysteem van de server te gebruiken.
 12089=SFTP
 12104=(handmatig)
 12105= (ontbreekt)

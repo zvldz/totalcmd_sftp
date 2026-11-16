@@ -410,6 +410,7 @@
 12162=LAN Pair: el otro equipo no permitió esta conexión.
 12163=LAN Pair: el otro equipo tiene una contraseña. Introduzca aquí la misma contraseña.
 12164=Advertencia: http:// sin cifrar: la contraseña del PHP Agent se envía sin cifrar en cada solicitud. Use https://.
+12165=El comando del servidor SFTP no inició una sesión SFTP. Compruebe su ruta en «Más...» en la configuración de la conexión, o déjelo vacío para usar el subsistema SFTP del servidor.
 12089=SFTP
 12104=(manual)
 12105= (no encontrada)

@@ -131,10 +131,11 @@ bool InitializeSftpSubsystemIfNeeded(pConnectSettings ConnectSettings, int progr
         ShowStatusId(IDS_ERR_INIT_SFTP, errmsg, true);
         SFTP_LOG("CONN", "SFTP init failed%s: %s", sftpInitTimedOut ? " (no answer)" : "",
                  errmsg ? errmsg : "(null)");
-        // The likeliest reason is a host that offers only a shell, and the
+        // With a server command set, the command is the likeliest culprit.
+        // Without one, it is a host that offers only a shell, and the
         // session has a mode for exactly that; say so rather than leave a
         // bare "could not initialise".
-        ShowErrorId(IDS_ERR_NO_SFTP_HINT);
+        ShowErrorId(serverCommand.empty() ? IDS_ERR_NO_SFTP_HINT : IDS_ERR_SFTP_SERVER_CMD);
         if (LogProc || LogProcW) {
             const std::string msg = std::format("SFTP: SFTP subsystem init failed: {}", errmsg ? errmsg : "(no details)");
             LogProcI(PluginNumber, MSGTYPE_IMPORTANTERROR, msg.c_str());

@@ -409,6 +409,7 @@
 12162=LAN Pair: druhý počítač toto připojení nepovolil.
 12163=LAN Pair: na druhém počítači je nastaveno heslo. Zadejte zde stejné heslo.
 12164=Upozornění: prosté http:// – heslo PHP Agent se posílá nešifrovaně s každým požadavkem. Použijte https://.
+12165=Příkaz serveru SFTP nespustil relaci SFTP. Zkontrolujte jeho cestu v „Další...“ v nastavení připojení, nebo jej vymažte a použijte subsystém SFTP serveru.
 12089=SFTP
 12104=(ručně)
 12105= (chybí)
