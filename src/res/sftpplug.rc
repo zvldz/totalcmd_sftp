@@ -854,6 +854,7 @@ BEGIN
     IDS_JUMP_WITH_PROXY     "This session is set to go through both a proxy and a jump host. The plugin reaches a jump host directly, which would skip the proxy. Keep one of the two."
     IDS_JUMP_REF_PROXIED    "Jump session '{}' goes through a proxy. A jump host is reached directly, which would skip that proxy, so the connection is refused. Pick a jump session without a proxy."
     IDS_IMPORT_STALE        "This session was changed in the program it was imported from (host, user, proxy or jump host) after the last scan. Use [Refresh] in its folder, then try again."
+    IDS_ERR_SESSION_NAME    "This name cannot be given to a session. It may not hold control characters, a backslash or $$, begin or end with a space, begin with [, be one of the plugin's own sections (Configuration, Imports, proxy) or lie inside another session."
     IDS_DLG_LANPAIR_GROUP   " LAN Pair Session: "
     IDS_DLG_FILEMOD         "New files (Upload):"
     IDS_DLG_DIRMOD          "New folders:"

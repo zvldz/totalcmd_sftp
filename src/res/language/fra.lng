@@ -417,6 +417,7 @@
 12169=Cette session est réglée pour passer à la fois par un proxy et par un hôte de rebond. Le plugin joint l'hôte de rebond directement, le proxy serait contourné. Gardez l'un des deux.
 12170=La session de rebond '{}' passe par un proxy. L'hôte de rebond est joint directement, ce proxy serait contourné, la connexion est donc refusée. Choisissez une session de rebond sans proxy.
 12171=Cette session a été modifiée dans le programme d'où elle est importée (hôte, utilisateur, proxy ou hôte de rebond) depuis la dernière analyse. Utilisez [Refresh] dans son dossier, puis réessayez.
+12172=Ce nom ne peut pas être donné à une session. Il ne peut contenir ni caractère de contrôle, ni barre oblique inverse, ni $$, ni commencer ou finir par une espace, ni commencer par [, ni être une des sections propres du plugin (Configuration, Imports, proxy), ni se trouver dans une autre session.
 12089=SFTP
 12104=(manuel)
 12105= (introuvable)

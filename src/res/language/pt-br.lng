@@ -416,6 +416,7 @@
 12169=Esta sessão está configurada para passar por um proxy e por um host de salto ao mesmo tempo. O plugin chega ao host de salto diretamente, o proxy seria ignorado. Mantenha só um dos dois.
 12170=A sessão de salto '{}' passa por um proxy. O host de salto é alcançado diretamente, esse proxy seria ignorado, por isso a conexão foi recusada. Escolha uma sessão de salto sem proxy.
 12171=Esta sessão foi alterada no programa de onde foi importada (host, usuário, proxy ou host de salto) depois da última leitura. Use [Refresh] na pasta dela e tente de novo.
+12172=Este nome não pode ser dado a uma sessão. Não pode conter caracteres de controle, barra invertida nem $$, começar ou terminar com espaço, começar com [, ser uma das seções do próprio plugin (Configuration, Imports, proxy) nem ficar dentro de outra sessão.
 12089=SFTP
 12104=(manual)
 12105= (ausente)

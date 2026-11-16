@@ -352,6 +352,32 @@ From this version the plugin comes in two builds: **classic**
   connection dialog.** It looked for the session in the own list, found
   nothing and asked for a new one; it now connects the way Enter on it
   does, with the password the panel's connection has.
+- **Session names are checked wherever a session gets one.** The
+  connection dialog, F5/F6 in the plugin, a session file dropped on it
+  and a copy from [Imports] all refuse a name that would not come back
+  the same from `sftpplug.ini`, or would collide with something else
+  there: control characters, a backslash, `$$`, a space at either end, a
+  leading `[`, the plugin's own sections (`proxy`, `proxy2`…,
+  `Configuration`, `Imports`), or a place inside another session, where
+  the session could never be reached. Brackets inside a name, as in
+  `web [old]` or a PuTTY session `prod [eu]`, now work: the name used to
+  end at the first `]` and the settings were lost or mixed up.
+- **`sftpplug.ini` keeps what it is given.**
+  - A line break in a value — an imported session name, say — could add
+    a line of its own to the file, any setting at all; such a write is
+    refused.
+  - A value in quotes (a server command like `'/usr/lib/sftp-server'`)
+    lost its quotes on the next read.
+  - Saving replaced the file, losing its permissions, and turned a
+    symbolic or hard link into a plain file. It now keeps both.
+  - With about 200 sessions, a new proxy record could get the number of
+    one that exists and overwrite it; the list of sections is no longer
+    cut short.
+  - Moving sessions on a file that cannot be written deleted them from
+    their old place anyway. They now stay where they were, and the error
+    is reported.
+  - A rename that changes only the case of a name did nothing.
+- **Deleting a proxy record reported the result the wrong way round.**
 - **An upload is no longer taken for a session file.** After a
   connection to a session was closed, a `.ini` file copied into one of
   its folders could be read as a session to import, creating a new

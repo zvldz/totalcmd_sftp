@@ -1,6 +1,8 @@
 #pragma once
 
 #include <windows.h>
+#include <string>
+#include <vector>
 
 // Drop-in replacements for the Windows profile API, used for the plugin's
 // own INI files (sftpplug.ini, the import cache). Signatures and semantics
@@ -44,6 +46,11 @@ BOOL IniWriteString(LPCWSTR section, LPCWSTR key, LPCWSTR value, LPCWSTR path);
 
 DWORD IniGetSectionNames(LPSTR out, DWORD outSize, LPCSTR path);
 DWORD IniGetSectionNames(LPWSTR out, DWORD outSize, LPCWSTR path);
+
+// Every section name, as internal strings, however many there are; where
+// the buffer forms above would cut the list short.
+std::vector<std::string> IniSectionNameList(LPCSTR path);
+std::vector<std::string> IniSectionNameList(LPCWSTR path);
 
 // Reading a file whose path is not in the system codepage (one the user
 // dropped on the plugin, say) with internal strings for the rest.

@@ -417,6 +417,7 @@
 12169=Diese Sitzung ist auf einen Proxy und einen Jump-Host zugleich eingestellt. Das Plugin erreicht einen Jump-Host direkt, der Proxy würde übergangen. Behalten Sie eines von beiden.
 12170=Die Jump-Sitzung '{}' geht über einen Proxy. Ein Jump-Host wird direkt erreicht, der Proxy würde übergangen, daher wird die Verbindung abgelehnt. Wählen Sie eine Jump-Sitzung ohne Proxy.
 12171=Diese Sitzung wurde nach dem letzten Einlesen in dem Programm geändert, aus dem sie importiert ist (Host, Benutzer, Proxy oder Jump-Host). Führen Sie [Refresh] in ihrem Ordner aus und versuchen Sie es erneut.
+12172=Dieser Name kann keiner Sitzung gegeben werden. Er darf keine Steuerzeichen, keinen Backslash und kein $$ enthalten, nicht mit einem Leerzeichen beginnen oder enden, nicht mit [ beginnen, keiner der eigenen Abschnitte des Plugins sein (Configuration, Imports, proxy) und nicht in einer anderen Sitzung liegen.
 12089=SFTP
 12104=(manuell)
 12105= (fehlt)

@@ -416,6 +416,7 @@
 12169=Deze sessie is ingesteld om zowel via een proxy als via een jump-host te gaan. De plugin bereikt een jump-host direct, de proxy zou worden overgeslagen. Houd een van beide.
 12170=De jump-sessie '{}' gaat via een proxy. Een jump-host wordt direct bereikt, die proxy zou worden overgeslagen, dus de verbinding wordt geweigerd. Kies een jump-sessie zonder proxy.
 12171=Deze sessie is na de laatste scan gewijzigd in het programma waaruit ze is geïmporteerd (host, gebruiker, proxy of jump-host). Gebruik [Refresh] in haar map en probeer het opnieuw.
+12172=Deze naam kan niet aan een sessie worden gegeven. Hij mag geen stuurtekens, backslash of $$ bevatten, niet met een spatie beginnen of eindigen, niet met [ beginnen, geen van de eigen secties van de plugin zijn (Configuration, Imports, proxy) en niet binnen een andere sessie liggen.
 12089=SFTP
 12104=(handmatig)
 12105= (ontbreekt)

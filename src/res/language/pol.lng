@@ -405,6 +405,7 @@
 12169=Ta sesja jest ustawiona jednocześnie na proxy i na host pośredni. Wtyczka łączy się z hostem pośrednim bezpośrednio, proxy zostałoby pominięte. Zostaw jedno z nich.
 12170=Sesja pośrednia '{}' przechodzi przez proxy. Z hostem pośrednim wtyczka łączy się bezpośrednio, to proxy zostałoby pominięte, więc połączenie odrzucono. Wybierz sesję pośrednią bez proxy.
 12171=Ta sesja została zmieniona w programie, z którego ją zaimportowano (host, użytkownik, proxy lub host pośredni), po ostatnim skanowaniu. Użyj [Refresh] w jej folderze i spróbuj ponownie.
+12172=Tej nazwy nie można nadać sesji. Nie może zawierać znaków sterujących, ukośnika wstecznego ani $$, zaczynać się ani kończyć spacją, zaczynać się od [, być jedną z własnych sekcji wtyczki (Configuration, Imports, proxy) ani leżeć wewnątrz innej sesji.
 12089=SFTP
 12090=Szukam peera LAN Pair w sieci lokalnej...
 12091={} s

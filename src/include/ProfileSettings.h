@@ -44,9 +44,3 @@ bool RemoveImportCustomPath(LPCSTR sourceId, LPCSTR path, LPCSTR iniFileName);
 // referenced session is being deleted. Critical for keeping jump-host
 // references intact across session/folder rename + delete operations.
 void UpdateJumpRefsOnSessionRename(LPCSTR oldName, LPCSTR newName, LPCSTR iniFileName);
-
-// Prefix variant for bulk folder renames: any `jumpsessionref` value that
-// starts with `oldPrefix + "/"` has that prefix swapped for `newPrefix + "/"`.
-// Used by F6 on a folder to keep jump references valid after every session
-// under the folder has been renamed.
-void UpdateJumpRefsOnFolderRename(LPCSTR oldPrefix, LPCSTR newPrefix, LPCSTR iniFileName);

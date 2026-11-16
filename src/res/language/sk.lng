@@ -416,6 +416,7 @@
 12169=Táto relácia je nastavená na proxy aj na skokový hostiteľ zároveň. Plugin sa ku skokovému hostiteľovi pripája priamo, proxy by bola vynechaná. Ponechajte len jedno.
 12170=Skoková relácia '{}' vedie cez proxy. Ku skokovému hostiteľovi sa plugin pripája priamo, tá proxy by bola vynechaná, preto je spojenie odmietnuté. Vyberte skokovú reláciu bez proxy.
 12171=Relácia bola po poslednom načítaní zmenená v programe, z ktorého bola importovaná (hostiteľ, používateľ, proxy alebo skokový hostiteľ). Použite [Refresh] v jej priečinku a skúste to znova.
+12172=Tento názov nemožno dať relácii. Nesmie obsahovať riadiace znaky, spätnú lomku ani $$, začínať ani končiť medzerou, začínať znakom [, byť jednou z vlastných sekcií pluginu (Configuration, Imports, proxy) ani ležať vnútri inej relácie.
 12089=SFTP
 12104=(ručne)
 12105= (chýba)

@@ -416,6 +416,7 @@
 12169=Ez a munkamenet egyszerre proxyn és átjáró gépen át van beállítva. A bővítmény közvetlenül éri el az átjáró gépet, a proxy kimaradna. Csak az egyiket tartsa meg.
 12170=A(z) '{}' átjáró munkamenet proxyn keresztül megy. Az átjáró gépet közvetlenül éri el, az a proxy kimaradna, ezért a kapcsolat el lett utasítva. Válasszon proxy nélküli átjáró munkamenetet.
 12171=Ezt a munkamenetet a legutóbbi beolvasás óta megváltoztatták abban a programban, ahonnan importálva lett (gép, felhasználó, proxy vagy átjáró gép). Használja a [Refresh]-t a mappájában, majd próbálja újra.
+12172=Ez a név nem adható munkamenetnek. Nem tartalmazhat vezérlőkaraktert, fordított perjelet vagy $$-t, nem kezdődhet és nem végződhet szóközzel, nem kezdődhet [-lel, nem lehet a bővítmény saját szakaszainak egyike (Configuration, Imports, proxy), és nem lehet másik munkamenet belsejében.
 12089=SFTP
 12104=(kézi)
 12105= (hiányzik)

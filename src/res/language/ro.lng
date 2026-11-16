@@ -416,6 +416,7 @@
 12169=Această sesiune este setată să treacă atât printr-un proxy, cât și printr-o gazdă intermediară. Pluginul ajunge direct la gazda intermediară, proxy-ul ar fi ocolit. Păstrați doar una dintre ele.
 12170=Sesiunea intermediară '{}' trece printr-un proxy. Gazda intermediară este accesată direct, acel proxy ar fi ocolit, așa că conexiunea este refuzată. Alegeți o sesiune intermediară fără proxy.
 12171=Această sesiune a fost modificată în programul din care a fost importată (gazdă, utilizator, proxy sau gazdă intermediară) după ultima scanare. Folosiți [Refresh] în dosarul ei, apoi încercați din nou.
+12172=Acest nume nu poate fi dat unei sesiuni. Nu poate conține caractere de control, bară inversă sau $$, începe ori se termina cu un spațiu, începe cu [, fi una dintre secțiunile proprii ale pluginului (Configuration, Imports, proxy) sau afla în interiorul altei sesiuni.
 12089=SFTP
 12104=(manual)
 12105= (lipsește)

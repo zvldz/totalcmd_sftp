@@ -210,26 +210,19 @@ int LoadServersFromIniW(LPCWSTR inifilename, LPCSTR quickconnectname) noexcept
     std::lock_guard<std::mutex> lock(g_registryMutex);
     
     int servercount = 0;
-    std::array<wchar_t, 65535> serverlist{};
-    
-    IniGetString(nullptr, nullptr, L"", serverlist.data(), static_cast<DWORD>(serverlist.size()), inifilename);
-    
     std::vector<std::string> ini_servers;
     if (quickconnectname)
         ini_servers.push_back(quickconnectname);
-        
-    wchar_t* wp = serverlist.data();
-    while (wp[0]) {
-        const std::string section = unicode_util::wide_to_internal(wp);
-        
+
+    for (const std::string& section : IniSectionNameList(inifilename)) {
+        const std::wstring wp = unicode_util::internal_to_wide(section);
         std::array<wchar_t, 512> serverval{};
-        IniGetString(wp, L"server", L"", serverval.data(), static_cast<DWORD>(serverval.size()), inifilename);
-        const int transferMode = IniGetInt(wp, L"transfermode", 0, inifilename);
-        
+        IniGetString(wp.c_str(), L"server", L"", serverval.data(), static_cast<DWORD>(serverval.size()), inifilename);
+        const int transferMode = IniGetInt(wp.c_str(), L"transfermode", 0, inifilename);
+
         if (serverval[0] || transferMode == 3) {
             ini_servers.push_back(section);
         }
-        wp += wcslen(wp) + 1;
     }
     
     auto it = std::remove_if(g_servers.begin(), g_servers.end(), [&](const std::unique_ptr<SERVERENTRY>& e) {
@@ -286,15 +279,23 @@ int CopyMoveServerInIniW(LPCSTR oldservername, LPCSTR newservername,
 
         DeleteServerFromIniW(newservername, inifilename);
 
+        // The source goes only once every key of the copy is written: on a
+        // file that cannot be written the move stops with the session where
+        // it was, not with neither.
+        bool written = true;
         wchar_t* pcapt = captlist.data();
-        while (pcapt[0]) {
-            std::array<wchar_t, 1024> valuebuf{};
+        while (pcapt[0] && written) {
+            std::array<wchar_t, 4096> valuebuf{};
             IniGetString(woldsect.c_str(), pcapt, L"", valuebuf.data(), static_cast<DWORD>(valuebuf.size() - 1), inifilename);
-            IniWriteString(wnewsect.c_str(), pcapt, valuebuf.data(), inifilename);
+            written = IniWriteString(wnewsect.c_str(), pcapt, valuebuf.data(), inifilename) != FALSE;
             pcapt += wcslen(pcapt) + 1;
         }
-        if (Move)
-            DeleteServerFromIniW(oldservername, inifilename);
+        if (!written) {
+            DeleteServerFromIniW(newservername, inifilename);
+            return FS_FILE_WRITEERROR;
+        }
+        if (Move && !DeleteServerFromIniW(oldservername, inifilename))
+            return FS_FILE_WRITEERROR;
         return FS_FILE_OK;
     }
     return FS_FILE_NOTFOUND;
@@ -472,6 +473,47 @@ PathResolution ResolvePathKind(LPCSTR path) noexcept
         out.displayName = std::move(folder);
     }
     return out;
+}
+
+bool IsUsableSessionName(const std::string& name) noexcept
+{
+    try {
+        if (name.empty() || name.front() == ' ' || name.back() == ' ' || name.front() == '[' ||
+            name.rfind("__vimp_", 0) == 0 || name.find("$$") != std::string::npos)
+            return false;
+        for (const char ch : name) {
+            const unsigned char c = static_cast<unsigned char>(ch);
+            if (c < 0x20 || c == 0x7F || c == '\\')
+                return false;
+        }
+        const auto reserved = [](const std::string& s) {
+            if (_stricmp(s.c_str(), "Configuration") == 0 || _stricmp(s.c_str(), "Imports") == 0)
+                return true;
+            if (_strnicmp(s.c_str(), "proxy", 5) != 0)
+                return false;
+            return s.find_first_not_of("0123456789", 5) == std::string::npos;
+        };
+        if (reserved(name))
+            return false;
+        // Folder segments: none empty or a dot name, and none of the folders
+        // above the leaf a session already.
+        std::lock_guard<std::mutex> lock(g_registryMutex);
+        size_t start = 0;
+        for (;;) {
+            const size_t slash = name.find('/', start);
+            const std::string segment = name.substr(start, slash == std::string::npos ? std::string::npos : slash - start);
+            if (segment.empty() || segment == "." || segment == "..")
+                return false;
+            if (slash == std::string::npos)
+                break;
+            if (!RegistryFindSession(name.substr(0, slash)).empty())
+                return false;
+            start = slash + 1;
+        }
+        return true;
+    } catch (...) {
+        return false;
+    }
 }
 
 PathResolution ResolvePathKindW(LPCWSTR path) noexcept

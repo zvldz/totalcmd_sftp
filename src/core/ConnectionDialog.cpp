@@ -2834,6 +2834,15 @@ void ConnectionDialog::OnOk()
         };
 
         const bool isNewSession = strcmp(dlgDisplayName, s_quickconnect) == 0;
+        // A new name has to be one the INI keeps as it is; an existing
+        // session keeps whatever name it has.
+        if ((isNewSession || _stricmp(targetProfile.data(), dlgDisplayName) != 0) &&
+            !IsUsableSessionName(targetProfile.data())) {
+            const std::wstring text = unicode_util::utf8_to_wstring(LngStrU8(IDS_ERR_SESSION_NAME,
+                "This name cannot be given to a session."));
+            MessageBoxW(m_hWnd, text.c_str(), L"SFTP", MB_OK | MB_ICONWARNING);
+            return;
+        }
         if (isNewSession) {
             // Saving under a name that is taken would replace that session's
             // settings with these, so refuse it the same way renaming onto an

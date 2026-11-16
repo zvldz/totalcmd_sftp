@@ -125,13 +125,14 @@ bool SameName(std::string_view a, std::string_view b)
     return true;
 }
 
-// "[name]" → name, closed by the first ']'.
+// "[name]" → name, closed by the last ']' of the line: a name may hold
+// brackets of its own ("prod [eu]"), and nothing is written after the header.
 bool ParseHeader(std::string_view line, std::string_view& name)
 {
     line = Trim(line);
     if (line.empty() || line.front() != '[')
         return false;
-    const size_t close = line.find(']');
+    const size_t close = line.rfind(']');
     if (close == std::string_view::npos)
         return false;
     name = Trim(line.substr(1, close - 1));
@@ -331,15 +332,35 @@ IniDoc& GetDoc(const std::wstring& full)
 }
 
 // Replace through a temporary copy so a reader never sees half a file.
-// When the target is held open without delete sharing, overwrite it in
-// place instead.
+// ReplaceFileW keeps the original's permissions and attributes; a file that
+// is a link (symbolic, or hard with other names) is written in place, which
+// keeps it one. So is a target held open without delete sharing.
 bool WriteReplace(const std::wstring& path, const std::string& body)
 {
-    const std::wstring tmp = path + L".tmp";
-    if (WriteAll(tmp, body) &&
-        MoveFileExW(tmp.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
-        return true;
-    DeleteFileW(tmp.c_str());
+    const DWORD attrs = GetFileAttributesW(path.c_str());
+    bool linked = attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_REPARSE_POINT);
+    if (!linked && attrs != INVALID_FILE_ATTRIBUTES) {
+        HANDLE h = CreateFileW(path.c_str(), FILE_READ_ATTRIBUTES,
+                               FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                               nullptr, OPEN_EXISTING, 0, nullptr);
+        BY_HANDLE_FILE_INFORMATION info{};
+        if (h != INVALID_HANDLE_VALUE) {
+            linked = GetFileInformationByHandle(h, &info) && info.nNumberOfLinks > 1;
+            CloseHandle(h);
+        }
+    }
+    if (!linked) {
+        const std::wstring tmp = path + L".tmp";
+        if (WriteAll(tmp, body)) {
+            const bool replaced = attrs != INVALID_FILE_ATTRIBUTES
+                ? ReplaceFileW(path.c_str(), tmp.c_str(), nullptr, REPLACEFILE_IGNORE_MERGE_ERRORS,
+                               nullptr, nullptr) != FALSE
+                : MoveFileExW(tmp.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != FALSE;
+            if (replaced)
+                return true;
+        }
+        DeleteFileW(tmp.c_str());
+    }
     return WriteAll(path, body);
 }
 
@@ -642,13 +663,27 @@ BOOL WriteStringT(const Ch* section, const Ch* key, const Ch* value, const Ch* p
     // Re-read under the lock: another process may have written meanwhile.
     IniDoc& doc = GetDoc(full);
     const std::string sec = ToUtf8(section);
+    // A line break in a name or a value would start a line of its own in the
+    // file — a key nobody set, `sendcommand=` say. Such a write is refused.
+    const auto oneLine = [](std::string_view s) { return s.find_first_of("\r\n") == std::string_view::npos; };
+    if (!oneLine(sec))
+        return FALSE;
     bool changed;
-    if (!key)
+    if (!key) {
         changed = DeleteSection(doc, sec);
-    else if (!value)
+    } else if (!value) {
         changed = DeleteKey(doc, sec, ToUtf8(key));
-    else
-        changed = SetValue(doc, sec, ToUtf8(key), ToUtf8(value));
+    } else {
+        const std::string k = ToUtf8(key);
+        std::string v = ToUtf8(value);
+        if (!oneLine(k) || !oneLine(v) || k.find('=') != std::string::npos)
+            return FALSE;
+        // Reading takes one pair of surrounding quotes off a value; one that
+        // has them itself gets another pair, so it reads back as written.
+        if (v.size() >= 2 && (v.front() == '"' || v.front() == '\'') && v.back() == v.front())
+            v = "\"" + v + "\"";
+        changed = SetValue(doc, sec, k, v);
+    }
     if (!changed)
         return TRUE;
     return Save(full, doc) ? TRUE : FALSE;
@@ -745,6 +780,30 @@ BOOL IniWriteString(LPCWSTR section, LPCWSTR key, LPCWSTR value, LPCWSTR path)
 DWORD IniGetSectionNames(LPSTR out, DWORD outSize, LPCSTR path)
 {
     return IniGetString(nullptr, nullptr, "", out, outSize, path);
+}
+
+std::vector<std::string> IniSectionNameList(LPCWSTR path)
+{
+    try {
+        if (!path)
+            return {};
+        const std::wstring full = FullPath(PathOf(path));
+        std::lock_guard<std::mutex> lock(g_mutex);
+        std::vector<std::string> names = SectionNames(GetDoc(full));
+        for (auto& n : names) {
+            std::string internal;
+            FromUtf8(n, internal);
+            n = std::move(internal);
+        }
+        return names;
+    } catch (...) {
+        return {};
+    }
+}
+
+std::vector<std::string> IniSectionNameList(LPCSTR path)
+{
+    return path ? IniSectionNameList(PathOf(path).c_str()) : std::vector<std::string>{};
 }
 
 DWORD IniGetSectionNames(LPWSTR out, DWORD outSize, LPCWSTR path)

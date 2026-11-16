@@ -610,6 +610,48 @@ int wmain(int argc, wchar_t** argv)
               "the replaced session has the file's settings and passwords only");
         DeleteFileW((local + L"in2.ini").c_str());
 
+        // Names: brackets of its own are fine and read back; the plugin's own
+        // sections, "$$" and a place inside another session are refused.
+        WriteFileBytes(local + L"plain.ini", "[x]\r\nserver=127.0.0.1:6\r\n");
+        Check(g_plugin.PutFileW((local + L"plain.ini").c_str(), L"\\web [old].ini", 0) == FS_FILE_OK,
+              "a session named with brackets is imported");
+        {
+            bool okRoot = false;
+            const auto rootList = ListDir(L"\\", okRoot);
+            Check(okRoot && rootList.count(L"web [old]") == 1, "and is listed under that name");
+            // Read through the plugin (F3): Windows' own profile API ends a
+            // section name at its first ']'.
+            const std::wstring shown = local + L"shown.ini";
+            std::string text;
+            if (g_plugin.GetFileW(L"\\web [old]", const_cast<LPWSTR>(shown.c_str()), FS_COPYFLAGS_OVERWRITE, &ri) == FS_FILE_OK) {
+                std::ifstream in(shown, std::ios::binary);
+                text.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+            }
+            DeleteFileW(shown.c_str());
+            Check(text.find("server=127.0.0.1:6") != std::string::npos, "and its settings read back");
+        }
+        g_plugin.DeleteFileW(L"\\web [old]");
+        Check(g_plugin.PutFileW((local + L"plain.ini").c_str(), L"\\proxy3.ini", 0) == FS_FILE_USERABORT &&
+              iniValue(L"proxy3", L"server") == L"(none)",
+              "a session named like a proxy record is refused");
+        Check(g_plugin.PutFileW((local + L"plain.ini").c_str(), L"\\a$$b.ini", 0) == FS_FILE_USERABORT,
+              "a session name with $$ is refused");
+        Check(g_plugin.RenMovFileW(L"\\it-imp2", L"\\it-secrets\\inside", FALSE, FALSE, &ri) == FS_FILE_USERABORT &&
+              iniValue(L"it-secrets/inside", L"server") == L"(none)",
+              "a session copied to a place inside another session is refused");
+        // A rename that changes only the case of the name takes effect.
+        Check(g_plugin.RenMovFileW(L"\\it-imp2", L"\\IT-IMP2", TRUE, FALSE, &ri) == FS_FILE_OK,
+              "a rename that changes only the case is done");
+        {
+            bool okRoot = false;
+            const auto rootList = ListDir(L"\\", okRoot);
+            Check(okRoot && rootList.count(L"IT-IMP2") == 1 && rootList.count(L"it-imp2") == 0 &&
+                  StoreValue(L"IT-IMP2") == L"secret9",
+                  "and the session and its password go by the new name");
+            g_plugin.RenMovFileW(L"\\IT-IMP2", L"\\it-imp2", TRUE, FALSE, &ri);
+        }
+        DeleteFileW((local + L"plain.ini").c_str());
+
         // A session file that names a proxy without describing it is not
         // imported: without its proxy it would connect directly.
         WriteFileBytes(local + L"noproxy.ini", "[x]\r\nserver=127.0.0.1:4\r\nproxynr=2\r\n");

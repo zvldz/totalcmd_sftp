@@ -20,10 +20,10 @@
 std::vector<int> EnumerateProxyNumbers(LPCSTR iniFileName)
 {
     std::vector<int> numbers;
-    std::array<char, 8192> sections{};
-    IniGetSectionNames(sections.data(),
-                       static_cast<DWORD>(sections.size() - 1), iniFileName);
-    for (const char* p = sections.data(); *p; p += strlen(p) + 1) {
+    // All of them: a list cut short would hide records, and a new one would
+    // then be given the number of one that exists.
+    for (const std::string& section : IniSectionNameList(iniFileName)) {
+        const char* p = section.c_str();
         if (_strnicmp(p, "proxy", 5) != 0)
             continue;
         const char* tail = p + 5;
@@ -257,15 +257,8 @@ void UpdateJumpRefsOnSessionRename(LPCSTR oldName, LPCSTR newName, LPCSTR iniFil
     if (!oldName || !oldName[0] || !iniFileName || !iniFileName[0])
         return;
 
-    // IniGetSectionNames returns section names as a double-null-terminated
-    // list; a list longer than the buffer comes back truncated.
-    std::array<char, 65535> sectionList{};
-    IniGetSectionNames(sectionList.data(),
-                       static_cast<DWORD>(sectionList.size()),
-                       iniFileName);
-
-    char* p = sectionList.data();
-    while (p[0]) {
+    for (const std::string& section : IniSectionNameList(iniFileName)) {
+        const char* p = section.c_str();
         std::array<char, MAX_PATH> currentRef{};
         IniGetString(p, "jumpsessionref", "",
                      currentRef.data(),
@@ -278,42 +271,9 @@ void UpdateJumpRefsOnSessionRename(LPCSTR oldName, LPCSTR newName, LPCSTR iniFil
             else
                 IniWriteString(p, "jumpsessionref", nullptr, iniFileName);
         }
-        p += strlen(p) + 1;
     }
 }
 
-void UpdateJumpRefsOnFolderRename(LPCSTR oldPrefix, LPCSTR newPrefix, LPCSTR iniFileName)
-{
-    if (!oldPrefix || !oldPrefix[0] || !newPrefix || !newPrefix[0] ||
-        !iniFileName || !iniFileName[0])
-        return;
-
-    const std::string oldNeedle = std::string(oldPrefix) + "/";
-    const std::string newReplacement = std::string(newPrefix) + "/";
-
-    std::array<char, 65535> sectionList{};
-    IniGetSectionNames(sectionList.data(),
-                       static_cast<DWORD>(sectionList.size()),
-                       iniFileName);
-
-    char* p = sectionList.data();
-    while (p[0]) {
-        std::array<char, MAX_PATH> currentRef{};
-        IniGetString(p, "jumpsessionref", "",
-                     currentRef.data(),
-                     static_cast<DWORD>(currentRef.size()),
-                     iniFileName);
-        const size_t reflen = strlen(currentRef.data());
-        if (reflen > oldNeedle.size() &&
-            _strnicmp(currentRef.data(), oldNeedle.c_str(), oldNeedle.size()) == 0)
-        {
-            std::string updated = newReplacement;
-            updated.append(currentRef.data() + oldNeedle.size());
-            IniWriteString(p, "jumpsessionref", updated.c_str(), iniFileName);
-        }
-        p += strlen(p) + 1;
-    }
-}
 
 // ===========================================================================
 // Import custom paths — [Imports] section

@@ -606,6 +606,7 @@
 #define IDS_JUMP_WITH_PROXY             12169  // refusal: proxy together with a jump host
 #define IDS_JUMP_REF_PROXIED            12170  // refusal: jump session goes through a proxy
 #define IDS_IMPORT_STALE                12171  // refusal: imported session changed in its source
+#define IDS_ERR_SESSION_NAME            12172  // refusal: unusable session name
 
 // Next default values for new objects
 //

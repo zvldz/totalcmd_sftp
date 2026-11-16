@@ -81,6 +81,16 @@ PathResolution ResolvePathKindW(LPCWSTR path) noexcept;
 std::string PathToDisplayName(LPCSTR path) noexcept;
 std::string PathToDisplayNameW(LPCWSTR path) noexcept;
 
+// Whether `name` (an internal string, folders joined by '/') can be given to a
+// new or renamed session: a section of sftpplug.ini that reads back as that
+// same session and is nothing else. Refused are control characters, '\',
+// "$$" (the password manager's separator), spaces at either end (the INI
+// trims them), empty or dot folder names, a leading '[' (the plugin's own
+// folders) or "__vimp_" (an [Imports] alias), the plugin's own sections
+// (Configuration, Imports, proxy, proxyN), and a name inside an existing
+// session ("srv/home/x" where "srv" is a session), which no path could reach.
+bool IsUsableSessionName(const std::string& name) noexcept;
+
 SERVERHANDLE FindFirstServer(LPSTR displayname, size_t maxlen) noexcept;
 SERVERHANDLE FindNextServer(SERVERHANDLE searchhandle, LPSTR displayname, size_t maxlen) noexcept;
 void FindCloseServer(SERVERHANDLE searchhandle) noexcept;

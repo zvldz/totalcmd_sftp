@@ -416,6 +416,7 @@
 12169=Questa sessione è impostata per passare sia da un proxy sia da un jump host. Il plugin raggiunge il jump host direttamente, il proxy verrebbe scavalcato. Tenga uno dei due.
 12170=La sessione jump '{}' passa da un proxy. Il jump host viene raggiunto direttamente, quel proxy verrebbe scavalcato, perciò la connessione è rifiutata. Scelga una sessione jump senza proxy.
 12171=Questa sessione è stata modificata nel programma da cui è importata (host, utente, proxy o jump host) dopo l'ultima scansione. Usi [Refresh] nella sua cartella e riprovi.
+12172=Questo nome non può essere dato a una sessione. Non può contenere caratteri di controllo, barra rovesciata o $$, iniziare o finire con uno spazio, iniziare con [, essere una delle sezioni proprie del plugin (Configuration, Imports, proxy) né trovarsi dentro un'altra sessione.
 12089=SFTP
 12104=(manuale)
 12105= (mancante)

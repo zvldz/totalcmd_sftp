@@ -478,6 +478,8 @@ static std::optional<int> TryImportSessionFromUpload(
     }
     if (display.empty())
         return abortWithMessage(IDS_SIMPORT_ERR_EMPTY_DEST);
+    if (!IsUsableSessionName(display))
+        return abortWithMessage(IDS_ERR_SESSION_NAME);
 
     // The session's `proxynr` came from another file, where that number meant
     // another record; the route itself travels in the file's [proxy]. A
@@ -558,20 +560,13 @@ static std::vector<std::string> CollectSessionsUnderFolder(
     const std::string& folderPrefix, LPCWSTR iniFileNameW)
 {
     std::vector<std::string> out;
-    std::array<wchar_t, 65535> serverlist{};
-    IniGetString(nullptr, nullptr, L"", serverlist.data(),
-                  static_cast<DWORD>(serverlist.size()),
-                  iniFileNameW);
     const std::string needle = folderPrefix + "/";
-    wchar_t* wp = serverlist.data();
-    while (wp[0]) {
-        std::string section = unicode_util::wide_to_internal(wp);
+    for (std::string& section : IniSectionNameList(iniFileNameW)) {
         if (section.size() > needle.size() &&
             _strnicmp(section.c_str(), needle.c_str(), needle.size()) == 0)
         {
             out.push_back(std::move(section));
         }
-        wp += wcslen(wp) + 1;
     }
     return out;
 }
@@ -693,6 +688,11 @@ static int MaterialiseVirtualSession(const std::string& sourceId,
     const std::string newDisplay = PathToDisplayNameW(NewName);
     if (newDisplay.empty())
         return FS_FILE_NOTFOUND;
+    if (!IsUsableSessionName(newDisplay)) {
+        ShowPluginMessage(IDS_ERR_SESSION_NAME, "This name cannot be given to a session.",
+                          IDS_SIMPORT_TITLE, "SFTP plugin - session import");
+        return FS_FILE_USERABORT;
+    }
 
     // Refuse overwrite unless TC's OverWrite flag is set.
     if (!OverWrite && sftp::IniSectionExists(newDisplay, inifilename))
@@ -1628,12 +1628,36 @@ int WINAPI FsRenMovFileW(LPCWSTR OldName, LPCWSTR NewName, BOOL Move, BOOL OverW
         // and cross-folder move. The new DisplayName comes from the path
         // itself (PathToDisplayName), since the destination session can't
         // exist in the registry yet (otherwise we'd be overwriting).
+        // A name the INI would not keep as it is, or one inside another
+        // session, is refused with a word rather than written.
+        const auto refuseName = [] {
+            ShowPluginMessage(IDS_ERR_SESSION_NAME, "This name cannot be given to a session.",
+                              IDS_TITLE_SFTP, "SFTP");
+            return FS_FILE_USERABORT;
+        };
         if (rOld.kind == PathKind::SessionLeaf) {
             const std::string newDisplay = PathToDisplayNameW(NewName);
             if (newDisplay.empty())
                 return FS_FILE_NOTFOUND;
+            if (rOld.displayName == newDisplay)
+                return FS_FILE_OK;
+            // Section names are compared without regard to case, so a rename
+            // that changes only the case goes through a name of its own.
+            if (Move && _stricmp(rOld.displayName.c_str(), newDisplay.c_str()) == 0) {
+                const std::string interim = newDisplay + "~rename";
+                if (CopyMoveSavedSession(rOld.displayName, interim, true, false, inifilename) != FS_FILE_OK ||
+                    CopyMoveSavedSession(interim, newDisplay, true, false, inifilename) != FS_FILE_OK)
+                    return FS_FILE_WRITEERROR;
+                UpdateJumpRefsOnSessionRename(rOld.displayName.c_str(), newDisplay.c_str(), inifilename);
+                LoadServersFromIniW(inifilenameW, s_quickconnect);
+                HWND hTcMain = FindWindowA("TTOTAL_CMD", nullptr);
+                if (hTcMain) PostMessage(hTcMain, WM_USER + 51, 540, 0);
+                return FS_FILE_OK;
+            }
             if (_stricmp(rOld.displayName.c_str(), newDisplay.c_str()) == 0)
                 return FS_FILE_OK;
+            if (!IsUsableSessionName(newDisplay))
+                return refuseName();
             if (!OverWrite && (rNew.kind == PathKind::SessionLeaf ||
                                rNew.kind == PathKind::Folder))
                 return FS_FILE_EXISTS;
@@ -1674,6 +1698,9 @@ int WINAPI FsRenMovFileW(LPCWSTR OldName, LPCWSTR NewName, BOOL Move, BOOL OverW
                 return FS_FILE_NOTFOUND;
             if (_stricmp(rOld.displayName.c_str(), newFolder.c_str()) == 0)
                 return FS_FILE_OK;
+            // The folder name is checked as the first part of a session name.
+            if (!IsUsableSessionName(newFolder + "/x"))
+                return refuseName();
             if (!OverWrite && (rNew.kind == PathKind::SessionLeaf ||
                                rNew.kind == PathKind::Folder))
                 return FS_FILE_EXISTS;
@@ -1693,11 +1720,15 @@ int WINAPI FsRenMovFileW(LPCWSTR OldName, LPCWSTR NewName, BOOL Move, BOOL OverW
                 renames.emplace_back(oldName, std::move(newName));
             }
 
-            for (const auto& [oldName, newName] : renames)
-                CopyMoveSavedSession(oldName, newName, !!Move, !!OverWrite, inifilename);
-            if (Move) {
-                UpdateJumpRefsOnFolderRename(rOld.displayName.c_str(),
-                                              newFolder.c_str(), inifilename);
+            // A session that cannot be written stops the move there; jump
+            // references follow only the sessions that did move.
+            int rc = FS_FILE_OK;
+            for (const auto& [oldName, newName] : renames) {
+                rc = CopyMoveSavedSession(oldName, newName, !!Move, !!OverWrite, inifilename);
+                if (rc != FS_FILE_OK)
+                    break;
+                if (Move)
+                    UpdateJumpRefsOnSessionRename(oldName.c_str(), newName.c_str(), inifilename);
             }
             LoadServersFromIniW(inifilenameW, s_quickconnect);
             // See the session branch above — cm_RereadSource only for rename.
@@ -1705,7 +1736,7 @@ int WINAPI FsRenMovFileW(LPCWSTR OldName, LPCWSTR NewName, BOOL Move, BOOL OverW
                 HWND hTcMain = FindWindowA("TTOTAL_CMD", nullptr);
                 if (hTcMain) PostMessage(hTcMain, WM_USER + 51, 540, 0);
             }
-            return FS_FILE_OK;
+            return rc == FS_FILE_OK ? FS_FILE_OK : FS_FILE_WRITEERROR;
         }
 
         // --- 3. Server-side rename (file / directory inside a session) ---
@@ -2505,15 +2536,16 @@ BOOL WINAPI FsDeleteFileW(LPCWSTR RemoteName)
         {
             std::string proxyEntry;
             if (IsProxiesPath(RemoteName, &proxyEntry) && !proxyEntry.empty()) {
+                // FsDeleteFile answers TRUE or FALSE, not an FS_FILE_* code.
                 const int proxynr = ProxyNrFromRowName(proxyEntry);
                 if (proxynr <= 0)
-                    return FS_FILE_NOTSUPPORTED;
+                    return FALSE;
 
                 std::string inUse = LngStrU8(IDS_ERROR_INUSE, "Proxy is in use by connection:");
                 inUse.append("\r\n");
                 inUse.resize(1024, '\0');
                 if (DeleteProxy(proxynr, "", inifilename, inUse.data(), inUse.size() - 1))
-                    return FS_FILE_OK;
+                    return TRUE;
 
                 const std::wstring message = unicode_util::utf8_to_wstring(inUse.c_str());
                 if (RequestProcW) {
@@ -2523,7 +2555,7 @@ BOOL WINAPI FsDeleteFileW(LPCWSTR RemoteName)
                     MessageBoxW(FindWindowA("TTOTAL_CMD", nullptr),
                                 message.c_str(), L"SFTP", MB_OK | MB_ICONSTOP);
                 }
-                return FS_FILE_NOTSUPPORTED;
+                return FALSE;
             }
         }
 
