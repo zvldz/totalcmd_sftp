@@ -157,7 +157,9 @@ int MimeDecode(LPCSTR inputstr, size_t inlen, LPVOID outdata, size_t maxlen);
 // String formatting
 void ReplaceEnvVars(LPSTR buf, size_t buflen);
 void ReplaceSubString(LPSTR buf, LPCSTR fromstr, LPCSTR tostr, size_t maxlen);
-bool ParseAddress(LPCSTR serverstring, LPSTR addr, WORD* port, int defport);
+// The host part goes to `addr` (`addrSize` bytes). A host that does not fit
+// fails rather than being cut, which would name another host.
+bool ParseAddress(LPCSTR serverstring, LPSTR addr, size_t addrSize, WORD* port, int defport);
 bool IsNumericIPv6(LPCSTR addr);
 
 } // extern "C"

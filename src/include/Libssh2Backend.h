@@ -118,7 +118,7 @@ public:
     // disconnect first to inform the server, then free the libssh2 struct.
     ~Libssh2Session() override;
 
-    int startup(int sock) override;
+    int handshake(libssh2_socket_t sock) override;
     void setBlocking(int blocking) override;
     int getBlocking() override;
     int disconnect(const char* desc) override;

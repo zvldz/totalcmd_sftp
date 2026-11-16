@@ -441,23 +441,34 @@ bool WaitForSshIo(pConnectSettings cs, DWORD timeoutMs)
     return select(0, &rfds, &wfds, nullptr, &tv) > 0;
 }
 
+// Sends all `len` bytes; the count on success, SOCKET_ERROR on a socket error
+// or when the user cancels.
 extern "C"
 int mysend(SOCKET s, LPCSTR buf, int len, int flags, LPCSTR progressmessage, int progressstart, int * ploop, SYSTICKS * plasttime)
 {
-    int ret = SOCKET_ERROR;
-    while (true) {
-        ret = send(s, buf, len, flags);
-        if (ret >= 0)
-            return ret;
-        int err = WSAGetLastError();
-        if (err == WSAEWOULDBLOCK) {
-            if (ProgressLoop(progressmessage, progressstart, progressstart + 10, ploop, plasttime))
-                break;
+    int sent = 0;
+    while (sent < len) {
+        const int ret = send(s, buf + sent, len - sent, flags);
+        if (ret > 0) {
+            sent += ret;
+            continue;
         }
+        if (ret == SOCKET_ERROR && WSAGetLastError() != WSAEWOULDBLOCK)
+            return SOCKET_ERROR;
+        if (ProgressLoop(progressmessage, progressstart, progressstart + 10, ploop, plasttime))
+            return SOCKET_ERROR;
+        fd_set wfds;
+        FD_ZERO(&wfds);
+        FD_SET(s, &wfds);
+        timeval tv = { static_cast<long>(SOCKET_READ_POLL_MS / 1000),
+                       static_cast<long>((SOCKET_READ_POLL_MS % 1000) * 1000) };
+        select(0, nullptr, &wfds, nullptr, &tv);
     }
-    return ret;
+    return sent;
 }
 
+// Receives exactly `len` bytes; `len` on success. A peer that closes first
+// (recv returns 0) is an error like any other, not a reason to wait on.
 extern "C"
 int myrecv(SOCKET s, LPSTR buf, int len, int flags, LPCSTR progressmessage, int progressstart, int * ploop, SYSTICKS * plasttime)
 {
@@ -473,6 +484,8 @@ int myrecv(SOCKET s, LPSTR buf, int len, int flags, LPCSTR progressmessage, int 
                 len -= ret;
                 continue;
             }
+            if (ret == 0)
+                return SOCKET_ERROR;
             if (WSAGetLastError() != WSAEWOULDBLOCK)
                 return ret;
         }
@@ -1038,7 +1051,8 @@ int SftpCloseConnection(pConnectSettings ConnectSettings)
         ConnectSettings->sock = INVALID_SOCKET;
     }
 
-    ConnectSettings->feedback.reset();
+    // `feedback` stays: a reconnect on these settings needs it to warn about
+    // a changed host key. It goes with the settings object.
     return SFTP_FAILED;
 }
 
@@ -1086,18 +1100,22 @@ bool ReconnectSFTPChannelIfNeeded(pConnectSettings ConnectSettings)
             ++ConnectSettings->sftpGeneration;
         }
 
+        // Waits on the socket between attempts and gives up after the same
+        // time as the first connect does; a full reconnect follows then.
+        const SYSTICKS initStart = get_sys_ticks();
         if (ConnectSettings->session)
             do {
                 ConnectSettings->sftpsession = nullptr;
                 if (ProgressLoop("Reconnect SFTP channel", 0, 100, &loop, &starttime))
                     break;
-                {
-                    auto sftpPtr = ConnectSettings->session->sftpInit(ConnectSettings->sftpservercommand);
-                    if (sftpPtr) {
-                        ConnectSettings->sftpsession = std::move(sftpPtr);
-                    } else if (ConnectSettings->session->lastErrno() != LIBSSH2_ERROR_EAGAIN) {
-                        break;
-                    }
+                auto sftpPtr = ConnectSettings->session->sftpInit(ConnectSettings->sftpservercommand);
+                if (sftpPtr) {
+                    ConnectSettings->sftpsession = std::move(sftpPtr);
+                } else if (ConnectSettings->session->lastErrno() != LIBSSH2_ERROR_EAGAIN ||
+                           get_ticks_between(initStart) > SFTP_INIT_TIMEOUT_MS) {
+                    break;
+                } else {
+                    WaitForSshIo(ConnectSettings);
                 }
             } while (!ConnectSettings->sftpsession);
 

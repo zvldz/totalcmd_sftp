@@ -45,6 +45,7 @@ constexpr int SSH_AUTH_KEYBOARD         = 0x02;
 constexpr int SSH_AUTH_PUBKEY           = 0x04;
 constexpr int SSH_AUTH_STAGE_TIMEOUT_MS = 10000; // interactive stages (password prompt etc.)
 constexpr int SSH_PROBE_TIMEOUT_MS      =  3000; // silent server probe (userauthList)
+constexpr int SSH_HANDSHAKE_TIMEOUT_MS  = 30000; // key exchange, the target or a jump host
 constexpr int SFTP_INIT_TIMEOUT_MS      = 15000; // SFTP subsystem start; a host without one never answers
 
 // ---------------------------------------------------------------------------

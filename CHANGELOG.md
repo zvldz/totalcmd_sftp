@@ -94,6 +94,33 @@ From this version the plugin comes in two builds: **classic**
   - FileZilla: a `filezilla.xml` that exists but cannot be read was taken
     as "no proxy"; the session is now refused. KiTTY reads a session file
     once, so a file locked between two reads cannot hide its proxy.
+- **A changed host key is reported on a reconnect too.** A connection
+  restored mid-transfer had lost the means to ask, so a server presenting
+  another key was refused without a word — no warning that someone might
+  be in between. It now asks as the first connection does.
+- **A proxy host name of 250 characters or more no longer overruns a
+  buffer**; one too long for it is refused.
+- **Cancelling a password change no longer crashes or loops.** A server
+  that forces a new password, with the prompt cancelled, sent the plugin
+  back into the SSH library with a state it had already freed.
+- **Connecting gives up instead of spinning.**
+  - A proxy that dropped the connection while the plugin was writing or
+    reading kept it busy at full CPU until cancelled.
+  - The SSH handshake and a jump host's login had no time limit; a
+    server that stopped answering kept the connection waiting for good.
+    The SFTP channel reopened mid-session waited without pause or limit,
+    and so did the post-login command.
+  - Cancel during the TCP connect went on to the server's next address
+    instead of stopping.
+- **A one-time code can be typed at leisure.** The 10-second limit of a
+  login step counted the time spent at the prompt, so a code from a
+  phone app often came too late.
+- **Pageant and a key file together.** With "Use SSH agent" on, the key
+  file of the session was never tried, although the help said it would
+  be after Pageant.
+- **Host names in any script.** Server and jump-host names with
+  characters outside the Windows codepage are looked up correctly; the
+  jump host follows the session's IPv4 / IPv6 choice.
 - **A remote name with a backslash is no longer shown.** Total Commander
   takes `\` for a separator: "a\b" was handled as file b in folder a, F8
   on it could delete another file, and a server could list
@@ -325,6 +352,10 @@ From this version the plugin comes in two builds: **classic**
   connection dialog.** It looked for the session in the own list, found
   nothing and asked for a new one; it now connects the way Enter on it
   does, with the password the panel's connection has.
+- **An upload is no longer taken for a session file.** After a
+  connection to a session was closed, a `.ini` file copied into one of
+  its folders could be read as a session to import, creating a new
+  session from it, or fail with an import message.
 - **A session file copied onto a session of the same name asks to
   overwrite it** instead of failing with "Error uploading file". The
   replaced session is disconnected, and passwords the file does not

@@ -520,7 +520,7 @@ void ReplaceSubString(LPSTR buf, LPCSTR fromstr, LPCSTR tostr, size_t maxlen)
     strncpy_s(buf, maxlen, buffer.c_str(), _TRUNCATE);
 }
 
-bool ParseAddress(LPCSTR serverstring, LPSTR addr, WORD* port, int defport)
+bool ParseAddress(LPCSTR serverstring, LPSTR addr, size_t addrSize, WORD* port, int defport)
 {
     if (!serverstring || !addr || !port) {
         return false;
@@ -620,11 +620,11 @@ bool ParseAddress(LPCSTR serverstring, LPSTR addr, WORD* port, int defport)
     }
 
     trim(host);
-    if (host.empty()) {
+    if (host.empty() || host.size() >= addrSize) {
         return false;
     }
 
-    strncpy_s(addr, MAX_PATH, host.c_str(), _TRUNCATE);
+    strncpy_s(addr, addrSize, host.c_str(), _TRUNCATE);
     *port = parsedPort;
     return true;
 }

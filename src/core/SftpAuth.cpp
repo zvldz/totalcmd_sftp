@@ -70,7 +70,11 @@ void kbd_callback(LPCSTR name, int name_len,
             retbuf[0] = 0;
 
             ShowStatusId(IDS_LOG_REQUEST_PASS, nullptr, true);
-            if (RequestProcI(PluginNumber, RT_Password, title.c_str(), promptMsg.c_str(), retbuf.data(), retbuf.size()-1)) {
+            const bool answered = RequestProcI(PluginNumber, RT_Password, title.c_str(), promptMsg.c_str(),
+                                               retbuf.data(), retbuf.size()-1) != 0;
+            if (ConnectSettings)
+                ConnectSettings->authPromptDone = get_sys_ticks();
+            if (answered) {
                 responses[i].text = _strdup(retbuf.data());
                 responses[i].length = (unsigned int)strlen(retbuf.data());
                 // Remember the password for background transfers and
@@ -86,6 +90,7 @@ void kbd_callback(LPCSTR name, int name_len,
                 responses[i].text = nullptr;
                 responses[i].length = 0;
             }
+            SecureZeroMemory(retbuf.data(), retbuf.size());
         }
     }
 } /* kbd_callback */

@@ -162,6 +162,10 @@ struct tConnectSettings {
     const wchar_t* progressTargetOverride = nullptr;
     sftp::PassSaveMode passSaveMode;
     bool InteractivePasswordSent;
+    // When the last prompt during authentication (a one-time code, a new
+    // password) was answered: an authentication stage times out counting from
+    // then, not including the time the user spent typing.
+    SYSTICKS authPromptDone = 0;
     int trycustomlistcommand;  // set to 2 initially, reduce to 1 or 0 if failing
     int  scpserver64bit  = -1;   // 0=no, 1=yes, -1=auto-detect
     bool scpserver64bittemporary;  // true=user allowed transfers>2GB

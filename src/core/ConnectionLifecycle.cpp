@@ -44,10 +44,10 @@ bool ResolveConnectEndpoint(pConnectSettings cs, char* outHost, size_t outHostLe
         *outPort = cs->customport;
         return true;
     case sftp::Proxy::http:
-        return ParseAddress(cs->proxyserver.c_str(), outHost, outPort, 8080);
+        return ParseAddress(cs->proxyserver.c_str(), outHost, outHostLen, outPort, 8080);
     case sftp::Proxy::socks4:
     case sftp::Proxy::socks5:
-        return ParseAddress(cs->proxyserver.c_str(), outHost, outPort, 1080);
+        return ParseAddress(cs->proxyserver.c_str(), outHost, outHostLen, outPort, 1080);
     default:
         return false;
     }

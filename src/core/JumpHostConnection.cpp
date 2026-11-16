@@ -85,7 +85,7 @@ JumpConfig ResolveJumpConfig(pConnectSettings cs, LPCSTR iniFileName)
         std::array<char, MAX_PATH> hostBuf{};
         strncpy_s(hostBuf.data(), hostBuf.size(), ref.server.c_str(), _TRUNCATE);
         WORD parsedPort = 22;
-        ParseAddress(hostBuf.data(), hostBuf.data(), &parsedPort, 22);
+        ParseAddress(hostBuf.data(), hostBuf.data(), hostBuf.size(), &parsedPort, 22);
 
         out.endpoint.host        = hostBuf.data();
         out.endpoint.port        = parsedPort;
@@ -503,6 +503,7 @@ static bool AuthJumpHost(
     if (canPassword && !jump.password.empty()) {
         ShowStatusId(IDS_LOG_JUMP_PASS_TRY, nullptr, true);
         int r = LIBSSH2_ERROR_EAGAIN;
+        const SYSTICKS authStart = get_sys_ticks();
         while (r == LIBSSH2_ERROR_EAGAIN) {
             r = jmpSession->userauthPassword(
                 jump.user.c_str(), static_cast<unsigned>(jump.user.size()),
@@ -511,6 +512,8 @@ static bool AuthJumpHost(
             if (r == LIBSSH2_ERROR_EAGAIN)
                 IsSocketReadable(jmpSock);
             if (ProgressLoop("Jump host: password auth...", progress, progress + 5, &loop, &lasttime))
+                break;
+            if (r == LIBSSH2_ERROR_EAGAIN && get_ticks_between(authStart) > SSH_AUTH_STAGE_TIMEOUT_MS)
                 break;
         }
         if (r == LIBSSH2_ERROR_NONE) {
@@ -524,6 +527,7 @@ static bool AuthJumpHost(
     if (canKbd && !jump.password.empty()) {
         ShowStatusId(IDS_LOG_JUMP_KBD_TRY, nullptr, true);
         int r = LIBSSH2_ERROR_EAGAIN;
+        const SYSTICKS authStart = get_sys_ticks();
         while (r == LIBSSH2_ERROR_EAGAIN) {
             r = jmpSession->userauthKeyboardInteractive(
                 jump.user.c_str(), static_cast<unsigned>(jump.user.size()),
@@ -531,6 +535,8 @@ static bool AuthJumpHost(
             if (r == LIBSSH2_ERROR_EAGAIN)
                 IsSocketReadable(jmpSock);
             if (ProgressLoop("Jump host: kbd-int auth...", progress, progress + 5, &loop, &lasttime))
+                break;
+            if (r == LIBSSH2_ERROR_EAGAIN && get_ticks_between(authStart) > SSH_AUTH_STAGE_TIMEOUT_MS)
                 break;
         }
         if (r == LIBSSH2_ERROR_NONE) {
@@ -563,13 +569,14 @@ std::unique_ptr<ITransportStream> ConnectViaJumpHost(
     // -----------------------------------------------------------------------
     // 1. TCP connect to jump host
     // -----------------------------------------------------------------------
-    struct addrinfo hints{};
-    hints.ai_family   = AF_UNSPEC;
+    // The session's IPv4 / IPv6 choice applies to the jump host as well.
+    ADDRINFOW hints{};
+    hints.ai_family   = cs->protocoltype == 1 ? AF_INET : cs->protocoltype == 2 ? AF_INET6 : AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
-    const std::string portStr = std::to_string(jump.port);
+    const std::wstring portStr = std::to_wstring(jump.port);
 
-    struct addrinfo* res = nullptr;
-    if (getaddrinfo(unicode_util::internal_to_acp(jump.host).c_str(), portStr.c_str(), &hints, &res) != 0) {
+    ADDRINFOW* res = nullptr;
+    if (GetAddrInfoW(unicode_util::internal_to_wide(jump.host).c_str(), portStr.c_str(), &hints, &res) != 0) {
         ShowStatus(("Jump host: DNS failed for " + jump.host).c_str());
         if (cs->feedback)
             cs->feedback->ShowError(("ProxyJump: cannot resolve jump host: " + jump.host).c_str());
@@ -578,13 +585,17 @@ std::unique_ptr<ITransportStream> ConnectViaJumpHost(
 
     SOCKET jmpSock = INVALID_SOCKET;
     bool connected = false;
-    for (struct addrinfo* ai = res; ai && !connected; ai = ai->ai_next) {
+    bool cancelled = false;
+    for (ADDRINFOW* ai = res; ai && !connected && !cancelled; ai = ai->ai_next) {
         if (jmpSock != INVALID_SOCKET)
             closesocket(jmpSock);
         jmpSock = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
         if (jmpSock == INVALID_SOCKET)
             continue;
 
+        int nodelay = 1;
+        setsockopt(jmpSock, IPPROTO_TCP, TCP_NODELAY,
+                   reinterpret_cast<const char*>(&nodelay), sizeof(nodelay));
         EnableTcpKeepAlive(jmpSock);
         SetBlockingSocket(jmpSock, false);
         if (connect(jmpSock, ai->ai_addr, static_cast<int>(ai->ai_addrlen)) == 0) {
@@ -594,12 +605,15 @@ std::unique_ptr<ITransportStream> ConnectViaJumpHost(
             while (get_ticks_between(t0) < 15000) {
                 if (IsSocketWritable(jmpSock)) { connected = true; break; }
                 if (IsSocketError(jmpSock))    break;
-                if (ProgressLoop("Connecting to jump host...", progress, progress + 5, &loop, &lasttime))
+                // Cancel ends the connect, not just the wait on this address.
+                if (ProgressLoop("Connecting to jump host...", progress, progress + 5, &loop, &lasttime)) {
+                    cancelled = true;
                     break;
+                }
             }
         }
     }
-    freeaddrinfo(res);
+    FreeAddrInfoW(res);
 
     if (!connected) {
         if (jmpSock != INVALID_SOCKET)
@@ -630,12 +644,17 @@ std::unique_ptr<ITransportStream> ConnectViaJumpHost(
     ShowStatusId(IDS_LOG_JUMP_HANDSHAKE, nullptr, true);
     {
         int r = LIBSSH2_ERROR_EAGAIN;
+        const SYSTICKS handshakeStart = get_sys_ticks();
         while (r == LIBSSH2_ERROR_EAGAIN) {
-            r = jmpSession->startup(static_cast<int>(jmpSock));
+            r = jmpSession->handshake(jmpSock);
             if (r == LIBSSH2_ERROR_EAGAIN)
                 IsSocketReadable(jmpSock);
             if (ProgressLoop("Jump host: SSH handshake...", progress, progress + 5, &loop, &lasttime))
                 break;
+            if (r == LIBSSH2_ERROR_EAGAIN && get_ticks_between(handshakeStart) > SSH_HANDSHAKE_TIMEOUT_MS) {
+                r = LIBSSH2_ERROR_TIMEOUT;
+                break;
+            }
         }
         if (r != LIBSSH2_ERROR_NONE) {
             char* msg = nullptr; int mlen = 0;

@@ -391,7 +391,11 @@ static std::optional<int> TryImportSessionFromUpload(
 {
     // A path inside a session is an ordinary upload, connected on demand by
     // the caller. A path naming a saved session itself is an import over it:
-    // TC asks before overwriting, then calls again with OverWrite.
+    // TC asks before overwriting, then calls again with OverWrite. The list
+    // of sessions is read first: closing a connection takes its session out
+    // of the registry until the next listing, and an upload into it would
+    // otherwise be taken for a session file — a config.ini made a session.
+    LoadServersFromIniW(inifilenameW, s_quickconnect);
     const PathResolution pr = ResolvePathKindW(RemoteName);
     if (pr.kind == PathKind::SessionWithSubpath)
         return std::nullopt;
@@ -1478,8 +1482,8 @@ static bool SameRemoteFile(pConnectSettings a, const std::wstring& aPath,
 
     std::array<char, MAX_PATH> hostA{}, hostB{};
     WORD portA = 0, portB = 0;
-    if (!ParseAddress(a->server.c_str(), hostA.data(), &portA, 22) ||
-        !ParseAddress(b->server.c_str(), hostB.data(), &portB, 22))
+    if (!ParseAddress(a->server.c_str(), hostA.data(), hostA.size(), &portA, 22) ||
+        !ParseAddress(b->server.c_str(), hostB.data(), hostB.size(), &portB, 22))
         return false;
     return portA == portB && _stricmp(hostA.data(), hostB.data()) == 0;
 }

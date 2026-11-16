@@ -118,7 +118,9 @@ struct ISftpSession {
 struct ISshSession {
     virtual ~ISshSession() = default;
 
-    virtual int startup(int sock) = 0;
+    // The SSH handshake on `sock`, a SOCKET as it is: on x64 it does not
+    // fit an int.
+    virtual int handshake(libssh2_socket_t sock) = 0;
     virtual void setBlocking(int blocking) = 0;
     virtual int getBlocking() = 0;
     virtual int disconnect(const char* desc) = 0;

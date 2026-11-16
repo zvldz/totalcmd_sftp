@@ -24,11 +24,15 @@ void newpassfunc(LIBSSH2_SESSION* /*session*/, LPSTR* newpw, int* newpw_len, LPV
     LoadStr(title, IDS_PASS_TITLE);
     LoadStr(buf1, IDS_PASS_CHANGE_REQUEST);
     newpass[0] = 0;
-    if (newpw)
-        *newpw = nullptr;
-    if (newpw_len)
-        *newpw_len = 0;
-    if (RequestProcI(PluginNumber, RT_Password, title.data(), buf1.data(), newpass.data(), newpass.size()-1)) {
+    if (!newpw || !newpw_len)
+        return;
+    *newpw = nullptr;
+    *newpw_len = 0;
+    const bool answered = RequestProcI(PluginNumber, RT_Password, title.data(), buf1.data(),
+                                       newpass.data(), newpass.size()-1) != 0;
+    if (PassConnectSettings)
+        PassConnectSettings->authPromptDone = get_sys_ticks();
+    if (answered) {
         size_t bufsize = strlen(newpass.data()) + 1;
         *newpw = static_cast<char*>(malloc(bufsize));
         if (!*newpw)
@@ -59,6 +63,7 @@ void newpassfunc(LIBSSH2_SESSION* /*session*/, LPSTR* newpw, int* newpw_len, LPV
             }
         }
     }
+    SecureZeroMemory(newpass.data(), newpass.size());
 }
 
 int NegotiateProxy(
@@ -189,35 +194,40 @@ int PerformAuthentication(
     int auth = 0;
     if (ConnectSettings->session->userauthAuthenticated()) {
         ShowStatusId(IDS_LOG_AUTH_NO_PASSWORD, nullptr, true);
-    } else if ((auth_pw & SSH_AUTH_PUBKEY) && ConnectSettings->useagent) {
+    } else if ((auth_pw & SSH_AUTH_PUBKEY) &&
+               (ConnectSettings->useagent || ConnectSettings->privkeyfile[0])) {
+        // Pageant first, then the key file: a key the agent does not hold is
+        // still tried from its file.
         progress = 65;
-        int rc = SftpAuthPageant(ConnectSettings, progressbuf, progress, &loop, &lasttime, &auth_pw);
-        auth = (rc < 0) ? LIBSSH2_ERROR_AGENT_PROTOCOL : 0;
-        const std::string status = std::format("Pageant: rc={} auth={}", rc, auth);
-        ShowStatus(status.c_str());
-    } else if ((auth_pw & SSH_AUTH_PUBKEY) && ConnectSettings->privkeyfile[0]) {
-        progress = 65;
-        LogProcI(PluginNumber, MSGTYPE_DETAILS, "=== Calling SftpAuthPubKey ===");
-        bool keyOpened = false;
-        int rc = SftpAuthPubKey(ConnectSettings, progressbuf, progress, &loop, &lasttime, &auth_pw,
-                                &keyOpened);
-        auth = (rc < 0) ? LIBSSH2_ERROR_FILE : 0;
-        // The unlabelled secret opened the key, so it is the key's
-        // passphrase: offered to the server as the password it would be
-        // disclosed. The password is asked for instead.
-        if (rc < 0 && keyOpened && !secret.labelled && !secret.accountPassword.empty() &&
-            ConnectSettings->key_passphrase == secret.accountPassword &&
-            ConnectSettings->account_password == secret.accountPassword) {
-            SFTP_LOG("AUTH", "Stored secret opened the key: not offered as the password");
-            ConnectSettings->account_password.clear();
+        if (ConnectSettings->useagent) {
+            int rc = SftpAuthPageant(ConnectSettings, progressbuf, progress, &loop, &lasttime, &auth_pw);
+            auth = (rc < 0) ? LIBSSH2_ERROR_AGENT_PROTOCOL : 0;
+            const std::string status = std::format("Pageant: rc={} auth={}", rc, auth);
+            ShowStatus(status.c_str());
         }
-        if (rc == -LIBSSH2_ERROR_FILE) {
-            SFTP_LOG("CONN", "Public-key auth aborted due to local key file error.");
-            return SFTP_FAILED;
+        if ((!ConnectSettings->useagent || auth != 0) && ConnectSettings->privkeyfile[0]) {
+            LogProcI(PluginNumber, MSGTYPE_DETAILS, "=== Calling SftpAuthPubKey ===");
+            bool keyOpened = false;
+            int rc = SftpAuthPubKey(ConnectSettings, progressbuf, progress, &loop, &lasttime, &auth_pw,
+                                    &keyOpened);
+            auth = (rc < 0) ? LIBSSH2_ERROR_FILE : 0;
+            // The unlabelled secret opened the key, so it is the key's
+            // passphrase: offered to the server as the password it would be
+            // disclosed. The password is asked for instead.
+            if (rc < 0 && keyOpened && !secret.labelled && !secret.accountPassword.empty() &&
+                ConnectSettings->key_passphrase == secret.accountPassword &&
+                ConnectSettings->account_password == secret.accountPassword) {
+                SFTP_LOG("AUTH", "Stored secret opened the key: not offered as the password");
+                ConnectSettings->account_password.clear();
+            }
+            if (rc == -LIBSSH2_ERROR_FILE) {
+                SFTP_LOG("CONN", "Public-key auth aborted due to local key file error.");
+                return SFTP_FAILED;
+            }
+            LogProcI(PluginNumber, MSGTYPE_DETAILS, "=== SftpAuthPubKey returned ===");
+            const std::string status = std::format("PubKey: rc={} auth={} pw=0x{:x}", rc, auth, auth_pw);
+            ShowStatus(status.c_str());
         }
-        LogProcI(PluginNumber, MSGTYPE_DETAILS, "=== SftpAuthPubKey returned ===");
-        const std::string status = std::format("PubKey: rc={} auth={} pw=0x{:x}", rc, auth, auth_pw);
-        ShowStatus(status.c_str());
     } else {
         // A server that takes keys only, with neither a key file nor a
         // running Pageant to offer it, leaves nothing to try; say so rather
@@ -252,7 +262,7 @@ int PerformAuthentication(
             int kbdIter = 0;
             while ((auth = cs->session->userauthKeyboardInteractive(cs->user.c_str(), (unsigned)cs->user.size(), &kbd_callback)) == LIBSSH2_ERROR_EAGAIN) {
                 const int dirs = cs->session->blockDirections();
-                const DWORD elapsed = (DWORD)get_ticks_between(authStart);
+                const DWORD elapsed = (DWORD)get_ticks_between((std::max)(authStart, cs->authPromptDone));
                 SFTP_LOG("AUTH", "kbd EAGAIN #%d dirs=0x%x elapsed=%u cbSent=%d", ++kbdIter, dirs, elapsed, cs->InteractivePasswordSent ? 1 : 0);
                 if (ProgressLoop(buf.data(), progress, progress + 10, &loop, &lasttime))
                     break;
@@ -282,20 +292,25 @@ int PerformAuthentication(
                     std::array<char, 256> tmpBuf{};
                     RequestProcI(PluginNumber, RT_Password, title.c_str(), nullptr, tmpBuf.data(), tmpBuf.size()-1);
                     passphrase = tmpBuf.data();
+                    SecureZeroMemory(tmpBuf.data(), tmpBuf.size());
                 }
+                ConnectSettings->authPromptDone = get_sys_ticks();
             }
 
             ShowStatusId(IDS_AUTH_PASSWORD_FOR, ConnectSettings->user.c_str(), true);
             LoadStr(buf, IDS_AUTH_PASSWORD);
             const SYSTICKS authStart = get_sys_ticks();
             int passIter = 0;
+            // PASSWORD_EXPIRED is final: the server wanted a new password and
+            // none was given. Calling again would re-enter libssh2 with the
+            // state of the change it already gave up.
             while (1) {
                 auth = ConnectSettings->session->userauthPassword(ConnectSettings->user.c_str(), (unsigned)ConnectSettings->user.size(), passphrase.c_str(), (unsigned)passphrase.length(), &newpassfunc);
-                if (auth != LIBSSH2_ERROR_EAGAIN && auth != LIBSSH2_ERROR_PASSWORD_EXPIRED)
+                if (auth != LIBSSH2_ERROR_EAGAIN)
                     break;
-                if (auth == LIBSSH2_ERROR_EAGAIN) {
+                {
                     const int dirs = ConnectSettings->session->blockDirections();
-                    const DWORD elapsed = (DWORD)get_ticks_between(authStart);
+                    const DWORD elapsed = (DWORD)get_ticks_between((std::max)(authStart, ConnectSettings->authPromptDone));
                     SFTP_LOG("AUTH", "pass EAGAIN #%d dirs=0x%x elapsed=%u", ++passIter, dirs, elapsed);
                     if (ProgressLoop(buf.data(), progress, progress + 10, &loop, &lasttime))
                         break;
@@ -321,6 +336,7 @@ int PerformAuthentication(
                 if (ConnectSettings->password.empty())
                     ConnectSettings->password = passphrase;
             }
+            SecureZeroMemory(passphrase.data(), passphrase.size());
         }
 
         if (auth != 0 && skippedKeyboardFirst) {
@@ -334,7 +350,7 @@ int PerformAuthentication(
             int kbdIter2 = 0;
             while ((auth = cs->session->userauthKeyboardInteractive(cs->user.c_str(), (unsigned)cs->user.size(), &kbd_callback)) == LIBSSH2_ERROR_EAGAIN) {
                 const int dirs = cs->session->blockDirections();
-                const DWORD elapsed = (DWORD)get_ticks_between(authStart);
+                const DWORD elapsed = (DWORD)get_ticks_between((std::max)(authStart, cs->authPromptDone));
                 SFTP_LOG("AUTH", "kbd2 EAGAIN #%d dirs=0x%x elapsed=%u cbSent=%d", ++kbdIter2, dirs, elapsed, cs->InteractivePasswordSent ? 1 : 0);
                 if (ProgressLoop(buf.data(), progress, progress + 10, &loop, &lasttime))
                     break;

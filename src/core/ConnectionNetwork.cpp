@@ -13,8 +13,9 @@
 
 int EstablishSocketConnection(pConnectSettings ConnectSettings, LPCSTR connecttoserver, unsigned short connecttoport, int& progress, int& loop, SYSTICKS& lasttime)
 {
-    struct addrinfo hints{};
+    ADDRINFOW hints{};
     bool connected = false;
+    bool cancelled = false;
     switch (ConnectSettings->protocoltype) {
     case 1:
         hints.ai_family = AF_INET;
@@ -27,10 +28,12 @@ int EstablishSocketConnection(pConnectSettings ConnectSettings, LPCSTR connectto
         break;
     }
     hints.ai_socktype = SOCK_STREAM;
-    const std::string portStr = std::format("{}", connecttoport);
+    const std::wstring portStr = std::to_wstring(connecttoport);
     std::array<char, 256> progressBuf{};
-    struct addrinfo* res = nullptr;
-    if (getaddrinfo(unicode_util::internal_to_acp(connecttoserver).c_str(), portStr.c_str(), &hints, &res) != 0) {
+    // Looked up in Unicode: a host name with characters outside the Windows
+    // codepage would not survive the ANSI form.
+    ADDRINFOW* res = nullptr;
+    if (GetAddrInfoW(unicode_util::internal_to_wide(connecttoserver).c_str(), portStr.c_str(), &hints, &res) != 0) {
         ShowErrorId(IDS_ERR_GETADDRINFO);
         if (LogProc || LogProcW) {
             const std::string msg = std::format("SFTP: DNS lookup failed for '{}' (WSA error {})", connecttoserver, WSAGetLastError());
@@ -39,7 +42,7 @@ int EstablishSocketConnection(pConnectSettings ConnectSettings, LPCSTR connectto
         return -20;
     }
     ConnectSettings->sock = INVALID_SOCKET;
-    for (struct addrinfo* ai = res; ai; ai = ai->ai_next) {
+    for (ADDRINFOW* ai = res; ai && !cancelled; ai = ai->ai_next) {
         closesocket(ConnectSettings->sock);
         ConnectSettings->sock = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
         if (ConnectSettings->sock == INVALID_SOCKET)
@@ -67,14 +70,17 @@ int EstablishSocketConnection(pConnectSettings ConnectSettings, LPCSTR connectto
                 }
                 if (IsSocketError(ConnectSettings->sock))
                     break;
-                if (ProgressLoop(progressBuf.data(), 0, progress, &loop, &lasttime))
+                // Cancel ends the connect, not just the wait on this address.
+                if (ProgressLoop(progressBuf.data(), 0, progress, &loop, &lasttime)) {
+                    cancelled = true;
                     break;
+                }
             }
         }
         if (connected)
             break;
     }
-    freeaddrinfo(res);
+    FreeAddrInfoW(res);
 
     if (!connected) {
         if (ConnectSettings->proxytype != sftp::Proxy::notused)

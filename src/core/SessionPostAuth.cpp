@@ -118,6 +118,8 @@ void SendUserCommand(pConnectSettings ConnectSettings, LPCSTR progressText, int 
     if (ConnectSettings->sendcommandmode <= 1) {
         if (SendChannelCommand(ConnectSettings->session.get(), channel.get(),
                                ConnectSettings->connectsendcommand.c_str(), ConnectSettings->sock)) {
+            // Shown until it ends: waits on the socket while it is quiet, and
+            // can be cancelled from the progress dialog.
             std::array<char, 1024> chunk{};
             while (!channel->eof()) {
                 if (ProgressLoop(progressText, progress, progress + 10, ploop, plasttime))
@@ -130,6 +132,8 @@ void SendUserCommand(pConnectSettings ConnectSettings, LPCSTR progressText, int 
                 const auto outLen = channel->read(chunk.data(), chunk.size());
                 if (outLen > 0)
                     ShowCommandOutput({ chunk.data(), static_cast<size_t>(outLen) });
+                else if (errLen <= 0)
+                    WaitForSshIo(ConnectSettings);
             }
         }
         if (ConnectSettings->sendcommandmode == 0)
@@ -145,6 +149,7 @@ void SendUserCommand(pConnectSettings ConnectSettings, LPCSTR progressText, int 
             rc = ConnectSettings->session->lastErrno();
         if (rc != LIBSSH2_ERROR_EAGAIN || EscapePressed())
             break;
+        WaitForSshIo(ConnectSettings);
     }
 }
 

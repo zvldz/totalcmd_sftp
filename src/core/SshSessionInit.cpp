@@ -137,10 +137,16 @@ int InitializeSshSession(
     int auth;
     int eagainIters = 0;
     SYSTICKS startupT0 = get_sys_ticks();
-    while ((auth = ConnectSettings->session->startup((int)ConnectSettings->sock)) == LIBSSH2_ERROR_EAGAIN) {
+    // A server that stops answering mid-handshake is given up on, as one
+    // that never answers the TCP connect is.
+    while ((auth = ConnectSettings->session->handshake(ConnectSettings->sock)) == LIBSSH2_ERROR_EAGAIN) {
         ++eagainIters;
         if (ProgressLoop(buf.data(), progress, progress + 20, &loop, &lasttime))
             break;
+        if (get_ticks_between(startupT0) > SSH_HANDSHAKE_TIMEOUT_MS) {
+            auth = LIBSSH2_ERROR_TIMEOUT;
+            break;
+        }
         WaitForTransportReadable(ConnectSettings);
     }
     SFTP_LOG("CONN", "Target session startup done: rc=%d iters=%d elapsed=%ums",

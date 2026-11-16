@@ -3308,7 +3308,7 @@ pConnectSettings SftpConnectToServer(LPCSTR DisplayName, LPCSTR inifilename,
             }
             // look for address and port
             p = strchr(serverBuf.data(), ':');
-            if (!ParseAddress(serverBuf.data(), serverBuf.data(), &ConnectSettings.customport, 22)) {
+            if (!ParseAddress(serverBuf.data(), serverBuf.data(), serverBuf.size(), &ConnectSettings.customport, 22)) {
                 ConnectSettings.feedback->ShowError(LngStrU8(IDS_ERR_INVALID_SERVER, "Invalid server address."));
                 return nullptr;
             }

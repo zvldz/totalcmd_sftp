@@ -343,9 +343,9 @@ int Libssh2SftpSession::symlink(const char* path, char* target,
 // Libssh2Session
 // ===========================================================================
 
-int Libssh2Session::startup(int sock)
+int Libssh2Session::handshake(libssh2_socket_t sock)
 {
-    return libssh2_session_startup(session_, sock);
+    return libssh2_session_handshake(session_, sock);
 }
 
 void Libssh2Session::setBlocking(int blocking)
