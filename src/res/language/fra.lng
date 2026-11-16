@@ -367,7 +367,7 @@
 12119= Session LAN Pair : 
 12120=Ces paramètres proviennent de la session '{}' et sont en lecture seule. Choisissez (manuel) dans la liste des jump hosts pour en configurer un ici.
 12121=Cette session passe par un proxy, un hôte de rebond ou un tunnel qui n'a pas été importé. Une connexion directe le contournerait, elle est donc refusée.
-12122=La session est configurée pour un proxy, mais le fichier ne le décrit pas. Elle a été importée sans le proxy et se connectera directement — vérifiez son réglage de proxy.
+12122=La session est réglée pour utiliser un proxy, mais le fichier ne le décrit pas. Elle n'a pas été importée : sans le proxy, elle se connecterait directement.
 12123=Copiez la session avec F5 : le proxy est copié avec elle. Son mot de passe éventuel sera demandé à la connexion.
 12124=Déplacement : la source a été conservée, car la copie a repris sur un fichier déjà présent
 12125=La source et la destination sont le même fichier sur le même serveur. Copier un fichier sur lui-même le tronquerait, c'est donc refusé.
@@ -414,6 +414,9 @@
 12166=L'autre ordinateur ne reconnaît pas celui-ci. Les associer à nouveau ? L'autre ordinateur demandera l'accord de son utilisateur.
 12167=LAN Pair : l'autre ordinateur ne reconnaît pas celui-ci. Associez-les à nouveau avec « Pair... » dans les paramètres de connexion.
 12168=Cette session utilise PHP Agent ou LAN Pair, présents uniquement dans la version extra du plugin (SFTPplug-...-extra.zip). Cette version se connecte uniquement en SSH.
+12169=Cette session est réglée pour passer à la fois par un proxy et par un hôte de rebond. Le plugin joint l'hôte de rebond directement, le proxy serait contourné. Gardez l'un des deux.
+12170=La session de rebond '{}' passe par un proxy. L'hôte de rebond est joint directement, ce proxy serait contourné, la connexion est donc refusée. Choisissez une session de rebond sans proxy.
+12171=Cette session a été modifiée dans le programme d'où elle est importée (hôte, utilisateur, proxy ou hôte de rebond) depuis la dernière analyse. Utilisez [Refresh] dans son dossier, puis réessayez.
 12089=SFTP
 12104=(manuel)
 12105= (introuvable)

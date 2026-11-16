@@ -12,6 +12,7 @@
 #include <array>
 #include <cctype>
 #include <cstdlib>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -250,20 +251,76 @@ bool IsConcreteName(const std::string& p)
 struct HostConfig {
     std::string hostName, user, identityFile, proxyJump, proxyCommand;
     int         port = 0;
+    // A ProxyJump or ProxyCommand in a `Match` block whose conditions cannot
+    // be told here (exec, user, localuser...): it may apply, so the route
+    // is unknown. Empty when there is none.
+    std::string unresolvedRoute;
 };
 
+enum class MatchResult { Applies, DoesNot, Unknown };
+
+// A `Match` line for `alias`. `all` applies; `host` and `originalhost`
+// are compared like a `Host` line (`host` against the HostName found so far
+// as well); any other criterion depends on something not known here.
+MatchResult MatchLineApplies(const std::vector<std::string>& args, const std::string& alias,
+                             const std::string& hostName)
+{
+    for (size_t i = 0; i < args.size(); ) {
+        std::string crit = Lower(args[i]);
+        const bool negate = crit.starts_with("!");
+        if (negate)
+            crit.erase(0, 1);
+        if (crit == "all") {
+            ++i;
+            continue;
+        }
+        if ((crit == "host" || crit == "originalhost") && i + 1 < args.size()) {
+            std::vector<std::string> patterns;
+            std::stringstream list(args[i + 1]);
+            for (std::string p; std::getline(list, p, ','); )
+                if (!p.empty())
+                    patterns.push_back(p);
+            bool m = HostLineMatches(patterns, alias) ||
+                     (crit == "host" && !hostName.empty() && HostLineMatches(patterns, hostName));
+            if (negate)
+                m = !m;
+            if (!m)
+                return MatchResult::DoesNot;
+            i += 2;
+            continue;
+        }
+        return MatchResult::Unknown;
+    }
+    return MatchResult::Applies;
+}
+
 // What `ssh <alias>` would use: lines before the first `Host` apply to
-// every host, `Match` blocks are skipped, and the first value seen for a
-// keyword wins.
+// every host, a `Match` block applies when its conditions can be told to,
+// and the first value seen for a keyword wins.
 HostConfig Resolve(const std::vector<ConfigLine>& lines, const std::string& alias)
 {
     HostConfig c;
     bool hasPort = false;
     bool active = true;
+    bool unknownMatch = false;
     for (const auto& l : lines) {
-        if (l.key == "host")       { active = HostLineMatches(l.args, alias); continue; }
-        if (l.key == "match")      { active = false; continue; }
-        if (!active) continue;
+        if (l.key == "host") {
+            active = HostLineMatches(l.args, alias);
+            unknownMatch = false;
+            continue;
+        }
+        if (l.key == "match") {
+            const MatchResult m = MatchLineApplies(l.args, alias, c.hostName);
+            active = m == MatchResult::Applies;
+            unknownMatch = m == MatchResult::Unknown;
+            continue;
+        }
+        if (!active) {
+            if (unknownMatch && (l.key == "proxyjump" || l.key == "proxycommand") &&
+                _stricmp(l.args.front().c_str(), "none") != 0 && c.unresolvedRoute.empty())
+                c.unresolvedRoute = l.key + " " + l.args.front() + " (in a Match block)";
+            continue;
+        }
         const std::string& v = l.args.front();
         if      (l.key == "hostname"     && c.hostName.empty())     c.hostName = v;
         else if (l.key == "user"         && c.user.empty())         c.user = v;
@@ -418,6 +475,15 @@ bool OpenSshAdapter::LoadSettings(const ExternalSessionEntry& entry,
         AssignImportedKeyFile(key, out->privkeyfile, out->pubkeyfile);
     }
 
+    // A route that may apply but cannot be told is refused like one that does.
+    if (!c.unresolvedRoute.empty()) {
+        if (dependency) {
+            dependency->kind   = SessionDependency::Kind::Bastion;
+            dependency->detail = c.unresolvedRoute;
+        }
+        return true;
+    }
+
     // A command in front of the host is nothing the plugin can run.
     if (!IsNone(c.proxyCommand)) {
         if (dependency) {
@@ -454,7 +520,7 @@ bool OpenSshAdapter::LoadSettings(const ExternalSessionEntry& entry,
         jumpAlias = spec;
 
         const HostConfig j = Resolve(lines, jumpAlias);
-        if (!IsNone(j.proxyJump) || !IsNone(j.proxyCommand))
+        if (!IsNone(j.proxyJump) || !IsNone(j.proxyCommand) || !j.unresolvedRoute.empty())
             return refuse();
 
         const std::string jumpHost = j.hostName.empty() ? jumpAlias : ExpandTokens(j.hostName, jumpAlias, j.user);

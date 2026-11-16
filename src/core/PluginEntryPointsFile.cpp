@@ -275,7 +275,7 @@ static void ShowDependencyRefusal(const sftp::SessionDependency& dep)
     }
 }
 
-static bool RefuseIfDependencyBlocks(const std::string& cacheSection)
+bool RefuseIfDependencyBlocks(const std::string& cacheSection)
 {
     const std::string& cachePath = sftp::GetImportCache().CacheFilePath();
     if (cacheSection.empty() || cachePath.empty())
@@ -318,10 +318,15 @@ static pConnectSettings ResolveTransferSession(LPCWSTR RemoteName,
         // our INI, and is reachable only through the alias its Enter registered.
         const auto info = sftp::LookupVirtualSession(r.displayName.c_str());
         const std::string& cachePath = sftp::GetImportCache().CacheFilePath();
-        if (!info || cachePath.empty())
+        if (!info || cachePath.empty() || RefuseIfDependencyBlocks(info->cacheSection))
             return nullptr;
+        bool stale = false;
         std::string password = LoadImportedPassword(info->sourceId, info->cacheSection,
-                                                    info->displayName);
+                                                    info->displayName, &stale);
+        if (stale) {
+            ShowImportStaleRefusal();
+            return nullptr;
+        }
         fresh = SftpConnectToServer(info->cacheSection.c_str(), cachePath.c_str(),
                                     password.empty() ? nullptr : password.c_str(),
                                     r.displayName.c_str());
@@ -470,6 +475,22 @@ static std::optional<int> TryImportSessionFromUpload(
     if (display.empty())
         return abortWithMessage(IDS_SIMPORT_ERR_EMPTY_DEST);
 
+    // The session's `proxynr` came from another file, where that number meant
+    // another record; the route itself travels in the file's [proxy]. A
+    // session set to use a proxy the file does not describe is refused: made
+    // without one it would connect straight to the host.
+    const bool wantsProxy = IniGetInt(chosenSection.c_str(), "proxynr", 0, LocalName) > 0;
+    std::array<char, 512> proxyServer{}, proxyUser{};
+    const int proxytype = static_cast<int>(IniGetInt("proxy", "proxytype", -1, LocalName));
+    IniGetString("proxy", "proxyserver", "", proxyServer.data(),
+                  static_cast<DWORD>(proxyServer.size() - 1), LocalName);
+    IniGetString("proxy", "proxyuser", "", proxyUser.data(),
+                  static_cast<DWORD>(proxyUser.size() - 1), LocalName);
+    if (wantsProxy && (proxytype <= 0 || !proxyServer[0])) {
+        SFTP_LOG("ENTRY", "Session import refused: proxy not described in the file");
+        return abortWithMessage(IDS_SIMPORT_PROXY_LOST);
+    }
+
     if (sftp::IniSectionExists(display, inifilename)) {
         if (!OverWrite)
             return FS_FILE_EXISTS;
@@ -488,42 +509,34 @@ static std::optional<int> TryImportSessionFromUpload(
     AdoptPasswordFromFile(chosenSection.c_str(), LocalName, "jumppassword",
                           display.c_str(), JumpPasswordStoreName(display));
 
-    // The session's `proxynr` came from another file, where that number meant
-    // another record. Resolve it here: reuse a local record describing the
-    // same route, create one when the route is new, and drop the reference
-    // when nothing describes it — a number left pointing at a stranger is how
-    // a session ends up quietly on the wrong proxy, or on none at all.
-    if (IniGetInt(display.c_str(), "proxynr", 0, inifilename) > 0) {
-        std::array<char, 512> proxyServer{}, proxyUser{};
-        const int proxytype = IniGetInt("proxy", "proxytype", -1, LocalName);
-        IniGetString("proxy", "proxyserver", "", proxyServer.data(),
-                      static_cast<DWORD>(proxyServer.size() - 1), LocalName);
-        IniGetString("proxy", "proxyuser", "", proxyUser.data(),
-                      static_cast<DWORD>(proxyUser.size() - 1), LocalName);
-
-        int localNr = 0;
-        if (proxytype > 0 && proxyServer[0]) {
-            localNr = FindMatchingProxyNr(proxytype, proxyServer.data(),
+    // Reuse a local record describing the same route, or create one. A
+    // record that could not be written leaves no session behind either:
+    // pointing at nothing reads as no proxy.
+    if (wantsProxy) {
+        int localNr = FindMatchingProxyNr(proxytype, proxyServer.data(),
                                           proxyUser.data(), inifilename);
-            if (localNr == 0) {
-                localNr = NextFreeProxyNr(inifilename);
-                const std::string dest = localNr > 1
-                    ? std::format("proxy{}", localNr) : std::string("proxy");
-                // A password the file has goes into TC's password manager;
-                // without one the proxy asks for it on connect, which is why
-                // the user name has to survive the trip.
-                CopyIniSectionAcrossFiles("proxy", LocalName, dest.c_str(), inifilename);
-                AdoptPasswordFromFile("proxy", LocalName, "proxypassword", dest.c_str(),
-                                      ProxyPasswordStoreName(localNr));
+        if (localNr == 0) {
+            localNr = NextFreeProxyNr(inifilename);
+            const std::string dest = localNr > 1
+                ? std::format("proxy{}", localNr) : std::string("proxy");
+            // A password the file has goes into TC's password manager;
+            // without one the proxy asks for it on connect, which is why
+            // the user name has to survive the trip.
+            if (!CopyIniSectionAcrossFiles("proxy", LocalName, dest.c_str(), inifilename) ||
+                IniGetInt(dest.c_str(), "proxytype", 0, inifilename) != proxytype) {
+                IniWriteString(dest.c_str(), nullptr, nullptr, inifilename);
+                IniWriteString(display.c_str(), nullptr, nullptr, inifilename);
+                return abortWithMessage(IDS_SIMPORT_ERR_WRITE);
             }
+            AdoptPasswordFromFile("proxy", LocalName, "proxypassword", dest.c_str(),
+                                  ProxyPasswordStoreName(localNr));
         }
-
-        std::array<char, 16> buf{};
-        _itoa_s(localNr, buf.data(), buf.size(), 10);
-        IniWriteString(display.c_str(), "proxynr", buf.data(), inifilename);
-        if (localNr == 0)
-            ShowPluginMessage(IDS_SIMPORT_PROXY_LOST, "", IDS_SIMPORT_TITLE,
-                              "SFTP plugin - session import");
+        // The copied section still holds the number from the other file.
+        IniWriteString(display.c_str(), "proxynr", std::to_string(localNr).c_str(), inifilename);
+        if (IniGetInt(display.c_str(), "proxynr", 0, inifilename) != localNr) {
+            IniWriteString(display.c_str(), nullptr, nullptr, inifilename);
+            return abortWithMessage(IDS_SIMPORT_ERR_WRITE);
+        }
     }
 
     LoadServersFromIniW(inifilenameW, s_quickconnect);
@@ -627,7 +640,8 @@ static void AdoptPasswordFromFile(LPCSTR srcSection, LPCWSTR srcIni, const char*
 
 // The local record for a proxy an imported session goes through: the one
 // that already describes the same route, or a new one under a number no
-// session still points at. Written without a password.
+// session still points at. Written without a password. 0 when the record
+// could not be written.
 static int ProxyRecordForDependency(const sftp::SessionDependency& dep, LPCSTR iniFile)
 {
     const int type = static_cast<int>(dep.proxyType);
@@ -637,13 +651,15 @@ static int ProxyRecordForDependency(const sftp::SessionDependency& dep, LPCSTR i
 
     nr = NextFreeProxyNr(iniFile);
     const std::string section = nr > 1 ? std::format("proxy{}", nr) : std::string("proxy");
-    IniWriteString(section.c_str(), "proxytype",
-                   std::to_string(type).c_str(), iniFile);
-    IniWriteString(section.c_str(), "proxyserver",
-                   dep.proxyServer.c_str(), iniFile);
-    if (!dep.proxyUser.empty())
-        IniWriteString(section.c_str(), "proxyuser",
-                       dep.proxyUser.c_str(), iniFile);
+    const bool written =
+        IniWriteString(section.c_str(), "proxytype", std::to_string(type).c_str(), iniFile) &&
+        IniWriteString(section.c_str(), "proxyserver", dep.proxyServer.c_str(), iniFile) &&
+        (dep.proxyUser.empty() ||
+         IniWriteString(section.c_str(), "proxyuser", dep.proxyUser.c_str(), iniFile));
+    if (!written || FindMatchingProxyNr(type, dep.proxyServer, dep.proxyUser, iniFile) != nr) {
+        IniWriteString(section.c_str(), nullptr, nullptr, iniFile);
+        return 0;
+    }
     return nr;
 }
 
@@ -693,6 +709,17 @@ static int MaterialiseVirtualSession(const std::string& sourceId,
     if (!dep.transferable() && RefuseIfDependencyBlocks(cacheSection))
         return FS_FILE_USERABORT;
 
+    // Read before anything is written: a session the source has changed
+    // since the scan is not copied with the cache's host and the source's
+    // password.
+    bool stale = false;
+    std::string password = LoadImportedPassword(sourceId, cacheSection, subPath, &stale);
+    struct Wipe { std::string& s; ~Wipe() { SecureZeroMemory(s.data(), s.size()); } } wipe{password};
+    if (stale) {
+        ShowImportStaleRefusal();
+        return FS_FILE_USERABORT;
+    }
+
     if (!CopyIniSectionAcrossFiles(cacheSection.c_str(),
                                     unicode_util::narrow_to_wide(cachePath, CP_ACP).c_str(),
                                     newDisplay.c_str(), inifilename))
@@ -700,10 +727,19 @@ static int MaterialiseVirtualSession(const std::string& sourceId,
         return FS_FILE_NOTFOUND;
     }
 
+    // A session whose proxy could not be recorded is not left behind: with
+    // no record to point at it would connect straight to the host.
     if (dep.transferable()) {
         const int proxynr = ProxyRecordForDependency(dep, inifilename);
-        IniWriteString(newDisplay.c_str(), "proxynr",
-                       std::to_string(proxynr).c_str(), inifilename);
+        if (proxynr > 0)
+            IniWriteString(newDisplay.c_str(), "proxynr",
+                           std::to_string(proxynr).c_str(), inifilename);
+        if (proxynr <= 0 || IniGetInt(newDisplay.c_str(), "proxynr", 0, inifilename) != proxynr) {
+            IniWriteString(newDisplay.c_str(), nullptr, nullptr, inifilename);
+            ShowPluginMessage(IDS_SIMPORT_ERR_WRITE, "", IDS_SIMPORT_TITLE,
+                              "SFTP plugin - session import");
+            return FS_FILE_USERABORT;
+        }
     }
 
     // The source's password, behind TC's master password: into its password
@@ -711,10 +747,8 @@ static int MaterialiseVirtualSession(const std::string& sourceId,
     // asks for the master password, or offers to create one. A store that
     // refuses leaves no password at all rather than one in the INI.
     if (HaveCryptProc()) {
-        std::string password = LoadImportedPassword(sourceId, cacheSection, subPath);
         if (!password.empty()) {
             const bool saved = SavePasswordInStore(newDisplay, password);
-            SecureZeroMemory(password.data(), password.size());
             if (saved)
                 IniWriteString(newDisplay.c_str(), "password", "!", inifilename);
             SFTP_LOG("IMPORT", "password for '%s' %s TC's password manager", newDisplay.c_str(),
@@ -791,13 +825,26 @@ static void ApplyEnumerationToCache(sftp::IExternalSessionSource* adapter,
     }
 }
 
+void ShowImportStaleRefusal()
+{
+    ShowPluginMessage(IDS_IMPORT_STALE,
+        "This session was changed in the program it was imported from (host, user, "
+        "proxy or jump host) after the last scan. Use [Refresh] in its folder, then "
+        "try again.",
+        IDS_SIMPORT_TITLE, "SFTP plugin - session import");
+}
+
 // The password of one imported session, read from its source at connect
 // time and kept in memory only; the cache holds just the mark that the
 // source has one. Empty when there is none or the source no longer has the
-// session — the standard prompt asks then.
+// session — the standard prompt asks then. The rest of the session comes
+// from the cache: when the source now names another host, user or route,
+// the password belongs to that one, and `*stale` is set instead.
 std::string LoadImportedPassword(const std::string& sourceId, const std::string& cacheSection,
-                                 const std::string& displayName)
+                                 const std::string& displayName, bool* stale)
 {
+    if (stale)
+        *stale = false;
     const std::string& cachePath = sftp::GetImportCache().CacheFilePath();
     if (cachePath.empty())
         return {};
@@ -828,6 +875,24 @@ std::string LoadImportedPassword(const std::string& sourceId, const std::string&
         sftp::SessionDependency dependency;
         if (!adapter->LoadSettings(entry, &settings, &dependency) || settings.password.empty())
             return {};
+        AdapterStringsToInternal(settings, dependency);
+        std::array<char, 1024> cachedServer{}, cachedUser{};
+        IniGetString(cacheSection.c_str(), "server", "", cachedServer.data(),
+                     static_cast<DWORD>(cachedServer.size()), cachePath.c_str());
+        IniGetString(cacheSection.c_str(), "user", "", cachedUser.data(),
+                     static_cast<DWORD>(cachedUser.size()), cachePath.c_str());
+        const sftp::SessionDependency cachedDep =
+            sftp::ImportCache::ReadDependency(cacheSection, cachePath);
+        if (settings.server != cachedServer.data() || settings.user != cachedUser.data() ||
+            dependency.kind != cachedDep.kind || dependency.proxyType != cachedDep.proxyType ||
+            dependency.proxyServer != cachedDep.proxyServer ||
+            dependency.proxyUser != cachedDep.proxyUser) {
+            SFTP_LOG("IMPORT", "'%s' changed in source %s since the last scan", displayName.c_str(),
+                     sourceId.c_str());
+            if (stale)
+                *stale = true;
+            return {};
+        }
         // Adapters hand the password over encoded, as the INI stores it.
         std::array<char, 1024> plain{};
         DecryptString(settings.password.c_str(), plain.data(), static_cast<UINT>(plain.size()));
@@ -1951,7 +2016,12 @@ int WINAPI FsGetFileW(LPCWSTR RemoteName, LPWSTR LocalName, int CopyFlags, Remot
                 std::replace(tcSubPath.begin(), tcSubPath.end(), '/', '\\');
                 std::string header = "Imported session from [Imports]\\[";
                 header.append(sourceId).append("]\\").append(tcSubPath);
-                std::string password = LoadImportedPassword(sourceId, cacheSection, subPath);
+                bool stale = false;
+                std::string password = LoadImportedPassword(sourceId, cacheSection, subPath, &stale);
+                if (stale) {
+                    ShowImportStaleRefusal();
+                    return FS_FILE_USERABORT;
+                }
                 const int rc = ExportSessionAsIniFile(cacheSection.c_str(),
                     cachePath.c_str(), subPath.c_str(),
                     header.c_str(), LocalName, OverWrite, &dep, password);

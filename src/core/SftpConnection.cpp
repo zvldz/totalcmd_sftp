@@ -769,7 +769,18 @@ int SftpConnect(pConnectSettings ConnectSettings)
     // connect path cannot disagree with what the dialog shows. It refuses
     // rather than returning an empty endpoint, which is what keeps a session
     // with a dangling reference from quietly connecting past the bastion.
-    const JumpConfig jumpCfg = ResolveJumpConfig(ConnectSettings, inifilename);
+    JumpConfig jumpCfg = ResolveJumpConfig(ConnectSettings, inifilename);
+
+    // The jump host is reached straight from this machine: a proxy set on
+    // the session as well would be skipped without a word.
+    if (jumpCfg.status == JumpConfigStatus::Ready &&
+        ConnectSettings->proxytype != sftp::Proxy::notused) {
+        jumpCfg.status = JumpConfigStatus::WithProxy;
+        jumpCfg.error  = LngStrU8(IDS_JUMP_WITH_PROXY,
+            "This session is set to go through both a proxy and a jump host. The "
+            "plugin reaches a jump host directly, which would skip the proxy. "
+            "Keep one of the two.");
+    }
 
     if (jumpCfg.status != JumpConfigStatus::Disabled &&
         jumpCfg.status != JumpConfigStatus::Ready) {

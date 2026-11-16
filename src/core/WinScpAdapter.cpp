@@ -265,6 +265,11 @@ bool WinScpAdapter::LoadSettings(const ExternalSessionEntry& entry,
     std::string tunnelHost, tunnelUser, tunnelKey;
     DWORD tunnel = 0, tunnelPort = 0, proxyMethod = 0;
 
+    // WinSCP stores a session's keys only where they differ from its
+    // "Default Settings"; a key the session lacks has that one's value. A
+    // proxy or tunnel set there applies to every session that does not say
+    // otherwise, so missing keys are looked up there before being taken as
+    // absent.
     if (entry.sourceOrigin == "standard") {
         HKEY key = nullptr;
         for (const auto& name : SubKeyNames(entry.displayName)) {
@@ -274,44 +279,60 @@ bool WinScpAdapter::LoadSettings(const ExternalSessionEntry& entry,
             key = nullptr;
         }
         if (!key) return false;
+        HKEY defaults = nullptr;
+        for (const char* name : { "Default%20Settings", "Default Settings" }) {
+            const std::string subKey = std::string(kWinScpSessionsRoot) + "\\" + name;
+            if (RegOpenKeyExA(HKEY_CURRENT_USER, subKey.c_str(), 0, KEY_READ, &defaults) == ERROR_SUCCESS)
+                break;
+            defaults = nullptr;
+        }
+        const auto regDword = [&](const char* name, DWORD& value) {
+            return ReadRegDword(key, name, value) ||
+                   (defaults && ReadRegDword(defaults, name, value));
+        };
+        const auto regString = [&](const char* name, std::string& value) {
+            return ReadRegString(key, name, value) ||
+                   (defaults && ReadRegString(defaults, name, value));
+        };
 
         if (!ReadRegString(key, "HostName", host) || host.empty()) {
             RegCloseKey(key);
+            if (defaults)
+                RegCloseKey(defaults);
             return false;
         }
         host = PuttyUrlDecode(host);
 
-        hasPort = ReadRegDword(key, "PortNumber", port);
+        hasPort = regDword("PortNumber", port);
 
-        if (ReadRegString(key, "UserName", userName))
+        if (regString("UserName", userName))
             userName = PuttyUrlDecode(userName);
 
-        if (!ReadRegDword(key, "AgentFwd", useAgent))
-            ReadRegDword(key, "AuthAgent", useAgent);
+        if (!regDword("AgentFwd", useAgent))
+            regDword("AuthAgent", useAgent);
 
-        if (ReadRegString(key, "PublicKeyFile", keyFile))
+        if (regString("PublicKeyFile", keyFile))
             keyFile = ExpandEnv(PuttyUrlDecode(keyFile));
 
-        hasFsProto = ReadRegDword(key, "FSProtocol", fsProtoRaw);
+        hasFsProto = regDword("FSProtocol", fsProtoRaw);
 
-        // WinSCP omits every key sitting at its default, so the presence of a
-        // non-zero value is the whole signal: `Tunnel` for an SSH session in
-        // front of the host, `ProxyMethod` for a proxy.
-        ReadRegDword(key, "Tunnel", tunnel);
-        ReadRegDword(key, "ProxyMethod", proxyMethod);
+        // A non-zero `Tunnel` is an SSH session in front of the host, a
+        // non-zero `ProxyMethod` a proxy.
+        regDword("Tunnel", tunnel);
+        regDword("ProxyMethod", proxyMethod);
         if (tunnel != 0) {
-            ReadRegString(key, "TunnelHostName", tunnelHost);
-            ReadRegDword(key, "TunnelPortNumber", tunnelPort);
-            ReadRegString(key, "TunnelUserName", tunnelUser);
-            ReadRegString(key, "TunnelPublicKeyFile", tunnelKey);
+            regString("TunnelHostName", tunnelHost);
+            regDword("TunnelPortNumber", tunnelPort);
+            regString("TunnelUserName", tunnelUser);
+            regString("TunnelPublicKeyFile", tunnelKey);
         }
         // A tunnel is dealt with below, together with any proxy beside it.
         if (dependency && tunnel == 0 && proxyMethod != 0) {
             std::string proxyHost, proxyUser;
             DWORD proxyPort = 0;
-            ReadRegString(key, "ProxyHost", proxyHost);
-            ReadRegDword(key, "ProxyPort", proxyPort);
-            ReadRegString(key, "ProxyUsername", proxyUser);
+            regString("ProxyHost", proxyHost);
+            regDword("ProxyPort", proxyPort);
+            regString("ProxyUsername", proxyUser);
             proxyHost = PuttyUrlDecode(proxyHost);
             dependency->kind   = SessionDependency::Kind::Proxy;
             dependency->detail = proxyHost;
@@ -319,56 +340,78 @@ bool WinScpAdapter::LoadSettings(const ExternalSessionEntry& entry,
                                PuttyUrlDecode(proxyUser), *dependency);
         }
         RegCloseKey(key);
+        if (defaults)
+            RegCloseKey(defaults);
     } else {
         // Portable channel: sourceOrigin is the literal WinSCP.ini path.
         // Section name is `Sessions\<encoded>`.
+        const std::string& ini = entry.sourceOrigin;
         std::string section;
         for (const auto& name : SubKeyNames(entry.displayName)) {
             section = std::string(kIniSessionsPrefix) + name;
-            host = PuttyUrlDecode(ReadIniString(entry.sourceOrigin, section, "HostName"));
+            host = PuttyUrlDecode(ReadIniString(ini, section, "HostName"));
             if (!host.empty())
                 break;
         }
         if (host.empty()) return false;
+        const std::string sections[] = {
+            section,
+            std::string(kIniSessionsPrefix) + "Default%20Settings",
+            std::string(kIniSessionsPrefix) + "Default Settings",
+        };
+        const auto iniString = [&](const char* name) {
+            for (const auto& s : sections) {
+                std::string v = ReadIniString(ini, s, name);
+                if (!v.empty())
+                    return v;
+            }
+            return std::string();
+        };
+        const auto iniDword = [&](const char* name) {
+            for (const auto& s : sections) {
+                const int v = ReadIniDword(ini, s, name);
+                if (v >= 0)
+                    return v;
+            }
+            return -1;
+        };
 
-        const int portRaw = ReadIniDword(entry.sourceOrigin, section, "PortNumber");
+        const int portRaw = iniDword("PortNumber");
         if (portRaw >= 0) { port = static_cast<DWORD>(portRaw); hasPort = true; }
 
-        userName = PuttyUrlDecode(ReadIniString(entry.sourceOrigin, section, "UserName"));
+        userName = PuttyUrlDecode(iniString("UserName"));
 
-        const int agentRaw = ReadIniDword(entry.sourceOrigin, section, "AgentFwd");
+        const int agentRaw = iniDword("AgentFwd");
         if (agentRaw >= 0) useAgent = static_cast<DWORD>(agentRaw);
         else {
-            const int auth2 = ReadIniDword(entry.sourceOrigin, section, "AuthAgent");
+            const int auth2 = iniDword("AuthAgent");
             if (auth2 >= 0) useAgent = static_cast<DWORD>(auth2);
         }
 
-        keyFile = ExpandEnv(PuttyUrlDecode(ReadIniString(entry.sourceOrigin, section, "PublicKeyFile")));
+        keyFile = ExpandEnv(PuttyUrlDecode(iniString("PublicKeyFile")));
 
-        const int fsRaw = ReadIniDword(entry.sourceOrigin, section, "FSProtocol");
+        const int fsRaw = iniDword("FSProtocol");
         if (fsRaw >= 0) { fsProtoRaw = static_cast<DWORD>(fsRaw); hasFsProto = true; }
 
-        if (ReadIniDword(entry.sourceOrigin, section, "Tunnel") > 0) {
+        if (iniDword("Tunnel") > 0) {
             tunnel     = 1;
-            tunnelHost = ReadIniString(entry.sourceOrigin, section, "TunnelHostName");
-            tunnelUser = ReadIniString(entry.sourceOrigin, section, "TunnelUserName");
-            tunnelKey  = ReadIniString(entry.sourceOrigin, section, "TunnelPublicKeyFile");
-            const int tp = ReadIniDword(entry.sourceOrigin, section, "TunnelPortNumber");
+            tunnelHost = iniString("TunnelHostName");
+            tunnelUser = iniString("TunnelUserName");
+            tunnelKey  = iniString("TunnelPublicKeyFile");
+            const int tp = iniDword("TunnelPortNumber");
             if (tp > 0) tunnelPort = static_cast<DWORD>(tp);
         }
-        const int method = ReadIniDword(entry.sourceOrigin, section, "ProxyMethod");
+        const int method = iniDword("ProxyMethod");
         if (method > 0) proxyMethod = static_cast<DWORD>(method);
 
         if (dependency && tunnel == 0 && method > 0) {
-            const std::string proxyHost = PuttyUrlDecode(
-                ReadIniString(entry.sourceOrigin, section, "ProxyHost"));
-            const int proxyPort = ReadIniDword(entry.sourceOrigin, section, "ProxyPort");
+            const std::string proxyHost = PuttyUrlDecode(iniString("ProxyHost"));
+            const int proxyPort = iniDword("ProxyPort");
             dependency->kind   = SessionDependency::Kind::Proxy;
             dependency->detail = proxyHost;
             DescribePuttyProxy(static_cast<DWORD>(method), proxyHost,
                                proxyPort > 0 ? static_cast<DWORD>(proxyPort) : 0,
-                               PuttyUrlDecode(ReadIniString(entry.sourceOrigin, section,
-                                                            "ProxyUsername")),
+                               PuttyUrlDecode(iniString("ProxyUsername")),
                                *dependency);
         }
     }

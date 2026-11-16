@@ -367,7 +367,7 @@
 12119= LAN-Pair-Sitzung: 
 12120=Diese Einstellungen stammen aus der Sitzung '{}' und werden nur angezeigt. Wählen Sie (manuell) in der Jump-Host-Liste, um hier einen Host einzutragen.
 12121=Diese Sitzung läuft über einen Proxy, Jump-Host oder Tunnel, der nicht importiert wurde. Eine direkte Verbindung würde ihn umgehen und wird daher abgelehnt.
-12122=Die Sitzung ist auf einen Proxy eingestellt, aber die Datei beschreibt ihn nicht. Sie wurde ohne Proxy importiert und verbindet sich direkt — prüfen Sie die Proxy-Einstellung.
+12122=Die Sitzung ist auf einen Proxy eingestellt, aber die Datei beschreibt ihn nicht. Sie wurde nicht importiert: ohne den Proxy würde sie sich direkt verbinden.
 12123=Kopieren Sie die Sitzung mit F5: Der Proxy wird mitkopiert. Ein eventuelles Passwort wird beim Verbinden abgefragt.
 12124=Verschieben: Die Quelle wurde behalten, weil das Kopieren auf einer bereits vorhandenen Datei fortgesetzt wurde
 12125=Quelle und Ziel sind dieselbe Datei auf demselben Server. Eine Datei auf sich selbst zu kopieren würde sie kürzen, daher wird es abgelehnt.
@@ -414,6 +414,9 @@
 12166=Der andere Computer erkennt diesen nicht. Neu koppeln? Der andere Computer fragt seinen Benutzer.
 12167=LAN Pair: Der andere Computer erkennt diesen nicht. Koppeln Sie sie neu mit „Paaren...“ in den Verbindungseinstellungen.
 12168=Diese Sitzung verwendet PHP Agent oder LAN Pair, die nur die Extra-Version des Plugins enthält (SFTPplug-...-extra.zip). Diese Version verbindet nur über SSH.
+12169=Diese Sitzung ist auf einen Proxy und einen Jump-Host zugleich eingestellt. Das Plugin erreicht einen Jump-Host direkt, der Proxy würde übergangen. Behalten Sie eines von beiden.
+12170=Die Jump-Sitzung '{}' geht über einen Proxy. Ein Jump-Host wird direkt erreicht, der Proxy würde übergangen, daher wird die Verbindung abgelehnt. Wählen Sie eine Jump-Sitzung ohne Proxy.
+12171=Diese Sitzung wurde nach dem letzten Einlesen in dem Programm geändert, aus dem sie importiert ist (Host, Benutzer, Proxy oder Jump-Host). Führen Sie [Refresh] in ihrem Ordner aus und versuchen Sie es erneut.
 12089=SFTP
 12104=(manuell)
 12105= (fehlt)

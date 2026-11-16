@@ -366,7 +366,7 @@
 12119= LAN Pair-sessie: 
 12120=Deze instellingen komen uit sessie '{}' en zijn alleen-lezen. Kies (handmatig) in de jump-hostlijst om hier een host in te stellen.
 12121=Deze sessie loopt via een proxy, jump host of tunnel die niet is geïmporteerd. Een directe verbinding zou die omzeilen en wordt daarom geweigerd.
-12122=De sessie is ingesteld op een proxy, maar het bestand beschrijft die niet. Ze is zonder proxy geïmporteerd en maakt direct verbinding — controleer de proxy-instelling.
+12122=De sessie is ingesteld op een proxy, maar het bestand beschrijft die niet. Ze is niet geïmporteerd: zonder de proxy zou ze direct verbinden.
 12123=Kopieer de sessie met F5: de proxy wordt meegekopieerd. Een eventueel wachtwoord wordt bij het verbinden gevraagd.
 12124=Verplaatsen: de bron is behouden, omdat het kopiëren werd hervat op een bestand dat er al was
 12125=Bron en doel zijn hetzelfde bestand op dezelfde server. Een bestand op zichzelf kopiëren zou het inkorten, daarom wordt het geweigerd.
@@ -413,6 +413,9 @@
 12166=De andere computer herkent deze niet. Opnieuw koppelen? De andere computer vraagt het zijn gebruiker.
 12167=LAN Pair: de andere computer herkent deze niet. Koppel ze opnieuw met "Koppelen..." in de verbindingsinstellingen.
 12168=Deze sessie gebruikt PHP Agent of LAN Pair, die alleen de extra-versie van de plug-in heeft (SFTPplug-...-extra.zip). Deze versie maakt alleen verbinding via SSH.
+12169=Deze sessie is ingesteld om zowel via een proxy als via een jump-host te gaan. De plugin bereikt een jump-host direct, de proxy zou worden overgeslagen. Houd een van beide.
+12170=De jump-sessie '{}' gaat via een proxy. Een jump-host wordt direct bereikt, die proxy zou worden overgeslagen, dus de verbinding wordt geweigerd. Kies een jump-sessie zonder proxy.
+12171=Deze sessie is na de laatste scan gewijzigd in het programma waaruit ze is geïmporteerd (host, gebruiker, proxy of jump-host). Gebruik [Refresh] in haar map en probeer het opnieuw.
 12089=SFTP
 12104=(handmatig)
 12105= (ontbreekt)

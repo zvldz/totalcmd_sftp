@@ -892,11 +892,16 @@ static void StatusInfo(const std::string& remoteDir, int InfoStartEnd, int InfoO
                 // connection or, failing that, from the source.
                 const auto info = sftp::LookupVirtualSession(displayName.data());
                 const std::string& cachePath = sftp::GetImportCache().CacheFilePath();
-                if (!info || cachePath.empty())
+                if (!info || cachePath.empty() || RefuseIfDependencyBlocks(info->cacheSection))
                     return;
+                bool stale = false;
                 std::string password = inherited.password.empty()
-                    ? LoadImportedPassword(info->sourceId, info->cacheSection, info->displayName)
+                    ? LoadImportedPassword(info->sourceId, info->cacheSection, info->displayName, &stale)
                     : inherited.password;
+                if (stale) {
+                    ShowImportStaleRefusal();
+                    return;
+                }
                 serverid = SftpConnectToServer(info->cacheSection.c_str(), cachePath.c_str(),
                                                password.empty() ? nullptr : password.c_str(),
                                                displayName.data(), &inherited);

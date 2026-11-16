@@ -67,6 +67,33 @@ From this version the plugin comes in two builds: **classic**
   the server makes you change during a background transfer is saved the
   way the session keeps its own — before, it went into `sftpplug.ini`
   even for a session whose password is under the master password.
+- **A proxy is no longer skipped when a jump host is set too.** The jump
+  host was reached straight from this machine and the session's proxy
+  ignored without a word, as was the proxy of a session used as the jump
+  host. Such a session is now refused with a message, and the connection
+  dialog does not save a proxy together with a jump host.
+- **A session file whose proxy is missing is not imported.** One set to
+  use a proxy the file does not describe was imported without it, to
+  connect directly; it is now refused. A proxy record that cannot be
+  written stops the import too, instead of leaving the session pointing
+  at nothing.
+- **Imported sessions keep their proxy and jump host on every connect.**
+  - The check that refuses an [Imports] session going through a route the
+    plugin does not reproduce ran on Enter only; a reconnect or background
+    transfer after [Refresh] added such a route went direct. It now runs
+    on every connect.
+  - A session changed in its source program since the last scan is
+    refused until [Refresh]: its new password was sent to the old host, or
+    its new proxy skipped.
+  - OpenSSH: a ProxyJump or ProxyCommand in a `Match` block was ignored.
+    `Match all` and `Match host` are now applied like `Host`; with other
+    conditions, which the plugin cannot evaluate, the session is refused.
+  - WinSCP: a proxy or tunnel set in "Default Settings", which WinSCP
+    applies to every session that does not override it, was not seen. The
+    same for the port, user name and protocol.
+  - FileZilla: a `filezilla.xml` that exists but cannot be read was taken
+    as "no proxy"; the session is now refused. KiTTY reads a session file
+    once, so a file locked between two reads cannot hide its proxy.
 - **PHP Agent and LAN Pair moved to a separate extra build.** They open
   the machine to the network in ways SSH does not: LAN Pair runs a file
   server on it, PHP Agent drives a script on a web server, with a shell.

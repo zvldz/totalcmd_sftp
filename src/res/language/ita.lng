@@ -366,7 +366,7 @@
 12119= Sessione LAN Pair: 
 12120=Queste impostazioni provengono dalla sessione '{}' e sono di sola lettura. Scegliere (manuale) nell'elenco dei jump host per configurarne uno qui.
 12121=Questa sessione passa per un proxy, un jump host o un tunnel che non è stato importato. Una connessione diretta lo aggirerebbe, quindi viene rifiutata.
-12122=La sessione è impostata per usare un proxy, ma il file non lo descrive. È stata importata senza il proxy e si connetterà direttamente: controllare l'impostazione del proxy.
+12122=La sessione è impostata per usare un proxy, ma il file non lo descrive. Non è stata importata: senza il proxy si collegherebbe direttamente.
 12123=Copiare la sessione con F5: il proxy viene copiato con essa. L'eventuale password verrà chiesta alla connessione.
 12124=Spostamento: l'origine è stata mantenuta, perché la copia è ripresa su un file già presente
 12125=Origine e destinazione sono lo stesso file sullo stesso server. Copiare un file su sé stesso lo troncherebbe, quindi viene rifiutato.
@@ -413,6 +413,9 @@
 12166=L'altro computer non riconosce questo. Abbinarli di nuovo? L'altro computer chiederà al suo utente.
 12167=LAN Pair: l'altro computer non riconosce questo. Abbinali di nuovo con «Abbina...» nelle impostazioni di connessione.
 12168=Questa sessione usa PHP Agent o LAN Pair, presenti solo nella versione extra del plugin (SFTPplug-...-extra.zip). Questa versione si connette solo via SSH.
+12169=Questa sessione è impostata per passare sia da un proxy sia da un jump host. Il plugin raggiunge il jump host direttamente, il proxy verrebbe scavalcato. Tenga uno dei due.
+12170=La sessione jump '{}' passa da un proxy. Il jump host viene raggiunto direttamente, quel proxy verrebbe scavalcato, perciò la connessione è rifiutata. Scelga una sessione jump senza proxy.
+12171=Questa sessione è stata modificata nel programma da cui è importata (host, utente, proxy o jump host) dopo l'ultima scansione. Usi [Refresh] nella sua cartella e riprovi.
 12089=SFTP
 12104=(manuale)
 12105= (mancante)

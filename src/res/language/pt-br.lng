@@ -366,7 +366,7 @@
 12119= Sessão LAN Pair: 
 12120=Estas configurações vêm da sessão '{}' e são somente leitura. Escolha (manual) na lista de jump hosts para configurar um aqui.
 12121=Esta sessão passa por um proxy, jump host ou túnel que não foi importado. Uma conexão direta o contornaria, por isso é recusada.
-12122=A sessão está configurada para usar um proxy, mas o arquivo não o descreve. Ela foi importada sem o proxy e se conectará diretamente — verifique a configuração de proxy.
+12122=A sessão está configurada para usar um proxy, mas o arquivo não o descreve. Ela não foi importada: sem o proxy, conectaria diretamente.
 12123=Copie a sessão com F5: o proxy é copiado junto. A senha, se houver, será pedida ao conectar.
 12124=Mover: a origem foi mantida, porque a cópia foi retomada sobre um arquivo já existente
 12125=Origem e destino são o mesmo arquivo no mesmo servidor. Copiar um arquivo sobre ele mesmo o truncaria, por isso é recusado.
@@ -413,6 +413,9 @@
 12166=O outro computador não reconhece este. Emparelhá-los novamente? O outro computador perguntará ao seu usuário.
 12167=LAN Pair: o outro computador não reconhece este. Emparelhe-os novamente com "Emparelhar..." nas configurações da conexão.
 12168=Esta sessão usa PHP Agent ou LAN Pair, que só existem na versão extra do plugin (SFTPplug-...-extra.zip). Esta versão conecta apenas por SSH.
+12169=Esta sessão está configurada para passar por um proxy e por um host de salto ao mesmo tempo. O plugin chega ao host de salto diretamente, o proxy seria ignorado. Mantenha só um dos dois.
+12170=A sessão de salto '{}' passa por um proxy. O host de salto é alcançado diretamente, esse proxy seria ignorado, por isso a conexão foi recusada. Escolha uma sessão de salto sem proxy.
+12171=Esta sessão foi alterada no programa de onde foi importada (host, usuário, proxy ou host de salto) depois da última leitura. Use [Refresh] na pasta dela e tente de novo.
 12089=SFTP
 12104=(manual)
 12105= (ausente)

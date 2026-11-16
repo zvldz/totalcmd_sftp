@@ -61,9 +61,9 @@ std::string JoinPath(const std::string& a, const char* b)
 // Value is returned URL-decoded, in UTF-8. Missing key → false, no `out`
 // write.
 // -------------------------------------------------------------------------
-bool ReadKittyString(const std::string& filePath,
-                     const char* key,
-                     std::string& out)
+
+// The whole session file. False when it cannot be read.
+bool ReadKittyFile(const std::string& filePath, std::string& content)
 {
     HANDLE h = CreateFileW(Utf8PathToWide(filePath).c_str(), GENERIC_READ, FILE_SHARE_READ,
                            nullptr, OPEN_EXISTING, 0, nullptr);
@@ -74,14 +74,19 @@ bool ReadKittyString(const std::string& filePath,
         CloseHandle(h);
         return false;    // reject absurd sizes; KiTTY session files are ~2 KB.
     }
-    std::string content(static_cast<size_t>(sz.QuadPart), '\0');
+    content.assign(static_cast<size_t>(sz.QuadPart), '\0');
     DWORD read = 0;
     const BOOL ok = ReadFile(h, content.data(),
                               static_cast<DWORD>(content.size()), &read, nullptr);
     CloseHandle(h);
     if (!ok) return false;
     content.resize(read);
+    return true;
+}
 
+// One key of a session file already read.
+bool KittyString(const std::string& content, const char* key, std::string& out)
+{
     const size_t keyLen = std::strlen(key);
     size_t pos = 0;
     while (pos < content.size()) {
@@ -111,16 +116,21 @@ bool ReadKittyString(const std::string& filePath,
     return false;
 }
 
-bool ReadKittyDword(const std::string& filePath,
-                    const char* key, DWORD& out)
+bool KittyDword(const std::string& content, const char* key, DWORD& out)
 {
     std::string s;
-    if (!ReadKittyString(filePath, key, s) || s.empty()) return false;
+    if (!KittyString(content, key, s) || s.empty()) return false;
     char* endp = nullptr;
     const unsigned long v = std::strtoul(s.c_str(), &endp, 10);
     if (endp == s.c_str()) return false;
     out = static_cast<DWORD>(v);
     return true;
+}
+
+bool ReadKittyString(const std::string& filePath, const char* key, std::string& out)
+{
+    std::string content;
+    return ReadKittyFile(filePath, content) && KittyString(content, key, out);
 }
 
 // -------------------------------------------------------------------------
@@ -369,44 +379,52 @@ bool KittyAdapter::LoadSettings(const ExternalSessionEntry& entry,
         return false;
     }
 
+    // Read once: every key below comes from the same file contents, so a
+    // file locked between two reads cannot make a proxy look absent.
+    std::string content;
+    if (!ReadKittyFile(filePath, content)) {
+        SFTP_LOG("KITTY", "LoadSettings: cannot read '%s'", filePath.c_str());
+        return false;
+    }
+
     // Protocol gate — same as EnumerateSessionsDir, in case a subsequent
     // KiTTY edit changed the transport away from SSH.
     std::string proto;
-    if (!ReadKittyString(filePath, "Protocol", proto) ||
+    if (!KittyString(content, "Protocol", proto) ||
         _stricmp(proto.c_str(), "ssh") != 0) {
         return false;
     }
 
     std::string host;
-    if (!ReadKittyString(filePath, "HostName", host) || host.empty()) return false;
+    if (!KittyString(content, "HostName", host) || host.empty()) return false;
 
     DWORD port = 0;
-    const bool hasPort = ReadKittyDword(filePath, "PortNumber", port);
+    const bool hasPort = KittyDword(content, "PortNumber", port);
 
     std::string userName, keyFile, lineCodePage;
-    ReadKittyString(filePath, "UserName", userName);
-    if (ReadKittyString(filePath, "PublicKeyFile", keyFile))
+    KittyString(content, "UserName", userName);
+    if (KittyString(content, "PublicKeyFile", keyFile))
         keyFile = ExpandEnv(keyFile);
-    ReadKittyString(filePath, "LineCodePage", lineCodePage);
+    KittyString(content, "LineCodePage", lineCodePage);
 
     DWORD useAgent = 0;
-    if (!ReadKittyDword(filePath, "AgentFwd", useAgent))
-        ReadKittyDword(filePath, "AuthAgent", useAgent);
+    if (!KittyDword(content, "AgentFwd", useAgent))
+        KittyDword(content, "AuthAgent", useAgent);
 
     DWORD enterSendsCrLf = 0;
-    const bool hasEnterSendsCrLf = ReadKittyDword(filePath, "EnterSendsCrLf",
+    const bool hasEnterSendsCrLf = KittyDword(content, "EnterSendsCrLf",
                                                     enterSendsCrLf);
 
     // KiTTY inherits PuTTY's key names and method numbers, so a non-zero
     // method means the same thing here: the session goes through a proxy,
     // which F5 can bring across when it is one the plugin speaks.
     DWORD proxyMethod = 0;
-    if (dependency && ReadKittyDword(filePath, "ProxyMethod", proxyMethod) && proxyMethod != 0) {
+    if (dependency && KittyDword(content, "ProxyMethod", proxyMethod) && proxyMethod != 0) {
         std::string proxyHost, proxyUser;
         DWORD proxyPort = 0;
-        ReadKittyString(filePath, "ProxyHost", proxyHost);
-        ReadKittyDword(filePath, "ProxyPort", proxyPort);
-        ReadKittyString(filePath, "ProxyUsername", proxyUser);
+        KittyString(content, "ProxyHost", proxyHost);
+        KittyDword(content, "ProxyPort", proxyPort);
+        KittyString(content, "ProxyUsername", proxyUser);
         proxyHost = PuttyUrlDecode(proxyHost);
         dependency->kind   = SessionDependency::Kind::Proxy;
         dependency->detail = proxyHost;

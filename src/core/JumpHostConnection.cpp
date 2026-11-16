@@ -107,6 +107,20 @@ JumpConfig ResolveJumpConfig(pConnectSettings cs, LPCSTR iniFileName)
         out.endpoint.fingerprint        = ref.savedfingerprint;
         out.endpoint.fingerprintSection = cs->jump_session_ref;
         out.endpoint.fingerprintKey     = "fingerprint";
+
+        // The jump host is reached straight from this machine. A session
+        // that itself goes through a proxy would have that proxy skipped.
+        if (ref.proxytype != sftp::Proxy::notused) {
+            out.status = JumpConfigStatus::RefProxied;
+            out.error  = LngStrU8(IDS_JUMP_REF_PROXIED,
+                "Jump session '{}' goes through a proxy. A jump host is reached "
+                "directly, which would skip that proxy, so the connection is refused. "
+                "Pick a jump session without a proxy.");
+            const auto p = out.error.find("{}");
+            if (p != std::string::npos)
+                out.error.replace(p, 2, cs->jump_session_ref);
+            return out;
+        }
     } else {
         out.endpoint.host        = cs->jump_host;
         out.endpoint.port        = cs->jump_port;

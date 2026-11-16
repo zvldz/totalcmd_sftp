@@ -554,9 +554,17 @@ static void DescribeGlobalProxy(const std::wstring& sitemanagerPath, SessionDepe
     const std::wstring settingsPath =
         sitemanagerPath.substr(0, slash + 1) + L"filezilla.xml";
 
+    // No settings file is FileZilla never having saved any: no proxy. One
+    // that is there but cannot be read (locked, no access) leaves the
+    // answer unknown, which is not taken as "no proxy".
     std::string text;
-    if (!ReadFileAsBytes(settingsPath, text))
+    if (!ReadFileAsBytes(settingsPath, text)) {
+        if (GetFileAttributesW(settingsPath.c_str()) != INVALID_FILE_ATTRIBUTES) {
+            dep.kind   = SessionDependency::Kind::Proxy;
+            dep.detail = "FileZilla proxy settings could not be read (filezilla.xml)";
+        }
         return;
+    }
 
     // The settings file is a flat list of <Setting name="...">value</Setting>,
     // so it is read by name rather than walked as a tree.

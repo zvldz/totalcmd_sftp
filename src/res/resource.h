@@ -603,6 +603,9 @@
 #define IDS_LAN_ASK_REPAIR              12166
 #define IDS_LAN_ERR_TRUST_UNKNOWN       12167
 #define IDS_ERR_NEEDS_EXTRA             12168  // classic build: PHP / LAN session refused
+#define IDS_JUMP_WITH_PROXY             12169  // refusal: proxy together with a jump host
+#define IDS_JUMP_REF_PROXIED            12170  // refusal: jump session goes through a proxy
+#define IDS_IMPORT_STALE                12171  // refusal: imported session changed in its source
 
 // Next default values for new objects
 //

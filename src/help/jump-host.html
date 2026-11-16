@@ -41,13 +41,14 @@
   <li><b>[!] name (missing)</b> - the referenced session no longer exists, because it was removed outside the plugin (by editing <code>sftpplug.ini</code>, say); the connection is refused rather than made straight to the target, until another entry is picked</li>
 </ul>
 <p>A referenced session must reach the bastion directly: one that has a jump host of its own is refused, since chained jump hosts are not supported. Renaming or moving the referenced session inside the plugin keeps the reference valid.</p>
+<p>The jump host is reached straight from this machine, never through a proxy. A session set to use both a proxy and a jump host cannot be saved, and one that has them anyway is not connected; the same goes for a referenced session that goes through a proxy. Connecting would otherwise skip the proxy without a word.</p>
 
 <h2>Jump Host settings</h2>
 <ul>
   <li><b>Host</b> - bastion hostname or IP</li>
   <li><b>Port</b> - usually 22</li>
   <li><b>User</b> - jump-host account</li>
-  <li><b>Password</b> - jump-host password, if used</li>
+  <li><b>Password</b> - jump-host password, if used; with <b>Protect password with password manager</b> (ticked by default) kept under Total Commander's master password, otherwise encrypted in <code>sftpplug.ini</code></li>
   <li><b>Public/Private key</b> - separate key material for the jump host</li>
   <li><b>Use SSH agent (Pageant)</b> - optional jump-host authentication via Pageant</li>
 </ul>

@@ -36,10 +36,21 @@ pConnectSettings GetServerIdAndRelativePathFromPathW(LPCWSTR Path, LPWSTR Relati
 // [Refresh] does (PluginEntryPointsFile.cpp).
 void RefreshImportSource(const std::string& sourceId);
 
+// True, after telling the user, when an imported session goes through a
+// proxy, jump host or tunnel the plugin would not use: connecting would
+// reach the host directly. Every connect of an [Imports] session asks this,
+// a reconnect or a background transfer as much as Enter, since [Refresh]
+// can add such a route to a session already open (PluginEntryPointsFile.cpp).
+bool RefuseIfDependencyBlocks(const std::string& cacheSection);
+
 // The password of one imported session, read from its source for this
-// connect only; empty when the source has none (PluginEntryPointsFile.cpp).
+// connect only; empty when the source has none. `*stale` is set when the
+// source now describes the session differently from the cache (another
+// host, user or route): the caller refuses, with ShowImportStaleRefusal
+// (PluginEntryPointsFile.cpp).
 std::string LoadImportedPassword(const std::string& sourceId, const std::string& cacheSection,
-                                 const std::string& displayName);
+                                 const std::string& displayName, bool* stale = nullptr);
+void ShowImportStaleRefusal();
 
 // Closes the session a TC path names; `root` is an internal string. What
 // FsDisconnect does, for callers inside the plugin.

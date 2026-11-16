@@ -141,7 +141,8 @@ static INT_PTR CALLBACK JumpHostDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
             ? ResolveJumpConfig(cs, cs->IniFileName.c_str())
             : JumpConfig{};
 
-        if (fromSession && shown.status == JumpConfigStatus::Ready) {
+        if (fromSession && (shown.status == JumpConfigStatus::Ready ||
+                            shown.status == JumpConfigStatus::RefProxied)) {
             const JumpHostSettings& j = shown.endpoint;
             SetDlgItemTextI(hWnd, IDC_JUMP_HOST, j.host.c_str());
             SetDlgItemInt(hWnd, IDC_JUMP_PORT, j.port ? j.port : 22, FALSE);
@@ -2790,6 +2791,17 @@ void ConnectionDialog::OnOk()
     m_settings->dirmod  = modbuf[0] == 0 ? 0755 : strtol(modbuf.data(), nullptr, 8);
 
     m_settings->proxynr = GetProxyNrFromCombo(m_hWnd);
+
+    // Connecting refuses a proxy together with a jump host; saving them
+    // together would only make a session that never connects.
+    if (m_settings->use_jump_host && m_settings->proxynr > 0) {
+        const std::wstring text = unicode_util::utf8_to_wstring(LngStrU8(IDS_JUMP_WITH_PROXY,
+            "This session is set to go through both a proxy and a jump host. The "
+            "plugin reaches a jump host directly, which would skip the proxy. "
+            "Keep one of the two."));
+        MessageBoxW(m_hWnd, text.c_str(), L"SFTP", MB_OK | MB_ICONWARNING);
+        return;
+    }
 
     std::array<char, wdirtypemax> targetProfile{};
     std::array<char, wdirtypemax> enteredProfile{};

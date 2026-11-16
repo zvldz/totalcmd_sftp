@@ -366,7 +366,7 @@
 12119= Sesiune LAN Pair: 
 12120=Aceste setări provin din sesiunea '{}' și sunt doar pentru citire. Alegeți (manual) în lista de jump host pentru a configura unul aici.
 12121=Această sesiune trece printr-un proxy, jump host sau tunel care nu a fost importat. O conexiune directă l-ar ocoli, de aceea este refuzată.
-12122=Sesiunea este setată să folosească un proxy, dar fișierul nu îl descrie. A fost importată fără proxy și se va conecta direct — verificați setarea proxy.
+12122=Sesiunea este setată să folosească un proxy, dar fișierul nu îl descrie. Nu a fost importată: fără proxy s-ar conecta direct.
 12123=Copiați sesiunea cu F5: proxy-ul se copiază împreună cu ea. Parola, dacă e necesară, va fi cerută la conectare.
 12124=Mutare: sursa a fost păstrată, deoarece copierea a fost reluată peste un fișier deja existent
 12125=Sursa și destinația sunt același fișier pe același server. Copierea unui fișier peste el însuși l-ar trunchia, de aceea este refuzată.
@@ -413,6 +413,9 @@
 12166=Celălalt computer nu îl recunoaște pe acesta. Le asociați din nou? Celălalt computer își va întreba utilizatorul.
 12167=LAN Pair: celălalt computer nu îl recunoaște pe acesta. Asociați-le din nou cu „Asociere...” în setările conexiunii.
 12168=Această sesiune folosește PHP Agent sau LAN Pair, care există doar în versiunea extra a pluginului (SFTPplug-...-extra.zip). Această versiune se conectează doar prin SSH.
+12169=Această sesiune este setată să treacă atât printr-un proxy, cât și printr-o gazdă intermediară. Pluginul ajunge direct la gazda intermediară, proxy-ul ar fi ocolit. Păstrați doar una dintre ele.
+12170=Sesiunea intermediară '{}' trece printr-un proxy. Gazda intermediară este accesată direct, acel proxy ar fi ocolit, așa că conexiunea este refuzată. Alegeți o sesiune intermediară fără proxy.
+12171=Această sesiune a fost modificată în programul din care a fost importată (gazdă, utilizator, proxy sau gazdă intermediară) după ultima scanare. Folosiți [Refresh] în dosarul ei, apoi încercați din nou.
 12089=SFTP
 12104=(manual)
 12105= (lipsește)

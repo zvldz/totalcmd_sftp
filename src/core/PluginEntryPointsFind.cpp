@@ -1011,13 +1011,20 @@ HANDLE WINAPI FsFindFirstW(LPCWSTR Path, LPWIN32_FIND_DATAW FindData)
                 }
                 const std::string& cachePath =
                     sftp::GetImportCache().CacheFilePath();
-                if (cachePath.empty()) {
+                if (cachePath.empty() || RefuseIfDependencyBlocks(info->cacheSection)) {
                     g_lastFailedFindPath = Path;
                     SetLastError(ERROR_PATH_NOT_FOUND);
                     return INVALID_HANDLE_VALUE;
                 }
+                bool stale = false;
                 std::string password = LoadImportedPassword(
-                    info->sourceId, info->cacheSection, info->displayName);
+                    info->sourceId, info->cacheSection, info->displayName, &stale);
+                if (stale) {
+                    ShowImportStaleRefusal();
+                    g_lastFailedFindPath = Path;
+                    SetLastError(ERROR_PATH_NOT_FOUND);
+                    return INVALID_HANDLE_VALUE;
+                }
                 new_serverid = SftpConnectToServer(
                     info->cacheSection.c_str(), cachePath.c_str(),
                     password.empty() ? nullptr : password.c_str(), displayName.data());

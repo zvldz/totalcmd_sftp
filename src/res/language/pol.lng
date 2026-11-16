@@ -355,7 +355,7 @@
 12119= Sesja LAN Pair: 
 12120=Te ustawienia pochodzą z sesji '{}' i są tylko do odczytu. Wybierz (ręcznie) na liście jump-hostów, aby skonfigurować hosta tutaj.
 12121=Ta sesja działa przez proxy, jump host lub tunel, które nie zostały zaimportowane. Bezpośrednie połączenie by je ominęło, dlatego jest odrzucone.
-12122=Sesja jest ustawiona na proxy, ale plik go nie opisuje. Zaimportowano ją bez proxy i będzie łączyć się bezpośrednio — sprawdź ustawienie proxy.
+12122=Sesja jest ustawiona na proxy, ale plik go nie opisuje. Sesja nie została zaimportowana: bez proxy łączyłaby się bezpośrednio.
 12123=Skopiuj sesję klawiszem F5: proxy zostanie skopiowane razem z nią. Hasło, jeśli jest potrzebne, zostanie zapytane przy połączeniu.
 12124=Przenoszenie: źródło zostało zachowane, ponieważ kopiowanie wznowiono na już istniejącym pliku
 12125=Źródło i cel to ten sam plik na tym samym serwerze. Kopiowanie pliku na samego siebie by go obcięło, dlatego jest odrzucone.
@@ -402,6 +402,9 @@
 12166=Drugi komputer nie rozpoznaje tego. Sparować je ponownie? Drugi komputer zapyta swojego użytkownika.
 12167=LAN Pair: drugi komputer nie rozpoznaje tego. Sparuj je ponownie przyciskiem „Paruj...” w ustawieniach połączenia.
 12168=Ta sesja używa PHP Agent lub LAN Pair, które ma tylko wersja extra wtyczki (SFTPplug-...-extra.zip). Ta wersja łączy się tylko przez SSH.
+12169=Ta sesja jest ustawiona jednocześnie na proxy i na host pośredni. Wtyczka łączy się z hostem pośrednim bezpośrednio, proxy zostałoby pominięte. Zostaw jedno z nich.
+12170=Sesja pośrednia '{}' przechodzi przez proxy. Z hostem pośrednim wtyczka łączy się bezpośrednio, to proxy zostałoby pominięte, więc połączenie odrzucono. Wybierz sesję pośrednią bez proxy.
+12171=Ta sesja została zmieniona w programie, z którego ją zaimportowano (host, użytkownik, proxy lub host pośredni), po ostatnim skanowaniu. Użyj [Refresh] w jej folderze i spróbuj ponownie.
 12089=SFTP
 12090=Szukam peera LAN Pair w sieci lokalnej...
 12091={} s

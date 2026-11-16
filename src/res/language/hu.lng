@@ -366,7 +366,7 @@
 12119= LAN Pair munkamenet: 
 12120=Ezek a beállítások a(z) '{}' munkamenetből származnak, és csak olvashatók. Válassza a (kézi) elemet a jump-host listában, ha itt szeretne megadni egyet.
 12121=Ez a munkamenet olyan proxyn, jump hoston vagy alagúton keresztül megy, amely nem lett importálva. A közvetlen kapcsolat megkerülné, ezért elutasítva.
-12122=A munkamenet proxyra van állítva, de a fájl nem írja le. Proxy nélkül lett importálva, és közvetlenül fog csatlakozni — ellenőrizze a proxy beállítását.
+12122=A munkamenet proxyra van állítva, de a fájl nem írja le. Nem lett importálva: proxy nélkül közvetlenül csatlakozna.
 12123=Másolja a munkamenetet az F5 billentyűvel: a proxy is vele másolódik. A jelszót, ha kell, csatlakozáskor kéri.
 12124=Áthelyezés: a forrás megmaradt, mert a másolás egy már meglévő fájlra folytatódott
 12125=A forrás és a cél ugyanaz a fájl ugyanazon a szerveren. Egy fájl önmagára másolása csonkolná, ezért elutasítva.
@@ -413,6 +413,9 @@
 12166=A másik számítógép nem ismeri fel ezt. Újra párosítja őket? A másik számítógép megkérdezi a felhasználóját.
 12167=LAN Pair: a másik számítógép nem ismeri fel ezt. Párosítsa újra őket a kapcsolat beállításaiban a(z) „Párosítás...” gombbal.
 12168=Ez a munkamenet PHP Agentet vagy LAN Pairt használ, amelyek csak a bővítmény extra változatában vannak meg (SFTPplug-...-extra.zip). Ez a változat csak SSH-n keresztül kapcsolódik.
+12169=Ez a munkamenet egyszerre proxyn és átjáró gépen át van beállítva. A bővítmény közvetlenül éri el az átjáró gépet, a proxy kimaradna. Csak az egyiket tartsa meg.
+12170=A(z) '{}' átjáró munkamenet proxyn keresztül megy. Az átjáró gépet közvetlenül éri el, az a proxy kimaradna, ezért a kapcsolat el lett utasítva. Válasszon proxy nélküli átjáró munkamenetet.
+12171=Ezt a munkamenetet a legutóbbi beolvasás óta megváltoztatták abban a programban, ahonnan importálva lett (gép, felhasználó, proxy vagy átjáró gép). Használja a [Refresh]-t a mappájában, majd próbálja újra.
 12089=SFTP
 12104=(kézi)
 12105= (hiányzik)

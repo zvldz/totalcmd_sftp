@@ -366,7 +366,7 @@
 12119= Relácia LAN Pair: 
 12120=Tieto nastavenia pochádzajú z relácie '{}' a sú iba na čítanie. Vyberte (ručne) v zozname jump-hostov, ak chcete hostiteľa zadať tu.
 12121=Táto relácia vedie cez proxy, jump host alebo tunel, ktorý nebol importovaný. Priame pripojenie by ho obišlo, preto je odmietnuté.
-12122=Relácia je nastavená na proxy, ale súbor ju neopisuje. Bola importovaná bez proxy a bude sa pripájať priamo — skontrolujte nastavenie proxy.
+12122=Relácia je nastavená na proxy, ale súbor ju neopisuje. Relácia nebola importovaná: bez proxy by sa pripájala priamo.
 12123=Skopírujte reláciu klávesom F5: proxy sa skopíruje s ňou. Heslo, ak je potrebné, bude vyžiadané pri pripojení.
 12124=Presun: zdroj bol ponechaný, pretože kopírovanie pokračovalo do už existujúceho súboru
 12125=Zdroj aj cieľ sú ten istý súbor na rovnakom serveri. Kopírovanie súboru do seba samého by ho skrátilo, preto je odmietnuté.
@@ -413,6 +413,9 @@
 12166=Druhý počítač tento nerozpoznáva. Spárovať ich znova? Druhý počítač sa opýta svojho používateľa.
 12167=LAN Pair: druhý počítač tento nerozpoznáva. Spárujte ich znova tlačidlom „Párovať...“ v nastaveniach pripojenia.
 12168=Táto relácia používa PHP Agent alebo LAN Pair, ktoré má len verzia extra pluginu (SFTPplug-...-extra.zip). Táto verzia sa pripája len cez SSH.
+12169=Táto relácia je nastavená na proxy aj na skokový hostiteľ zároveň. Plugin sa ku skokovému hostiteľovi pripája priamo, proxy by bola vynechaná. Ponechajte len jedno.
+12170=Skoková relácia '{}' vedie cez proxy. Ku skokovému hostiteľovi sa plugin pripája priamo, tá proxy by bola vynechaná, preto je spojenie odmietnuté. Vyberte skokovú reláciu bez proxy.
+12171=Relácia bola po poslednom načítaní zmenená v programe, z ktorého bola importovaná (hostiteľ, používateľ, proxy alebo skokový hostiteľ). Použite [Refresh] v jej priečinku a skúste to znova.
 12089=SFTP
 12104=(ručne)
 12105= (chýba)

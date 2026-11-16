@@ -67,6 +67,10 @@ enum class JumpConfigStatus {
     NotConfigured,   // wanted, but neither a reference nor a host is set
     RefNotFound,     // referenced session no longer exists
     RefChained,      // referenced session has a jump host of its own
+    RefProxied,      // referenced session goes through a proxy, which the jump
+                     // connection would skip; the endpoint is filled in
+    WithProxy,       // the session itself has a proxy as well (set by the
+                     // connect path, which knows the proxy settings)
 };
 
 struct JumpConfig {

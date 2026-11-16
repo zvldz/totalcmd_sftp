@@ -501,6 +501,46 @@ int wmain(int argc, wchar_t** argv)
               "the replaced session has the file's settings and passwords only");
         DeleteFileW((local + L"in2.ini").c_str());
 
+        // A session file that names a proxy without describing it is not
+        // imported: without its proxy it would connect directly.
+        WriteFileBytes(local + L"noproxy.ini", "[x]\r\nserver=127.0.0.1:4\r\nproxynr=2\r\n");
+        Check(g_plugin.PutFileW((local + L"noproxy.ini").c_str(), L"\\it-noproxy.ini", 0) == FS_FILE_USERABORT &&
+              iniValue(L"it-noproxy", L"server") == L"(none)",
+              "a session whose proxy the file does not describe is refused");
+        DeleteFileW((local + L"noproxy.ini").c_str());
+
+        // One that describes it gets a local record, not the file's number.
+        WriteFileBytes(local + L"proxied.ini", "[x]\r\nserver=127.0.0.1:5\r\nproxynr=7\r\n"
+                                               "[proxy]\r\nproxytype=2\r\nproxyserver=10.9.8.7:3128\r\n");
+        Check(g_plugin.PutFileW((local + L"proxied.ini").c_str(), L"\\it-proxied.ini", 0) == FS_FILE_OK,
+              "a session with its proxy described is imported");
+        {
+            const std::wstring nr = iniValue(L"it-proxied", L"proxynr");
+            const std::wstring record = nr == L"1" ? L"proxy" : L"proxy" + nr;
+            Check(nr != L"(none)" && nr != L"0" && nr != L"7" &&
+                  iniValue(record.c_str(), L"proxyserver") == L"10.9.8.7:3128",
+                  "it points at a local record of that proxy");
+        }
+        // With a jump host as well, connecting would skip the proxy: refused
+        // before any connection is made.
+        WriteFileBytes(local + L"both.ini", "[x]\r\nserver=127.0.0.1:5\r\nproxynr=7\r\n"
+                                            "usejumphost=1\r\njumphost=127.0.0.1\r\njumpport=6\r\n"
+                                            "[proxy]\r\nproxytype=2\r\nproxyserver=10.9.8.7:3128\r\n");
+        Check(g_plugin.PutFileW((local + L"both.ini").c_str(), L"\\it-both.ini", 0) == FS_FILE_OK,
+              "a session with a proxy and a jump host is imported");
+        {
+            bool listedBoth = true;
+            g_lastMessage.clear();
+            ListDir(L"\\it-both", listedBoth);
+            Check(!listedBoth && g_lastMessage.find(L"jump host") != std::wstring::npos,
+                  "it is not connected: the proxy would be skipped");
+        }
+        g_plugin.DeleteFileW(L"\\it-both");
+        DeleteFileW((local + L"both.ini").c_str());
+
+        g_plugin.DeleteFileW(L"\\it-proxied");
+        DeleteFileW((local + L"proxied.ini").c_str());
+
         // A folder of sessions named with a trailing separator, as TC does
         // before copying a file into it, is listed, not connected to.
         Check(g_plugin.PutFileW((local + L"in.ini").c_str(), L"\\it-fold\\s1.ini", 0) == FS_FILE_OK,
