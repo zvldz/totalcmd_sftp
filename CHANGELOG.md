@@ -377,6 +377,22 @@ From this version the plugin comes in two builds: **classic**
     their old place anyway. They now stay where they were, and the error
     is reported.
   - A rename that changes only the case of a name did nothing.
+- **Session settings read back what was saved.** A stored password longer
+  than the read buffer — a long one, or any password once encrypted — no
+  longer loads empty. A file or folder mode that is not an octal number no
+  longer becomes 0 (no rights at all) but stays at 644 or 755, in the INI
+  and in the dialog. A jump-host port outside 1–65535 falls back to 22.
+- **Cancelling "Other..." codepage keeps the old one.** Closing the prompt
+  or typing something Windows has no codepage for left the session with an
+  unusable codepage; the saved one now stays.
+- **Long local paths and network folders.** A local path of 248 characters
+  or more, where creating a folder already fails, gets the long-path
+  prefix; a network path gets its own `\\?\UNC\` form instead of a prefix
+  Windows does not resolve, and a path that already has one is left as it
+  is.
+- **Basic proxy login no longer reads past the user name.** Encoding the
+  proxy credentials read one or two bytes beyond their end.
+- **Number-to-text conversions in the dialog check the buffer size.**
 - **Deleting a proxy record reported the result the wrong way round.**
 - **An upload is no longer taken for a session file.** After a
   connection to a session was closed, a `.ini` file copied into one of

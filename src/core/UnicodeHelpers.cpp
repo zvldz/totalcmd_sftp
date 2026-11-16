@@ -166,25 +166,41 @@ int ConvUTF8toUTF16(LPCSTR inbuf, size_t inlen, LPWSTR outbuf, size_t outmax, bo
 
 namespace {
 
-// Return true if name wasn't cut
+// A path the long-path API takes: past 248 characters (where creating a
+// folder already fails) an absolute one gets the \\?\ prefix, \\?\UNC\ for a
+// network path, after being made full — with the prefix Windows no longer
+// resolves '/' or "..". A path that has a prefix, or is relative, stays as
+// it is. False when the result does not fit `maxlen`.
 [[nodiscard]] bool MakeExtraLongNameW(LPWSTR outbuf, LPCWSTR inbuf, size_t maxlen) noexcept
 {
     if (!outbuf || !inbuf || maxlen == 0) return false;
+    outbuf[0] = L'\0';
 
     const size_t inLen = wcslen(inbuf);
-    
-    // Check bounds BEFORE calling wcscpy_s to avoid invalid parameter handler
-    if (inLen >= MAX_PATH) {
-        // Need space for "\\\\?\\" prefix + inLen + null terminator
-        if (inLen + 5 > maxlen) return false;
-        wcscpy_s(outbuf, maxlen, L"\\\\?\\");
-        wcscat_s(outbuf, maxlen, inbuf);
-    } else {
-        // Need space for inLen + null terminator
+    const bool prefixed = wcsncmp(inbuf, L"\\\\?\\", 4) == 0 || wcsncmp(inbuf, L"\\\\.\\", 4) == 0;
+    const bool absolute = (inLen >= 3 && inbuf[1] == L':' && (inbuf[2] == L'\\' || inbuf[2] == L'/')) ||
+                          (inLen >= 2 && inbuf[0] == L'\\' && inbuf[1] == L'\\');
+    if (inLen < 248 || prefixed || !absolute) {
         if (inLen + 1 > maxlen) return false;
         wcscpy_s(outbuf, maxlen, inbuf);
+        return true;
     }
-    return true;
+    try {
+        const DWORD need = GetFullPathNameW(inbuf, 0, nullptr, nullptr);
+        if (need == 0) return false;
+        std::wstring full(need, L'\0');
+        const DWORD len = GetFullPathNameW(inbuf, need, full.data(), nullptr);
+        if (len == 0 || len >= need) return false;
+        full.resize(len);
+        std::wstring out = full.rfind(L"\\\\", 0) == 0
+            ? L"\\\\?\\UNC\\" + full.substr(2)
+            : L"\\\\?\\" + full;
+        if (out.size() + 1 > maxlen) return false;
+        wcscpy_s(outbuf, maxlen, out.c_str());
+        return true;
+    } catch (...) {
+        return false;
+    }
 }
 
 } // anonymous namespace

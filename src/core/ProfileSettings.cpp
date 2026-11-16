@@ -87,6 +87,35 @@ int FindMatchingProxyNr(int proxytype, const std::string& server,
     return 0;
 }
 
+// A password as `section` keeps it under `key`, decrypted. The buffers take
+// what the writers allow (an encrypted value of up to 1024 characters), so a
+// long password is not lost to a short buffer; both are wiped.
+static std::string LoadPasswordSetting(LPCSTR section, LPCSTR key, LPCSTR iniFileName)
+{
+    std::array<char, 2048> stored{};
+    std::string out;
+    if (IniGetString(section, key, "", stored.data(), static_cast<DWORD>(stored.size() - 1), iniFileName)) {
+        std::array<char, 1024> plain{};
+        DecryptString(stored.data(), plain.data(), static_cast<UINT>(plain.size()));
+        out = plain.data();
+        SecureZeroMemory(plain.data(), plain.size());
+    }
+    SecureZeroMemory(stored.data(), stored.size());
+    return out;
+}
+
+// A file or folder mode: octal digits only, up to 07777; anything else
+// gives `fallback` rather than a mode of 0, which would lock the user out
+// of what is created.
+static int ParseModeSetting(const char* text, int fallback)
+{
+    const size_t len = strlen(text);
+    if (len == 0 || len > 5 || strspn(text, "01234567") != len)
+        return fallback;
+    const long mode = strtol(text, nullptr, 8);
+    return mode > 0 && mode <= 07777 ? static_cast<int>(mode) : fallback;
+}
+
 bool LoadProxySettingsFromNr(int proxynr, pConnectSettings ConnectResults, LPCSTR iniFileName)
 {
     if (proxynr > 0) {
@@ -101,13 +130,7 @@ bool LoadProxySettingsFromNr(int proxynr, pConnectSettings ConnectResults, LPCST
         IniGetString(proxyentry.data(), "proxyuser", "", proxyUser.data(), proxyUser.size() - 1, iniFileName);
         ConnectResults->proxyserver = proxyServer.data();
         ConnectResults->proxyuser = proxyUser.data();
-        std::array<char, 1024> szPassword{};
-        if (IniGetString(proxyentry.data(), "proxypassword", "", szPassword.data(), szPassword.size(), iniFileName)) {
-            std::array<char, MAX_PATH> decPassword{};
-            DecryptString(szPassword.data(), decPassword.data(), static_cast<UINT>(decPassword.size()));
-            ConnectResults->proxypassword = decPassword.data();
-        } else
-            ConnectResults->proxypassword.clear();
+        ConnectResults->proxypassword = LoadPasswordSetting(proxyentry.data(), "proxypassword", iniFileName);
         return (type != -1 || proxynr == 1);
     } else {
         ConnectResults->proxytype = sftp::Proxy::notused;
@@ -146,9 +169,9 @@ bool LoadServerSettings(LPCSTR DisplayName, pConnectSettings ConnectResults, LPC
     ConnectResults->useagent = IniGetInt(DisplayName, "useagent", 0, iniFileName) != 0;
 
     IniGetString(DisplayName, "filemod", "644", modbuf.data(), modbuf.size() - 1, iniFileName);
-    ConnectResults->filemod = strtol(modbuf.data(), nullptr, 8);
+    ConnectResults->filemod = ParseModeSetting(modbuf.data(), 0644);
     IniGetString(DisplayName, "dirmod", "755", modbuf.data(), modbuf.size() - 1, iniFileName);
-    ConnectResults->dirmod = strtol(modbuf.data(), nullptr, 8);
+    ConnectResults->dirmod = ParseModeSetting(modbuf.data(), 0755);
 
     ConnectResults->compressed = IniGetInt(DisplayName, "compression", 0, iniFileName) != 0;
     ConnectResults->scpfordata = IniGetInt(DisplayName, "scpfordata", 0, iniFileName) != 0;
@@ -191,14 +214,12 @@ bool LoadServerSettings(LPCSTR DisplayName, pConnectSettings ConnectResults, LPC
     ConnectResults->scpserver64bit = IniGetInt(DisplayName, "largefilesupport", -1, iniFileName);
     ConnectResults->password.clear();
     if (IniGetString(DisplayName, "password", "",  szPassword.data(),  szPassword.size(),  iniFileName)) {
-        if (!ConnectResults->useagent) {
-            std::array<char, MAX_PATH> decPassword{};
-            DecryptString(szPassword.data(), decPassword.data(), static_cast<UINT>(decPassword.size()));
-            ConnectResults->password = decPassword.data();
-        }
+        if (!ConnectResults->useagent)
+            ConnectResults->password = LoadPasswordSetting(DisplayName, "password", iniFileName);
         else if (strcmp(szPassword.data(), "!") == 0)
             ConnectResults->password = "\001";
     }
+    SecureZeroMemory(szPassword.data(), szPassword.size());
     ConnectResults->proxynr = IniGetInt(DisplayName, "proxynr", 0, iniFileName);
 
     LoadProxySettingsFromNr(ConnectResults->proxynr, ConnectResults, iniFileName);
@@ -223,21 +244,15 @@ bool LoadServerSettings(LPCSTR DisplayName, pConnectSettings ConnectResults, LPC
         ConnectResults->jump_pubkeyfile  = jumpPub.data();
         ConnectResults->jump_privkeyfile = jumpPriv.data();
         ConnectResults->jump_fingerprint = jumpFp.data();
+        const int jumpPort = static_cast<int>(IniGetInt(DisplayName, "jumpport", 22, iniFileName));
         ConnectResults->jump_port        = static_cast<unsigned short>(
-            IniGetInt(DisplayName, "jumpport", 22, iniFileName));
+            jumpPort > 0 && jumpPort <= 65535 ? jumpPort : 22);
         ConnectResults->jump_useagent    = IniGetInt(DisplayName, "jumpuseagent", 0, iniFileName) != 0;
         std::array<char, MAX_PATH> jumpSessRef{};
         IniGetString(DisplayName, "jumpsessionref", "", jumpSessRef.data(), jumpSessRef.size() - 1, iniFileName);
         ConnectResults->jump_session_ref  = jumpSessRef.data();
 
-        std::array<char, 1024> jumpPass{};
-        if (IniGetString(DisplayName, "jumppassword", "", jumpPass.data(), jumpPass.size(), iniFileName)) {
-            std::array<char, MAX_PATH> decJumpPass{};
-            DecryptString(jumpPass.data(), decJumpPass.data(), static_cast<UINT>(decJumpPass.size()));
-            ConnectResults->jump_password = decJumpPass.data();
-        } else {
-            ConnectResults->jump_password.clear();
-        }
+        ConnectResults->jump_password = LoadPasswordSetting(DisplayName, "jumppassword", iniFileName);
     }
 
     ConnectResults->neednewchannel = false;

@@ -2772,9 +2772,15 @@ void ConnectionDialog::OnOk()
                 if (cbline >= 0 && cbline < kCodepageListCount) {
                     cp = codepagelist[cbline];
                     if (cp == -3) {
+                        // Cancel, or a number Windows does not know as a code
+                        // page, keeps the one the session had.
+                        cp = m_settings->codepage;
                         if (RequestProcI(PluginNumber, RT_Other, "Code page", "Code page (e.g. 28591):",
-                                        strbuf.data(), strbuf.size() - 1))
-                            cp = atoi(strbuf.data());
+                                        strbuf.data(), strbuf.size() - 1)) {
+                            const int typed = atoi(strbuf.data());
+                            if (typed > 0 && IsValidCodePage(static_cast<UINT>(typed)))
+                                cp = typed;
+                        }
                     } else if (cp == -4) {
                         cp = m_settings->codepage;
                     }
@@ -2785,10 +2791,19 @@ void ConnectionDialog::OnOk()
         }
     }
 
+    // Octal digits only: anything else would become a mode of 0, which
+    // locks the owner out of what is created.
+    const auto parseMode = [](const char* text, int fallback) {
+        const size_t len = strlen(text);
+        if (len == 0 || len > 5 || strspn(text, "01234567") != len)
+            return fallback;
+        const long mode = strtol(text, nullptr, 8);
+        return mode > 0 && mode <= 07777 ? static_cast<int>(mode) : fallback;
+    };
     GetDlgItemTextI(m_hWnd, IDC_FILEMOD, modbuf.data(), modbuf.size() - 1);
-    m_settings->filemod = modbuf[0] == 0 ? 0644 : strtol(modbuf.data(), nullptr, 8);
+    m_settings->filemod = parseMode(modbuf.data(), 0644);
     GetDlgItemTextI(m_hWnd, IDC_DIRMOD, modbuf.data(), modbuf.size() - 1);
-    m_settings->dirmod  = modbuf[0] == 0 ? 0755 : strtol(modbuf.data(), nullptr, 8);
+    m_settings->dirmod  = parseMode(modbuf.data(), 0755);
 
     m_settings->proxynr = GetProxyNrFromCombo(m_hWnd);
 

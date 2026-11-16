@@ -377,10 +377,16 @@ int MimeEncodeData(LPCVOID indata, size_t inlen, LPSTR outstr, size_t maxlen)
     std::string result;
     result.reserve(((inlen + 2) / 3) * 4);
     
+    // The last group is copied into a zero-padded triple so the encoder never
+    // reads past the end of the input.
     std::array<char, 8> buf{};
-    for (SSIZE_T j = static_cast<SSIZE_T>(inlen); j > 0; j -= 3) {
-        EncodeMimeTriple(p, static_cast<size_t>(j), buf.data());
-        p += 3;
+    for (size_t left = inlen; left > 0; ) {
+        const size_t take = left < 3 ? left : 3;
+        BYTE triple[3] = {};
+        memcpy(triple, p, take);
+        EncodeMimeTriple(triple, take, buf.data());
+        p += take;
+        left -= take;
         result += buf.data();
     }
     

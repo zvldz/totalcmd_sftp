@@ -51,11 +51,6 @@ typedef const VOID *LPCVOID;
 #define countof(array) (sizeof(array) / sizeof(array[0]))
 #endif
 
-// Safe string copy for legacy code compatibility
-#ifndef _itoa_s
-#define _itoa_s(nr,buf,sz,rdx)  _itoa((nr),(buf),(rdx))
-#endif
-
 // Modern C++ namespace for plugin internals
 #ifdef __cplusplus
 
