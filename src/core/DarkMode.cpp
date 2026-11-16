@@ -258,6 +258,10 @@ LRESULT CALLBACK ButtonProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR 
     case WM_LBUTTONUP:
     case WM_KEYUP:
     case WM_MOUSELEAVE: {
+        // A hidden control draws nothing, and WM_SETREDRAW TRUE would also set
+        // WS_VISIBLE on it: it would show up on the next repaint.
+        if (!(GetWindowLongW(hwnd, GWL_STYLE) & WS_VISIBLE))
+            break;
         // The default handlers draw the control directly; it is drawn again
         // in the dark colours right after.
         SendMessageW(hwnd, WM_SETREDRAW, FALSE, 0);

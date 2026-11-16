@@ -154,8 +154,11 @@ std::vector<Item> Children(HWND hDlg, bool visibleOnly)
     return items;
 }
 
-// Visible controls grouped into rows by vertical overlap; group boxes, which
-// span many rows, are left out.
+// Visible controls grouped into rows by vertical overlap with the row's first
+// (topmost) control; group boxes, which span many rows, are left out. The
+// overlap is not measured against the row's growing extent: a taller control
+// beside two stacked check boxes would otherwise chain them into one row, and
+// their widths would be added up as if they stood side by side.
 std::vector<std::vector<Item>> Rows(HWND hDlg)
 {
     std::vector<Item> items;
@@ -172,8 +175,6 @@ std::vector<std::vector<Item>> Rows(HWND hDlg)
             const int overlap = (std::min)(spans[r].bottom, it.rect.bottom) - (std::max)(spans[r].top, it.rect.top);
             if (overlap * 2 >= (std::min)(Height(spans[r]), Height(it.rect))) {
                 rows[r].push_back(it);
-                spans[r].top = (std::min)(spans[r].top, it.rect.top);
-                spans[r].bottom = (std::max)(spans[r].bottom, it.rect.bottom);
                 placed = true;
             }
         }

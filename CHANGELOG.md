@@ -123,6 +123,15 @@ this fork's 10.0.2.2. Each entry names where it came from.
 
 ### Fixes
 
+- **The connection dialog keeps its width.** Two check boxes stacked
+  beside the taller System list were taken for one row, their widths
+  added up, and the dialog grew to about twice its width — more on every
+  re-layout.
+- **Hidden controls stay hidden in the dark theme.** A hidden check box or
+  group box that was enabled or relabelled got marked visible and showed
+  up on the next repaint, after Alt+Tab say: the password manager check
+  box under Change password..., the LAN Pair group title over the
+  permissions group.
 - **A wrong SFTP server command is named as the cause.** When the command
   set under More... did not start SFTP, the error suggested turning on SCP
   for everything; it now points at the command.
