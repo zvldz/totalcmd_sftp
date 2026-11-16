@@ -589,7 +589,7 @@ int SftpQuoteCommand2(pConnectSettings cs, const char* remotedir, const char* cm
     display += cmd;
     std::replace(display.begin(), display.end(), '\\', '/');
     ShowStatus(display.c_str());
-    SFTP_LOG("SHELL", "Quote command: %s", cmd);
+    SFTP_LOG("SHELL", "Quote command: %zu bytes", strlen(cmd));
 
     auto channel = ConnectChannel(cs->session.get(), cs->sock);
     if (!channel)

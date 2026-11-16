@@ -109,7 +109,7 @@ bool InitializeSftpSubsystemIfNeeded(pConnectSettings ConnectSettings, int progr
     if (serverCommand.empty())
         SFTP_LOG("CONN", "Initializing SFTP subsystem");
     else
-        SFTP_LOG("CONN", "Initializing SFTP via server command: %s", serverCommand.c_str());
+        SFTP_LOG("CONN", "Initializing SFTP via the configured server command");
     ShowStatusId(IDS_SESSION_STARTUP, " (SFTP)", true);
     // A host with no SFTP subsystem — dropbear on a camera or a router —
     // may never answer the request, and the call keeps saying "not yet".

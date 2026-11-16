@@ -1027,7 +1027,7 @@ int ShellScpUploadFile(
 
     std::string cmd = "scp -t ";
     cmd += remotePathArg;
-    SFTP_LOG("SCP", "upload command: %s", cmd.c_str());
+    SFTP_LOG("SCP", "upload: sending scp -t");
     if (!SendChannelCommandNoEof(cs->session.get(), channel.get(), cmd.c_str(), cs->sock)) {
         SFTP_LOG("SCP", "upload: sending the command failed");
         DisconnectShell(channel.get());

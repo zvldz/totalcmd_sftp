@@ -527,7 +527,7 @@ Single-language mode strips unused RC language blocks before compile and restore
 
 **Debug configuration:**
 - `SFTP_DEBUG_ENABLED=1` → `OutputDebugString` output
-- `SFTP_DEBUG_TO_FILE=0` by default; set to 1 manually for file logging to `C:\temp\sftpplug_debug.log`
+- `SFTP_DEBUG_TO_FILE=0` by default; set to 1 manually for file logging to `%TEMP%\sftpplug.log`
 
 **Rebuilding dependency libraries (`build-deps.ps1`):**
 

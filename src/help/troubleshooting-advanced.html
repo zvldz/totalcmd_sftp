@@ -445,7 +445,7 @@ XFER: Complete
 
 <h3>Debug Logging Performance</h3>
 <p><b>Symptom:</b> Slow file transfers in Release build.</p>
-<p><b>Cause:</b> Debug logging was enabled by default, creating C:\temp\sftpplug.log on every operation.</p>
+<p><b>Cause:</b> Debug logging was enabled by default, writing to sftpplug.log on every operation.</p>
 <p><b>Fix:</b> Debug logging now disabled in Release builds (LOG_ENABLED=0 in global.h). No action needed.</p>
 
 <h2>Getting Help</h2>

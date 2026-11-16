@@ -286,8 +286,36 @@ bool IsInterestingVehCode(DWORD code) noexcept
     }
 }
 
+// Set while a crash hook is logging on this thread: a fault inside the
+// logging or DbgHelp is passed on instead of being logged again.
+thread_local bool t_in_crash_hook = false;
+
+// True when the exception was raised by code in this plugin module. The
+// vectored handler sees every exception in Total Commander, other plugins
+// included; only ours are logged.
+bool RaisedInThisModule(const EXCEPTION_RECORD* rec) noexcept
+{
+    HMODULE self = nullptr;
+    HMODULE owner = nullptr;
+    if (!rec ||
+        !::GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                              GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                              reinterpret_cast<LPCWSTR>(&RaisedInThisModule), &self) ||
+        !::GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                              GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                              reinterpret_cast<LPCWSTR>(rec->ExceptionAddress), &owner))
+        return false;
+    return owner == self;
+}
+
 LONG WINAPI CrashFilter(EXCEPTION_POINTERS* ep) noexcept
 {
+    if (t_in_crash_hook) {
+        if (g_prev_filter)
+            return g_prev_filter(ep);
+        return EXCEPTION_CONTINUE_SEARCH;
+    }
+    t_in_crash_hook = true;
     LogExceptionBasic("UEF", ep);
 
     // Stack trace — done after basic info so we still see something if this
@@ -296,6 +324,7 @@ LONG WINAPI CrashFilter(EXCEPTION_POINTERS* ep) noexcept
     // unwind path).
     const std::string trace = BuildStackTrace(0);
     SFTP_LOG("CRASH", "!!! [UEF] Stack trace:\n%s", trace.c_str());
+    t_in_crash_hook = false;
 
     // Hand off to whatever was installed before us (typically WerFault or
     // Total Commander's own filter). EXCEPTION_CONTINUE_SEARCH preserves the
@@ -312,12 +341,15 @@ LONG WINAPI VectoredCrashFilter(EXCEPTION_POINTERS* ep) noexcept
     // codes only so we don't drown in noise from regular C++ throws.
     if (!ep || !ep->ExceptionRecord)
         return EXCEPTION_CONTINUE_SEARCH;
-    if (!IsInterestingVehCode(ep->ExceptionRecord->ExceptionCode))
+    if (t_in_crash_hook || !IsInterestingVehCode(ep->ExceptionRecord->ExceptionCode) ||
+        !RaisedInThisModule(ep->ExceptionRecord))
         return EXCEPTION_CONTINUE_SEARCH;
 
+    t_in_crash_hook = true;
     LogExceptionBasic("VEH", ep);
     const std::string trace = BuildStackTrace(0);
     SFTP_LOG("CRASH", "!!! [VEH] Stack trace:\n%s", trace.c_str());
+    t_in_crash_hook = false;
     return EXCEPTION_CONTINUE_SEARCH;   // never swallow — let SEH continue
 }
 
@@ -361,20 +393,17 @@ void OnPureCall() noexcept
     std::abort();
 }
 
-void OnInvalidParameter(const wchar_t*, const wchar_t*, const wchar_t*,
-                        unsigned int, uintptr_t) noexcept
-{
-    SFTP_LOG("CRASH", "!!! [INVPARAM] CRT invalid parameter");
-    const std::string trace = BuildStackTrace(0);
-    SFTP_LOG("CRASH", "!!! [INVPARAM] Stack trace:\n%s", trace.c_str());
-    // Don't abort — let CRT decide. Returning falls through to the default
-    // CRT behaviour (typically debug break in debug builds, no-op in release).
-}
-
 } // anonymous namespace
 
+// The hooks only write to the log, so without logging none is installed.
+// The CRT's invalid-parameter handler is left alone: its default ends the
+// process at once, where a handler that returns would let an overflow
+// caught by a *_s function carry on.
 void InstallCrashHandler() noexcept
 {
+#if !SFTP_DEBUG_ENABLED
+    return;
+#else
     // 1. Top-level SEH filter — for unhandled hardware exceptions.
     g_prev_filter = ::SetUnhandledExceptionFilter(CrashFilter);
 
@@ -386,7 +415,6 @@ void InstallCrashHandler() noexcept
     //    CRTs and would otherwise leave no trace.
     g_prev_terminate = std::set_terminate(OnTerminate);
     _set_purecall_handler(OnPureCall);
-    _set_invalid_parameter_handler(OnInvalidParameter);
 
     // 4. POSIX signals (CRT layer). On Windows MSVC these fire for abort(),
     //    /GS buffer-overrun checks (signal-style fallback), and a few CRT
@@ -395,11 +423,17 @@ void InstallCrashHandler() noexcept
     std::signal(SIGSEGV, OnSignal);
     std::signal(SIGFPE,  OnSignal);
     std::signal(SIGILL,  OnSignal);
+#endif
 }
 
 void UninstallCrashHandler() noexcept
 {
-    ::SetUnhandledExceptionFilter(g_prev_filter);
+#if SFTP_DEBUG_ENABLED
+    // A filter set after ours belongs to someone else and stays; ours is
+    // replaced by the one it took over from.
+    const LPTOP_LEVEL_EXCEPTION_FILTER current = ::SetUnhandledExceptionFilter(g_prev_filter);
+    if (current != CrashFilter)
+        ::SetUnhandledExceptionFilter(current);
     g_prev_filter = nullptr;
     if (g_veh_handle) {
         ::RemoveVectoredExceptionHandler(g_veh_handle);
@@ -412,6 +446,7 @@ void UninstallCrashHandler() noexcept
     std::signal(SIGSEGV, SIG_DFL);
     std::signal(SIGFPE,  SIG_DFL);
     std::signal(SIGILL,  SIG_DFL);
+#endif
 }
 
 // ============================================================================

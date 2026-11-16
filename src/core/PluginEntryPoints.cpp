@@ -5,6 +5,7 @@
 #include <winsock2.h>
 #include <windows.h>
 #include <shellapi.h>
+#include <delayimp.h>
 #include <stdlib.h>
 #include <array>
 #include <memory>
@@ -305,6 +306,22 @@ LANGID GetConfiguredUiLanguageId() noexcept
     return g_configuredUiLangId;
 }
 
+
+// dbghelp.dll and version.dll are delay-loaded (see SFTPplug.vsprops) and
+// taken from System32 only: a file of that name beside TC or the plugin is
+// never loaded in their place. Should System32-only loading be unavailable,
+// the loader's own search is used.
+static FARPROC WINAPI LoadDelayedFromSystem32(unsigned notify, PDelayLoadInfo info)
+{
+    if (notify != dliNotePreLoadLibrary || !info || !info->szDll)
+        return nullptr;
+    std::array<wchar_t, MAX_PATH> name{};
+    if (!MultiByteToWideChar(CP_ACP, 0, info->szDll, -1, name.data(), static_cast<int>(name.size())))
+        return nullptr;
+    return reinterpret_cast<FARPROC>(LoadLibraryExW(name.data(), nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32));
+}
+
+extern "C" const PfnDliHook __pfnDliNotifyHook2 = LoadDelayedFromSystem32;
 
 BOOL APIENTRY DllMain( HANDLE hModule, DWORD ul_reason_for_call, LPVOID lpReserved)
 {

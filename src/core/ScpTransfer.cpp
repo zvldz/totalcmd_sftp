@@ -386,7 +386,7 @@ int ShellScpDownloadFile(pConnectSettings cs,
 
     std::string cmd = "scp -f ";
     cmd += remotePathArg;
-    SFTP_LOG("SCP", "download command: %s", cmd.c_str());
+    SFTP_LOG("SCP", "download: sending scp -f");
     if (!SendChannelCommandNoEof(cs->session.get(), channel.get(), cmd.c_str(), cs->sock)) {
         SFTP_LOG("SCP", "download: sending the command failed");
         return SFTP_READFAILED;

@@ -24,11 +24,13 @@ jobs:
 
     steps:
       - name: Checkout with submodules
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
         with:
           # openssl and libssh2 sources live as submodules and are
-          # rebuilt from source on every run (cached below).
-          submodules: recursive
+          # rebuilt from source on every run. Only these two: OpenSSL's own
+          # submodules are test suites and external projects the build
+          # does not use.
+          submodules: true
           # Full history so `git describe` and CHANGELOG lookup work.
           fetch-depth: 0
 
@@ -61,8 +63,30 @@ jobs:
           "prerelease=$isPre"     >> $env:GITHUB_OUTPUT
           Write-Host "Build metadata: tag=$tag sha=$sha date=$date prerelease=$isPre"
 
+      - name: Check tag against the sources
+        shell: pwsh
+        # The tag names the version the plugin reports, and a stable release
+        # never ships with the debug log on (it writes every operation to
+        # %TEMP%\sftpplug.log). Pre-releases keep the log for testing.
+        run: |
+          $version = "${{ steps.meta.outputs.tag }}".TrimStart('v') -replace '-(beta|rc)\d*$', ''
+          $header = Get-Content -Raw src\include\version.h
+          if ($header -notmatch '#define VER_FILEVERSION_STR\s+"([^"]+)"') {
+            throw "version.h: VER_FILEVERSION_STR not found"
+          }
+          if ($Matches[1] -ne $version) {
+            throw "Tag $version does not match version.h $($Matches[1])"
+          }
+          if ("${{ steps.meta.outputs.prerelease }}" -ne "true") {
+            $global = Get-Content -Raw src\include\global.h
+            if ($global -notmatch '(?m)^#define LOG_ENABLED\s+0\b') {
+              throw "Stable tag with LOG_ENABLED on in global.h"
+            }
+          }
+          Write-Host "Tag matches version.h $version"
+
       - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v2
+        uses: microsoft/setup-msbuild@6fb02220983dee41ce7ae257b6f4d8f9bf5ed4ce  # v2.0.0
 
       - name: Install NASM
         # OpenSSL 3.x requires NASM for both x64 and x86 assembly. Not
@@ -103,14 +127,23 @@ jobs:
           $tag = "${{ steps.meta.outputs.tag }}"
           # Two builds: classic (SSH only) and extra (+ PHP Agent, LAN Pair).
           $paths = @()
+          # The symbols archive resolves crash-report addresses of this build.
           foreach ($pair in @(@("bin\SFTPplug.zip", "bin\SFTPplug-$tag.zip"),
-                              @("bin\SFTPplug-extra.zip", "bin\SFTPplug-$tag-extra.zip"))) {
+                              @("bin\SFTPplug-extra.zip", "bin\SFTPplug-$tag-extra.zip"),
+                              @("bin\SFTPplug-pdb.zip", "bin\SFTPplug-$tag-pdb.zip"))) {
             if (-not (Test-Path $pair[0])) {
               throw "Build did not produce $($pair[0])"
             }
             Copy-Item $pair[0] $pair[1]
             $paths += $pair[1]
           }
+          # Checksums of the published files, in the format `sha256sum -c`
+          # reads, so a download can be checked against the release page.
+          $sums = foreach ($p in $paths) {
+            "$((Get-FileHash -Algorithm SHA256 $p).Hash.ToLowerInvariant())  $(Split-Path -Leaf $p)"
+          }
+          $sums -join "`n" | Out-File -Encoding ascii -NoNewline bin\SHA256SUMS
+          $paths += "bin\SHA256SUMS"
           # Newline-separated, as the release step takes a file list.
           "paths<<EOF" >> $env:GITHUB_OUTPUT
           $paths -join "`n" >> $env:GITHUB_OUTPUT
@@ -144,7 +177,7 @@ jobs:
           "path=release-notes.md" >> $env:GITHUB_OUTPUT
 
       - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65  # v2.6.2
         with:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}

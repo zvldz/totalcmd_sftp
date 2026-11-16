@@ -43,6 +43,7 @@
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <ControlFlowGuard>Guard</ControlFlowGuard>
       <SpectreMitigation>Spectre</SpectreMitigation>
+      <SDLCheck>true</SDLCheck>
     </ClCompile>
     
     <ResourceCompile>
@@ -53,7 +54,9 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <AdditionalLibraryDirectories>$(SolutionDir)..\src\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>Ws2_32.lib;Iphlpapi.lib;shlwapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Ws2_32.lib;Iphlpapi.lib;shlwapi.lib;delayimp.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <!-- Loaded on first use, from System32 only (see the hook in PluginEntryPoints.cpp). -->
+      <DelayLoadDLLs>dbghelp.dll;version.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <ModuleDefinitionFile>sftpplug.def</ModuleDefinitionFile>
       <OptimizeReferences>true</OptimizeReferences>

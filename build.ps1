@@ -423,33 +423,40 @@ version=$pluginVersion
             Add-ZipFile  (Join-Path $buildOutputDir    "$projectName.wfx") "$projectName.wfx64"
             Add-ZipFile  (Join-Path $buildOutputDirX86 "$projectName.wfx") "$projectName.wfx"
             # NOTE: sftpplug.pdb is intentionally not packed for release. To ship
-            # a diagnostic build that resolves stack frames in C:\temp\sftpplug.log,
+            # a diagnostic build that resolves stack frames in %TEMP%\sftpplug.log,
             # set LOG_ENABLED=1 in global.h and re-enable PDB inclusion here.
             Add-ZipString $pluginstInf "pluginst.inf"
 
-            # The PHP agent script goes only with the build that speaks to it.
-            if ($v.Extra -and (Test-Path $phpAgentSource)) { Add-ZipFile $phpAgentSource "sftp.php" }
-            if (Test-Path $helpCompiled)   { Add-ZipFile $helpCompiled   "$projectName-help.html" }
+            # Every part of the package is required: a missing one fails the
+            # build instead of shipping a package without it. The help page
+            # is left out only when the build was told not to make it.
+            if ($v.Extra) { Add-ZipFile $phpAgentSource "sftp.php" }
+            if ($buildHelp) { Add-ZipFile $helpCompiled "$projectName-help.html" }
 
-            $tplSource = Join-Path $projectRoot "src\res\sftpplug.tpl"
-            if (Test-Path $tplSource)      { Add-ZipFile $tplSource      "sftpplug.tpl" }
+            Add-ZipFile (Join-Path $projectRoot "src\res\sftpplug.tpl") "sftpplug.tpl"
 
-            # Pack all external language files
+            # Entry paths use '/', as the ZIP format specifies.
             $lngDir = Join-Path $projectRoot "src\res\language"
-            foreach ($lngFile in Get-ChildItem -Path $lngDir -Filter "*.lng" -ErrorAction SilentlyContinue) {
-                Add-ZipFile $lngFile.FullName "language\$($lngFile.Name)"
+            $lngFiles = @(Get-ChildItem -Path $lngDir -Filter "*.lng" -ErrorAction Stop)
+            if ($lngFiles.Count -eq 0) { throw "No language files in $lngDir" }
+            foreach ($lngFile in $lngFiles) {
+                Add-ZipFile $lngFile.FullName "language/$($lngFile.Name)"
             }
 
-            $readmeSource = Join-Path $projectRoot "src\help\readme.txt"
-            if (Test-Path $readmeSource)   { Add-ZipFile $readmeSource   "readme.txt" }
-
-            Write-Host "  Created: $($v.Zip)" -ForegroundColor Green
+            Add-ZipFile (Join-Path $projectRoot "src\help\readme.txt") "readme.txt"
+            $zipOk = $true
         } catch {
             Write-Host "  Failed to create ZIP: $($_.Exception.Message)" -ForegroundColor Red
+            $zipOk = $false
         } finally {
             $zip.Dispose()
             $outStream.Dispose()
         }
+        if (-not $zipOk) {
+            Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
+            exit 1
+        }
+        Write-Host "  Created: $($v.Zip)" -ForegroundColor Green
     }
 }
 
@@ -518,8 +525,37 @@ if (-not $nodeploy) {
 }
 
 # ============================================================================
-# Step 7: Clean up intermediate build directory
+# Step 7: Keep the symbols, then clean up the intermediate build directory
 # ============================================================================
+# The PDBs are not shipped to users, but a stack address from a crash report
+# can be resolved only against the PDB of that exact build, so they are kept
+# beside the packages (one archive, a folder per variant and platform).
+if (-not $nozip) {
+    $pdbZipPath = Join-Path $binDir "$projectName-pdb.zip"
+    if (Test-Path $pdbZipPath) { Remove-Item $pdbZipPath -Force }
+    $pdbs = @(foreach ($v in $variants) {
+        foreach ($platform in @('x64', 'Win32')) {
+            $pdb = Join-Path (Get-VariantOutDir $v $platform) "$projectName.pdb"
+            if (Test-Path $pdb) { [pscustomobject]@{ Path = $pdb; Entry = "$($v.Name)-$platform/$projectName.pdb" } }
+        }
+    })
+    if ($pdbs.Count -gt 0) {
+        $pdbStream = [System.IO.File]::Open($pdbZipPath, [System.IO.FileMode]::Create)
+        $pdbZip = [System.IO.Compression.ZipArchive]::new($pdbStream, [System.IO.Compression.ZipArchiveMode]::Create)
+        try {
+            foreach ($p in $pdbs) {
+                $dst = $pdbZip.CreateEntry($p.Entry, [System.IO.Compression.CompressionLevel]::Optimal).Open()
+                $src = [System.IO.File]::OpenRead($p.Path)
+                try { $src.CopyTo($dst) } finally { $src.Dispose(); $dst.Dispose() }
+            }
+        } finally {
+            $pdbZip.Dispose()
+            $pdbStream.Dispose()
+        }
+        Write-Host "  Symbols: $projectName-pdb.zip ($($pdbs.Count) PDB)" -ForegroundColor Gray
+    }
+}
+
 $buildBinDir = Join-Path $buildDir "bin"
 if (Test-Path $buildBinDir) {
     Remove-Item $buildBinDir -Recurse -Force -ErrorAction SilentlyContinue

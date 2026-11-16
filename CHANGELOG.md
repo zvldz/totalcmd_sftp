@@ -19,6 +19,25 @@ From this version the plugin comes in two builds: **classic**
 
 ### Security
 
+- **Debug log and crash hooks.**
+  - The log of a test build is written to `%TEMP%\sftpplug.log`, which
+    only the user can open, instead of `C:\temp`, where other users of the
+    machine could read it or put a file in its place. Quote commands, the
+    SFTP server command and SCP commands are no longer written to it.
+  - The crash hooks are installed only in a build with the log on, since
+    the log is all they write to. The vectored handler logs only
+    exceptions raised in the plugin; before, it built a stack trace for
+    every exception in Total Commander and its other plugins.
+  - The plugin no longer replaces the C runtime's invalid-parameter
+    handler, whose default stops at once: with the replacement, an
+    overflow caught by a checked string function carried on.
+  - A crash filter set after the plugin's is not removed when the plugin
+    is unloaded.
+  - A release built from a stable tag is refused when the log is on or the
+    tag does not match the version in the sources.
+- **System DLLs from System32 only.** `dbghelp.dll` and `version.dll` are
+  loaded when first needed and only from System32, so a file of that name
+  beside Total Commander is not loaded instead.
 - **A session file can no longer take a password from the password
   manager.** A file dropped onto the plugin with `password=!` and a server
   of its choosing was given the password Total Commander's password
@@ -545,6 +564,14 @@ From this version the plugin comes in two builds: **classic**
   and the Mica caption. A layout test renders every dialog in every
   language and checks for clipped, overlapping or outside controls.
   *From wesmar/sftp 10.3.0.0.*
+- **Release packaging.** A package missing any of its parts fails the
+  build instead of being published without it; language files are stored
+  under `language/` with a forward slash, as ZIP specifies. Each release
+  also carries the debug symbols of its build (`-pdb.zip`, for crash
+  reports) and `SHA256SUMS` for checking a download. The workflow's actions
+  are pinned to exact commits, the checkout fetches only the OpenSSL and
+  libssh2 sources, and the compiler's extra security checks (`/sdl`) are
+  on.
 - **"Protect password with password manager" without "(TC>=7.5)".** Every
   Total Commander the plugin runs in is newer than that.
 - **No more argon2 library.** Argon2 for PuTTY keys of format 3 comes from
