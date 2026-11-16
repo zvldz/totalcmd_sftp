@@ -412,6 +412,7 @@
 12165=Il comando del server SFTP non ha avviato una sessione SFTP. Controlla il percorso in «Altro...» nelle impostazioni di connessione, oppure svuotalo per usare il sottosistema SFTP del server.
 12166=L'altro computer non riconosce questo. Abbinarli di nuovo? L'altro computer chiederà al suo utente.
 12167=LAN Pair: l'altro computer non riconosce questo. Abbinali di nuovo con «Abbina...» nelle impostazioni di connessione.
+12168=Questa sessione usa PHP Agent o LAN Pair, presenti solo nella versione extra del plugin (SFTPplug-...-extra.zip). Questa versione si connette solo via SSH.
 12089=SFTP
 12104=(manuale)
 12105= (mancante)

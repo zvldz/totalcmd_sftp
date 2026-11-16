@@ -19,9 +19,10 @@
 #include "ConnectionDialog.h"
 #include "ProfileSettings.h"
 #include "DllExceptionBarrier.h"
+#if SFTP_EXTRA
 #include "LanPairSession.h"
+#endif
 #include "PluginEntryPointsInternal.h"
-#include "PhpAgentClient.h"
 #include "ImportSourceRegistry.h"
 #include "ImportCache.h"
 #include "VirtualSessionRegistry.h"
@@ -73,10 +74,12 @@ private:
 // Find handle state types
 // ---------------------------------------------------------------------------
 
+#if SFTP_EXTRA
 struct LanPairFindState {
     std::vector<LanPairSession::DirEntry> entries;
     size_t index = 0;
 };
+#endif
 
 // Plugin-side namespace entry: a saved session, a folder grouping saved
 // sessions, the [F7 = new connection] pseudo-helper, or — inside the
@@ -133,8 +136,9 @@ static HANDLE CreateLastFindHandle(LPVOID sftpdataptr, pConnectSettings serverid
 }
 
 // ---------------------------------------------------------------------------
-// LAN Pair helpers for directory enumeration
+// LAN Pair helpers for directory enumeration (extra build only)
 // ---------------------------------------------------------------------------
+#if SFTP_EXTRA
 
 // Convert a wide TC remote path to a UTF-8 Windows path for the LAN protocol.
 // TC uses backslash separators; the remote side expects Windows paths directly.
@@ -193,6 +197,7 @@ static HANDLE LanCreateFindHandle(std::vector<LanPairSession::DirEntry> entries,
     lf->sftpdataptr = state.release();
     return static_cast<HANDLE>(lf.release());
 }
+#endif // SFTP_EXTRA
 
 // ---------------------------------------------------------------------------
 // Plugin-side folder enumeration
@@ -1049,6 +1054,7 @@ HANDLE WINAPI FsFindFirstW(LPCWSTR Path, LPWIN32_FIND_DATAW FindData)
         GetServerIdAndRelativePathFromPathW(Path, remotedir.data(), remotedir.size() - 1);
 
         // LAN Pair: use our own directory enumeration.
+#if SFTP_EXTRA
         if (IsLanPairTransport(serverid)) {
             SFTP_LOG("LAN", "FsFindFirstW LAN path='%s'", unicode_util::wstring_to_utf8(Path).c_str());
             if (!serverid->lanSession || !serverid->lanSession->isConnected()) {
@@ -1090,6 +1096,7 @@ HANDLE WINAPI FsFindFirstW(LPCWSTR Path, LPWIN32_FIND_DATAW FindData)
             newConnGuard.commit();
             return LanCreateFindHandle(std::move(entries), FindData, serverid);
         }
+#endif
 
         // Retrieve the directory
         SFTP_LOG("FIND", "FsFindFirstW: connection ready, calling SftpFindFirstFileW remotedir='%s'", unicode_util::wstring_to_utf8(remotedir.data()).c_str());
@@ -1183,6 +1190,7 @@ BOOL WINAPI FsFindNextW(HANDLE Hdl, LPWIN32_FIND_DATAW FindData)
             FillFindDataFromPluginEntry(*FindData, state->entries[state->index++]);
             return true;
         }
+#if SFTP_EXTRA
         if (lf->isLanPair) {
             auto* state = static_cast<LanPairFindState*>(lf->sftpdataptr);
             if (!state || state->index >= state->entries.size())
@@ -1190,6 +1198,7 @@ BOOL WINAPI FsFindNextW(HANDLE Hdl, LPWIN32_FIND_DATAW FindData)
             LanFillFindData(FindData, state->entries[state->index++]);
             return true;
         }
+#endif
         if (lf->sftpdataptr) {
             int rc = SftpFindNextFileW(lf->serverid, lf->sftpdataptr, FindData);
             return (rc == SFTP_OK) ? true : false;
@@ -1221,9 +1230,11 @@ int WINAPI FsFindClose(HANDLE Hdl)
         if (lf->isPluginFolder) {
             delete static_cast<PluginFolderFindState*>(lf->sftpdataptr);
             lf->sftpdataptr = nullptr;
+#if SFTP_EXTRA
         } else if (lf->isLanPair) {
             delete static_cast<LanPairFindState*>(lf->sftpdataptr);
             lf->sftpdataptr = nullptr;
+#endif
         } else if (lf->sftpdataptr) {
             SftpFindClose(lf->serverid, lf->sftpdataptr);
             lf->sftpdataptr = nullptr;
@@ -1279,10 +1290,12 @@ BOOL WINAPI FsMkDirW(LPCWSTR Path)
             if (!serverid)
                 return false;
             SessionContextGuard _sessionGuard(serverid);
+#if SFTP_EXTRA
             if (IsLanPairTransport(serverid)) {
                 if (!serverid->lanSession || !serverid->lanSession->isConnected()) return false;
                 return serverid->lanSession->mkdir(LanRemotePathToUtf8(remotedir.data()));
             }
+#endif
             // PHP Agent in TAR mode creates the folder right away too: F7 has no
             // archive to carry it, and a TAR batch holds files only, so an empty
             // folder of a copied tree would otherwise never appear. Unpacking

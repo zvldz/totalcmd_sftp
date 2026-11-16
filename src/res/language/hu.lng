@@ -412,6 +412,7 @@
 12165=Az SFTP-kiszolgáló parancsa nem indított SFTP-munkamenetet. Ellenőrizze az elérési útját a kapcsolat beállításaiban a(z) „Továbbiak...” alatt, vagy törölje, hogy a kiszolgáló SFTP-alrendszere legyen használva.
 12166=A másik számítógép nem ismeri fel ezt. Újra párosítja őket? A másik számítógép megkérdezi a felhasználóját.
 12167=LAN Pair: a másik számítógép nem ismeri fel ezt. Párosítsa újra őket a kapcsolat beállításaiban a(z) „Párosítás...” gombbal.
+12168=Ez a munkamenet PHP Agentet vagy LAN Pairt használ, amelyek csak a bővítmény extra változatában vannak meg (SFTPplug-...-extra.zip). Ez a változat csak SSH-n keresztül kapcsolódik.
 12089=SFTP
 12104=(kézi)
 12105= (hiányzik)

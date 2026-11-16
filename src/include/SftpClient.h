@@ -14,7 +14,9 @@
 #include "ISshBackend.h"
 #include "IUserFeedback.h"
 
+#if SFTP_EXTRA
 #include "LanPairSession.h"
+#endif
 #include "ITransportStream.h"
 
 enum SftpResult : int
@@ -165,7 +167,9 @@ struct tConnectSettings {
     uint16_t lan_pair_port = 45846; // TCP port of remote peer's file server
     int lan_pair_timeout_min = 0;         // 0=no limit
     bool lan_pair_trusted_installer = false; // impersonate NT SERVICE\TrustedInstaller on connect
+#if SFTP_EXTRA
     std::unique_ptr<LanPairSession> lanSession; // active file session (nullptr when disconnected)
+#endif
 
     // -----------------------------------------------------------------------
     // SSH ProxyJump / jump host settings

@@ -22,9 +22,13 @@
 #include "UnicodeHelpers.h"
 #include "PluginEntryPoints.h"
 #include "DllExceptionBarrier.h"
+#if SFTP_EXTRA
 #include "LanPairSession.h"
+#endif
 #include "LngLoader.h"
+#if SFTP_EXTRA
 #include "PhpAgentClient.h"
+#endif
 #include "PluginEntryPointsInternal.h"
 #include "DownloadErrorBatch.h"
 #include "ImportCache.h"
@@ -32,7 +36,9 @@
 #include "VirtualSessionRegistry.h"
 
 // Declared in SftpConnection.cpp
+#if SFTP_EXTRA
 void StopGlobalLanServices();
+#endif
 
 HINSTANCE hinst = nullptr;
 HWND hWndMain = nullptr;
@@ -304,7 +310,9 @@ BOOL APIENTRY DllMain( HANDLE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
     }
     if (ul_reason_for_call == DLL_PROCESS_DETACH) {
         // Stop LAN services before CRT destroys global objects
+#if SFTP_EXTRA
         StopGlobalLanServices();
+#endif
         ShutdownMultiServer();
         if (g_winsockInitialized) {
             WSACleanup();
@@ -547,8 +555,8 @@ static int _FsInit(int PluginNr)
     // paste the log tail and everyone knows exactly which build they are
     // running — matters most in the beta cycle where version.h stays put
     // between beta1/2/... and only git tag + SHA differ.
-    SFTP_LOG("STARTUP", "SFTPplug build tag=%s sha=%s date=%s",
-             SFTP_BUILD_TAG, SFTP_BUILD_SHA, SFTP_BUILD_DATE);
+    SFTP_LOG("STARTUP", "SFTPplug build tag=%s sha=%s date=%s variant=%s",
+             SFTP_BUILD_TAG, SFTP_BUILD_SHA, SFTP_BUILD_DATE, SFTP_BUILD_VARIANT);
 
     // Load language now in case FsSetDefaultParams was not called yet or registry lookup failed.
     DetectAndApplyLanguage(nullptr);
@@ -770,6 +778,8 @@ static void StatusInfo(const std::string& remoteDir, int InfoStartEnd, int InfoO
             g_inMultiOpTransfer = (InfoStartEnd == FS_STATUS_START);
         }
 
+#if SFTP_EXTRA
+        // PHP Agent TAR batches.
         if (InfoOperation == FS_STATUS_OP_PUT_MULTI ||
             InfoOperation == FS_STATUS_OP_PUT_SINGLE) {
             std::array<char, wdirtypemax> remotedir{};
@@ -813,9 +823,11 @@ static void StatusInfo(const std::string& remoteDir, int InfoStartEnd, int InfoO
                 }
             }
         }
+#endif
 
         if (InfoOperation == FS_STATUS_OP_GET_MULTI_THREAD || InfoOperation == FS_STATUS_OP_PUT_MULTI_THREAD) {
             if (InfoStartEnd != FS_STATUS_START) {
+#if SFTP_EXTRA
                 if (InfoOperation == FS_STATUS_OP_PUT_MULTI_THREAD && TarUploadSessionIsActive()) {
                     const int rc = TarUploadSessionExecuteAndClear();
                     if (rc != SFTP_OK && rc != SFTP_ABORT)
@@ -826,6 +838,7 @@ static void StatusInfo(const std::string& remoteDir, int InfoStartEnd, int InfoO
                     if (rc != SFTP_OK && rc != SFTP_ABORT)
                         ShowStatusId(IDS_LOG_TAR_UPLOAD_FAIL, nullptr, false);
                 }
+#endif
                 DisconnectSessionPath(remoteDir);
                 return;
             }
@@ -836,12 +849,14 @@ static void StatusInfo(const std::string& remoteDir, int InfoStartEnd, int InfoO
             // get password from main thread
             pConnectSettings oldserverid = static_cast<pConnectSettings>(GetServerIdFromName(displayName.data(), mainthreadid));
             if (oldserverid) {
+#if SFTP_EXTRA
                 if (InfoOperation == FS_STATUS_OP_PUT_MULTI_THREAD
                     && IsPhpAgentTransport(oldserverid) && oldserverid->php_tar)
                     TarUploadSessionBegin(nullptr);  // cs filled in by first FsPutFileW
                 if (InfoOperation == FS_STATUS_OP_GET_MULTI_THREAD
                     && IsPhpAgentTransport(oldserverid) && oldserverid->php_tar)
                     TarDownloadSessionBegin(nullptr);  // cs filled in by first FsGetFileW
+#endif
                 oldpass = oldserverid->password.c_str();
                 if (!oldpass[0])
                     oldpass = nullptr;

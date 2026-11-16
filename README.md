@@ -244,6 +244,8 @@ MD5 fingerprint stored in INI per server. First connection prompts acceptance. C
 
 ## LAN Pair Transport
 
+*Extra build only.*
+
 Direct Windows-to-Windows file transfer without SSH. Uses a custom application-layer protocol stack over TCP/UDP on the local network.
 
 ### Discovery (UDP Broadcast)
@@ -320,6 +322,8 @@ Session timeout configurable via `setTimeoutMin(int minutes)`. When a non-zero t
 ---
 
 ## PHP Agent and PHP Shell
+
+*Extra build only.*
 
 ### PHP Agent (HTTP)
 
@@ -565,14 +569,28 @@ Output libs are placed in `src\lib\` (`libcrypto_x64.lib`, `libcrypto_x86.lib`, 
 
 ## Packaging and Installation
 
-Distribution archive: `SFTPplug.zip`
+Two distribution archives, built from the same source:
+
+| Archive | Build | Transfer modes |
+|---------|-------|----------------|
+| `SFTPplug-<version>.zip` | classic (recommended) | SSH: SFTP, SCP, shell transfer |
+| `SFTPplug-<version>-extra.zip` | extra | the above + PHP Agent, PHP Shell, LAN Pair |
+
+PHP Agent and LAN Pair open the machine to the network in ways SSH does not
+(a file server on the LAN, a script with a shell on a web server), so the
+classic build leaves their code out entirely. Both builds use the same file
+names and the same `sftpplug.ini`; one installs over the other. A PHP Agent or
+LAN Pair session met by the classic build is refused with a message naming the
+extra build, and its settings open read-only. To build locally, `build.ps1`
+makes both (`-classiconly` for classic alone); the MSBuild property
+`SftpExtra=1` selects extra.
 
 | File | Purpose |
 |------|---------|
 | `SFTPplug.wfx64` | x64 plugin binary (statically links libssh2 and OpenSSL, `/MT`) |
 | `SFTPplug.wfx` | x86 plugin binary (statically links libssh2 and OpenSSL, `/MT`) |
 | `pluginst.inf` | Total Commander auto-install descriptor (`file=` x86, `file64=` x64) |
-| `sftp.php` | PHP Agent script for HTTP transfer and shell modes |
+| `sftp.php` | PHP Agent script for HTTP transfer and shell modes (extra build only) |
 | `SFTPplug-help.html` | Full offline documentation, one self-contained page |
 | `readme.txt` | Package notes |
 | `language\pol.lng` | Polish |

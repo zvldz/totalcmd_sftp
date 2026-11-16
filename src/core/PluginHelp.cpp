@@ -73,6 +73,9 @@ void OpenPluginHelp(HWND hWnd)
     const std::wstring ver = GetPluginVersionW();
     if (!ver.empty())
         helpTitle += L" v" + ver;
+#if SFTP_EXTRA
+    helpTitle += L" extra";
+#endif
 
     // One self-contained page, opened by whatever handles .html. It replaced
     // a CHM: the only compiler for that format was withdrawn, and a CHM

@@ -13,8 +13,24 @@ Fixes and improvements taken over from
 [wesmar/sftp 10.3.0.0](https://github.com/wesmar/sftp), which is based on
 this fork's 10.0.2.2. Each entry names where it came from.
 
+From this version the plugin comes in two builds: **classic**
+(`SFTPplug-<version>.zip`, SSH only) and **extra**
+(`SFTPplug-<version>-extra.zip`, + PHP Agent, PHP Shell, LAN Pair).
+
 ### Security
 
+- **PHP Agent and LAN Pair moved to a separate extra build.** They open
+  the machine to the network in ways SSH does not: LAN Pair runs a file
+  server on it, PHP Agent drives a script on a web server, with a shell.
+  The classic build leaves their code out entirely — no LAN Pair server,
+  no HTTP client, no TrustedInstaller code in the binary. Both builds use
+  the same file names and the same `sftpplug.ini`, so one installs over
+  the other. A PHP Agent or LAN Pair session met by the classic build is
+  not connected (a message names the extra build, nothing is tried over
+  SSH) and opens read-only in its settings, so its mode is never
+  rewritten. The extra build says so in the connection dialog's title,
+  the help page title and the file description; `sftp.php` and the PHP
+  Agent / LAN Pair help pages ship only with it.
 - **LAN Pair no longer lets an unknown computer in.** Any machine on the
   same network could connect to LAN Pair's file server, ask for a new
   trust key and get it, with no password and no question, and then read,

@@ -13,6 +13,10 @@
     <b>Scope:</b> This help covers the complete plugin functionality: SSH authentication (password, public key, Pageant), SFTP/SCP transfer modes, shell fallback for blocked hosts, PHP Agent for HTTP-based file operations, LAN Pair, Jump Host (ProxyJump), proxy configuration, session management, and advanced troubleshooting.
   </div>
 
+  <div class="note">
+    <b>Two builds:</b> the plugin comes as <b>classic</b> (<code>SFTPplug-&lt;version&gt;.zip</code>) and <b>extra</b> (<code>SFTPplug-&lt;version&gt;-extra.zip</code>). Classic connects over SSH only: SFTP, SCP and shell transfer. Extra adds PHP Agent, PHP Shell and LAN Pair, which open the machine to the network in ways SSH does not — take it only if you use them. Both use the same file names and the same <code>sftpplug.ini</code>, so one installs over the other. A PHP Agent or LAN Pair session met by the classic build is not connected and opens read-only in its settings. The pages on PHP Agent, PHP Shell and LAN Pair are in the extra build's help only.
+  </div>
+
   <h2>Main Sections</h2>
   
   <h3>Getting Started</h3>

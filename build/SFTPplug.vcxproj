@@ -185,14 +185,14 @@
     <ClCompile Include="..\src\core\CoreUtils.cpp" />
     <ClCompile Include="..\src\core\PpkConverter.cpp" />
     <ClCompile Include="..\src\core\WindowsUserFeedback.cpp" />
-    <ClCompile Include="..\src\core\PhpAgentClient.cpp" />
-    <ClCompile Include="..\src\core\PhpShellConsole.cpp" />
+    <ClCompile Include="..\src\core\PhpAgentClient.cpp" Condition="'$(SftpExtra)'=='1'" />
+    <ClCompile Include="..\src\core\PhpShellConsole.cpp" Condition="'$(SftpExtra)'=='1'" />
     <ClCompile Include="..\src\core\ShellHistory.cpp" />
     <ClCompile Include="..\src\core\SessionPostAuth.cpp" />
     <ClCompile Include="..\src\core\AuthMethodParser.cpp" />
     <ClCompile Include="..\src\core\ConnectionLifecycle.cpp" />
     <ClCompile Include="..\src\core\PasswordCrypto.cpp" />
-    <ClCompile Include="..\src\core\PhpAgentScriptConfig.cpp" />
+    <ClCompile Include="..\src\core\PhpAgentScriptConfig.cpp" Condition="'$(SftpExtra)'=='1'" />
     <ClCompile Include="..\src\core\ConnectionNetwork.cpp" />
     <ClCompile Include="..\src\core\DarkMode.cpp" />
     <ClCompile Include="..\src\core\DownloadErrorBatch.cpp" />
@@ -201,9 +201,9 @@
     <ClCompile Include="..\src\core\PluginHelp.cpp" />
     <ClCompile Include="..\src\core\SshSessionInit.cpp" />
     <ClCompile Include="..\src\core\ConnectionAuth.cpp" />
-    <ClCompile Include="..\src\core\LanPair.cpp" />
-    <ClCompile Include="..\src\core\LanPairSession.cpp" />
-    <ClCompile Include="..\src\core\TrustedInstallerToken.cpp" />
+    <ClCompile Include="..\src\core\LanPair.cpp" Condition="'$(SftpExtra)'=='1'" />
+    <ClCompile Include="..\src\core\LanPairSession.cpp" Condition="'$(SftpExtra)'=='1'" />
+    <ClCompile Include="..\src\core\TrustedInstallerToken.cpp" Condition="'$(SftpExtra)'=='1'" />
   </ItemGroup>
   <!-- Header Files -->
   <ItemGroup>

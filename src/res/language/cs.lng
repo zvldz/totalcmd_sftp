@@ -412,6 +412,7 @@
 12165=Příkaz serveru SFTP nespustil relaci SFTP. Zkontrolujte jeho cestu v „Další...“ v nastavení připojení, nebo jej vymažte a použijte subsystém SFTP serveru.
 12166=Druhý počítač tento nerozpoznává. Spárovat je znovu? Druhý počítač se zeptá svého uživatele.
 12167=LAN Pair: druhý počítač tento nerozpoznává. Spárujte je znovu tlačítkem „Párovat...“ v nastavení připojení.
+12168=Tato relace používá PHP Agent nebo LAN Pair, které má jen verze extra pluginu (SFTPplug-...-extra.zip). Tato verze se připojuje jen přes SSH.
 12089=SFTP
 12104=(ručně)
 12105= (chybí)

@@ -412,6 +412,7 @@
 12165=De SFTP-serveropdracht heeft geen SFTP-sessie gestart. Controleer het pad onder "Meer..." in de verbindingsinstellingen, of maak het leeg om het SFTP-subsysteem van de server te gebruiken.
 12166=De andere computer herkent deze niet. Opnieuw koppelen? De andere computer vraagt het zijn gebruiker.
 12167=LAN Pair: de andere computer herkent deze niet. Koppel ze opnieuw met "Koppelen..." in de verbindingsinstellingen.
+12168=Deze sessie gebruikt PHP Agent of LAN Pair, die alleen de extra-versie van de plug-in heeft (SFTPplug-...-extra.zip). Deze versie maakt alleen verbinding via SSH.
 12089=SFTP
 12104=(handmatig)
 12105= (ontbreekt)

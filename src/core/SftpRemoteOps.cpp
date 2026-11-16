@@ -15,7 +15,9 @@
 #include "CoreUtils.h"
 #include "UnicodeHelpers.h"
 #include "SftpInternal.h"
+#if SFTP_EXTRA
 #include "PhpAgentClient.h"
+#endif
 #include "DialogLayout.h"
 #include "DialogStrings.h"
 #include "DialogText.h"
@@ -305,6 +307,7 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
     if (dirStr.size() > 1 && dirStr.back() != '/')
         dirStr += '/';
 
+#if SFTP_EXTRA
     if (IsPhpAgentTransport(cs)) {
         std::vector<WIN32_FIND_DATAW> entries;
         int rc = PhpAgentListDirectoryW(cs, remotedir, entries);
@@ -320,6 +323,7 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
         wcslcpy(cs->lastactivepath, remotedir, _countof(cs->lastactivepath) - 1);
         return SFTP_OK;
     }
+#endif
 
     if (cs->scponly) {
         // Retry loop in case of silent TCP disconnections (e.g., home.pl)
@@ -741,8 +745,10 @@ int SftpCreateDirectoryW(pConnectSettings cs, LPCWSTR Path)
     dirStr.resize(strlen(dirStr.c_str()));
     std::replace(dirStr.begin(), dirStr.end(), '\\', '/');
 
+#if SFTP_EXTRA
     if (IsPhpAgentTransport(cs))
         return PhpAgentCreateDirectoryW(cs, Path);
+#endif
 
     if (cs->scponly) {
         auto channel = ConnectChannel(cs->session.get(), cs->sock);
@@ -818,8 +824,10 @@ int SftpDeleteFileW(pConnectSettings cs, LPCWSTR RemoteName, bool isdir)
     nameStr.resize(strlen(nameStr.c_str()));
     std::replace(nameStr.begin(), nameStr.end(), '\\', '/');
 
+#if SFTP_EXTRA
     if (IsPhpAgentTransport(cs))
         return PhpAgentDeleteFileW(cs, RemoteName, isdir);
+#endif
 
     // Names that address no single file are refused before any command is
     // built. A shell asked to remove "/" would take the request literally, and
@@ -945,8 +953,10 @@ int SftpRenameMoveFileW(pConnectSettings cs, LPCWSTR OldName, LPCWSTR NewName, b
     if (!cs)
         return SFTP_FAILED;
 
+#if SFTP_EXTRA
     if (IsPhpAgentTransport(cs))
         return PhpAgentRenameMoveFileW(cs, OldName, NewName, Overwrite);
+#endif
 
     std::string oldNameA(wdirtypemax, '\0');
     std::string newNameA(wdirtypemax, '\0');

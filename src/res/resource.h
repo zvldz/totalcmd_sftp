@@ -602,6 +602,7 @@
 #define IDS_ERR_SFTP_SERVER_CMD         12165  // SFTP server command failed: point at More...
 #define IDS_LAN_ASK_REPAIR              12166
 #define IDS_LAN_ERR_TRUST_UNKNOWN       12167
+#define IDS_ERR_NEEDS_EXTRA             12168  // classic build: PHP / LAN session refused
 
 // Next default values for new objects
 //

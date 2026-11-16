@@ -19,12 +19,15 @@ Everything a run creates on the server lives in one directory under
 
 .PARAMETER Modes
 sftp, scp, scponly, shell, text, text-scp, text-scponly, nosub, nosub-bad,
-postcmd, key-utf8, key-cp1251 (default: all).
+postcmd, key-utf8, key-cp1251, classic-gate (default: all).
   text*      text mode (CRLF <-> LF) over SFTP, SCP and SCP-only
   nosub      SFTP through sftpservercommand; the server is restarted
              mid-run and the session has to reconnect through the command
   nosub-bad  a wrong sftpservercommand: fails, and without hanging
   postcmd    a post-login command printing a Cyrillic word: whole in the log
+  classic-gate  a PHP Agent session pointed at the SSH bench: the classic
+             build (bin\SFTPplug.zip, the one tested) refuses it rather
+             than connecting over SSH
   key-*      a key whose passphrase is a Cyrillic word, stored as UTF-8 or
              as cp1251 bytes; the second only means something where the
              ANSI code page is 1251
@@ -35,7 +38,7 @@ postcmd, key-utf8, key-cp1251 (default: all).
 #>
 param(
     [ValidateSet('x64', 'x86', 'both')] [string]$Arch = 'both',
-    [string[]]$Modes = @('sftp', 'scp', 'scponly', 'shell', 'text', 'text-scp', 'text-scponly', 'nosub', 'nosub-bad', 'postcmd', 'key-utf8', 'key-cp1251'),
+    [string[]]$Modes = @('sftp', 'scp', 'scponly', 'shell', 'text', 'text-scp', 'text-scponly', 'nosub', 'nosub-bad', 'postcmd', 'key-utf8', 'key-cp1251', 'classic-gate'),
     [string]$RemoteBase = '/tmp',
     [switch]$VerboseLog
 )
@@ -49,7 +52,7 @@ $KeyFileUtf8 = Join-Path $Bench 'keys\id_ed25519_utf8'
 $KeyFileCp1251 = Join-Path $Bench 'keys\id_ed25519_cp1251'
 
 $Modes = @($Modes | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
-$knownModes = 'sftp', 'scp', 'scponly', 'shell', 'text', 'text-scp', 'text-scponly', 'nosub', 'nosub-bad', 'postcmd', 'key-utf8', 'key-cp1251'
+$knownModes = 'sftp', 'scp', 'scponly', 'shell', 'text', 'text-scp', 'text-scponly', 'nosub', 'nosub-bad', 'postcmd', 'key-utf8', 'key-cp1251', 'classic-gate'
 foreach ($m in $Modes) { if ($m -notin $knownModes) { throw "Unknown mode '$m'. Known: $($knownModes -join ', ')" } }
 
 # ---------------------------------------------------------------------------
@@ -98,6 +101,8 @@ $overrides = @{
                         server = '127.0.0.1:2223'; sftpservercommand = '/nonexistent/sftp-server' }
     postcmd        = @{ scpfordata = '0'; scponly = '0'; shelltransfer = '0'; shelltransferforce = '0'; unixlinebreaks = '0'
                         sendcommand = "echo $Privet" }
+    'classic-gate' = @{ scpfordata = '0'; scponly = '0'; shelltransfer = '0'; shelltransferforce = '0'; unixlinebreaks = '0'
+                        transfermode = '1' }
     'key-utf8'   = @{ scpfordata = '0'; scponly = '0'; shelltransfer = '0'; shelltransferforce = '0'; unixlinebreaks = '0'
                       privkeyfile = $KeyFileUtf8 }
     'key-cp1251' = @{ scpfordata = '0'; scponly = '0'; shelltransfer = '0'; shelltransferforce = '0'; unixlinebreaks = '0'

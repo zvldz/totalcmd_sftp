@@ -9,6 +9,9 @@ import sys
 
 SRC = 'src/help'
 OUT = sys.argv[1] if len(sys.argv) > 1 else 'sftpplug-help.html'
+# Pages left out, comma-separated (the classic build has no PHP Agent or LAN
+# Pair pages). Links to them stay as plain text.
+SKIP = {p.strip() for p in (sys.argv[2] if len(sys.argv) > 2 else '').split(',') if p.strip()}
 
 # index.html lists the topics in reading order, so it decides the order here
 # too — one file to keep straight instead of a separate table of contents.
@@ -18,13 +21,13 @@ order = ['index.html'] + re.findall(r'(?i)href="([A-Za-z0-9._-]+\.html)"', index
 seen, pages = set(), []
 for f in order:
     f = f.strip()
-    if f and f not in seen and os.path.exists(os.path.join(SRC, f)):
+    if f and f not in seen and f not in SKIP and os.path.exists(os.path.join(SRC, f)):
         seen.add(f)
         pages.append(f)
 
 # anything index.html does not link still ships, appended in name order
 for f in sorted(os.listdir(SRC)):
-    if f.endswith('.html') and f not in seen:
+    if f.endswith('.html') and f not in seen and f not in SKIP:
         pages.append(f)
 
 sections = []
@@ -56,8 +59,14 @@ def relink(match):
     return match.group(0)
 
 
+def unlink_skipped(match):
+    return match.group(3) if match.group(1) in SKIP else match.group(0)
+
+
 parts = []
 for stem, title, body in sections:
+    body = re.sub(r'(?is)<a\s+href="([a-zA-Z0-9._-]+\.html)(#[^"]*)?"[^>]*>(.*?)</a>',
+                  unlink_skipped, body)
     body = re.sub(r'href="([a-zA-Z0-9._-]+\.html)(#[^"]*)?"', relink, body)
     parts.append(
         '<section id="{0}">\n<h1>{1}</h1>\n{2}\n</section>'.format(

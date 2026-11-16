@@ -21,9 +21,13 @@
 #include "TransferUtils.h"
 #include "ProfileSettings.h"
 #include "DllExceptionBarrier.h"
+#if SFTP_EXTRA
 #include "LanPairSession.h"
+#endif
 #include "PluginEntryPointsInternal.h"
+#if SFTP_EXTRA
 #include "PhpAgentClient.h"
+#endif
 #include "DownloadErrorBatch.h"
 #include "ImportSourceRegistry.h"
 #include "ImportCache.h"
@@ -1206,8 +1210,10 @@ static bool RemoteFileExists(pConnectSettings cs, LPCWSTR remoteRelative)
     if (!cs || !remoteRelative || !remoteRelative[0])
         return false;
 
+#if SFTP_EXTRA
     if (IsPhpAgentTransport(cs))
         return PhpAgentPathMayExist(cs, remoteRelative);
+#endif
 
     if (cs->scponly) {
         // The wide path goes to the shell helper, which applies the session's
@@ -1588,6 +1594,7 @@ int WINAPI FsRenMovFileW(LPCWSTR OldName, LPCWSTR NewName, BOOL Move, BOOL OverW
                 return CopyBetweenSessions(OldName, NewName, false, !!OverWrite, ri);
         }
 
+#if SFTP_EXTRA
         // LAN Pair rename.
         if (IsLanPairTransport(serverid1)) {
             if (!serverid1->lanSession || !serverid1->lanSession->isConnected()) return FS_FILE_WRITEERROR;
@@ -1598,6 +1605,7 @@ int WINAPI FsRenMovFileW(LPCWSTR OldName, LPCWSTR NewName, BOOL Move, BOOL OverW
                 return FS_FILE_OK;
             return exists ? FS_FILE_EXISTS : FS_FILE_WRITEERROR;
         }
+#endif
 
         int rc = SftpRenameMoveFileW(serverid1, olddir.data(), newdir.data(), !!Move, !!OverWrite, isdir);
         switch (rc) {
@@ -1686,6 +1694,7 @@ static int CreateHelpFileLocalW(LPCWSTR localName, bool overwrite)
     body.append("Tag:   ").append(SFTP_BUILD_TAG).append("\r\n");
     body.append("SHA:   ").append(SFTP_BUILD_SHA).append("\r\n");
     body.append("Date:  ").append(SFTP_BUILD_DATE).append("\r\n");
+    body.append("Build: ").append(SFTP_BUILD_VARIANT).append("\r\n");
 
     DWORD written = 0;
     const BOOL ok = WriteFile(outFile.get(), body.data(),
@@ -1712,11 +1721,14 @@ static int FinishDownloadMove(pConnectSettings serverid, LPCWSTR remoteRelative,
 
     // LAN Pair has no SFTP session to delete through; its peer does it.
     int rc = SFTP_FAILED;
+#if SFTP_EXTRA
     if (IsLanPairTransport(serverid)) {
         if (serverid->lanSession && serverid->lanSession->isConnected() &&
             serverid->lanSession->remove(LanRemotePathToUtf8(remoteRelative)))
             rc = SFTP_OK;
-    } else {
+    } else
+#endif
+    {
         rc = SftpDeleteFileW(serverid, remoteRelative, false);
     }
     SFTP_LOG("ENTRY", "FsGetFileW move: deleting the source rc=%d", rc);
@@ -1981,6 +1993,7 @@ int WINAPI FsGetFileW(LPCWSTR RemoteName, LPWSTR LocalName, int CopyFlags, Remot
             DeleteFileT(LocalName);
         }
 
+#if SFTP_EXTRA
         // PHP Agent TAR batch download: queue single file instead of downloading individually.
         if (ri && !(ri->Attr & FILE_ATTRIBUTE_DIRECTORY) &&
             IsPhpAgentTransport(serverid) && serverid->php_tar &&
@@ -2023,6 +2036,7 @@ int WINAPI FsGetFileW(LPCWSTR RemoteName, LPWSTR LocalName, int CopyFlags, Remot
                 ? FinishDownloadMove(serverid, remotedir.data(), Move, resumeAsked)
                 : fsResult;
         }
+#endif
 
         // A dropped connection leaves part of the file; the loop picks it up
         // from there. It goes on only while each round adds to the file — an
@@ -2138,6 +2152,7 @@ int WINAPI FsPutFileW(LPCWSTR LocalName, LPCWSTR RemoteName, int CopyFlags)
         // Prefix all ShowStatus output in this thread with "[<session>] ".
         SessionContextGuard _sessionGuard(serverid);
 
+#if SFTP_EXTRA
         // LAN Pair upload.
         if (IsLanPairTransport(serverid)) {
             if (!serverid->lanSession || !serverid->lanSession->isConnected())
@@ -2179,6 +2194,7 @@ int WINAPI FsPutFileW(LPCWSTR LocalName, LPCWSTR RemoteName, int CopyFlags)
                  IsPhpAgentTransport(serverid) ? 1 : 0,
                  serverid->php_tar ? 1 : 0,
                  TarUploadSessionIsActive() ? 1 : 0);
+#endif
 
         // TC sets the EXISTS flags only when its own listing shows the file.
         // A subfolder it never listed, a background copy: the upload, which
@@ -2353,10 +2369,12 @@ BOOL WINAPI FsDeleteFileW(LPCWSTR RemoteName)
                 return false;
             ResetLastPercent(serverid);
             SessionContextGuard _sessionGuard(serverid);
+#if SFTP_EXTRA
             if (IsLanPairTransport(serverid)) {
                 if (!serverid->lanSession || !serverid->lanSession->isConnected()) return false;
                 return serverid->lanSession->remove(LanRemotePathToUtf8(remotedir.data()));
             }
+#endif
             int rc = SftpDeleteFileW(serverid, remotedir.data(), false);
             return (rc == SFTP_OK) ? true : false;
         }
@@ -2425,10 +2443,12 @@ BOOL WINAPI FsRemoveDirW(LPCWSTR RemoteName)
                 return false;
             ResetLastPercent(serverid);
             SessionContextGuard _sessionGuard(serverid);
+#if SFTP_EXTRA
             if (IsLanPairTransport(serverid)) {
                 if (!serverid->lanSession || !serverid->lanSession->isConnected()) return false;
                 return serverid->lanSession->remove(LanRemotePathToUtf8(remotedir.data()));
             }
+#endif
             int rc = SftpDeleteFileW(serverid, remotedir.data(), true);
             return (rc == SFTP_OK) ? true : false;
         }

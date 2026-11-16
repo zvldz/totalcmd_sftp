@@ -6,9 +6,14 @@
     <!-- Map MSBuild Platform name to lib suffix -->
     <LibSuffix Condition="'$(Platform)'=='x64'">x64</LibSuffix>
     <LibSuffix Condition="'$(Platform)'=='Win32'">x86</LibSuffix>
-    <IntDir>$(SolutionDir).intermediates\$(ProjectName)\$(Platform)_$(Configuration)\</IntDir>
+    <!-- Build variant: 0 = classic (SSH only, the default), 1 = extra
+         (+ PHP Agent, PHP Shell, LAN Pair, TrustedInstaller). Extra builds
+         into folders of their own so the two never share objects. -->
+    <SftpExtra Condition="'$(SftpExtra)'==''">0</SftpExtra>
+    <VariantSuffix Condition="'$(SftpExtra)'=='1'">_extra</VariantSuffix>
+    <IntDir>$(SolutionDir).intermediates\$(ProjectName)\$(Platform)_$(Configuration)$(VariantSuffix)\</IntDir>
     <LibDir>$(SolutionDir)lib\$(Platform)_$(Configuration)\</LibDir>
-    <BinDir>$(SolutionDir)bin\$(Platform)_$(Configuration)\</BinDir>
+    <BinDir>$(SolutionDir)bin\$(Platform)_$(Configuration)$(VariantSuffix)\</BinDir>
     <ExtDir>$(SolutionDir)..\ext\</ExtDir>
     <SrcDir>$(SolutionDir)..\src\</SrcDir>
     <OutDir>$(BinDir)</OutDir>
@@ -32,7 +37,7 @@
         %(AdditionalIncludeDirectories)
       </AdditionalIncludeDirectories>
       <DisableSpecificWarnings>4244;4267;4996;26812;26451</DisableSpecificWarnings>
-      <PreprocessorDefinitions>_USRDLL;_WIN32_WINNT=0x0601;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_USRDLL;_WIN32_WINNT=0x0601;SFTP_EXTRA=$(SftpExtra);%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ObjectFileName>$(IntDir)</ObjectFileName>
       <ProgramDataBaseFileName>$(OutDir)$(TargetName).pdb</ProgramDataBaseFileName>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
@@ -42,6 +47,7 @@
     
     <ResourceCompile>
       <Culture>0x0807</Culture>
+      <PreprocessorDefinitions>SFTP_EXTRA=$(SftpExtra);%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ResourceCompile>
     
     <Link>

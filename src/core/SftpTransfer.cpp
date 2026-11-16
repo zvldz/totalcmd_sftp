@@ -19,7 +19,9 @@
 #include "UnicodeHelpers.h"
 #include "SftpInternal.h"
 #include "IUserFeedback.h"
+#if SFTP_EXTRA
 #include "PhpAgentClient.h"
+#endif
 #include "ScpTransfer.h"
 #include "ScpTransferInternal.h"
 #include "TransferUtils.h"
@@ -315,8 +317,10 @@ int SftpDownloadFileW(pConnectSettings cs, LPCWSTR RemoteName, LPCWSTR LocalName
                       bool alwaysOverwrite, int64_t filesize, LPFILETIME ft, bool Resume)
 {
     if (!cs) return SFTP_FAILED;
+#if SFTP_EXTRA
     if (IsPhpAgentTransport(cs))
         return PhpAgentDownloadFileW(cs, RemoteName, LocalName, alwaysOverwrite, filesize, Resume);
+#endif
 
     // Converted text has different offsets on each side, so a text file is
     // never continued: a resume asked for becomes a transfer from the start.
@@ -463,8 +467,10 @@ int SftpUploadFileW(pConnectSettings cs, LPCWSTR LocalName, LPCWSTR RemoteName,
                     bool Resume, bool setattr)
 {
     if (!cs) return SFTP_FAILED;
+#if SFTP_EXTRA
     if (IsPhpAgentTransport(cs))
         return PhpAgentUploadFileW(cs, LocalName, RemoteName, Resume);
+#endif
 
     // Converted text has different offsets on each side, so a text file is
     // never continued: a resume asked for becomes a transfer from the start.

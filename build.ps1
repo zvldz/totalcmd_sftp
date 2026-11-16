@@ -2,7 +2,9 @@ param(
     [switch]$nohelp,
     [switch]$nodeploy,
     [switch]$nozip,
-    [switch]$x64only
+    [switch]$x64only,
+    [switch]$classiconly,   # build the classic variant only (SSH)
+    [switch]$deployextra    # deploy the extra variant instead of classic
 )
 
 # ============================================================================
@@ -12,11 +14,25 @@ $projectName = "SFTPplug"
 $projectRoot = $PSScriptRoot
 $binDir = Join-Path $projectRoot "bin"
 $buildDir = Join-Path $projectRoot "build"
-$buildOutputDir    = Join-Path $buildDir "bin\x64_Release"
-$buildOutputDirX86 = Join-Path $buildDir "bin\Win32_Release"
 $phpAgentSource = Join-Path $projectRoot "src\agent\sftp.php"
 $helpBuilder = Join-Path $projectRoot "tools\build-help-page.py"
-$helpCompiled = Join-Path $projectRoot "bin\$projectName-help.html"
+
+# Two builds from one source tree: classic (SSH only) and extra (+ PHP Agent,
+# PHP Shell, LAN Pair). The MSBuild property SftpExtra selects one; extra
+# builds into folders of its own (suffix _extra).
+$variants = @(
+    [pscustomobject]@{ Name = 'classic'; Extra = 0; Suffix = '';       Zip = "$projectName.zip";
+                       Help = (Join-Path $binDir "$projectName-help.html") }
+    [pscustomobject]@{ Name = 'extra';   Extra = 1; Suffix = '_extra'; Zip = "$projectName-extra.zip";
+                       Help = (Join-Path $binDir "$projectName-help-extra.html") }
+)
+if ($classiconly) { $variants = @($variants[0]) }
+# Help pages only the extra build has.
+$extraOnlyHelpPages = 'lan-pair.html,php-agent.html,php-agent-operations.html,php-shell.html'
+
+function Get-VariantOutDir($variant, [string]$platform) {
+    Join-Path $buildDir "bin\$($platform)_Release$($variant.Suffix)"
+}
 
 # Read plugin version from version.h (single source of truth)
 $pluginVersion = "0.0.0.0"
@@ -124,7 +140,7 @@ function Remove-PathSafe {
     }
 }
 
-function Build-HelpPage {
+function Build-HelpPage([string]$outFile, [string]$skipPages) {
 <#
 .SYNOPSIS
 Folds src/help/*.html into one self-contained page.
@@ -153,14 +169,14 @@ every topic at once. The builder needs nothing but Python.
         return $false
     }
 
-    & $python $helpBuilder $helpCompiled
-    if ($LASTEXITCODE -ne 0 -or -not (Test-Path $helpCompiled)) {
+    & $python $helpBuilder $outFile $skipPages
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path $outFile)) {
         Write-Host "  Help page build FAILED" -ForegroundColor Red
         return $false
     }
 
-    $sizeKB = [math]::Round((Get-Item $helpCompiled).Length / 1KB)
-    Write-Host "  $projectName-help.html ($sizeKB KB)" -ForegroundColor Green
+    $sizeKB = [math]::Round((Get-Item $outFile).Length / 1KB)
+    Write-Host "  $(Split-Path $outFile -Leaf) ($sizeKB KB)" -ForegroundColor Green
     return $true
 }
 
@@ -171,7 +187,7 @@ function Clean-BuildOutput {
     #>
     Write-Host "  Cleaning intermediate files..." -ForegroundColor Gray
     
-    foreach ($outDir in @($buildOutputDir, $buildOutputDirX86)) {
+    foreach ($outDir in @(foreach ($v in $variants) { Get-VariantOutDir $v 'x64'; Get-VariantOutDir $v 'Win32' })) {
         if (Test-Path $outDir) {
             Get-ChildItem -Path $outDir | Where-Object {
                 $_.Name -notlike "*.wfx" -and $_.Name -notlike "*.pdb"
@@ -248,10 +264,12 @@ Write-Host "--- Preparing Build Directories ---" -ForegroundColor Cyan
 # Clean only the final artifact, not the whole bin directory.
 # Avoids spurious failures when bin/ is held by AV, indexer, or a file monitor —
 # those typically lock the folder handle without locking individual files.
-$zipPath = Join-Path $binDir "$projectName.zip"
-if (Test-Path $zipPath) {
-    if (-not (Remove-PathSafe -PathToRemove $zipPath)) {
-        Write-Host "  Continuing with existing zip in place" -ForegroundColor Yellow
+foreach ($zipName in @("$projectName.zip", "$projectName-extra.zip")) {
+    $zipPath = Join-Path $binDir $zipName
+    if (Test-Path $zipPath) {
+        if (-not (Remove-PathSafe -PathToRemove $zipPath)) {
+            Write-Host "  Continuing with existing zip in place" -ForegroundColor Yellow
+        }
     }
 }
 if (-not (Test-Path $binDir)) {
@@ -259,9 +277,11 @@ if (-not (Test-Path $binDir)) {
 }
 New-Item -ItemType Directory -Path $binDir -Force | Out-Null
 
-# Clean build output directory
-if (-not (Remove-PathSafe -PathToRemove $buildOutputDir)) {
-    Write-Host "  Continuing with existing build output" -ForegroundColor Yellow
+# Clean build output directories
+foreach ($v in $variants) {
+    if (-not (Remove-PathSafe -PathToRemove (Get-VariantOutDir $v 'x64'))) {
+        Write-Host "  Continuing with existing build output" -ForegroundColor Yellow
+    }
 }
 
 Write-Host "  Directories ready" -ForegroundColor Gray
@@ -316,35 +336,23 @@ $msBuildBase = @(
 )
 if ($vcToolsVersion) { $msBuildBase += "/p:VCToolsVersion=$vcToolsVersion" }
 
-# --- x64 ---
-Write-Host ""
-Write-Host "--- Building Release x64 ---" -ForegroundColor Cyan
-
-$msbuildExitCode = 0
-Write-Host "  Building: $vcxprojPath (x64)" -ForegroundColor Gray
-&$msbuild ($msBuildBase + @("/p:Platform=x64"))
-$msbuildExitCode = $LASTEXITCODE
-if ($msbuildExitCode -ne 0) {
-    Write-Host "!!! BUILD FAILED (x64) !!!" -ForegroundColor Red
-    exit $msbuildExitCode
-}
-Write-Host "  x64 build completed" -ForegroundColor Green
-
-# --- x86 ---
-if (-not $x64only) {
-    Write-Host ""
-    Write-Host "--- Building Release x86 ---" -ForegroundColor Cyan
-
-    $msbuildExitCode = 0
-    Write-Host "  Building: $vcxprojPath (x86)" -ForegroundColor Gray
-    &$msbuild ($msBuildBase + @("/p:Platform=Win32"))
-    $msbuildExitCode = $LASTEXITCODE
-    if ($msbuildExitCode -ne 0) {
-        Write-Host "!!! BUILD FAILED (x86) !!!" -ForegroundColor Red
-        exit $msbuildExitCode
+foreach ($v in $variants) {
+    $platforms = if ($x64only) { @('x64') } else { @('x64', 'Win32') }
+    foreach ($platform in $platforms) {
+        $label = "$($v.Name) $(if ($platform -eq 'Win32') { 'x86' } else { 'x64' })"
+        Write-Host ""
+        Write-Host "--- Building Release $label ---" -ForegroundColor Cyan
+        Write-Host "  Building: $vcxprojPath ($label)" -ForegroundColor Gray
+        &$msbuild ($msBuildBase + @("/p:Platform=$platform", "/p:SftpExtra=$($v.Extra)"))
+        $msbuildExitCode = $LASTEXITCODE
+        if ($msbuildExitCode -ne 0) {
+            Write-Host "!!! BUILD FAILED ($label) !!!" -ForegroundColor Red
+            exit $msbuildExitCode
+        }
+        Write-Host "  $label build completed" -ForegroundColor Green
     }
-    Write-Host "  x86 build completed" -ForegroundColor Green
-} else {
+}
+if ($x64only) {
     Write-Host "  Skipping x86 build (-x64only)" -ForegroundColor Gray
 }
 
@@ -355,20 +363,32 @@ Clean-BuildOutput
 # Step 4: Build the help page
 # ============================================================================
 if ($buildHelp) {
-    Build-HelpPage | Out-Null
+    foreach ($v in $variants) {
+        $skip = if ($v.Extra) { '' } else { $extraOnlyHelpPages }
+        Build-HelpPage $v.Help $skip | Out-Null
+    }
 }
 
 # ============================================================================
 # Step 5: Create ZIP package (ONLY output in bin\)
 # ============================================================================
 if (-not $nozip) {
-    Write-Host ""
-    Write-Host "--- Creating ZIP Package ---" -ForegroundColor Cyan
-    
-    $zipPath = Join-Path $binDir "$projectName.zip"
-    $pluginstInf = @"
+    foreach ($v in $variants) {
+        Write-Host ""
+        Write-Host "--- Creating ZIP Package ($($v.Name)) ---" -ForegroundColor Cyan
+
+        $buildOutputDir    = Get-VariantOutDir $v 'x64'
+        $buildOutputDirX86 = Get-VariantOutDir $v 'Win32'
+        $helpCompiled      = $v.Help
+        $zipPath = Join-Path $binDir $v.Zip
+        $description = if ($v.Extra) {
+            'Secure FTP plugin (x64+x86), extra build: + PHP Agent, PHP Shell, LAN Pair'
+        } else {
+            'Secure FTP plugin (x64+x86) - static build, no external DLL required'
+        }
+        $pluginstInf = @"
 [plugininstall]
-description=Secure FTP plugin (x64+x86) - static build, no external DLL required
+description=$description
 type=wfx
 file=$projectName.wfx
 file64=$projectName.wfx64
@@ -376,58 +396,60 @@ defaultdir=$projectName
 version=$pluginVersion
 "@
 
-    Add-Type -AssemblyName System.IO.Compression
+        Add-Type -AssemblyName System.IO.Compression
 
-    if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+        if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
 
-    $outStream = [System.IO.File]::Open($zipPath, [System.IO.FileMode]::Create)
-    $zip = [System.IO.Compression.ZipArchive]::new($outStream, [System.IO.Compression.ZipArchiveMode]::Create)
+        $outStream = [System.IO.File]::Open($zipPath, [System.IO.FileMode]::Create)
+        $zip = [System.IO.Compression.ZipArchive]::new($outStream, [System.IO.Compression.ZipArchiveMode]::Create)
 
-    function Add-ZipFile([string]$src, [string]$entryName) {
-        $entry = $zip.CreateEntry($entryName, [System.IO.Compression.CompressionLevel]::Optimal)
-        $dst = $entry.Open()
-        $fs  = [System.IO.File]::OpenRead($src)
-        try   { $fs.CopyTo($dst) }
-        finally { $fs.Dispose(); $dst.Dispose() }
-    }
-
-    function Add-ZipString([string]$text, [string]$entryName) {
-        $entry = $zip.CreateEntry($entryName, [System.IO.Compression.CompressionLevel]::Optimal)
-        $dst = $entry.Open()
-        $bytes = [System.Text.Encoding]::ASCII.GetBytes($text)
-        try   { $dst.Write($bytes, 0, $bytes.Length) }
-        finally { $dst.Dispose() }
-    }
-
-    try {
-        Add-ZipFile  (Join-Path $buildOutputDir    "$projectName.wfx") "$projectName.wfx64"
-        Add-ZipFile  (Join-Path $buildOutputDirX86 "$projectName.wfx") "$projectName.wfx"
-        # NOTE: sftpplug.pdb is intentionally not packed for release. To ship
-        # a diagnostic build that resolves stack frames in C:\temp\sftpplug.log,
-        # set LOG_ENABLED=1 in global.h and re-enable PDB inclusion here.
-        Add-ZipString $pluginstInf "pluginst.inf"
-
-        if (Test-Path $phpAgentSource) { Add-ZipFile $phpAgentSource "sftp.php" }
-        if (Test-Path $helpCompiled)   { Add-ZipFile $helpCompiled   "$projectName-help.html" }
-
-        $tplSource = Join-Path $projectRoot "src\res\sftpplug.tpl"
-        if (Test-Path $tplSource)      { Add-ZipFile $tplSource      "sftpplug.tpl" }
-
-        # Pack all external language files
-        $lngDir = Join-Path $projectRoot "src\res\language"
-        foreach ($lngFile in Get-ChildItem -Path $lngDir -Filter "*.lng" -ErrorAction SilentlyContinue) {
-            Add-ZipFile $lngFile.FullName "language\$($lngFile.Name)"
+        function Add-ZipFile([string]$src, [string]$entryName) {
+            $entry = $zip.CreateEntry($entryName, [System.IO.Compression.CompressionLevel]::Optimal)
+            $dst = $entry.Open()
+            $fs  = [System.IO.File]::OpenRead($src)
+            try   { $fs.CopyTo($dst) }
+            finally { $fs.Dispose(); $dst.Dispose() }
         }
 
-        $readmeSource = Join-Path $projectRoot "src\help\readme.txt"
-        if (Test-Path $readmeSource)   { Add-ZipFile $readmeSource   "readme.txt" }
+        function Add-ZipString([string]$text, [string]$entryName) {
+            $entry = $zip.CreateEntry($entryName, [System.IO.Compression.CompressionLevel]::Optimal)
+            $dst = $entry.Open()
+            $bytes = [System.Text.Encoding]::ASCII.GetBytes($text)
+            try   { $dst.Write($bytes, 0, $bytes.Length) }
+            finally { $dst.Dispose() }
+        }
 
-        Write-Host "  Created: $projectName.zip" -ForegroundColor Green
-    } catch {
-        Write-Host "  Failed to create ZIP: $($_.Exception.Message)" -ForegroundColor Red
-    } finally {
-        $zip.Dispose()
-        $outStream.Dispose()
+        try {
+            Add-ZipFile  (Join-Path $buildOutputDir    "$projectName.wfx") "$projectName.wfx64"
+            Add-ZipFile  (Join-Path $buildOutputDirX86 "$projectName.wfx") "$projectName.wfx"
+            # NOTE: sftpplug.pdb is intentionally not packed for release. To ship
+            # a diagnostic build that resolves stack frames in C:\temp\sftpplug.log,
+            # set LOG_ENABLED=1 in global.h and re-enable PDB inclusion here.
+            Add-ZipString $pluginstInf "pluginst.inf"
+
+            # The PHP agent script goes only with the build that speaks to it.
+            if ($v.Extra -and (Test-Path $phpAgentSource)) { Add-ZipFile $phpAgentSource "sftp.php" }
+            if (Test-Path $helpCompiled)   { Add-ZipFile $helpCompiled   "$projectName-help.html" }
+
+            $tplSource = Join-Path $projectRoot "src\res\sftpplug.tpl"
+            if (Test-Path $tplSource)      { Add-ZipFile $tplSource      "sftpplug.tpl" }
+
+            # Pack all external language files
+            $lngDir = Join-Path $projectRoot "src\res\language"
+            foreach ($lngFile in Get-ChildItem -Path $lngDir -Filter "*.lng" -ErrorAction SilentlyContinue) {
+                Add-ZipFile $lngFile.FullName "language\$($lngFile.Name)"
+            }
+
+            $readmeSource = Join-Path $projectRoot "src\help\readme.txt"
+            if (Test-Path $readmeSource)   { Add-ZipFile $readmeSource   "readme.txt" }
+
+            Write-Host "  Created: $($v.Zip)" -ForegroundColor Green
+        } catch {
+            Write-Host "  Failed to create ZIP: $($_.Exception.Message)" -ForegroundColor Red
+        } finally {
+            $zip.Dispose()
+            $outStream.Dispose()
+        }
     }
 }
 
@@ -440,7 +462,12 @@ if (-not $nodeploy) {
     Write-Host "--- Deploying to Total Commander ---" -ForegroundColor Cyan
     
     $tcPath = Get-TotalCommanderPath
-    
+    $deployVariant     = if ($deployextra -and $variants.Count -gt 1) { $variants[1] } else { $variants[0] }
+    $buildOutputDir    = Get-VariantOutDir $deployVariant 'x64'
+    $buildOutputDirX86 = Get-VariantOutDir $deployVariant 'Win32'
+    $helpCompiled      = $deployVariant.Help
+    Write-Host "  Variant: $($deployVariant.Name)" -ForegroundColor Gray
+
     if ($tcPath) {
         # Stop Total Commander
         Stop-TotalCommander
@@ -460,7 +487,7 @@ if (-not $nodeploy) {
                 Write-Host "  Deployed: $projectName-help.html" -ForegroundColor Green
             }
             
-            if (Test-Path $phpAgentSource) {
+            if ($deployVariant.Extra -and (Test-Path $phpAgentSource)) {
                 Copy-Item -Path $phpAgentSource -Destination (Join-Path $pluginDir "sftp.php") -Force
                 Write-Host "  Deployed: sftp.php" -ForegroundColor Green
             }
@@ -507,8 +534,10 @@ Write-Host "BUILD COMPLETED SUCCESSFULLY" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Output directory: $binDir" -ForegroundColor White
-if (Test-Path (Join-Path $binDir "$projectName.zip")) {
-    Write-Host "  - $projectName.zip (TC auto-install)" -ForegroundColor Gray
+foreach ($v in $variants) {
+    if (Test-Path (Join-Path $binDir $v.Zip)) {
+        Write-Host "  - $($v.Zip) ($($v.Name), TC auto-install)" -ForegroundColor Gray
+    }
 }
 
 if ($deploySuccess) {

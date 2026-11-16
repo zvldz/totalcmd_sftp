@@ -31,3 +31,11 @@
 #ifndef SFTP_BUILD_DATE
 #define SFTP_BUILD_DATE __DATE__
 #endif
+
+// Build variant: "extra" carries PHP Agent, PHP Shell and LAN Pair,
+// "classic" is SSH only. Shown next to the version wherever it appears.
+#if SFTP_EXTRA
+#define SFTP_BUILD_VARIANT  "extra"
+#else
+#define SFTP_BUILD_VARIANT  "classic"
+#endif

@@ -28,8 +28,9 @@
 #include <fstream>
 #include <iterator>
 #include <vector>
+#if SFTP_EXTRA
 #include "PhpAgentClient.h"
-#include "PhpShellConsole.h"
+#endif
 #include "ConnectionDialog.h"
 #include "SessionPostAuth.h"
 #include "ConnectionLifecycle.h"
@@ -37,8 +38,9 @@
 #include "SshSessionInit.h"
 #include "PluginEntryPointsInternal.h"
 #include "ConnectionAuth.h"
+#if SFTP_EXTRA
 #include "LanPairSession.h"
-#include "TrustedInstallerToken.h"
+#endif
 #include "JumpHostConnection.h"
 #include "IniFile.h"
 
@@ -53,8 +55,10 @@ static std::unique_ptr<ISshBackend> g_sshBackend;
 // Global LAN Pair file server: started when a LAN Pair session is opened,
 // serves all authenticated peers. Also the discovery service that
 // announces this machine's presence.
+#if SFTP_EXTRA
 static std::unique_ptr<LanFileServer>    g_lanFileServer;
 static std::unique_ptr<lanpair::DiscoveryService> g_lanDiscovery;
+#endif
 
 // ---------------------------------------------------------------------------
 // Connection progress step percentages
@@ -294,9 +298,15 @@ bool IsSessionAlive(pConnectSettings cs) noexcept
 {
     if (!cs) return false;
 
-    // LAN Pair carries its own connected-state accessor.
-    if (IsLanPairTransport(cs))
+    // LAN Pair carries its own connected-state accessor; the classic build
+    // never connects one.
+    if (IsLanPairTransport(cs)) {
+#if SFTP_EXTRA
         return cs->lanSession && cs->lanSession->isConnected();
+#else
+        return false;
+#endif
+    }
 
     // PHP Agent uses HTTP-over-transport; no long-lived TCP to probe. If
     // the client object exists we optimistically consider it alive — the
@@ -419,8 +429,9 @@ int myrecv(SOCKET s, LPSTR buf, int len, int flags, LPCSTR progressmessage, int 
 }
 
 // ---------------------------------------------------------------------------
-// LAN Pair global server management
+// LAN Pair global server management (extra build only)
 // ---------------------------------------------------------------------------
+#if SFTP_EXTRA
 
 // Generate a stable peer ID for this machine/process combination.
 static std::string MakeLanPeerId()
@@ -667,10 +678,23 @@ static int LanPairConnect(pConnectSettings cs)
     ShowStatusId(IDS_LOG_LAN_CONNECTED, nullptr, true);
     return SFTP_OK;
 }
+#endif // SFTP_EXTRA
 
 int SftpConnect(pConnectSettings ConnectSettings)
 {
     int hr = 0;
+#if !SFTP_EXTRA
+    // The classic build has no PHP Agent and no LAN Pair. A session made for
+    // them in the extra build is refused, never tried as SSH.
+    if (ConnectSettings->transfermode != static_cast<int>(sftp::TransferMode::ssh_auto)) {
+        SFTP_LOG("CONN", "transfer mode %d needs the extra build", ConnectSettings->transfermode);
+        if (ConnectSettings->feedback)
+            ConnectSettings->feedback->ShowError(LngStrU8(IDS_ERR_NEEDS_EXTRA,
+                "This session uses PHP Agent or LAN Pair, which only the extra build of the plugin "
+                "has (SFTPplug-...-extra.zip). This build connects over SSH only.").c_str());
+        return SFTP_FAILED;
+    }
+#else
     if (IsLanPairTransport(ConnectSettings)) {
         return LanPairConnect(ConnectSettings);
     }
@@ -686,6 +710,7 @@ int SftpConnect(pConnectSettings ConnectSettings)
         }
         return SFTP_OK;
     }
+#endif
 
     std::array<char, 1024> buf{};
     std::array<char, 250> connecttoserver{};
@@ -877,7 +902,9 @@ int SftpCloseConnection(pConnectSettings ConnectSettings)
         return SFTP_FAILED;
 
     // 1. LAN Pair (own transport, not SSH) — quick disconnect.
+#if SFTP_EXTRA
     ReleaseLanSession(ConnectSettings);
+#endif
 
     // 2. SCP shell channel (only present in scponly mode). Destructor of
     //    Libssh2Channel sends SSH_MSG_CHANNEL_CLOSE/free with bounded retry.
@@ -933,8 +960,13 @@ int SftpCloseConnection(pConnectSettings ConnectSettings)
 
 bool ReconnectSFTPChannelIfNeeded(pConnectSettings ConnectSettings)
 {
-    if (IsLanPairTransport(ConnectSettings))
+    if (IsLanPairTransport(ConnectSettings)) {
+#if SFTP_EXTRA
         return ConnectSettings->lanSession && ConnectSettings->lanSession->isConnected();
+#else
+        return false;
+#endif
+    }
     if (IsPhpAgentTransport(ConnectSettings))
         return true;
 

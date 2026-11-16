@@ -7,10 +7,12 @@
 #include <vector>
 #include <string>
 
+#if SFTP_EXTRA
 // Declared in SftpConnection.cpp
 extern void LanFileServerSetTrustedInstaller(bool enabled);
 extern bool LanFileServerIsRunning();
 extern bool AskNewLanPeer(const std::string& peerId, const std::string& ip);
+#endif
 #include <new>
 #include <unordered_map>
 #include <vector>
@@ -19,6 +21,7 @@ extern bool AskNewLanPeer(const std::string& peerId, const std::string& ip);
 #include <cwctype>
 #include <cstring>
 #include <format>
+#include <mutex>
 #include <string_view>
 #include <stdio.h>
 #include "SftpClient.h"
@@ -30,10 +33,14 @@ extern bool AskNewLanPeer(const std::string& peerId, const std::string& ip);
 #include "UnicodeHelpers.h"
 #include "SftpInternal.h"
 #include "WindowsUserFeedback.h"
+#if SFTP_EXTRA
 #include "PhpAgentClient.h"
 #include "PhpShellConsole.h"
+#endif
 #include "ConnectionDialog.h"
+#if SFTP_EXTRA
 #include "LanPair.h"
+#endif
 #include "JumpHostConnection.h"
 #include "IniFile.h"
 #include "ProfileSettings.h"
@@ -272,9 +279,11 @@ struct ConnectDialogContext {
     std::string defaultSystemLabel;
     std::string defaultEncodingLabel;
     std::wstring defaultPasswordLabel;
+#if SFTP_EXTRA
     std::unique_ptr<lanpair::DiscoveryService> lanDiscovery;
     std::unique_ptr<lanpair::PairServer> lanServer;
     std::unordered_map<std::string, lanpair::PeerAnnouncement> lanPeers;
+#endif
     std::vector<std::string> lanPeerOrder;
     std::string lanPeerId;
     std::wstring lanDisplayName;
@@ -308,7 +317,9 @@ private:
     INT_PTR OnShowWindow(BOOL fShow);
     INT_PTR OnCommand(WPARAM wParam, LPARAM lParam);
     void    OnDestroy();
+#if SFTP_EXTRA
     INT_PTR OnLanPeerMessage(WPARAM wParam, LPARAM lParam);
+#endif
     void    OnOk();
     void    OnCancel();
     void    OnTransferModeChanged();
@@ -592,6 +603,7 @@ static void StopLanPairing(ConnectDialogContext* dlgCtx)
     if (!dlgCtx) {
         return;
     }
+#if SFTP_EXTRA
     if (dlgCtx->lanServer) {
         dlgCtx->lanServer->stop();
         dlgCtx->lanServerRunning = false;
@@ -600,6 +612,7 @@ static void StopLanPairing(ConnectDialogContext* dlgCtx)
         dlgCtx->lanDiscovery->stop();
         dlgCtx->lanDiscoveryRunning = false;
     }
+#endif
 }
 
 static void RefreshLanPeerCombo(HWND hWnd, ConnectDialogContext* dlgCtx, const std::string& selectedPeerId)
@@ -627,6 +640,7 @@ static void RefreshLanPeerCombo(HWND hWnd, ConnectDialogContext* dlgCtx, const s
     } else if (!peerFallback.empty() && peerFallback.back() == L':') {
         peerFallback.pop_back();
     }
+#if SFTP_EXTRA
     for (const auto& [peerId, ann] : dlgCtx->lanPeers) {
         const std::string nameU8 = ann.displayName.empty() ? ann.peerId : ann.displayName;
         const std::wstring nameW = Utf8ToWide(nameU8);
@@ -639,6 +653,15 @@ static void RefreshLanPeerCombo(HWND hWnd, ConnectDialogContext* dlgCtx, const s
         }
         ++nextIndex;
     }
+#else
+    // No discovery in the classic build: the stored peer is shown as it is.
+    if (!effectiveSelectedPeerId.empty()) {
+        SendDlgItemMessageW(hWnd, IDC_UTF8, CB_ADDSTRING, 0,
+                            (LPARAM)Utf8ToWide(effectiveSelectedPeerId).c_str());
+        dlgCtx->lanPeerOrder.push_back(effectiveSelectedPeerId);
+        selectedIndex = nextIndex;
+    }
+#endif
     SendDlgItemMessage(hWnd, IDC_UTF8, CB_SETCURSEL, selectedIndex, 0);
     {
         RECT rRef{};
@@ -648,6 +671,7 @@ static void RefreshLanPeerCombo(HWND hWnd, ConnectDialogContext* dlgCtx, const s
     }
 }
 
+#if SFTP_EXTRA
 static void EnsureLanDiscoveryRunning(HWND hWnd, ConnectDialogContext* dlgCtx, pConnectSettings s)
 {
     if (!dlgCtx || dlgCtx->lanDiscoveryRunning) {
@@ -1009,6 +1033,7 @@ static void HandleLanPairAction(HWND hWnd, ConnectDialogContext* dlgCtx, pConnec
     const std::wstring titleW = LoadResStringW(IDS_LAN_TITLE);
     tempFeedback.ShowMessage(WideToUtf8(msgW), titleW.empty() ? "LAN Pair" : WideToUtf8(titleW));
 }
+#endif // SFTP_EXTRA
 
 // ============================================================================
 // WM_COMMAND handlers - refactored to separate functions
@@ -1043,6 +1068,7 @@ static void OnBrowseKeyFileCommand(HWND hWnd, bool isPublicKey)
     }
 }
 
+#if SFTP_EXTRA
 static void OnPhpShellCommand(HWND hWnd, ConnectDialogContext* dlgCtx, pConnectSettings dlgConnectResults)
 {
     int transferMode = (int)SendDlgItemMessage(hWnd, IDC_TRANSFERMODE, CB_GETCURSEL, 0, 0);
@@ -1111,6 +1137,7 @@ static void OnPhpShellCommand(HWND hWnd, ConnectDialogContext* dlgCtx, pConnectS
     }
     ShowPhpShellConsole(hWnd, std::move(shellSettings));
 }
+#endif // SFTP_EXTRA
 
 static void RebuildSystemAndEncodingCombos(HWND hWnd, ConnectDialogContext* dlgCtx, pConnectSettings s)
 {
@@ -1157,7 +1184,9 @@ static void RebuildSystemAndEncodingCombos(HWND hWnd, ConnectDialogContext* dlgC
         SendDlgItemMessageW(hWnd, IDC_SYSTEM, CB_ADDSTRING, 0, (LPARAM)(roleDonor.empty() ? L"Donor" : roleDonor.c_str()));
         SendDlgItemMessage(hWnd, IDC_SYSTEM, CB_SETCURSEL, max(0, min(2, s->lan_pair_role)), 0);
         RefreshLanPeerCombo(hWnd, dlgCtx, s->lan_pair_peer);
+#if SFTP_EXTRA
         EnsureLanDiscoveryRunning(hWnd, dlgCtx, s);
+#endif
         SendMessage(hWnd, WM_SETREDRAW, TRUE, 0);
         RedrawWindow(hWnd, nullptr, nullptr, RDW_ERASE | RDW_FRAME | RDW_INVALIDATE | RDW_ALLCHILDREN);
         return;
@@ -1382,7 +1411,7 @@ static void UpdateCertSectionState(HWND hWnd)
 void EnableControlsPageant(HWND hWnd, bool enable) { EnableCertSection(hWnd, enable); }
 void UpdateKeyControlsForPrivateKey(HWND hWnd)      { UpdateCertSectionState(hWnd); }
 
-void UpdateScpOnlyDependentControls(HWND hWnd)
+static void UpdateModeDependentControls(HWND hWnd)
 {
     SendMessage(hWnd, WM_SETREDRAW, FALSE, 0);
     const int transferMode = (int)SendDlgItemMessage(hWnd, IDC_TRANSFERMODE, CB_GETCURSEL, 0, 0);
@@ -1533,6 +1562,21 @@ void UpdateScpOnlyDependentControls(HWND hWnd)
     DlgLayout::LayoutConnectionDialog(hWnd);
     SendMessage(hWnd, WM_SETREDRAW, TRUE, 0);
     RedrawWindow(hWnd, nullptr, nullptr, RDW_ERASE | RDW_FRAME | RDW_INVALIDATE | RDW_ALLCHILDREN);
+}
+
+void UpdateScpOnlyDependentControls(HWND hWnd)
+{
+    UpdateModeDependentControls(hWnd);
+#if !SFTP_EXTRA
+    // The classic build is SSH only: the mode cannot be changed, PHP Shell
+    // and Pair... are not there, and a PHP Agent / LAN Pair session made by
+    // the extra build is shown read-only.
+    const int transferMode = (int)SendDlgItemMessage(hWnd, IDC_TRANSFERMODE, CB_GETCURSEL, 0, 0);
+    EnableWindow(GetDlgItem(hWnd, IDC_TRANSFERMODE), FALSE);
+    EnableWindow(GetDlgItem(hWnd, IDC_PHPSHELL), FALSE);
+    EnableWindow(GetDlgItem(hWnd, IDOK),
+                 transferMode == static_cast<int>(sftp::TransferMode::ssh_auto));
+#endif
 }
 
 static void TrimSessionName(char* s) noexcept
@@ -2220,7 +2264,9 @@ INT_PTR ConnectionDialog::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
         return TRUE;
     case WM_SHOWWINDOW:   return OnShowWindow(LOWORD(wParam));
     case WM_COMMAND:      return OnCommand(wParam, lParam);
+#if SFTP_EXTRA
     case WM_APP_LAN_PEER: return OnLanPeerMessage(wParam, lParam);
+#endif
     case WM_DESTROY:      OnDestroy(); return 0;
     }
     return 0;
@@ -2243,7 +2289,11 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
         if (!ver.empty()) {
             std::array<wchar_t, 256> cur{};
             GetWindowTextW(m_hWnd, cur.data(), static_cast<int>(cur.size() - 1));
-            SetWindowTextW(m_hWnd, (std::wstring(cur.data()) + L" v" + ver).c_str());
+            std::wstring title = std::wstring(cur.data()) + L" v" + ver;
+#if SFTP_EXTRA
+            title += L" extra";
+#endif
+            SetWindowTextW(m_hWnd, title.c_str());
         }
     }
 
@@ -2508,6 +2558,7 @@ void ConnectionDialog::OnDestroy()
     StopLanPairing(m_ctx);
 }
 
+#if SFTP_EXTRA
 INT_PTR ConnectionDialog::OnLanPeerMessage(WPARAM /*wParam*/, LPARAM lParam)
 {
     auto* ann = reinterpret_cast<lanpair::PeerAnnouncement*>(lParam);
@@ -2559,10 +2610,19 @@ INT_PTR ConnectionDialog::OnLanPeerMessage(WPARAM /*wParam*/, LPARAM lParam)
     delete ann;
     return 1;
 }
+#endif
 
 void ConnectionDialog::OnOk()
 {
     StopLanPairing(m_ctx);
+#if !SFTP_EXTRA
+    // A PHP Agent / LAN Pair session from the extra build is shown read-only:
+    // nothing is saved, so its mode is never rewritten as SSH.
+    if (m_settings->transfermode != static_cast<int>(sftp::TransferMode::ssh_auto)) {
+        EndDialog(m_hWnd, IDCANCEL);
+        return;
+    }
+#endif
 
     LPCSTR dlgDisplayName = m_ctx->displayName;
     LPCSTR dlgIniFileName = m_ctx->iniFileName;
@@ -2729,12 +2789,14 @@ void ConnectionDialog::OnOk()
         _itoa_s(max(0, m_settings->lan_pair_timeout_min), buf.data(), buf.size(), 10);
         IniWriteString(targetProfile.data(), "lanpairtimeout", m_settings->lan_pair_timeout_min == 0 ? nullptr : buf.data(), dlgIniFileName);
         IniWriteString(targetProfile.data(), "lanparti", m_settings->lan_pair_trusted_installer ? "1" : nullptr, dlgIniFileName);
+#if SFTP_EXTRA
         LanFileServerSetTrustedInstaller(m_settings->lan_pair_trusted_installer);
         if (m_settings->transfermode == static_cast<int>(sftp::TransferMode::smb_lan) &&
             !m_settings->password.empty() && !m_settings->lan_pair_peer.empty()) {
             const std::string localId = MakeLanPeerId();
             PrepareLanPairTrustKeys(localId, m_settings->lan_pair_peer, m_settings->password);
         }
+#endif
         IniWriteString(targetProfile.data(), "detailedlog", m_settings->detailedlog ? "1" : nullptr, dlgIniFileName);
         IniWriteString(targetProfile.data(), "utf8",        m_settings->utf8names == -1 ? nullptr : m_settings->utf8names == 1 ? "1" : "0", dlgIniFileName);
         _itoa_s(m_settings->codepage, buf.data(), buf.size(), 10);
@@ -2821,6 +2883,7 @@ void ConnectionDialog::OnOk()
         }
     }
 
+#if SFTP_EXTRA
     const int transferMode = max(0, min(3, m_settings->transfermode));
     if (transferMode == static_cast<int>(sftp::TransferMode::php_agent) ||
         transferMode == static_cast<int>(sftp::TransferMode::php_shell)) {
@@ -2829,6 +2892,7 @@ void ConnectionDialog::OnOk()
             ShowStatusId(IDS_LOG_PHP_SKIP_UPDATE, nullptr, true);
         }
     }
+#endif
     m_settings->customport = 0;  // will be set later by the connection logic
     EndDialog(m_hWnd, IDOK);
 }
@@ -2885,7 +2949,9 @@ void ConnectionDialog::OnTransferModeChanged()
 
 void ConnectionDialog::OnPhpShellBtn()
 {
+#if SFTP_EXTRA
     OnPhpShellCommand(m_hWnd, m_ctx, m_settings);
+#endif
 }
 
 void ConnectionDialog::OnBrowseKeyFile(bool isPublicKey)

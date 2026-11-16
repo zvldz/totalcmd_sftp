@@ -89,25 +89,32 @@ jobs:
         # release before the plugin is built.
         run: ./tests/run-unit-tests.ps1
 
-      - name: Build plugin (Release x64 + x86)
+      - name: Build plugin (classic + extra, Release x64 + x86)
         shell: pwsh
         # The help page is generated from src/help by a Python script, so the
         # runner builds it like everything else — nothing is carried in the
         # repository and nothing can go stale between an edit and a tag.
         run: ./build.ps1
 
-      - name: Rename release artifact
+      - name: Rename release artifacts
         id: zip
         shell: pwsh
         run: |
           $tag = "${{ steps.meta.outputs.tag }}"
-          $zipSrc = "bin\SFTPplug.zip"
-          $zipDst = "bin\SFTPplug-$tag.zip"
-          if (-not (Test-Path $zipSrc)) {
-            throw "Build did not produce $zipSrc"
+          # Two builds: classic (SSH only) and extra (+ PHP Agent, LAN Pair).
+          $paths = @()
+          foreach ($pair in @(@("bin\SFTPplug.zip", "bin\SFTPplug-$tag.zip"),
+                              @("bin\SFTPplug-extra.zip", "bin\SFTPplug-$tag-extra.zip"))) {
+            if (-not (Test-Path $pair[0])) {
+              throw "Build did not produce $($pair[0])"
+            }
+            Copy-Item $pair[0] $pair[1]
+            $paths += $pair[1]
           }
-          Copy-Item $zipSrc $zipDst
-          "path=$zipDst" >> $env:GITHUB_OUTPUT
+          # Newline-separated, as the release step takes a file list.
+          "paths<<EOF" >> $env:GITHUB_OUTPUT
+          $paths -join "`n" >> $env:GITHUB_OUTPUT
+          "EOF" >> $env:GITHUB_OUTPUT
 
       - name: Extract CHANGELOG section for release notes
         id: notes
@@ -142,5 +149,5 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}
           prerelease: ${{ steps.meta.outputs.prerelease == 'true' }}
-          files: ${{ steps.zip.outputs.path }}
+          files: ${{ steps.zip.outputs.paths }}
           body_path: ${{ steps.notes.outputs.path }}

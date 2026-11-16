@@ -8,7 +8,7 @@
 //   remote-base  existing writable remote directory, e.g. /tmp
 //   mode         the transfer mode the session is set up for (sftp, scp,
 //                scponly, shell, text, text-scp, text-scponly, nosub,
-//                nosub-bad, postcmd, key-*); the text* modes also run the
+//                nosub-bad, postcmd, key-*, classic-gate); the text* modes also run the
 //                text-mode (CRLF <-> LF) checks
 //
 // Environment: SFTP_IT_POSTCMD_EXPECT, the line the post-login command
@@ -90,6 +90,7 @@ struct Plugin {
 // ---------------------------------------------------------------------------
 int g_unexpectedPrompts = 0;
 int g_messages = 0;
+std::wstring g_lastMessage;
 bool g_verbose = false;
 
 std::string Narrow(const std::wstring& w)
@@ -153,6 +154,7 @@ BOOL WINAPI OnRequest(int, int type, LPCWSTR title, LPCWSTR text, LPWSTR returne
     }
     if (type == RT_MsgOK) {
         ++g_messages;
+        g_lastMessage = all;
         std::printf("      message: %s\n", Narrow(all).c_str());
         return TRUE;
     }
@@ -336,6 +338,19 @@ int wmain(int argc, wchar_t** argv)
         const ULONGLONG seconds = (GetTickCount64() - start) / 1000;
         Check(!listedBad, "a wrong SFTP server command fails to connect");
         Check(seconds < 30, "and gives up in " + std::to_string(seconds) + " s, no hang");
+        std::printf("%d passed, %d failed, %d known\n", g_passed, g_failed, g_known);
+        return g_failed == 0 ? 0 : 1;
+    }
+
+    if (mode == L"classic-gate") {
+        // A PHP Agent session pointed at the SSH bench, with a key that
+        // works there: the classic build refuses it, and must not connect
+        // over SSH instead.
+        bool listedGate = true;
+        ListDir(root, listedGate);
+        Check(!listedGate, "a PHP Agent session is not connected by the classic build");
+        Check(g_lastMessage.find(L"extra build") != std::wstring::npos,
+              "the refusal names the extra build");
         std::printf("%d passed, %d failed, %d known\n", g_passed, g_failed, g_known);
         return g_failed == 0 ? 0 : 1;
     }
