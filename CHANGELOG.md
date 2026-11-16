@@ -242,6 +242,36 @@ From this version the plugin comes in two builds: **classic**
   backslash, as Total Commander names the target of a copy, was not
   recognised as a folder and was connected to as a session; so was the
   target of a background copy. Closing the dialog let the import go on.
+- **SCP-only downloads longer than 20 seconds no longer fail.** The stall
+  timeout counted from the start of the transfer, so the first pause in
+  the data after 20 seconds ended any larger download as "stalled".
+- **An unreadable file no longer costs the local copy.**
+  - Overwriting a local file from a remote one that cannot be read, in
+    SCP-only and shell-transfer sessions, deleted the local file before
+    the server said no. The download now goes to a file beside it and
+    replaces the original only when complete.
+  - Choosing Skip for a file that could not be read deleted the local
+    file of that name even when the download had not touched it. Only a
+    file the failed download wrote is removed now.
+- **Resuming past 4 GB on the 32-bit plugin.** An SFTP upload resumed
+  on a remote file over 4 GB wrote the rest at the wrong place and
+  reported success, after which a move deleted the source; an SCP-only
+  download over 4 GB failed. Offsets are 64-bit now, and a resume checks
+  where it writes.
+- **Shell transfers keep more of what they had.**
+  - A resumed download whose fast path failed started over from zero,
+    throwing away the part already there; it now continues where it was.
+  - Text mode no longer converts line breaks in a file that turns out
+    to be binary (UTF-16 text among them), as SFTP mode already did.
+  - Downloads keep the server's modification time.
+  - A terminal that still echoed commands could put a few junk bytes at
+    the start of a base64 download.
+  - Cancelling an upload while the server finished writing reported it
+    done; a file name with a quote in it went into the SCP header with
+    the quoting left in.
+- **SCP no longer takes the end of a connection for "OK".** A server
+  closing the channel in the middle of the protocol was read as a
+  confirmation.
 - **Shell transfers notice a refused file.** A download of a file the
   server would not let `cat` read was saved empty and reported done; an
   upload the server refused (no permission, disk full) was reported done

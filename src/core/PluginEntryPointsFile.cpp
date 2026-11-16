@@ -2231,8 +2231,22 @@ int WINAPI FsGetFileW(LPCWSTR RemoteName, LPWSTR LocalName, int CopyFlags, Remot
         // error that keeps striking at the same offset would otherwise spin
         // here for good.
         // A file that cannot be read may be skipped when it is one of many.
+        // Skipping removes what this download wrote, and nothing else: a
+        // local file the failed download never touched — the server refused
+        // the file before a byte arrived — is the user's, and stays.
+        WIN32_FILE_ATTRIBUTE_DATA before{};
+        const bool existedBefore = GetFileAttributesExW(LocalName, GetFileExInfoStandard, &before) != 0;
+        const auto touched = [&] {
+            WIN32_FILE_ATTRIBUTE_DATA now{};
+            if (!GetFileAttributesExW(LocalName, GetFileExInfoStandard, &now))
+                return false;
+            return !existedBefore || now.nFileSizeHigh != before.nFileSizeHigh ||
+                   now.nFileSizeLow != before.nFileSizeLow ||
+                   CompareFileTime(&now.ftLastWriteTime, &before.ftLastWriteTime) != 0;
+        };
         const auto readError = [&] {
-            return download_batch::ResolveReadError(RemoteName, LocalName, Move, resumeAsked);
+            return download_batch::ResolveReadError(RemoteName, touched() ? LocalName : nullptr,
+                                                    Move, resumeAsked);
         };
         int64_t partialSize = -1;
         while (true) {  // auto-resume loop

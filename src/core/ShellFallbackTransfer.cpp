@@ -184,13 +184,16 @@ static bool ShellExecPersistentProcessLines(
         if (!p[0])
             continue;
 
-        if (!gotBeginMarker) {
-            if (strstr(p, beginMarker.data()) != nullptr) {
-                gotBeginMarker = true;
+        // A terminal that still echoes shows the marker first inside the
+        // echoed command, then again as the command's output; neither is data.
+        if (strstr(p, beginMarker.data()) != nullptr) {
+            if (!gotBeginMarker)
                 SFTP_LOG("SCP", "Detected BEGIN marker: %s", beginMarker.data());
-            }
+            gotBeginMarker = true;
             continue;
         }
+        if (!gotBeginMarker)
+            continue;
 
         // Prefer exact line-start marker matching, but also accept marker anywhere
         // in the line for shells that inject prompt prefixes.
@@ -358,9 +361,15 @@ static int ShellDdDownloadRaw(
     const SYSTICKS starttime = get_sys_ticks();
     SYSTICKS lastIoTime = get_sys_ticks();
 
+    bool firstChunk = true;
     while (true) {
         int rc = (int)ch->read(buf.data(), buf.size());
         if (rc > 0) {
+            // A NUL in the first data is a binary file (UTF-16 text among
+            // them), which line-break conversion would corrupt.
+            if (textMode && firstChunk && memchr(buf.data(), 0, static_cast<size_t>(rc)))
+                textMode = false;
+            firstChunk = false;
             // The count stays in server bytes, which the size checks use;
             // only what is written to disk is converted.
             const char* out = buf.data();
@@ -474,6 +483,10 @@ static int ShellDdDownloadBase64(
             size_t decoded = ShellB64Decode(std::string_view(p, lineLen), std::span<uint8_t>(decodeBuf.data(), decodeBuf.size()));
             if (decoded == 0)
                 return true;
+            // A NUL in the first data is a binary file (UTF-16 text among
+            // them), which line-break conversion would corrupt.
+            if (textMode && decodedTotal == resumeFrom && memchr(decodeBuf.data(), 0, decoded))
+                textMode = false;
 
             // The counts stay in server bytes, which the size checks use;
             // only what is written to disk is converted.
@@ -628,8 +641,10 @@ static int ShellDdUploadRaw(
     while (!ch->eof()) {
         if (get_ticks_between(waitStart) > (int)SFTP_SCP_WRITE_IDLE_TIMEOUT_MS)
             break;
-        if (EscapePressed())
-            break;
+        if (EscapePressed()) {
+            DisconnectShell(ch.get());
+            return SFTP_ABORT;
+        }
         WaitForSshIo(cs);
     }
 
@@ -836,6 +851,17 @@ int ShellDdDownloadFile(
 
     ShowStatusId(IDS_LOG_SHELL_DL_START, nullptr, true);
 
+    // A failed raw attempt is undone back to where this download started:
+    // what the raw read appended goes, the part a resume began with stays.
+    const int64_t startedAt = resumeFrom;
+    const auto rewind = [&] {
+        LARGE_INTEGER at{};
+        at.QuadPart = startedAt;
+        SetFilePointerEx(localfile, at, nullptr, FILE_BEGIN);
+        SetEndOfFile(localfile);
+        *outSizeLoaded = startedAt;
+    };
+
     if (!cs->shell_dd_b64only) {
         int rc = ShellDdDownloadRaw(cs, remotePath, remoteNameW,
                                     localfile, localNameW, hintedSize, resumeFrom, textMode, outSizeLoaded);
@@ -852,22 +878,16 @@ int ShellDdDownloadFile(
                 SHELL_DD_LOG("raw DL size mismatch: got %lld expected %lld, switching to base64",
                              (long long)*outSizeLoaded, (long long)hintedSize);
                 cs->shell_dd_b64only = true;
-                // Reset local file and retry with base64.
-                SetFilePointer(localfile, 0, nullptr, FILE_BEGIN);
-                SetEndOfFile(localfile);
-                *outSizeLoaded = 0;
-                resumeFrom = 0;
+                rewind();
                 // fall through
             } else {
                 return SFTP_OK;
             }
         } else if (rc != SFTP_ABORT) {
-            SHELL_DD_LOG("raw DL failed (rc=%d), switching to base64", rc);
+            SHELL_DD_LOG("raw DL failed (rc=%d), switching to base64 from %lld",
+                         rc, (long long)startedAt);
             cs->shell_dd_b64only = true;
-            SetFilePointer(localfile, 0, nullptr, FILE_BEGIN);
-            SetEndOfFile(localfile);
-            *outSizeLoaded = 0;
-            resumeFrom = 0;
+            rewind();
             // fall through
         } else {
             return rc;
@@ -962,13 +982,24 @@ int ShellDdUploadFile(
                                textMode, expectedRemoteSize, outSizeLoaded);
 }
 
+// The file name from a path argument as BuildShellScpArgument quotes it:
+// single quotes, with each quote inside written as '\''.
 static std::string BaseNameFromPath(const std::string& path)
 {
     if (path.empty())
         return "upload.bin";
-    std::string normalized = path;
-    if (normalized.size() >= 2 && normalized.front() == '"' && normalized.back() == '"')
-        normalized = normalized.substr(1, normalized.size() - 2);
+    std::string normalized;
+    bool quoted = false;
+    for (size_t i = 0; i < path.size(); ++i) {
+        const char c = path[i];
+        if (c == '\'') {
+            quoted = !quoted;
+        } else if (!quoted && c == '\\' && i + 1 < path.size()) {
+            normalized.push_back(path[++i]);
+        } else {
+            normalized.push_back(c);
+        }
+    }
     size_t pos = normalized.find_last_of('/');
     if (pos == std::string::npos || pos + 1 >= normalized.size())
         return normalized;
@@ -1012,7 +1043,12 @@ int ShellScpUploadFile(
         return SFTP_WRITEFAILED;
     }
 
+    // The header is one line: a name that breaks it cannot be sent.
     const std::string baseName = BaseNameFromPath(remotePathArg);
+    if (baseName.find_first_of("\r\n") != std::string::npos) {
+        DisconnectShell(channel.get());
+        return SFTP_WRITEFAILED;
+    }
     std::array<char, 1024> header{};
     _snprintf_s(header.data(), header.size(), _TRUNCATE, "C%04o %lld %s\n", cs->filemod & 0777, (long long)fileSize, baseName.c_str());
     if (!ScpWriteAll(channel.get(), cs, header.data(), strlen(header.data()), SFTP_SCP_WRITE_IDLE_TIMEOUT_MS) ||

@@ -704,10 +704,7 @@ int wmain(int argc, wchar_t** argv)
         const std::string keepHash = Sha256File(target);
         rc = g_plugin.GetFileW(remote.c_str(), target.data(), FS_COPYFLAGS_OVERWRITE, &ri);
         const std::string over = "overwrite from an unreadable file keeps the local copy (rc=" + std::to_string(rc) + ")";
-        if (shellMode)
-            Known(rc != FS_FILE_OK && Sha256File(target) == keepHash, over);
-        else
-            Check(rc != FS_FILE_OK && Sha256File(target) == keepHash, over);
+        Check(rc != FS_FILE_OK && Sha256File(target) == keepHash, over);
         // Total Commander reports the failed download itself; the plugin
         // adds no dialog of its own, least of all one blaming scp.
         Check(g_messages == messagesBefore, "no extra message box for an unreadable file");

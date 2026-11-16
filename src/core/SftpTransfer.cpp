@@ -376,15 +376,24 @@ int SftpDownloadFileW(pConnectSettings cs, LPCWSTR RemoteName, LPCWSTR LocalName
         }
     }
 
+    // A shell path learns that the remote file cannot be read only once it
+    // runs, after the local file is opened. One that would be overwritten is
+    // therefore left alone until the download is complete: the data goes to
+    // a file beside it, which replaces it at the end.
+    const bool viaTemp = shellPath && alwaysOverwrite && !Resume &&
+                         GetFileAttributesT(LocalName) != INVALID_FILE_ATTRIBUTES;
+    const std::wstring tempName = viaTemp ? std::wstring(LocalName) + L".sftp-part" : std::wstring();
+    const LPCWSTR target = viaTemp ? tempName.c_str() : LocalName;
+
     // A file being overwritten is removed rather than truncated in place:
     // CREATE_ALWAYS is refused on a hidden or system file.
     if (alwaysOverwrite && !Resume)
-        DeleteFileT(LocalName);
+        DeleteFileT(target);
 
     // Open local file
     LocalFile local;
     int64_t loaded = 0;
-    if (!OpenLocalForWrite(local, LocalName, alwaysOverwrite, Resume, loaded, filesize)) {
+    if (!OpenLocalForWrite(local, target, alwaysOverwrite, Resume, loaded, filesize)) {
         if (Resume && loaded == filesize)
             return SFTP_OK;
         if (!Resume && GetLastError() == ERROR_FILE_EXISTS)
@@ -404,9 +413,23 @@ int SftpDownloadFileW(pConnectSettings cs, LPCWSTR RemoteName, LPCWSTR LocalName
                                       local.get(), LocalName,
                                       textMode, filesize, &loaded);
         }
-        // These paths learn that the remote file cannot be read only after
-        // the local one exists; a failure that wrote nothing removes it
-        // rather than leave an empty file behind.
+        // The file keeps the server's modification time, as over SFTP.
+        if (rc == SFTP_OK && ft)
+            SetFileTime(local.get(), nullptr, nullptr, ft);
+        if (viaTemp) {
+            CloseHandle(local.release());
+            if (rc != SFTP_OK) {
+                DeleteFileT(tempName.c_str());
+                return rc;
+            }
+            if (!DeleteFileT(LocalName) || !MoveFileT(tempName.c_str(), LocalName)) {
+                DeleteFileT(tempName.c_str());
+                return SFTP_WRITEFAILED;
+            }
+            return rc;
+        }
+        // A failure that wrote nothing removes the file it created rather
+        // than leave an empty one behind.
         if (rc != SFTP_OK && !Resume && local.GetSize() == 0) {
             CloseHandle(local.release());
             DeleteFileT(LocalName);
@@ -415,7 +438,7 @@ int SftpDownloadFileW(pConnectSettings cs, LPCWSTR RemoteName, LPCWSTR LocalName
     }
 
     if (!useScp && Resume && loaded > 0) {
-        sftpHandle->seek(static_cast<size_t>(loaded));
+        sftpHandle->seek(static_cast<uint64_t>(loaded));
         if (static_cast<int64_t>(sftpHandle->tell()) != loaded)
             return SFTP_READFAILED;
     }
@@ -605,7 +628,11 @@ int SftpUploadFileW(pConnectSettings cs, LPCWSTR LocalName, LPCWSTR RemoteName,
             if (remoteSize > filesize)
                 return SFTP_WRITEFAILED;
             if (remoteSize > 0) {
-                sftpHandle->seek(static_cast<size_t>(remoteSize));
+                // Writing anywhere but at the end of what is there would put
+                // the rest of the file in the middle of it.
+                sftpHandle->seek(static_cast<uint64_t>(remoteSize));
+                if (sftpHandle->tell() != static_cast<uint64_t>(remoteSize))
+                    return SFTP_WRITEFAILED;
                 if (!local.Seek(remoteSize))
                     return SFTP_READFAILED;
                 resumeOffset = remoteSize;

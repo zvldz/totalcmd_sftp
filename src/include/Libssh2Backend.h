@@ -22,8 +22,8 @@ public:
     int readdir(char* buf, size_t blen, char* longentry, size_t llen,
                 LIBSSH2_SFTP_ATTRIBUTES* attrs) override;
     int close() override;
-    void seek(size_t offset) override;
-    size_t tell() override;
+    void seek(uint64_t offset) override;
+    uint64_t tell() override;
     int fstat(LIBSSH2_SFTP_ATTRIBUTES* attrs, int setstat) override;
     void abandon() noexcept override { handle_ = nullptr; }
 

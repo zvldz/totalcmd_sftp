@@ -63,14 +63,14 @@ Libssh2SftpHandle::~Libssh2SftpHandle()
     handle_ = nullptr;
 }
 
-void Libssh2SftpHandle::seek(size_t offset)
+void Libssh2SftpHandle::seek(uint64_t offset)
 {
-    libssh2_sftp_seek(handle_, offset);
+    libssh2_sftp_seek64(handle_, offset);
 }
 
-size_t Libssh2SftpHandle::tell()
+uint64_t Libssh2SftpHandle::tell()
 {
-    return libssh2_sftp_tell(handle_);
+    return libssh2_sftp_tell64(handle_);
 }
 
 int Libssh2SftpHandle::fstat(LIBSSH2_SFTP_ATTRIBUTES* attrs, int setstat)

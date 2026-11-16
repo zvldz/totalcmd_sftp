@@ -425,12 +425,15 @@ bool ScpReadCommandOutput(pConnectSettings cs, const char* endMarker,
         if (trimmed.empty())
             continue;
 
-        if (!gotBegin) {
-            if (trimmed.find(beginMarkerStr) != std::string_view::npos) {
-                gotBegin = true;
-            }
+        // A terminal that still echoes shows the marker first inside the
+        // echoed command, then again as the command's output; neither is
+        // output to keep.
+        if (hasBegin && trimmed.find(beginMarkerStr) != std::string_view::npos) {
+            gotBegin = true;
             continue;
         }
+        if (!gotBegin)
+            continue;
 
         // The shell may still echo what it was sent, and that echo carries
         // every marker the command mentions — including the end one, with a

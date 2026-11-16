@@ -34,8 +34,9 @@ struct ISftpHandle {
                         char* longentry, size_t llen,
                         LIBSSH2_SFTP_ATTRIBUTES* attrs) = 0;
     virtual int close() = 0;
-    virtual void seek(size_t offset) = 0;
-    virtual size_t tell() = 0;
+    // 64-bit on both builds: a resume past 4 GB on x86 must not wrap.
+    virtual void seek(uint64_t offset) = 0;
+    virtual uint64_t tell() = 0;
     virtual int fstat(LIBSSH2_SFTP_ATTRIBUTES* attrs, int setstat) = 0;
     // The SFTP session this handle belonged to is gone, and freed the handle
     // with it: forget it without closing.

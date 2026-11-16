@@ -76,12 +76,10 @@ public:
         return true;
     }
 
+    // One byte, or false: the end of the channel must not pass for a zero
+    // byte, which is the protocol's "OK".
     bool ReadByte(char& out, DWORD timeoutMs) {
-        int rc = WaitForOperation([&] {
-            int r = static_cast<int>(channel_->read(&out, 1));
-            return r == 1 ? 1 : r;
-        }, timeoutMs, cs_);
-        return rc >= 0;
+        return ScpReadByte(channel_.get(), cs_, &out, timeoutMs);
     }
 
     bool ReadLine(std::string& out, DWORD timeoutMs) {
@@ -89,11 +87,7 @@ public:
         const auto start = std::chrono::steady_clock::now();
         while (true) {
             char ch = 0;
-            int rc = WaitForOperation([&] {
-                int r = static_cast<int>(channel_->read(&ch, 1));
-                return r == 1 ? 1 : r;
-            }, timeoutMs, cs_);
-            if (rc < 0)
+            if (!ReadByte(ch, timeoutMs))
                 return false;
             if (ch == '\n')
                 return true;
@@ -414,7 +408,8 @@ int ShellScpDownloadFile(pConnectSettings cs,
     text_conversion::LfToCrLf toCrLf;
     std::vector<char> dataBuf(SFTP_MAX_READ_SIZE * 2);
     std::vector<char> converted;
-    const auto start = std::chrono::steady_clock::now();
+    // The stall timeout counts from the last data, not from the start.
+    auto lastData = std::chrono::steady_clock::now();
 
     while (true) {
         char type = 0;
@@ -459,10 +454,19 @@ int ShellScpDownloadFile(pConnectSettings cs,
 
         int64_t remaining = remoteSize;
         while (remaining > 0) {
-            const size_t want = std::min<size_t>(static_cast<size_t>(remaining), dataBuf.size());
+            // Compared in 64 bits: on x86 a remainder past 4 GB cast to size_t
+            // first would wrap, to nothing at 2^32.
+            const size_t want = static_cast<size_t>(
+                std::min<int64_t>(remaining, static_cast<int64_t>(dataBuf.size())));
             int rc = static_cast<int>(scp.get()->read(dataBuf.data(), want));
             if (rc > 0) {
+                // A NUL in the first data is a binary file (UTF-16 text among
+                // them), which line-break conversion would corrupt.
+                if (textMode && remaining == remoteSize &&
+                    memchr(dataBuf.data(), 0, static_cast<size_t>(rc)))
+                    textMode = false;
                 remaining -= rc;
+                lastData = std::chrono::steady_clock::now();
                 // LF -> CRLF can double a chunk, so it goes to its own buffer.
                 const char* out = dataBuf.data();
                 size_t outLen = static_cast<size_t>(rc);
@@ -484,7 +488,7 @@ int ShellScpDownloadFile(pConnectSettings cs,
             } else if (rc == LIBSSH2_ERROR_EAGAIN) {
                 if (EscapePressed()) return SFTP_ABORT;
                 const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-                    std::chrono::steady_clock::now() - start).count();
+                    std::chrono::steady_clock::now() - lastData).count();
                 if (elapsed > SFTP_SCP_READ_IDLE_TIMEOUT_MS) {
                     ShowStatus("SCP download stalled.");
                     return SFTP_READFAILED;
