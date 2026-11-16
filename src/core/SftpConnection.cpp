@@ -796,6 +796,20 @@ int SftpConnect(pConnectSettings ConnectSettings)
         EnsureSshBackend();
 
         JumpHostSettings jump = jumpCfg.endpoint;
+        if (!jump.passwordStoreName.empty()) {
+            std::string stored = LoadPlainPassword("!", jump.passwordStoreName);
+            if (stored.empty()) {
+                ShowStatus("Jump host: password not loaded from the password manager");
+                if (ConnectSettings->feedback)
+                    ConnectSettings->feedback->ShowError(
+                        LngStrU8(IDS_ERR_LOAD_PASS, "Failed to load password!"), "ProxyJump");
+                return fail(-25);
+            }
+            const StoredSecret secret = SplitStoredSecret(stored);
+            SecureZeroMemory(stored.data(), stored.size());
+            jump.password      = secret.accountPassword;
+            jump.keyPassphrase = secret.keyPassphrase;
+        }
 
         // Target is the server configured in the profile (resolved already
         // in connecttoserver/connecttoport above).

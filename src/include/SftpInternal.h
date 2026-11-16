@@ -140,6 +140,20 @@ int WaitForOperation(F&& op, DWORD timeoutMs, pConnectSettings cs)
 void  EncryptString(LPCTSTR pszPlain,     LPTSTR pszEncrypted, UINT cchEncrypted);
 void  DecryptString(LPCTSTR pszEncrypted, LPTSTR pszPlain,     UINT cchPlain);
 
+// Total Commander's password manager. A session's password is kept there
+// under the session name, its jump host's under "<session>$$jump", a proxy
+// record's under "proxyN$$pass"; the INI then holds "!" in its place.
+std::string JumpPasswordStoreName(const std::string& session);
+std::string ProxyPasswordStoreName(int proxynr);
+// Saves `plain` under `storeName`. TC asks for the master password, or
+// offers to create one when there is none; false when it was not saved.
+bool        SavePasswordInStore(const std::string& storeName, const std::string& plain);
+void        DeletePasswordFromStore(const std::string& storeName);
+// The plain text of a password value as the INI stores it: "!" is loaded
+// from the manager (TC asks for the master password if needed), anything
+// else is decrypted. Empty when there is none or it cannot be read.
+std::string LoadPlainPassword(const std::string& stored, const std::string& storeName);
+
 // Network helpers (extern "C" so they match libssh2 callback expectations)
 extern "C" int mysend(SOCKET s, LPCSTR buf, int len, int flags,
                       LPCSTR progressmessage, int progressstart,

@@ -4,6 +4,7 @@
 #include <windows.h>
 #include <string>
 #include <string_view>
+#include "fsplugin.h"
 
 namespace unicode_util {
 
@@ -25,6 +26,15 @@ std::wstring narrow_to_wide(std::string_view a, int codepage)
 bool HaveCryptProc() noexcept
 {
     return false;
+}
+
+int  PluginNumber   = 0;
+int  CryptoNumber   = 0;
+bool CryptCheckPass = false;
+
+int CryptProcI(int, int, int, LPCSTR, LPSTR, int) noexcept
+{
+    return FS_FILE_NOTSUPPORTED;
 }
 
 extern "C" LPSTR strlcpy(LPSTR p, LPCSTR p2, size_t maxlen)

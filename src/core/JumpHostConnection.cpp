@@ -90,7 +90,9 @@ JumpConfig ResolveJumpConfig(pConnectSettings cs, LPCSTR iniFileName)
         out.endpoint.host        = hostBuf.data();
         out.endpoint.port        = parsedPort;
         out.endpoint.user        = ref.user;
-        {
+        if (ref.password == "\001") {
+            out.endpoint.passwordStoreName = cs->jump_session_ref;
+        } else {
             const StoredSecret secret = SplitStoredSecret(ref.password);
             out.endpoint.password      = secret.accountPassword;
             out.endpoint.keyPassphrase = secret.keyPassphrase;
@@ -108,7 +110,9 @@ JumpConfig ResolveJumpConfig(pConnectSettings cs, LPCSTR iniFileName)
         out.endpoint.host        = cs->jump_host;
         out.endpoint.port        = cs->jump_port;
         out.endpoint.user        = cs->jump_user;
-        {
+        if (cs->jump_password == "\001") {
+            out.endpoint.passwordStoreName = JumpPasswordStoreName(cs->DisplayName);
+        } else {
             const StoredSecret secret = SplitStoredSecret(cs->jump_password);
             out.endpoint.password      = secret.accountPassword;
             out.endpoint.keyPassphrase = secret.keyPassphrase;

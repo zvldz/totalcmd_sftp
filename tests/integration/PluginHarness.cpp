@@ -8,8 +8,10 @@
 //   remote-base  existing writable remote directory, e.g. /tmp
 //   mode         the transfer mode the session is set up for (sftp, scp,
 //                scponly, shell, text, text-scp, text-scponly, nosub,
-//                nosub-bad, postcmd, key-*, classic-gate); the text* modes also run the
-//                text-mode (CRLF <-> LF) checks
+//                nosub-bad, postcmd, key-*, classic-gate, secrets); the text* modes
+//                also run the text-mode (CRLF <-> LF) checks; secrets needs no
+//                server: it checks where passwords end up when sessions are
+//                imported, exported, copied, renamed and deleted
 //
 // Environment: SFTP_IT_POSTCMD_EXPECT, the line the post-login command
 // prints (mode postcmd); SFTP_IT_RESTART_CMD, a command that restarts the
@@ -31,6 +33,7 @@
 #include <cstdlib>
 #include <cwchar>
 #include <fstream>
+#include <iterator>
 #include <map>
 #include <mutex>
 #include <random>
@@ -64,6 +67,7 @@ struct Plugin {
     int (WINAPI* ExecuteFileW)(HWND, LPWSTR, LPCWSTR) = nullptr;
     BOOL (WINAPI* Disconnect)(LPCSTR) = nullptr;
     void (WINAPI* StatusInfoW)(LPCWSTR, int, int) = nullptr;
+    void (WINAPI* SetCryptCallbackW)(tCryptProcW, int, int) = nullptr;
 
     template <class F> bool Bind(F& fn, const char* name)
     {
@@ -85,7 +89,7 @@ struct Plugin {
                Bind(MkDirW, "FsMkDirW") && Bind(RemoveDirW, "FsRemoveDirW") && Bind(DeleteFileW, "FsDeleteFileW") &&
                Bind(PutFileW, "FsPutFileW") && Bind(GetFileW, "FsGetFileW") && Bind(RenMovFileW, "FsRenMovFileW") &&
                Bind(ExecuteFileW, "FsExecuteFileW") && Bind(Disconnect, "FsDisconnect") &&
-               Bind(StatusInfoW, "FsStatusInfoW");
+               Bind(StatusInfoW, "FsStatusInfoW") && Bind(SetCryptCallbackW, "FsSetCryptCallbackW");
     }
 } g_plugin;
 
@@ -180,6 +184,49 @@ BOOL WINAPI OnRequest(int, int type, LPCWSTR title, LPCWSTR text, LPWSTR returne
     std::printf("      UNEXPECTED prompt type %d declined: %s\n", type, Narrow(all).c_str());
     ++g_unexpectedPrompts;
     return FALSE;
+}
+
+// Total Commander's password manager, kept in memory: the master password
+// counts as entered, so nothing is ever asked.
+std::map<std::wstring, std::wstring> g_store;
+
+int WINAPI OnCrypt(int, int, int mode, LPCWSTR name, LPWSTR password, int maxlen)
+{
+    const std::wstring key = name ? name : L"";
+    switch (mode) {
+    case FS_CRYPT_SAVE_PASSWORD:
+        g_store[key] = password ? password : L"";
+        return FS_FILE_OK;
+    case FS_CRYPT_LOAD_PASSWORD:
+    case FS_CRYPT_LOAD_PASSWORD_NO_UI: {
+        const auto it = g_store.find(key);
+        if (it == g_store.end())
+            return FS_FILE_READERROR;
+        wcsncpy_s(password, static_cast<size_t>(maxlen), it->second.c_str(), _TRUNCATE);
+        return FS_FILE_OK;
+    }
+    case FS_CRYPT_COPY_PASSWORD:
+    case FS_CRYPT_MOVE_PASSWORD: {
+        const auto it = g_store.find(key);
+        if (it == g_store.end())
+            return FS_FILE_READERROR;
+        const std::wstring value = it->second;
+        if (mode == FS_CRYPT_MOVE_PASSWORD)
+            g_store.erase(it);
+        g_store[password] = value;
+        return FS_FILE_OK;
+    }
+    case FS_CRYPT_DELETE_PASSWORD:
+        g_store.erase(key);
+        return FS_FILE_OK;
+    }
+    return FS_FILE_NOTSUPPORTED;
+}
+
+std::wstring StoreValue(const std::wstring& key)
+{
+    const auto it = g_store.find(key);
+    return it == g_store.end() ? L"(none)" : it->second;
 }
 
 // ---------------------------------------------------------------------------
@@ -370,6 +417,79 @@ int wmain(int argc, wchar_t** argv)
         Check(!listedGate, "a PHP Agent session is not connected by the classic build");
         Check(g_lastMessage.find(L"extra build") != std::wstring::npos,
               "the refusal names the extra build");
+        std::printf("%d passed, %d failed, %d known\n", g_passed, g_failed, g_known);
+        return g_failed == 0 ? 0 : 1;
+    }
+
+    if (mode == L"secrets") {
+        g_plugin.SetCryptCallbackW(OnCrypt, 1, FS_CRYPTOPT_MASTERPASS_SET);
+        const std::wstring iniPath = iniDir + L"\\sftpplug.ini";
+        const auto iniValue = [&](const wchar_t* section, const wchar_t* key) {
+            wchar_t buf[512] = {};
+            GetPrivateProfileStringW(section, key, L"(none)", buf, 512, iniPath.c_str());
+            return std::wstring(buf);
+        };
+        const std::wstring local = NewTempDir(L"secrets");
+        RemoteInfoStruct ri{};
+
+        // A session file with passwords, copied into the plugin: they land
+        // in the password manager, the INI holding "!".
+        WriteFileBytes(local + L"in.ini", "[x]\r\nserver=127.0.0.1:1\r\nuser=u\r\n"
+                                          "password=plain:secret1\r\njumppassword=plain:jsecret\r\n");
+        Check(g_plugin.PutFileW((local + L"in.ini").c_str(), L"\\it-imp.ini", 0) == FS_FILE_OK,
+              "a session file is copied into the plugin");
+        Check(iniValue(L"it-imp", L"password") == L"!" && iniValue(L"it-imp", L"jumppassword") == L"!",
+              "its passwords are not in the INI, only \"!\"");
+        Check(StoreValue(L"it-imp") == L"secret1" && StoreValue(L"it-imp$$jump") == L"jsecret",
+              "its passwords are in the password manager");
+
+        // "!" in a foreign file must not bind to this machine's entry of the
+        // same name.
+        g_store[L"it-victim"] = L"realpw";
+        WriteFileBytes(local + L"evil.ini", "[x]\r\nserver=127.0.0.1:2\r\npassword=!\r\njumppassword=!\r\n");
+        Check(g_plugin.PutFileW((local + L"evil.ini").c_str(), L"\\it-victim.ini", FS_COPYFLAGS_OVERWRITE) == FS_FILE_OK,
+              "a session file with \"!\" is copied into the plugin");
+        Check(iniValue(L"it-victim", L"password") == L"(none)" &&
+              iniValue(L"it-victim", L"jumppassword") == L"(none)",
+              "\"!\" from a file brings no password");
+
+        // Out to a file: the passwords readable, loaded from the manager.
+        const std::wstring out = local + L"out.ini";
+        Check(g_plugin.GetFileW(L"\\it-imp", const_cast<LPWSTR>(out.c_str()), FS_COPYFLAGS_OVERWRITE, &ri) == FS_FILE_OK,
+              "a session is copied out to a file");
+        std::string exported;
+        {
+            std::ifstream in(out, std::ios::binary);
+            exported.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+        }
+        Check(exported.find("password=plain:secret1") != std::string::npos &&
+              exported.find("jumppassword=plain:jsecret") != std::string::npos,
+              "the file has its passwords as plain:");
+
+        // Rename and copy inside the plugin carry the manager's entries.
+        Check(g_plugin.RenMovFileW(L"\\it-imp", L"\\it-imp2", TRUE, FALSE, &ri) == FS_FILE_OK,
+              "a session is renamed");
+        Check(StoreValue(L"it-imp2") == L"secret1" && StoreValue(L"it-imp2$$jump") == L"jsecret" &&
+              StoreValue(L"it-imp") == L"(none)" && StoreValue(L"it-imp$$jump") == L"(none)",
+              "its passwords move with it");
+        Check(g_plugin.RenMovFileW(L"\\it-imp2", L"\\it-imp3", FALSE, FALSE, &ri) == FS_FILE_OK,
+              "a session is copied");
+        Check(StoreValue(L"it-imp3") == L"secret1" && StoreValue(L"it-imp3$$jump") == L"jsecret" &&
+              StoreValue(L"it-imp2") == L"secret1",
+              "the copy has its own passwords, the original keeps its");
+
+        // Deleting a session deletes what the manager keeps for it.
+        Check(g_plugin.DeleteFileW(L"\\it-imp3") != FALSE, "a session is deleted");
+        Check(StoreValue(L"it-imp3") == L"(none)" && StoreValue(L"it-imp3$$jump") == L"(none)",
+              "its passwords leave the password manager");
+
+        g_plugin.DeleteFileW(L"\\it-imp2");
+        g_plugin.DeleteFileW(L"\\it-victim");
+        DeleteFileW((local + L"in.ini").c_str());
+        DeleteFileW((local + L"evil.ini").c_str());
+        DeleteFileW(out.c_str());
+        RemoveDirectoryW(local.c_str());
+        Check(g_unexpectedPrompts == 0, "no unexpected prompts");
         std::printf("%d passed, %d failed, %d known\n", g_passed, g_failed, g_known);
         return g_failed == 0 ? 0 : 1;
     }

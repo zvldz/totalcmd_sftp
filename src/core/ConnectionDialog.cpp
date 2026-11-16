@@ -48,6 +48,7 @@ extern bool AskNewLanPeer(const std::string& peerId, const std::string& ip);
 #include "DialogLayout.h"
 #include "DialogStrings.h"
 #include "DialogText.h"
+#include "PluginEntryPointsInternal.h"
 
 // Forward declaration - implemented in PluginHelp.cpp
 std::wstring GetPluginVersionW();
@@ -66,6 +67,10 @@ struct ProxyDialogContext {
 struct JumpDialogContext {
     pConnectSettings cs    = nullptr;   // main connection settings (in/out)
     bool   hasCryptProc    = false;
+    // Where the jump password is kept in TC's password manager, and whether it
+    // is to be kept there (in/out: "Protect password with password manager").
+    std::string storeName;
+    bool   protect         = false;
     // Set when the user repoints the jump host at a different machine, so the
     // parent dialog knows to drop the fingerprint of the old one.
     bool   fingerprintCleared = false;
@@ -99,7 +104,7 @@ static void UpdateJumpControlStates(HWND hWnd, bool fromSession)
     for (int id : { IDC_JUMP_HOST, IDC_JUMP_PORT, IDC_JUMP_USER,
                     IDC_JUMP_PASSWORD, IDC_JUMP_PUBKEY, IDC_JUMP_PRIVKEY,
                     IDC_JUMP_USEAGENT, IDC_JUMP_LOADPUBKEY, IDC_JUMP_LOADPRIVKEY,
-                    IDC_JUMP_CRYPTPASS }) {
+                    IDC_JUMP_CRYPTPASS, IDC_JUMP_EDITPASS }) {
         EnableWindow(GetDlgItem(hWnd, id), editable);
     }
 }
@@ -149,7 +154,24 @@ static INT_PTR CALLBACK JumpHostDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
             SetDlgItemTextI(hWnd, IDC_JUMP_HOST, cs->jump_host.c_str());
             SetDlgItemInt(hWnd, IDC_JUMP_PORT, cs->jump_port ? cs->jump_port : 22, FALSE);
             SetDlgItemTextI(hWnd, IDC_JUMP_USER, cs->jump_user.c_str());
-            SetDlgItemTextI(hWnd, IDC_JUMP_PASSWORD, cs->jump_password.c_str());
+            if (cs->jump_password == "\001") {
+                // Kept in the password manager: shown only if the master
+                // password has been entered already, otherwise behind
+                // Change password..., which asks for it.
+                std::array<char, MAX_PATH> stored{};
+                if (CryptProcI(PluginNumber, CryptoNumber, FS_CRYPT_LOAD_PASSWORD_NO_UI,
+                               ctx->storeName.c_str(), stored.data(),
+                               static_cast<int>(stored.size() - 1)) == FS_FILE_OK) {
+                    SetDlgItemTextI(hWnd, IDC_JUMP_PASSWORD, stored.data());
+                } else {
+                    ShowWindow(GetDlgItem(hWnd, IDC_JUMP_PASSWORD), SW_HIDE);
+                    ShowWindow(GetDlgItem(hWnd, IDC_JUMP_CRYPTPASS), SW_HIDE);
+                    ShowWindow(GetDlgItem(hWnd, IDC_JUMP_EDITPASS), SW_SHOW);
+                }
+                SecureZeroMemory(stored.data(), stored.size());
+            } else {
+                SetDlgItemTextI(hWnd, IDC_JUMP_PASSWORD, cs->jump_password.c_str());
+            }
             SetDlgItemTextI(hWnd, IDC_JUMP_PUBKEY, cs->jump_pubkeyfile.c_str());
             SetDlgItemTextI(hWnd, IDC_JUMP_PRIVKEY, cs->jump_privkeyfile.c_str());
             CheckDlgButton(hWnd, IDC_JUMP_USEAGENT, cs->jump_useagent ? BST_CHECKED : BST_UNCHECKED);
@@ -168,10 +190,12 @@ static INT_PTR CALLBACK JumpHostDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
                             unicode_util::utf8_to_wstring(note).c_str());
         }
 
-        if (!ctx->hasCryptProc)
-            EnableWindow(GetDlgItem(hWnd, IDC_JUMP_CRYPTPASS), FALSE);
+        CheckDlgButton(hWnd, IDC_JUMP_CRYPTPASS,
+                       ctx->hasCryptProc && ctx->protect ? BST_CHECKED : BST_UNCHECKED);
 
         UpdateJumpControlStates(hWnd, fromSession);
+        if (!ctx->hasCryptProc)
+            EnableWindow(GetDlgItem(hWnd, IDC_JUMP_CRYPTPASS), FALSE);
         DlgLayout::OnInitDialog(hWnd);
         DlgLayout::LayoutJumpHostDialog(hWnd);
 
@@ -237,8 +261,15 @@ static INT_PTR CALLBACK JumpHostDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
             GetDlgItemTextI(hWnd, IDC_JUMP_USER, buf.data(), static_cast<int>(buf.size()) - 1);
             cs->jump_user = buf.data();
 
-            GetDlgItemTextI(hWnd, IDC_JUMP_PASSWORD, buf.data(), static_cast<int>(buf.size()) - 1);
-            cs->jump_password = buf.data();
+            // Behind Change password... the password was not touched and
+            // stays where it is kept.
+            if (!IsWindowVisible(GetDlgItem(hWnd, IDC_JUMP_EDITPASS))) {
+                GetDlgItemTextI(hWnd, IDC_JUMP_PASSWORD, buf.data(), static_cast<int>(buf.size()) - 1);
+                cs->jump_password = buf.data();
+                SecureZeroMemory(buf.data(), buf.size());
+                ctx->protect = ctx->hasCryptProc &&
+                               IsDlgButtonChecked(hWnd, IDC_JUMP_CRYPTPASS) == BST_CHECKED;
+            }
 
             GetDlgItemTextI(hWnd, IDC_JUMP_PUBKEY, buf.data(), static_cast<int>(buf.size()) - 1);
             cs->jump_pubkeyfile = buf.data();
@@ -258,6 +289,23 @@ static INT_PTR CALLBACK JumpHostDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
         case IDCANCEL:
             EndDialog(hWnd, IDCANCEL);
             return 1;
+        case IDC_JUMP_EDITPASS: {
+            // TC asks for the master password here. Without it the password
+            // stays hidden and unchanged.
+            std::array<char, MAX_PATH> stored{};
+            const int err = CryptProcI(PluginNumber, CryptoNumber, FS_CRYPT_LOAD_PASSWORD,
+                                       ctx->storeName.c_str(), stored.data(),
+                                       static_cast<int>(stored.size() - 1));
+            if (err == FS_FILE_OK || err == FS_FILE_READERROR) {
+                SetDlgItemTextI(hWnd, IDC_JUMP_PASSWORD, err == FS_FILE_OK ? stored.data() : "");
+                ShowWindow(GetDlgItem(hWnd, IDC_JUMP_PASSWORD), SW_SHOW);
+                ShowWindow(GetDlgItem(hWnd, IDC_JUMP_CRYPTPASS), SW_SHOW);
+                ShowWindow(GetDlgItem(hWnd, IDC_JUMP_EDITPASS), SW_HIDE);
+                CheckDlgButton(hWnd, IDC_JUMP_CRYPTPASS, BST_CHECKED);
+            }
+            SecureZeroMemory(stored.data(), stored.size());
+            break;
+        }
         case IDC_JUMP_LOADPUBKEY:
             BrowseJumpKeyFile(hWnd, IDC_JUMP_PUBKEY);
             break;
@@ -350,6 +398,8 @@ private:
     // is open would otherwise have its accepted fingerprint overwritten by
     // whatever the model held when the dialog opened.
     bool                   m_jumpFingerprintCleared = false;
+    // The jump password is kept in TC's password manager.
+    bool                   m_jumpProtect = false;
 };
 
 // Dialog text is exchanged as internal strings (UnicodeHelpers.h).
@@ -372,23 +422,24 @@ static UINT GetDlgItemTextI(HWND hWnd, int nIDDlgItem, std::string& out, size_t 
 // store when `useStore` (the INI then holds "!"), otherwise encrypted into
 // the INI. A store that refuses — TC cannot write wcx_ftp.ini when its
 // settings sit in a read-only folder — is reported, and the password goes
-// into the INI rather than being lost.
+// into the INI rather than being lost. A password that leaves the store is
+// deleted from it, so no entry is left for a later "!" to pick up.
 static void SavePasswordSetting(HWND hWnd, const char* section, const char* key,
                                 const char* storeName, const std::string& password,
                                 bool useStore, const char* iniFileName)
 {
+    std::array<char, 8> previous{};
+    IniGetString(section, key, "", previous.data(), static_cast<DWORD>(previous.size() - 1), iniFileName);
+    const bool wasInStore = strcmp(previous.data(), "!") == 0;
     if (password.empty()) {
         IniWriteString(section, key, nullptr, iniFileName);
+        if (wasInStore)
+            DeletePasswordFromStore(storeName);
         return;
     }
     if (useStore) {
-        std::string copy = password;
-        const bool ok = CryptProcI(PluginNumber, CryptoNumber, FS_CRYPT_SAVE_PASSWORD,
-                                   storeName, copy.data(), 0) == FS_FILE_OK;
-        SecureZeroMemory(copy.data(), copy.size());
-        if (ok) {
+        if (SavePasswordInStore(storeName, password)) {
             IniWriteString(section, key, "!", iniFileName);
-            CryptCheckPass = true;
             return;
         }
         const std::wstring text = unicode_util::utf8_to_wstring(LngStrU8(IDS_CRYPT_SAVE_FAILED,
@@ -399,7 +450,13 @@ static void SavePasswordSetting(HWND hWnd, const char* section, const char* key,
     }
     std::array<char, 1024> encrypted{};
     EncryptString(password.c_str(), encrypted.data(), static_cast<UINT>(encrypted.size()));
+    // Encryption that fails leaves the stored value as it was rather than
+    // replace it with nothing.
+    if (!encrypted[0])
+        return;
     IniWriteString(section, key, encrypted.data(), iniFileName);
+    if (wasInStore)
+        DeletePasswordFromStore(storeName);
 }
 
 static BOOL IniWriteString(const char* section, const char* key, const std::string& value, const char* fileName)
@@ -1740,16 +1797,9 @@ INT_PTR WINAPI ProxyDlgProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lPara
         SetDlgItemTextI(hWnd, IDC_PROXYUSERNAME, ConnectData.proxyuser);
 
         if (ConnectData.proxypassword == "\001" && HaveCryptProc()) {
-            std::array<char, 64> proxyentry{};
-            if (ctx->proxynr > 1)
-                strlcpy(proxyentry.data(), std::format("proxy{}", ctx->proxynr), proxyentry.size() - 1);
-            else
-                strlcpy(proxyentry.data(), "proxy", proxyentry.size()-1);
-
-            strlcat(proxyentry.data(), "$$pass", proxyentry.size()-1);
-
+            const std::string storeName = ProxyPasswordStoreName(ctx->proxynr);
             std::array<char, MAX_PATH> proxyPassword{};
-            if (CryptProcI(PluginNumber, CryptoNumber, FS_CRYPT_LOAD_PASSWORD_NO_UI, proxyentry.data(), proxyPassword.data(), static_cast<int>(proxyPassword.size() - 1)) == FS_FILE_OK) {
+            if (CryptProcI(PluginNumber, CryptoNumber, FS_CRYPT_LOAD_PASSWORD_NO_UI, storeName.c_str(), proxyPassword.data(), static_cast<int>(proxyPassword.size() - 1)) == FS_FILE_OK) {
                 ConnectData.proxypassword = proxyPassword.data();
                 SetDlgItemTextI(hWnd, IDC_PROXYPASSWORD, ConnectData.proxypassword);
                 CheckDlgButton(hWnd, IDC_CRYPTPASS, BST_CHECKED);
@@ -1760,9 +1810,11 @@ INT_PTR WINAPI ProxyDlgProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lPara
             }
         } else {
             SetDlgItemTextI(hWnd, IDC_PROXYPASSWORD, ConnectData.proxypassword);
+            // A new password goes to the password manager unless unticked; one
+            // already kept in the INI stays there until the user ticks it.
             if (!HaveCryptProc())
                 EnableWindow(GetDlgItem(hWnd, IDC_CRYPTPASS), false);
-            else if (ConnectData.proxypassword.empty() && CryptCheckPass)
+            else if (ConnectData.proxypassword.empty())
                 CheckDlgButton(hWnd, IDC_CRYPTPASS, BST_CHECKED);
         }
         
@@ -1824,7 +1876,7 @@ INT_PTR WINAPI ProxyDlgProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lPara
             IniWriteString(proxyentry.data(), "proxytype", proxy_str, ctx->iniFileName);
 
             if (!IsWindowVisible(GetDlgItem(hWnd, IDC_EDITPASS))) {  // Edit button is hidden.
-                const std::string storeName = std::string(proxyentry.data()) + "$$pass";
+                const std::string storeName = ProxyPasswordStoreName(ctx->proxynr);
                 SavePasswordSetting(hWnd, proxyentry.data(), "proxypassword", storeName.c_str(),
                                     ConnectData.proxypassword,
                                     HaveCryptProc() && IsDlgButtonChecked(hWnd, IDC_CRYPTPASS),
@@ -1868,16 +1920,9 @@ INT_PTR WINAPI ProxyDlgProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lPara
         {   
             bool doshow = true;
             int err;
-            std::array<char, 64> proxyentry{};
-            if (ctx->proxynr > 1)
-                strlcpy(proxyentry.data(), std::format("proxy{}", ctx->proxynr), proxyentry.size() - 1);
-            else
-                strlcpy(proxyentry.data(), "proxy", proxyentry.size()-1);
-
-            strlcat(proxyentry.data(), "$$pass", proxyentry.size()-1);
-
+            const std::string storeName = ProxyPasswordStoreName(ctx->proxynr);
             std::array<char, MAX_PATH> proxyPassword{};
-            err = CryptProcI(PluginNumber, CryptoNumber, FS_CRYPT_LOAD_PASSWORD, proxyentry.data(), proxyPassword.data(), static_cast<int>(proxyPassword.size() - 1));
+            err = CryptProcI(PluginNumber, CryptoNumber, FS_CRYPT_LOAD_PASSWORD, storeName.c_str(), proxyPassword.data(), static_cast<int>(proxyPassword.size() - 1));
             if (err == FS_FILE_OK) {
                 ConnectData.proxypassword = proxyPassword.data();
                 SetDlgItemTextI(hWnd, IDC_PROXYPASSWORD, ConnectData.proxypassword);
@@ -1890,8 +1935,9 @@ INT_PTR WINAPI ProxyDlgProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lPara
                 ShowWindow(GetDlgItem(hWnd, IDC_PROXYPASSWORD), SW_SHOW);
                 ShowWindow(GetDlgItem(hWnd, IDC_CRYPTPASS), SW_SHOW);
                 ShowWindow(GetDlgItem(hWnd, IDC_EDITPASS), SW_HIDE);
-                if (ctx->ownerConnectResults && !ctx->ownerConnectResults->password.empty())
-                    CheckDlgButton(hWnd, IDC_CRYPTPASS, BST_CHECKED);
+                // The password came from the password manager and stays there
+                // unless the user unticks this.
+                CheckDlgButton(hWnd, IDC_CRYPTPASS, BST_CHECKED);
             }
         }
         } /* switch */
@@ -2017,7 +2063,14 @@ bool DeleteProxy(int proxynrtodelete, LPCSTR ServerToSkip, LPCSTR iniFileName, L
 
     const std::string doomed = proxynrtodelete > 1
         ? std::format("proxy{}", proxynrtodelete) : std::string("proxy");
+    std::array<char, 8> storedPassword{};
+    IniGetString(doomed.c_str(), "proxypassword", "", storedPassword.data(),
+                 static_cast<DWORD>(storedPassword.size() - 1), iniFileName);
     IniWriteString(doomed.c_str(), nullptr, nullptr, iniFileName);
+    // The number is given out again to the next record; its password must
+    // not come back with it.
+    if (strcmp(storedPassword.data(), "!") == 0)
+        DeletePasswordFromStore(ProxyPasswordStoreName(proxynrtodelete));
 
     // Only the session being edited can still point here — any other one would
     // have blocked the delete above. Leaving its number behind would aim it at
@@ -2193,15 +2246,19 @@ static INT_PTR CALLBACK MoreSettingsDlgProc(HWND hWnd, UINT msg, WPARAM wParam, 
     return 0;
 }
 
-static bool OnJumpButtonCommand(HWND hWnd, pConnectSettings dlgConnectResults)
+static bool OnJumpButtonCommand(HWND hWnd, pConnectSettings dlgConnectResults,
+                                const std::string& storeName, bool& protect)
 {
     if (!dlgConnectResults) return false;
 
     JumpDialogContext jumpCtx;
     jumpCtx.cs = dlgConnectResults;
     jumpCtx.hasCryptProc = HaveCryptProc();
+    jumpCtx.storeName = storeName;
+    jumpCtx.protect = protect;
 
     ShowLocalizedDialogBoxParam(IDD_JUMPHOST, hWnd, JumpHostDlgProc, (LPARAM)&jumpCtx);
+    protect = jumpCtx.protect;
 
     CheckDlgButton(hWnd, IDC_JUMP_ENABLE,
         dlgConnectResults->use_jump_host ? BST_CHECKED : BST_UNCHECKED);
@@ -2363,6 +2420,15 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
         m_ctx->defaultPasswordLabel = wlabelBuf.data();
     }
 
+    // The jump password gets the same default as the session's own: a new
+    // one goes to the password manager unless unticked.
+    {
+        std::array<char, 8> jumpRaw{};
+        IniGetString(dlgDisplayName, "jumppassword", "", jumpRaw.data(),
+                     static_cast<DWORD>(jumpRaw.size() - 1), dlgIniFileName);
+        m_jumpProtect = HaveCryptProc() && (!jumpRaw[0] || strcmp(jumpRaw.data(), "!") == 0);
+    }
+
     if (strcmp(dlgDisplayName, s_quickconnect) != 0) {
         SetDlgItemTextI(m_hWnd, IDC_CONNECTTO, m_settings->server);
         if (!m_settings->server.empty())
@@ -2419,8 +2485,11 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
                              storedPasswordRaw.data(),
                              storedPasswordRaw.size() - 1,
                              dlgIniFileName);
+                // A new password goes to the password manager unless unticked;
+                // one already kept in the INI stays there until the user ticks it.
                 CheckDlgButton(m_hWnd, IDC_CRYPTPASS,
-                               strcmp(storedPasswordRaw.data(), "!") == 0 ? BST_CHECKED : BST_UNCHECKED);
+                               !storedPasswordRaw[0] || strcmp(storedPasswordRaw.data(), "!") == 0
+                                   ? BST_CHECKED : BST_UNCHECKED);
             }
         }
 
@@ -2440,6 +2509,11 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
         CheckDlgButton(m_hWnd, IDC_SHELLTRANSFER, BST_UNCHECKED);
         SendDlgItemMessage(m_hWnd, IDC_TRANSFERMODE, CB_SETCURSEL, 0, 0);
         fillProxyCombobox(m_hWnd, 0, dlgIniFileName);
+        // A new password goes to the password manager unless unticked.
+        if (HaveCryptProc())
+            CheckDlgButton(m_hWnd, IDC_CRYPTPASS, BST_CHECKED);
+        else
+            EnableWindow(GetDlgItem(m_hWnd, IDC_CRYPTPASS), false);
     }
     RebuildSystemAndEncodingCombos(m_hWnd, m_ctx, m_settings);
     SetLanTimeoutMinutes(m_hWnd, m_settings->lan_pair_timeout_min);
@@ -2761,11 +2835,15 @@ void ConnectionDialog::OnOk()
                 return;
             }
         } else if (_stricmp(targetProfile.data(), dlgDisplayName) != 0) {
-            int moveRc = CopyMoveServerInIni(dlgDisplayName, targetProfile.data(), true, false, dlgIniFileName);
+            // The same rename as F6: passwords in the password manager move
+            // with the session, and jump hosts naming it follow.
+            int moveRc = CopyMoveSavedSession(dlgDisplayName, targetProfile.data(), true, false, dlgIniFileName);
             if (moveRc == FS_FILE_EXISTS) {
                 warnNameTaken();
                 return;
             }
+            if (moveRc == FS_FILE_OK)
+                UpdateJumpRefsOnSessionRename(dlgDisplayName, targetProfile.data(), dlgIniFileName);
         }
 
         m_settings->DisplayName = targetProfile.data();
@@ -2850,12 +2928,12 @@ void ConnectionDialog::OnOk()
         IniWriteString(targetProfile.data(), "jumpprivkeyfile",
             m_settings->jump_privkeyfile.empty() ? nullptr : m_settings->jump_privkeyfile.c_str(), dlgIniFileName);
         IniWriteString(targetProfile.data(), "jumpuseagent", m_settings->jump_useagent ? "1" : nullptr, dlgIniFileName);
-        if (!m_settings->jump_password.empty()) {
-            std::array<char, 1024> jumpEnc{};
-            EncryptString(m_settings->jump_password.c_str(), jumpEnc.data(), static_cast<UINT>(jumpEnc.size()));
-            IniWriteString(targetProfile.data(), "jumppassword", jumpEnc.data(), dlgIniFileName);
-        } else {
-            IniWriteString(targetProfile.data(), "jumppassword", nullptr, dlgIniFileName);
+        // "\001" is a password left in the password manager untouched.
+        if (m_settings->jump_password != "\001") {
+            SavePasswordSetting(m_hWnd, targetProfile.data(), "jumppassword",
+                                JumpPasswordStoreName(targetProfile.data()).c_str(),
+                                m_settings->jump_password, HaveCryptProc() && m_jumpProtect,
+                                dlgIniFileName);
         }
         if (m_jumpFingerprintCleared) {
             IniWriteString(targetProfile.data(), "jumpfingerprint", nullptr, dlgIniFileName);
@@ -2983,7 +3061,8 @@ void ConnectionDialog::OnJumpEnableChanged()
 
 void ConnectionDialog::OnJumpButton()
 {
-    if (OnJumpButtonCommand(m_hWnd, m_settings))
+    if (OnJumpButtonCommand(m_hWnd, m_settings, JumpPasswordStoreName(m_ctx->displayName),
+                            m_jumpProtect))
         m_jumpFingerprintCleared = true;
     CheckDlgButton(m_hWnd, IDC_JUMP_ENABLE,
         m_settings->use_jump_host ? BST_CHECKED : BST_UNCHECKED);
@@ -3067,8 +3146,9 @@ void ConnectionDialog::OnEditPass()
         ShowWindow(GetDlgItem(m_hWnd, IDC_PASSWORD),  SW_SHOW);
         ShowWindow(GetDlgItem(m_hWnd, IDC_CRYPTPASS), SW_SHOW);
         ShowWindow(GetDlgItem(m_hWnd, IDC_EDITPASS),  SW_HIDE);
-        if (!m_settings->password.empty())
-            CheckDlgButton(m_hWnd, IDC_CRYPTPASS, BST_CHECKED);
+        // The password came from the password manager and stays there
+        // unless the user unticks this.
+        CheckDlgButton(m_hWnd, IDC_CRYPTPASS, BST_CHECKED);
     }
 }
 

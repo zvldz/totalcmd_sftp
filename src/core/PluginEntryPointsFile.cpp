@@ -45,8 +45,40 @@
 // a clean `[dron/hz-1]` header rather than the ugly cache name.
 // The proxy record travels under a fixed section name: the number it had in
 // the file it came from means nothing in the file it is going to.
+// Passwords travel readable, as "plain:<password>": a file is meant to be
+// read and taken elsewhere, where neither DPAPI nor this machine's password
+// manager can open them. One kept in the password manager is loaded from it,
+// TC asking for the master password. Copying the file back into the plugin
+// puts them into the password manager again.
 static constexpr const char* kExportProxySection = "[proxy]";
 static constexpr const char* RN = "\r\n";
+
+static bool IsPasswordKey(const char* key)
+{
+    return _stricmp(key, "password") == 0 || _stricmp(key, "jumppassword") == 0 ||
+           _stricmp(key, "proxypassword") == 0;
+}
+
+// `key=plain:<password>`; nothing for an empty password.
+static void AppendPlainPassword(std::string& content, const char* key, const std::string& plain)
+{
+    if (plain.empty())
+        return;
+    content.append(key).append("=plain:").append(plain).append(RN);
+}
+
+// The same for the password `section` keeps under `key` in `srcIni`;
+// nothing when it has none or it cannot be read.
+static void AppendStoredPassword(std::string& content, LPCSTR section, const char* key,
+                                 const std::string& storeName, LPCSTR srcIni)
+{
+    std::array<char, 2048> raw{};
+    IniGetString(section, key, "", raw.data(), static_cast<DWORD>(raw.size() - 1), srcIni);
+    std::string plain = LoadPlainPassword(raw.data(), storeName);
+    SecureZeroMemory(raw.data(), raw.size());
+    AppendPlainPassword(content, key, plain);
+    SecureZeroMemory(plain.data(), plain.size());
+}
 // Names, in an exported snippet, a route the plugin could not rebuild.
 // Importing the snippet refuses on it rather than create a session that
 // would connect straight to the host.
@@ -65,8 +97,7 @@ static const char* DependencyName(sftp::SessionDependency::Kind kind)
 
 // The proxy record numbered `proxynr` in `srcIni`, under the fixed export
 // name. It travels without its number, since the number is local to the
-// file it came from, and without its password, which is machine-bound where
-// it is stored at all. Returns false when the file has no such record.
+// file it came from. Returns false when the file has no such record.
 static bool AppendProxyRecord(std::string& content, int proxynr, LPCSTR srcIni)
 {
     const std::string proxySection = proxynr > 1
@@ -85,6 +116,8 @@ static bool AppendProxyRecord(std::string& content, int proxynr, LPCSTR srcIni)
             value.data(), static_cast<DWORD>(value.size() - 1), srcIni);
         content.append(k).append("=").append(value.data()).append(RN);
     }
+    AppendStoredPassword(content, proxySection.c_str(), "proxypassword",
+                         ProxyPasswordStoreName(proxynr), srcIni);
     return true;
 }
 
@@ -110,11 +143,14 @@ static int WriteExportFile(LPCWSTR destFile, BOOL OverWrite, const std::string& 
     return FS_FILE_OK;
 }
 
+// `importedPassword` is the password of a session from [Imports], read from
+// its source: the cache it is exported from holds none.
 static int ExportSessionAsIniFile(
     LPCSTR srcSection, LPCSTR srcIni,
     LPCSTR exportSection, LPCSTR headerComment,
     LPCWSTR destFile, BOOL OverWrite,
-    const sftp::SessionDependency* dependency = nullptr)
+    const sftp::SessionDependency* dependency = nullptr,
+    const std::string& importedPassword = {})
 {
     std::string content;
     content.reserve(1024);
@@ -129,7 +165,7 @@ static int ExportSessionAsIniFile(
         srcIni);
     const char* p = keyList.data();
     while (p[0]) {
-        if (p[0] != '_') {
+        if (p[0] != '_' && !IsPasswordKey(p)) {
             std::array<char, 2048> valueBuf{};
             IniGetString(srcSection, p, "",
                 valueBuf.data(),
@@ -138,6 +174,13 @@ static int ExportSessionAsIniFile(
             content.append(p).append("=").append(valueBuf.data()).append("\r\n");
         }
         p += strlen(p) + 1;
+    }
+    if (!importedPassword.empty()) {
+        AppendPlainPassword(content, "password", importedPassword);
+    } else {
+        AppendStoredPassword(content, srcSection, "password", srcSection, srcIni);
+        AppendStoredPassword(content, srcSection, "jumppassword",
+                             JumpPasswordStoreName(srcSection), srcIni);
     }
 
     // A session from [Imports] has no record to copy: its proxy exists only
@@ -191,6 +234,8 @@ static int ExportProxyAsIniFile(int proxynr, const std::string& rowName,
 
 static bool CopyIniSectionAcrossFiles(LPCSTR srcSection, LPCWSTR srcIni,
                                        LPCSTR dstSection, LPCSTR dstIni);
+static void AdoptPasswordFromFile(LPCSTR srcSection, LPCWSTR srcIni, const char* key,
+                                  LPCSTR dstSection, const std::string& storeName);
 
 // Try to import an uploaded file as a session-INI. Returns nullopt when the
 // destination path is (or could resolve to) a real session — FsPutFile then
@@ -294,8 +339,8 @@ static pConnectSettings ResolveTransferSession(LPCWSTR RemoteName,
 // A file copied into [Proxies]: the reverse of F5 on a proxy row. Its
 // [proxy] section becomes a record, unless one already describes the same
 // route (kind, server, user): that one is left as it is and the user is
-// told, since nothing new appears. A password does not come with it; it is
-// asked for on connect.
+// told, since nothing new appears. A password in the file goes into TC's
+// password manager, or is asked for on connect.
 static int ImportProxyFromUpload(LPCWSTR LocalName)
 {
     auto abortWithMessage = [](UINT msgId) -> int {
@@ -330,6 +375,8 @@ static int ImportProxyFromUpload(LPCWSTR LocalName)
         SFTP_LOG("ENTRY", "Proxy import: writing record %d failed", nr);
         return abortWithMessage(IDS_PIMPORT_ERR_WRITE);
     }
+    AdoptPasswordFromFile("proxy", LocalName, "proxypassword", dest.c_str(),
+                          ProxyPasswordStoreName(nr));
     SFTP_LOG("ENTRY", "Proxy import: '%s' added as record %d", proxyServer.data(), nr);
     return FS_FILE_OK;
 }
@@ -441,6 +488,10 @@ static std::optional<int> TryImportSessionFromUpload(
     {
         return abortWithMessage(IDS_SIMPORT_ERR_WRITE);
     }
+    AdoptPasswordFromFile(chosenSection.c_str(), LocalName, "password",
+                          display.c_str(), display);
+    AdoptPasswordFromFile(chosenSection.c_str(), LocalName, "jumppassword",
+                          display.c_str(), JumpPasswordStoreName(display));
 
     // The session's `proxynr` came from another file, where that number meant
     // another record. Resolve it here: reuse a local record describing the
@@ -463,11 +514,12 @@ static std::optional<int> TryImportSessionFromUpload(
                 localNr = NextFreeProxyNr(inifilename);
                 const std::string dest = localNr > 1
                     ? std::format("proxy{}", localNr) : std::string("proxy");
-                // The record arrives without its password: whatever held it
-                // was bound to the machine it came from. A proxy that needs
-                // one is asked for it on connect, which is why the user name
-                // has to survive the trip.
+                // A password the file has goes into TC's password manager;
+                // without one the proxy asks for it on connect, which is why
+                // the user name has to survive the trip.
                 CopyIniSectionAcrossFiles("proxy", LocalName, dest.c_str(), inifilename);
+                AdoptPasswordFromFile("proxy", LocalName, "proxypassword", dest.c_str(),
+                                      ProxyPasswordStoreName(localNr));
             }
         }
 
@@ -515,9 +567,11 @@ static std::vector<std::string> CollectSessionsUnderFolder(
 // Copy every key/value pair from `srcSection` in `srcIni` into `dstSection`
 // in `dstIni`. The plugin-internal `_` metadata keys (provenance, refusal)
 // are filtered out so the materialised session in the user's own INI carries
-// only the user-visible connect fields. The destination section is cleared first so
-// an overwrite is a full clean replace — leftover keys from a prior session
-// (password, proxy, jump-host refs) never survive materialisation.
+// only the user-visible connect fields, and so are passwords: one that
+// comes along goes through AdoptPasswordFromFile. The destination section
+// is cleared first so an overwrite is a full clean replace — leftover keys
+// from a prior session (password, proxy, jump-host refs) never survive
+// materialisation.
 // Returns true if at least one key was copied.
 static bool CopyIniSectionAcrossFiles(LPCSTR srcSection, LPCWSTR srcIni,
                                        LPCSTR dstSection, LPCSTR dstIni)
@@ -534,7 +588,7 @@ static bool CopyIniSectionAcrossFiles(LPCSTR srcSection, LPCWSTR srcIni,
     bool any = false;
     char* p = keyList.data();
     while (p[0]) {
-        if (p[0] != '_') {
+        if (p[0] != '_' && !IsPasswordKey(p)) {
             std::array<char, 2048> valueBuf{};
             IniGetString(srcSection, p, "",
                          valueBuf.data(),
@@ -548,6 +602,29 @@ static bool CopyIniSectionAcrossFiles(LPCSTR srcSection, LPCWSTR srcIni,
         p += strlen(p) + 1;
     }
     return any;
+}
+
+// A password a file brings into the plugin goes into TC's password manager,
+// the INI holding "!" for it — TC asks for the master password, or offers to
+// create one. Not saved there, it is not kept at all and is asked for on
+// connect. A "!" in the file names an entry of whatever machine wrote it;
+// here it would pick up the entry that happens to have the same name, so it
+// brings nothing.
+static void AdoptPasswordFromFile(LPCSTR srcSection, LPCWSTR srcIni, const char* key,
+                                  LPCSTR dstSection, const std::string& storeName)
+{
+    std::array<char, 2048> raw{};
+    IniGetString(srcSection, key, "", raw.data(), static_cast<DWORD>(raw.size() - 1), srcIni);
+    std::string stored = raw.data();
+    SecureZeroMemory(raw.data(), raw.size());
+    std::string plain = stored == "!" ? std::string() : LoadPlainPassword(stored, storeName);
+    SecureZeroMemory(stored.data(), stored.size());
+    const bool saved = SavePasswordInStore(storeName, plain);
+    if (!plain.empty())
+        SFTP_LOG("IMPORT", "%s for '%s' %s TC's password manager", key, dstSection,
+                 saved ? "saved in" : "not saved in");
+    SecureZeroMemory(plain.data(), plain.size());
+    IniWriteString(dstSection, key, saved ? "!" : nullptr, inifilename);
 }
 
 // The local record for a proxy an imported session goes through: the one
@@ -632,13 +709,13 @@ static int MaterialiseVirtualSession(const std::string& sourceId,
     }
 
     // The source's password, behind TC's master password: into its password
-    // manager, the INI holding only the "!" that sends the plugin there. A
-    // store that refuses leaves no password at all rather than one in the INI.
-    if (HaveCryptProc() && CryptCheckPass) {
+    // manager, the INI holding only the "!" that sends the plugin there. TC
+    // asks for the master password, or offers to create one. A store that
+    // refuses leaves no password at all rather than one in the INI.
+    if (HaveCryptProc()) {
         std::string password = LoadImportedPassword(sourceId, cacheSection, subPath);
         if (!password.empty()) {
-            const bool saved = CryptProcI(PluginNumber, CryptoNumber, FS_CRYPT_SAVE_PASSWORD,
-                                          newDisplay.c_str(), password.data(), 0) == FS_FILE_OK;
+            const bool saved = SavePasswordInStore(newDisplay, password);
             SecureZeroMemory(password.data(), password.size());
             if (saved)
                 IniWriteString(newDisplay.c_str(), "password", "!", inifilename);
@@ -1192,13 +1269,47 @@ int WINAPI FsExecuteFile(HWND MainWin, LPSTR RemoteName, LPCSTR Verb)
     });
 }
 
-static bool CopyMoveEncryptedPassword(LPCSTR OldName, LPSTR NewName, bool Move)
+// The password manager's entry behind `key` of the copied section, carried
+// to the new name. A "!" whose entry cannot be carried is removed: no
+// password, asked for on connect, rather than one that fails to load. A
+// section without "!" that replaced another must not leave that one's entry
+// for a later "!" to pick up.
+static void CopyMoveStoredPassword(const std::string& newSection, const char* key,
+                                   const std::string& oldStore, const std::string& newStore,
+                                   bool move, bool overwrite, LPCSTR iniFile)
 {
-    if (!HaveCryptProc())
-        return false;
-    int mode = Move ? FS_CRYPT_MOVE_PASSWORD : FS_CRYPT_COPY_PASSWORD;
-    int rc = CryptProcI(PluginNumber, CryptoNumber, mode, OldName, NewName, 0);
-    return (rc == FS_FILE_OK) ? true : false;
+    std::array<char, 8> raw{};
+    IniGetString(newSection.c_str(), key, "", raw.data(),
+                 static_cast<DWORD>(raw.size() - 1), iniFile);
+    if (strcmp(raw.data(), "!") != 0) {
+        if (overwrite)
+            DeletePasswordFromStore(newStore);
+        return;
+    }
+    std::string target = newStore;
+    const bool carried = HaveCryptProc() &&
+        CryptProcI(PluginNumber, CryptoNumber,
+                   move ? FS_CRYPT_MOVE_PASSWORD : FS_CRYPT_COPY_PASSWORD,
+                   oldStore.c_str(), target.data(), 0) == FS_FILE_OK;
+    if (!carried) {
+        IniWriteString(newSection.c_str(), key, nullptr, iniFile);
+        SFTP_LOG("CRYPT", "%s of '%s' not carried to '%s': removed",
+                 key, oldStore.c_str(), newStore.c_str());
+    }
+}
+
+int CopyMoveSavedSession(const std::string& oldName, const std::string& newName,
+                         bool move, bool overwrite, LPCSTR iniFile)
+{
+    if (move)
+        DisconnectSessionPath("\\" + oldName);
+    const int rc = CopyMoveServerInIni(oldName.c_str(), newName.c_str(), move, overwrite, iniFile);
+    if (rc != FS_FILE_OK)
+        return rc;
+    CopyMoveStoredPassword(newName, "password", oldName, newName, move, overwrite, iniFile);
+    CopyMoveStoredPassword(newName, "jumppassword", JumpPasswordStoreName(oldName),
+                           JumpPasswordStoreName(newName), move, overwrite, iniFile);
+    return FS_FILE_OK;
 }
 
 // Whether the session may already hold that file. Only a server that clearly
@@ -1449,21 +1560,9 @@ int WINAPI FsRenMovFileW(LPCWSTR OldName, LPCWSTR NewName, BOOL Move, BOOL OverW
                                rNew.kind == PathKind::Folder))
                 return FS_FILE_EXISTS;
 
-            // Disconnect the live connection (if any) before yanking the INI
-            // section out from under it — see the original F6 rename note.
-            if (Move) {
-                std::string disconnPath;
-                disconnPath.reserve(rOld.displayName.size() + 1);
-                disconnPath.append("\\").append(rOld.displayName);
-                DisconnectSessionPath(disconnPath);
-            }
-            int rc = CopyMoveServerInIniW(rOld.displayName.c_str(),
-                                          newDisplay.c_str(),
-                                          !!Move, !!OverWrite, inifilenameW);
+            int rc = CopyMoveSavedSession(rOld.displayName, newDisplay,
+                                          !!Move, !!OverWrite, inifilename);
             if (rc == FS_FILE_OK) {
-                std::string newDisplayMut = newDisplay;
-                CopyMoveEncryptedPassword(rOld.displayName.c_str(),
-                                          newDisplayMut.data(), !!Move);
                 if (Move) {
                     UpdateJumpRefsOnSessionRename(rOld.displayName.c_str(),
                                                   newDisplay.c_str(),
@@ -1516,18 +1615,8 @@ int WINAPI FsRenMovFileW(LPCWSTR OldName, LPCWSTR NewName, BOOL Move, BOOL OverW
                 renames.emplace_back(oldName, std::move(newName));
             }
 
-            for (const auto& [oldName, newName] : renames) {
-                if (Move) {
-                    std::string disconnPath;
-                    disconnPath.reserve(oldName.size() + 1);
-                    disconnPath.append("\\").append(oldName);
-                    DisconnectSessionPath(disconnPath);
-                }
-                CopyMoveServerInIniW(oldName.c_str(), newName.c_str(),
-                                      !!Move, !!OverWrite, inifilenameW);
-                std::string newNameMut = newName;
-                CopyMoveEncryptedPassword(oldName.c_str(), newNameMut.data(), !!Move);
-            }
+            for (const auto& [oldName, newName] : renames)
+                CopyMoveSavedSession(oldName, newName, !!Move, !!OverWrite, inifilename);
             if (Move) {
                 UpdateJumpRefsOnFolderRename(rOld.displayName.c_str(),
                                               newFolder.c_str(), inifilename);
@@ -1864,9 +1953,12 @@ int WINAPI FsGetFileW(LPCWSTR RemoteName, LPWSTR LocalName, int CopyFlags, Remot
                 std::replace(tcSubPath.begin(), tcSubPath.end(), '/', '\\');
                 std::string header = "Imported session from [Imports]\\[";
                 header.append(sourceId).append("]\\").append(tcSubPath);
-                return ExportSessionAsIniFile(cacheSection.c_str(),
+                std::string password = LoadImportedPassword(sourceId, cacheSection, subPath);
+                const int rc = ExportSessionAsIniFile(cacheSection.c_str(),
                     cachePath.c_str(), subPath.c_str(),
-                    header.c_str(), LocalName, OverWrite, &dep);
+                    header.c_str(), LocalName, OverWrite, &dep, password);
+                SecureZeroMemory(password.data(), password.size());
+                return rc;
             }
         }
 
@@ -2398,9 +2490,8 @@ BOOL WINAPI FsDeleteFileW(LPCWSTR RemoteName)
                 DisconnectSessionPath(disconnPath);
             }
             if (DeleteServerFromIniW(r.displayName.c_str(), inifilenameW)) {
-                if (HaveCryptProc())
-                    CryptProcI(PluginNumber, CryptoNumber, FS_CRYPT_DELETE_PASSWORD,
-                              const_cast<char*>(r.displayName.c_str()), nullptr, 0);
+                DeletePasswordFromStore(r.displayName);
+                DeletePasswordFromStore(JumpPasswordStoreName(r.displayName));
                 // Clear any jump-host references that pointed at the deleted
                 // session so the by-reference picker doesn't surface them as
                 // "[!] (missing)" markers afterwards.
@@ -2473,9 +2564,8 @@ BOOL WINAPI FsRemoveDirW(LPCWSTR RemoteName)
                 disconnPath.append("\\").append(name);
                 DisconnectSessionPath(disconnPath);
                 DeleteServerFromIniW(name.c_str(), inifilenameW);
-                if (HaveCryptProc())
-                    CryptProcI(PluginNumber, CryptoNumber, FS_CRYPT_DELETE_PASSWORD,
-                              const_cast<char*>(name.c_str()), nullptr, 0);
+                DeletePasswordFromStore(name);
+                DeletePasswordFromStore(JumpPasswordStoreName(name));
                 UpdateJumpRefsOnSessionRename(name.c_str(), nullptr, inifilename);
             }
 

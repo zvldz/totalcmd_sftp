@@ -44,6 +44,13 @@ std::string LoadImportedPassword(const std::string& sourceId, const std::string&
 // Closes the session a TC path names; `root` is an internal string. What
 // FsDisconnect does, for callers inside the plugin.
 BOOL DisconnectSessionPath(const std::string& root);
+
+// Copies or renames a saved session in `iniFile`: its section and the
+// passwords TC's password manager keeps for it. A rename closes the
+// session's connection first. Jump-host references to the old name are the
+// caller's to update. Returns FS_FILE_* (PluginEntryPointsFile.cpp).
+int CopyMoveSavedSession(const std::string& oldName, const std::string& newName,
+                         bool move, bool overwrite, LPCSTR iniFile);
 void  ResetLastPercent(pConnectSettings ConnectSettings);
 void  ApplyTcLanguageToPluginResources(const char* tcIniPath) noexcept;
 

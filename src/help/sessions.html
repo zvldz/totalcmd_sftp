@@ -74,9 +74,21 @@ identical proxy already on the machine is reused, and only a proxy never seen
 before is added to your list. Either way the session ends up pointing at the
 right one, whatever number it happens to have locally.</p>
 
-<p>Two things do not travel, by design: the password of the session and the
-password of its proxy. Both are tied to the machine that stored them. You are
-asked for them on the first connection.</p>
+<p>The file carries the passwords readable, as <code>plain:&lt;password&gt;</code>
+— the session's, its jump host's and its proxy's. A password kept under Total
+Commander's master password is read for that, so Total Commander asks for the
+master password. Keep such a file as you would keep the passwords themselves.</p>
+
+<p>Dropped back onto the plugin, the file's passwords go into Total Commander's
+password manager, under the master password; when there is none yet, Total
+Commander offers to create one. A password the password manager does not take
+is not kept at all and is asked for on connect. A file carrying
+<code>password=!</code> instead brings no password: that mark names an entry of
+the machine that wrote the file.</p>
+
+<p>Copying or renaming a session inside the plugin takes its passwords along,
+however they are stored. Deleting a session deletes them from the password
+manager.</p>
 
 <p>A file written by an older version of the plugin names a proxy without
 describing it. Such a session is imported without a proxy and says so, rather
@@ -107,10 +119,12 @@ than being pointed at whichever proxy happens to hold that number here.</p>
 
 <h3>Password Security</h3>
 <ul>
-  <li>Passwords encrypted with Windows DPAPI</li>
-  <li>Encryption is user-specific (cannot be used by other users)</li>
-  <li>Passwords not stored in plain text</li>
-  <li>Optional: Don't save password, prompt each time</li>
+  <li>"Protect password with password manager", ticked by default, keeps the
+      password in Total Commander's password manager under its master password</li>
+  <li>Unticked, the password is encrypted with Windows DPAPI in <code>sftpplug.ini</code>,
+      usable only by the same Windows user</li>
+  <li>The same choice exists for the jump host's and the proxy's password</li>
+  <li>Leave the password empty to be asked for it on every connection</li>
 </ul>
 
 <h2>Import Sessions</h2>
@@ -138,7 +152,9 @@ than being pointed at whichever proxy happens to hold that number here.</p>
 <ul>
   <li>KiTTY and FileZilla passwords are carried over when the source has one saved</li>
   <li>PuTTY keeps no password on disk; WinSCP and SecureCRT passwords are not imported</li>
-  <li>Imported passwords are re-protected with Windows DPAPI, never stored in plain text</li>
+  <li>Connecting reads the password from the source program each time; it is not copied anywhere</li>
+  <li><code>F5</code> into your own list puts it into Total Commander's password manager,
+      under the master password (Total Commander offers to create one if there is none)</li>
 </ul>
 
 <h3>Key File Compatibility</h3>

@@ -1,6 +1,7 @@
 #include "global.h"
 #include <windows.h>
 #include <wincrypt.h>
+#include <array>
 #include <vector>
 #include <string>
 #include <format>
@@ -206,9 +207,59 @@ void DecryptString(LPCTSTR pszEncrypted, LPTSTR pszPlain, UINT cchPlain)
 
     // Legacy XOR
     auto plain = LegacyDecryptXor(input);
-    if (plain && plain->size() < cchPlain) {
-        memcpy(pszPlain, plain->data(), plain->size());
-        pszPlain[plain->size()] = '\0';
+    if (plain) {
+        if (plain->size() < cchPlain) {
+            memcpy(pszPlain, plain->data(), plain->size());
+            pszPlain[plain->size()] = '\0';
+        }
         SecureZeroMemory(plain->data(), plain->size());
     }
+}
+
+std::string JumpPasswordStoreName(const std::string& session)
+{
+    return session + "$$jump";
+}
+
+std::string ProxyPasswordStoreName(int proxynr)
+{
+    return (proxynr > 1 ? std::format("proxy{}", proxynr) : std::string("proxy")) + "$$pass";
+}
+
+bool SavePasswordInStore(const std::string& storeName, const std::string& plain)
+{
+    if (plain.empty() || !HaveCryptProc())
+        return false;
+    std::string copy = plain;
+    const bool ok = CryptProcI(PluginNumber, CryptoNumber, FS_CRYPT_SAVE_PASSWORD,
+                               storeName.c_str(), copy.data(), 0) == FS_FILE_OK;
+    SecureZeroMemory(copy.data(), copy.size());
+    if (ok)
+        CryptCheckPass = true;
+    return ok;
+}
+
+void DeletePasswordFromStore(const std::string& storeName)
+{
+    if (HaveCryptProc())
+        CryptProcI(PluginNumber, CryptoNumber, FS_CRYPT_DELETE_PASSWORD,
+                   storeName.c_str(), nullptr, 0);
+}
+
+std::string LoadPlainPassword(const std::string& stored, const std::string& storeName)
+{
+    if (stored.empty())
+        return {};
+    std::array<char, 1024> plain{};
+    if (stored == "!") {
+        if (!HaveCryptProc() ||
+            CryptProcI(PluginNumber, CryptoNumber, FS_CRYPT_LOAD_PASSWORD, storeName.c_str(),
+                       plain.data(), static_cast<int>(plain.size() - 1)) != FS_FILE_OK)
+            return {};
+    } else {
+        DecryptString(stored.c_str(), plain.data(), static_cast<UINT>(plain.size()));
+    }
+    std::string out = plain.data();
+    SecureZeroMemory(plain.data(), plain.size());
+    return out;
 }

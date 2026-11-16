@@ -16,12 +16,12 @@
   <tr><th>Storage mode</th><th>INI format</th><th>Description</th></tr>
   <tr><td>TC Master Password</td><td><code>password=!</code></td><td>Delegated to Total Commander's own CryptProc API</td></tr>
   <tr><td>DPAPI</td><td><code>password=dpapi:&lt;base64&gt;</code></td><td>Windows CryptProtectData, bound to your Windows user account</td></tr>
-  <tr><td>Explicit plaintext</td><td><code>password=plain:&lt;text&gt;</code></td><td>Opt-in only; use only in isolated environments</td></tr>
+  <tr><td>Explicit plaintext</td><td><code>password=plain:&lt;text&gt;</code></td><td>Never written to <code>sftpplug.ini</code>; read when typed in by hand. Session files copied out of the plugin carry passwords this way</td></tr>
   <tr><td>Legacy XOR</td><td><code>&lt;decimal triplets&gt;</code></td><td>Read-only; used by very old plugin versions — never written for new sessions</td></tr>
 </table>
 <ul>
-  <li>All decrypted password buffers are zeroed from memory (<code>SecureZeroMemory</code>) immediately after use.</li>
-  <li>Jump Host credentials are stored and encrypted separately from target-host credentials.</li>
+  <li>The jump host's password is stored the same ways, under its own key <code>jumppassword</code>; in the password manager it is kept as <code>&lt;session&gt;$$jump</code>.</li>
+  <li>A password that comes into the plugin from elsewhere — a session file dropped onto it, a session copied from <code>[Imports]</code> — goes into the password manager or is not kept. A <code>!</code> in a session file is ignored.</li>
   <li>The PHP Agent PSK is stored as a salted SHA-256 hash inside <code>sftp.php</code> — the raw secret is not written to disk on the server.</li>
   <li>A PuTTY <code>.ppk</code> key is converted for the SSH library in memory only; the decrypted key is never written to disk.</li>
 </ul>

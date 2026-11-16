@@ -19,6 +19,40 @@ From this version the plugin comes in two builds: **classic**
 
 ### Security
 
+- **A session file can no longer take a password from the password
+  manager.** A file dropped onto the plugin with `password=!` and a server
+  of its choosing was given the password Total Commander's password
+  manager kept under the same session name, and the plugin sent it to
+  that server. A `!` in a file now brings no password. Passwords a file
+  does carry, for the session, its jump host or its proxy, go into the
+  password manager under the master password; when there is none yet,
+  Total Commander offers to create one. A password the manager does not
+  take is not kept and is asked for on connect.
+- **The jump host's password can be kept under the master password.** The
+  "Protect password with password manager" box in the jump-host settings
+  did nothing: the password always went into `sftpplug.ini`. It is now
+  kept in the password manager when ticked, and a jump host taken from
+  another session whose password is kept there gets that password at
+  connect — before, it got a placeholder byte instead.
+- **"Protect password with password manager" is ticked for new
+  passwords** — session, proxy and jump host. Copying a session from
+  [Imports] into the own list puts its password into the password
+  manager even when no master password is set yet: Total Commander offers
+  to create one, where before the password was silently dropped.
+- **Passwords follow the session in the password manager.** Renaming a
+  session in its settings left the password behind under the old name
+  ("Failed to load password!"), and jump hosts pointing at the session
+  lost it; it now works like F6. Deleting a proxy, or unticking the
+  password manager box, leaves no entry in the password manager for a
+  later record or session with the same name to pick up. The proxy
+  dialog ticks the box by where its own password is kept, not by the
+  session's.
+- **Session files copied out carry the passwords readable.** F3/F5 on a
+  session or a proxy record writes its passwords as
+  `plain:<password>`, loading one kept under the master password (Total
+  Commander asks for it). Before, the file carried the stored form,
+  which no other machine can read, or none at all. An [Imports] session
+  copied out carries the source program's password.
 - **PHP Agent and LAN Pair moved to a separate extra build.** They open
   the machine to the network in ways SSH does not: LAN Pair runs a file
   server on it, PHP Agent drives a script on a web server, with a shell.
