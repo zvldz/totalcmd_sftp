@@ -214,12 +214,12 @@
 297=Použiť SCP pre všetko (bez SFTP)
 298=Prenos:
 299=Kódovanie (znaková stránka) názvov súborov:
-300= &Práva používateľa pre nové súbory/adresáre: 
+300= P&ráva používateľa pre nové súbory/adresáre: 
 301=Nové súbory (odosielanie):
 302=Nové priečinky:
 303=Relácia:
 304=Prechodový hostiteľ:
-305=Použiť &prechodový hostiteľ
+305=Použiť prechodový hos&titeľ
 306=Nastavenia proxy:
 309=Nastavenia proxy
 310=Nastavenia proxy
@@ -239,7 +239,7 @@
 320=&Heslo:
 321=Certifikát (*-cert.pub), voliteľné:
 322=Súbor súkromného kľúča (*.pem;*.ppk):
-323=Použiť agenta SSH &(Pageant) na overenie prechodového hostiteľa
+323=Použiť &agenta SSH (Pageant) na overenie prechodového hostiteľa
 324=Pomocník
 325=Zrušiť
 326=TAR prúd
@@ -417,6 +417,12 @@
 12170=Skoková relácia '{}' vedie cez proxy. Ku skokovému hostiteľovi sa plugin pripája priamo, tá proxy by bola vynechaná, preto je spojenie odmietnuté. Vyberte skokovú reláciu bez proxy.
 12171=Relácia bola po poslednom načítaní zmenená v programe, z ktorého bola importovaná (hostiteľ, používateľ, proxy alebo skokový hostiteľ). Použite [Refresh] v jej priečinku a skúste to znova.
 12172=Tento názov nemožno dať relácii. Nesmie obsahovať riadiace znaky, spätnú lomku ani $$, začínať ani končiť medzerou, začínať znakom [, byť jednou z vlastných sekcií pluginu (Configuration, Imports, proxy) ani ležať vnútri inej relácie.
+12173=Toto heslo je príliš dlhé na uloženie. Heslo môže mať najviac 259 bajtov v UTF-8: 259 latinských písmen, v iných abecedách menej.
+12174=ProxyJump: nie je možné preložiť prechodového hostiteľa {}
+12175=ProxyJump: nie je možné pripojiť sa k prechodovému hostiteľovi {}
+12176=ProxyJump: nadviazanie SSH s prechodovým hostiteľom zlyhalo: {}
+12177=ProxyJump: overenie na prechodovom hostiteľovi zlyhalo.\nPoužívateľ: {}
+12178=ProxyJump: nie je možné otvoriť tunel k {}\n{}
 12089=SFTP
 12104=(ručne)
 12105= (chýba)

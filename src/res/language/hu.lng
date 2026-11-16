@@ -214,7 +214,7 @@
 297=SCP használata mindenhez (SFTP nélkül)
 298=Átvitel:
 299=Fájlnevek kódolása (kódlap):
-300= &Felhasználói jogok új fájlokhoz/könyvtárakhoz: 
+300= Felhasználói j&ogok új fájlokhoz/könyvtárakhoz: 
 301=Új fájlok (feltöltés):
 302=Új mappák:
 303=Munkamenet:
@@ -239,7 +239,7 @@
 320=&Jelszó:
 321=Tanúsítvány (*-cert.pub), nem kötelező:
 322=Titkos kulcs fájlja (*.pem;*.ppk):
-323=SSH-ügynök &(Pageant) használata a közvetítő gazdagép hitelesítéséhez
+323=SSH-&ügynök (Pageant) használata a közvetítő gazdagép hitelesítéséhez
 324=Súgó
 325=Mégse
 326=TAR adatfolyam
@@ -417,6 +417,12 @@
 12170=A(z) '{}' átjáró munkamenet proxyn keresztül megy. Az átjáró gépet közvetlenül éri el, az a proxy kimaradna, ezért a kapcsolat el lett utasítva. Válasszon proxy nélküli átjáró munkamenetet.
 12171=Ezt a munkamenetet a legutóbbi beolvasás óta megváltoztatták abban a programban, ahonnan importálva lett (gép, felhasználó, proxy vagy átjáró gép). Használja a [Refresh]-t a mappájában, majd próbálja újra.
 12172=Ez a név nem adható munkamenetnek. Nem tartalmazhat vezérlőkaraktert, fordított perjelet vagy $$-t, nem kezdődhet és nem végződhet szóközzel, nem kezdődhet [-lel, nem lehet a bővítmény saját szakaszainak egyike (Configuration, Imports, proxy), és nem lehet másik munkamenet belsejében.
+12173=Ez a jelszó túl hosszú a tároláshoz. Egy jelszó legfeljebb 259 bájt lehet UTF-8-ban: 259 latin betű, más ábécékben kevesebb.
+12174=ProxyJump: a(z) {} közvetítő gazdagép neve nem oldható fel
+12175=ProxyJump: nem lehet csatlakozni a(z) {} közvetítő gazdagéphez
+12176=ProxyJump: az SSH-kézfogás a közvetítő gazdagéppel sikertelen: {}
+12177=ProxyJump: a hitelesítés a közvetítő gazdagépen sikertelen.\nFelhasználó: {}
+12178=ProxyJump: nem nyitható alagút ide: {}\n{}
 12089=SFTP
 12104=(kézi)
 12105= (hiányzik)

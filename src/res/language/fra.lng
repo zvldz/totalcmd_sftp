@@ -214,7 +214,7 @@
 297=Utiliser SCP pour tout (sans SFTP)
 298=Mode :
 299=Encodage (page de code) des noms de fichiers :
-300= &Droits utilisateur pour les nouveaux fichiers/dossiers :
+300= D&roits utilisateur pour les nouveaux fichiers/dossiers :
 301=Nouveaux fichiers (envoi) :
 302=Nouveaux dossiers :
 303=Session :
@@ -418,6 +418,12 @@
 12170=La session de rebond '{}' passe par un proxy. L'hôte de rebond est joint directement, ce proxy serait contourné, la connexion est donc refusée. Choisissez une session de rebond sans proxy.
 12171=Cette session a été modifiée dans le programme d'où elle est importée (hôte, utilisateur, proxy ou hôte de rebond) depuis la dernière analyse. Utilisez [Refresh] dans son dossier, puis réessayez.
 12172=Ce nom ne peut pas être donné à une session. Il ne peut contenir ni caractère de contrôle, ni barre oblique inverse, ni $$, ni commencer ou finir par une espace, ni commencer par [, ni être une des sections propres du plugin (Configuration, Imports, proxy), ni se trouver dans une autre session.
+12173=Ce mot de passe est trop long pour être conservé. Un mot de passe peut occuper jusqu'à 259 octets en UTF-8 : 259 lettres latines, moins dans d'autres alphabets.
+12174=ProxyJump : impossible de résoudre l'hôte intermédiaire {}
+12175=ProxyJump : impossible de se connecter à l'hôte intermédiaire {}
+12176=ProxyJump : échec de la négociation SSH avec l'hôte intermédiaire : {}
+12177=ProxyJump : échec de l'authentification sur l'hôte intermédiaire.\nUtilisateur : {}
+12178=ProxyJump : impossible d'ouvrir le tunnel vers {}\n{}
 12089=SFTP
 12104=(manuel)
 12105= (introuvable)

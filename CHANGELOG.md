@@ -396,6 +396,29 @@ From this version the plugin comes in two builds: **classic**
     their old place anyway. They now stay where they were, and the error
     is reported.
   - A rename that changes only the case of a name did nothing.
+- **Dialogs and messages.**
+  - A password too long to be kept is no longer cut without a word: the
+    password fields take at most 259 characters, and one that still needs
+    more than 259 bytes (letters outside the Latin alphabet) is refused on
+    OK with a message.
+  - Keyboard shortcuts in the connection and jump-host dialogs no longer
+    repeat in 13 of the 15 translations (two controls on one letter, so the
+    second could not be reached); Japanese and Chinese use the "(&C)" form
+    with a Latin letter, as their own programs do, and "&(Pageant)" no
+    longer puts the shortcut on the bracket.
+  - A jump host whose referenced session is missing shows why, with empty
+    fields, instead of the session's unused own settings labelled as the
+    missing session's.
+  - A PHP Agent or LAN Pair session opened in the classic build is truly
+    read-only: the proxy list, proxy settings and "Change password..." are
+    closed too, since they save on their own.
+  - Jump-host errors (name not found, no connection, handshake, login,
+    tunnel) are translated.
+  - Long texts taken from the plugin's resources (the F1 help without a
+    language file) come whole and in UTF-8, so dashes and accents no longer
+    break; language files, the help page, the INI template, `sftp.php` and
+    `pageant.lnk` are found in a plugin folder whose name the system
+    codepage cannot spell.
 - **An upload is finished only when the server has closed the file.** The
   SFTP upload reported success with the remote file still open and closed
   it later without waiting, so the server could keep it open, and an error

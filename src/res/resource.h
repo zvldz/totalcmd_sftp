@@ -607,6 +607,12 @@
 #define IDS_JUMP_REF_PROXIED            12170  // refusal: jump session goes through a proxy
 #define IDS_IMPORT_STALE                12171  // refusal: imported session changed in its source
 #define IDS_ERR_SESSION_NAME            12172  // refusal: unusable session name
+#define IDS_ERR_PASSWORD_TOO_LONG       12173  // refusal: password longer than can be kept
+#define IDS_ERR_JUMP_RESOLVE            12174  // jump host name not resolved ({} = host)
+#define IDS_ERR_JUMP_CONNECT            12175  // jump host TCP connect failed ({} = host)
+#define IDS_ERR_JUMP_HANDSHAKE          12176  // jump host SSH handshake failed ({} = reason)
+#define IDS_ERR_JUMP_AUTH               12177  // jump host login failed ({} = user)
+#define IDS_ERR_JUMP_TUNNEL             12178  // tunnel through jump host refused ({} = target, {} = reason)
 
 // Next default values for new objects
 //

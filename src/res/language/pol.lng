@@ -217,12 +217,12 @@
 297=Użyj SCP do wszystkiego (bez SFTP)
 298=Transfer:
 299=Kodowanie (strona kodowa) nazw plików:
-300= &Prawa użytkownika dla nowych plików/katalogów: 
+300= P&rawa użytkownika dla nowych plików/katalogów: 
 301=Nowe pliki (przesyłanie):
 302=Nowe foldery:
 303=Sesja:
 304=Host pośredni:
-305=Użyj &hosta pośredniego
+305=Użyj hosta p&ośredniego
 306=Ustawienia proxy:
 309=Ustawienia proxy
 310=Ustawienia proxy
@@ -242,7 +242,7 @@
 320=&Hasło:
 321=Certyfikat (*-cert.pub), opcjonalnie:
 322=Plik klucza prywatnego (*.pem;*.ppk):
-323=Użyj agenta SSH &(Pageant) do uwierzytelniania hosta pośredniego
+323=Użyj &agenta SSH (Pageant) do uwierzytelniania hosta pośredniego
 327=System:
 328=Metoda:
 329=Fragmenty:
@@ -406,6 +406,12 @@
 12170=Sesja pośrednia '{}' przechodzi przez proxy. Z hostem pośrednim wtyczka łączy się bezpośrednio, to proxy zostałoby pominięte, więc połączenie odrzucono. Wybierz sesję pośrednią bez proxy.
 12171=Ta sesja została zmieniona w programie, z którego ją zaimportowano (host, użytkownik, proxy lub host pośredni), po ostatnim skanowaniu. Użyj [Refresh] w jej folderze i spróbuj ponownie.
 12172=Tej nazwy nie można nadać sesji. Nie może zawierać znaków sterujących, ukośnika wstecznego ani $$, zaczynać się ani kończyć spacją, zaczynać się od [, być jedną z własnych sekcji wtyczki (Configuration, Imports, proxy) ani leżeć wewnątrz innej sesji.
+12173=To hasło jest za długie, aby je zapisać. Hasło może zajmować do 259 bajtów w UTF-8: 259 liter łacińskich, mniej w innych alfabetach.
+12174=ProxyJump: nie można rozwiązać nazwy hosta pośredniego {}
+12175=ProxyJump: nie można połączyć się z hostem pośrednim {}
+12176=ProxyJump: uzgadnianie SSH z hostem pośrednim nie powiodło się: {}
+12177=ProxyJump: uwierzytelnianie na hoście pośrednim nie powiodło się.\nUżytkownik: {}
+12178=ProxyJump: nie można otworzyć tunelu do {}\n{}
 12089=SFTP
 12090=Szukam peera LAN Pair w sieci lokalnej...
 12091={} s

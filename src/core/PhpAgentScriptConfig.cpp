@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include "ConnectionDialog.h"
+#include "UnicodeHelpers.h"
 
 #pragma comment(lib, "bcrypt.lib")
 
@@ -105,9 +106,10 @@ static bool ComputeSha256Hex(const std::string& input, std::string& outHex)
     return true;
 }
 
+// `path` is UTF-8; the stream is opened by its wide form.
 static bool ReadTextFileUtf8(const std::string& path, std::string& outText)
 {
-    std::ifstream in(path, std::ios::binary);
+    std::ifstream in(unicode_util::utf8_to_wstring(path), std::ios::binary);
     if (!in)
         return false;
     outText.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
@@ -116,7 +118,7 @@ static bool ReadTextFileUtf8(const std::string& path, std::string& outText)
 
 static bool WriteTextFileUtf8(const std::string& path, const std::string& text)
 {
-    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    std::ofstream out(unicode_util::utf8_to_wstring(path), std::ios::binary | std::ios::trunc);
     if (!out)
         return false;
     out.write(text.data(), static_cast<std::streamsize>(text.size()));
@@ -145,7 +147,7 @@ bool UpdateLocalPhpAgentScriptWithPassword(LPCSTR plainPassword)
         return false;
 
     std::string pluginDir;
-    if (!GetPluginDirectoryA(pluginDir) || pluginDir.empty())
+    if (!GetPluginDirectoryU8(pluginDir) || pluginDir.empty())
         return false;
 
     std::string scriptPath = pluginDir + "\\sftp.php";

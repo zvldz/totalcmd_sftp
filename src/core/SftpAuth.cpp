@@ -416,18 +416,21 @@ int SftpAuthPageantOn(const SshAuthTarget& target, LPCSTR progressbuf, int progr
             agent.reset();
         }
         // Attempt to launch Pageant.
-        std::array<char, MAX_PATH> dirname{};
-        dirname[0] = 0;
-        GetModuleFileName(hinst, dirname.data(), dirname.size()-10);
-        char* p = strrchr(dirname.data(), '\\');
-        p = p ? p + 1 : dirname.data();
-        p[0] = 0;
-        const std::string linkname = std::string(dirname.data()) + "pageant.lnk";
-        if (GetFileAttributesA(linkname.c_str()) == INVALID_FILE_ATTRIBUTES)
+        // A pageant.lnk beside the plugin starts it; wide paths, so a plugin
+        // folder the system codepage cannot spell works too.
+        std::vector<wchar_t> modulePath(32768);
+        const DWORD len = GetModuleFileNameW(hinst, modulePath.data(), static_cast<DWORD>(modulePath.size()));
+        if (len == 0 || len >= modulePath.size())
+            return finish(-IDS_AGENT_CONNECTERROR);
+        std::wstring dirname(modulePath.data(), len);
+        const size_t slash = dirname.find_last_of(L'\\');
+        dirname.resize(slash == std::wstring::npos ? 0 : slash + 1);
+        const std::wstring linkname = dirname + L"pageant.lnk";
+        if (GetFileAttributesW(linkname.c_str()) == INVALID_FILE_ATTRIBUTES)
             return finish(-IDS_AGENT_CONNECTERROR);
 
         HWND active = GetForegroundWindow();
-        ShellExecute(active, nullptr, linkname.c_str(), nullptr, dirname.data(), SW_SHOW);
+        ShellExecuteW(active, nullptr, linkname.c_str(), nullptr, dirname.c_str(), SW_SHOW);
         Sleep(PAGEANT_WAIT_MS);
         SYSTICKS starttime = get_sys_ticks();
         while (active != GetForegroundWindow() && get_ticks_between(starttime) < PAGEANT_TIMEOUT_MS) {

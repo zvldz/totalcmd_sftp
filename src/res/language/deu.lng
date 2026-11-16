@@ -214,7 +214,7 @@
 297=SCP für alles verwenden (kein SFTP)
 298=Modus:
 299=Kodierung (Zeichensatz) der Dateinamen:
-300= &Benutzerrechte für neue Dateien/Verzeichnisse:
+300= Benutzer&rechte für neue Dateien/Verzeichnisse:
 301=Neue Dateien (Upload):
 302=Neue Ordner:
 303=Sitzung:
@@ -418,6 +418,12 @@
 12170=Die Jump-Sitzung '{}' geht über einen Proxy. Ein Jump-Host wird direkt erreicht, der Proxy würde übergangen, daher wird die Verbindung abgelehnt. Wählen Sie eine Jump-Sitzung ohne Proxy.
 12171=Diese Sitzung wurde nach dem letzten Einlesen in dem Programm geändert, aus dem sie importiert ist (Host, Benutzer, Proxy oder Jump-Host). Führen Sie [Refresh] in ihrem Ordner aus und versuchen Sie es erneut.
 12172=Dieser Name kann keiner Sitzung gegeben werden. Er darf keine Steuerzeichen, keinen Backslash und kein $$ enthalten, nicht mit einem Leerzeichen beginnen oder enden, nicht mit [ beginnen, keiner der eigenen Abschnitte des Plugins sein (Configuration, Imports, proxy) und nicht in einer anderen Sitzung liegen.
+12173=Dieses Passwort ist zu lang, um gespeichert zu werden. Ein Passwort darf in UTF-8 bis zu 259 Bytes umfassen: 259 lateinische Buchstaben, in anderen Alphabeten weniger.
+12174=ProxyJump: Jump-Host {} kann nicht aufgelöst werden
+12175=ProxyJump: Keine Verbindung zum Jump-Host {}
+12176=ProxyJump: SSH-Handshake mit dem Jump-Host fehlgeschlagen: {}
+12177=ProxyJump: Anmeldung am Jump-Host fehlgeschlagen.\nBenutzer: {}
+12178=ProxyJump: Tunnel zu {} kann nicht geöffnet werden\n{}
 12089=SFTP
 12104=(manuell)
 12105= (fehlt)

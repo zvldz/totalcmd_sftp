@@ -62,12 +62,24 @@ inline int LoadStr(char (&arr)[N], UINT id) {
     return detail::LoadStrInto(arr, static_cast<int>(N) - 1, id);
 }
 
+// The translation from the .lng file, else the resource string, in UTF-8
+// either way. The resource is read in place (a zero buffer size makes
+// LoadStringW return a pointer to it), so a long text such as the F1 help
+// comes whole.
 inline std::string LngStrU8(UINT id, const char* fallback) {
     const char* s = LngGetString(id);
     if (s) return s;
-    std::array<char, 512> buf{};
-    const int n = LoadStringA(hinst, id, buf.data(), static_cast<int>(buf.size()) - 1);
-    return n > 0 ? std::string(buf.data(), static_cast<size_t>(n)) : (fallback ? fallback : "");
+    const wchar_t* res = nullptr;
+    const int n = LoadStringW(hinst, id, reinterpret_cast<LPWSTR>(&res), 0);
+    if (n > 0 && res) {
+        const int len = WideCharToMultiByte(CP_UTF8, 0, res, n, nullptr, 0, nullptr, nullptr);
+        if (len > 0) {
+            std::string out(static_cast<size_t>(len), '\0');
+            WideCharToMultiByte(CP_UTF8, 0, res, n, out.data(), len, nullptr, nullptr);
+            return out;
+        }
+    }
+    return fallback ? fallback : "";
 }
 // For raw char* cases where only a runtime size is available
 inline int LoadStr(char* p, size_t n, UINT id) {

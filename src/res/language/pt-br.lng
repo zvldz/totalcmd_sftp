@@ -239,7 +239,7 @@
 320=&Senha:
 321=Certificado (*-cert.pub), opcional:
 322=Arquivo de chave privada (*.pem;*.ppk):
-323=Usar agente SSH &(Pageant) para autenticar o host intermediário
+323=Usar &agente SSH (Pageant) para autenticar o host intermediário
 324=Ajuda
 325=Cancelar
 326=Fluxo TAR
@@ -417,6 +417,12 @@
 12170=A sessão de salto '{}' passa por um proxy. O host de salto é alcançado diretamente, esse proxy seria ignorado, por isso a conexão foi recusada. Escolha uma sessão de salto sem proxy.
 12171=Esta sessão foi alterada no programa de onde foi importada (host, usuário, proxy ou host de salto) depois da última leitura. Use [Refresh] na pasta dela e tente de novo.
 12172=Este nome não pode ser dado a uma sessão. Não pode conter caracteres de controle, barra invertida nem $$, começar ou terminar com espaço, começar com [, ser uma das seções do próprio plugin (Configuration, Imports, proxy) nem ficar dentro de outra sessão.
+12173=Esta senha é longa demais para ser guardada. Uma senha pode ocupar até 259 bytes em UTF-8: 259 letras latinas, menos em outros alfabetos.
+12174=ProxyJump: não foi possível resolver o host intermediário {}
+12175=ProxyJump: não foi possível conectar ao host intermediário {}
+12176=ProxyJump: falha no handshake SSH com o host intermediário: {}
+12177=ProxyJump: falha na autenticação no host intermediário.\nUsuário: {}
+12178=ProxyJump: não foi possível abrir o túnel para {}\n{}
 12089=SFTP
 12104=(manual)
 12105= (ausente)

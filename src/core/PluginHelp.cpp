@@ -44,18 +44,18 @@ std::wstring GetPluginVersionW()
     return ver;
 }
 
-bool GetPluginDirectoryA(std::string& outDir)
+bool GetPluginDirectoryU8(std::string& outDir)
 {
     outDir.clear();
-    std::array<char, MAX_PATH> dllPath{};
-    DWORD n = GetModuleFileNameA(hinst, dllPath.data(), static_cast<DWORD>(dllPath.size()));
+    std::vector<wchar_t> dllPath(32768);
+    const DWORD n = GetModuleFileNameW(hinst, dllPath.data(), static_cast<DWORD>(dllPath.size()));
     if (n == 0 || n >= dllPath.size())
         return false;
-    char* slash = strrchr(dllPath.data(), '\\');
-    if (!slash)
+    const std::wstring_view path(dllPath.data(), n);
+    const size_t slash = path.find_last_of(L'\\');
+    if (slash == std::wstring_view::npos || slash == 0)
         return false;
-    *slash = 0;
-    outDir.assign(dllPath.data());
+    outDir = unicode_util::wstring_to_utf8(path.substr(0, slash));
     return !outDir.empty();
 }
 
@@ -63,7 +63,7 @@ void OpenPluginHelp(HWND hWnd)
 {
     std::string pluginDir;
     WindowsUserFeedback feedback(hWnd);
-    if (!GetPluginDirectoryA(pluginDir)) {
+    if (!GetPluginDirectoryU8(pluginDir)) {
         feedback.ShowError(LngStrU8(IDS_ERR_NO_PLUGIN_DIR, "Cannot locate plugin directory."), "Help");
         return;
     }
@@ -80,10 +80,11 @@ void OpenPluginHelp(HWND hWnd)
     // One self-contained page, opened by whatever handles .html. It replaced
     // a CHM: the only compiler for that format was withdrawn, and a CHM
     // arriving inside a downloaded ZIP is blocked by Windows and opens blank.
-    std::string helpPath = pluginDir + "\\SFTPplug-help.html";
-    DWORD attrs = GetFileAttributesA(helpPath.c_str());
+    const std::wstring pluginDirW = unicode_util::utf8_to_wstring(pluginDir);
+    const std::wstring helpPathW = pluginDirW + L"\\SFTPplug-help.html";
+    DWORD attrs = GetFileAttributesW(helpPathW.c_str());
     if (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY) == 0) {
-        HINSTANCE openRc = ShellExecuteA(hWnd, "open", helpPath.c_str(), nullptr, pluginDir.c_str(), SW_SHOWNORMAL);
+        HINSTANCE openRc = ShellExecuteW(hWnd, L"open", helpPathW.c_str(), nullptr, pluginDirW.c_str(), SW_SHOWNORMAL);
         if (reinterpret_cast<INT_PTR>(openRc) > 32)
             return;
     }
@@ -93,7 +94,7 @@ void OpenPluginHelp(HWND hWnd)
     const std::wstring shortHelpW =
         unicode_util::utf8_to_wstring(LngStrU8(IDS_HELPTEXT, "Plugin help:"));
     std::wstring msgW = L"Help file not found or failed to open.\n\nExpected location:\n";
-    msgW += std::wstring(helpPath.begin(), helpPath.end());
+    msgW += helpPathW;
     msgW += L"\n\n";
     msgW += shortHelpW;
     feedback.ShowError(unicode_util::wide_to_internal(msgW), unicode_util::wide_to_internal(helpTitle));

@@ -214,7 +214,7 @@
 297=Folosire SCP pentru totul (fără SFTP)
 298=Transfer:
 299=Codificare (pagină de cod) nume fișiere:
-300= &Drepturi utilizator pentru fișiere/directoare noi: 
+300= D&repturi utilizator pentru fișiere/directoare noi: 
 301=Fișiere noi (încărcare):
 302=Foldere noi:
 303=Sesiune:
@@ -239,7 +239,7 @@
 320=&Parolă:
 321=Certificat (*-cert.pub), opțional:
 322=Fișier cheie privată (*.pem;*.ppk):
-323=Folosire agent SSH &(Pageant) pentru autentificarea gazdei intermediare
+323=Folosire &agent SSH (Pageant) pentru autentificarea gazdei intermediare
 324=Ajutor
 325=Anulare
 326=Flux TAR
@@ -417,6 +417,12 @@
 12170=Sesiunea intermediară '{}' trece printr-un proxy. Gazda intermediară este accesată direct, acel proxy ar fi ocolit, așa că conexiunea este refuzată. Alegeți o sesiune intermediară fără proxy.
 12171=Această sesiune a fost modificată în programul din care a fost importată (gazdă, utilizator, proxy sau gazdă intermediară) după ultima scanare. Folosiți [Refresh] în dosarul ei, apoi încercați din nou.
 12172=Acest nume nu poate fi dat unei sesiuni. Nu poate conține caractere de control, bară inversă sau $$, începe ori se termina cu un spațiu, începe cu [, fi una dintre secțiunile proprii ale pluginului (Configuration, Imports, proxy) sau afla în interiorul altei sesiuni.
+12173=Această parolă este prea lungă pentru a fi păstrată. O parolă poate ocupa cel mult 259 de octeți în UTF-8: 259 de litere latine, mai puține în alte alfabete.
+12174=ProxyJump: numele gazdei intermediare {} nu poate fi rezolvat
+12175=ProxyJump: nu se poate conecta la gazda intermediară {}
+12176=ProxyJump: negocierea SSH cu gazda intermediară a eșuat: {}
+12177=ProxyJump: autentificarea la gazda intermediară a eșuat.\nUtilizator: {}
+12178=ProxyJump: nu se poate deschide tunelul către {}\n{}
 12089=SFTP
 12104=(manual)
 12105= (lipsește)

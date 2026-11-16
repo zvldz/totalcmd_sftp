@@ -98,6 +98,9 @@ static void BrowseJumpKeyFile(HWND hWnd, int editCtrl)
 // discarded at connect time, which is what made an agent problem here hard to
 // pin down. Without a reference the dialog is the only place they exist, so
 // everything is editable.
+static void LimitPasswordEdit(HWND hWnd, int id);
+static bool PasswordFitsOrWarn(HWND hWnd, int id);
+
 static void UpdateJumpControlStates(HWND hWnd, bool fromSession)
 {
     const bool editable = !fromSession;
@@ -141,8 +144,18 @@ static INT_PTR CALLBACK JumpHostDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
             ? ResolveJumpConfig(cs, cs->IniFileName.c_str())
             : JumpConfig{};
 
-        if (fromSession && (shown.status == JumpConfigStatus::Ready ||
-                            shown.status == JumpConfigStatus::RefProxied)) {
+        const bool refResolved = fromSession && (shown.status == JumpConfigStatus::Ready ||
+                                                 shown.status == JumpConfigStatus::RefProxied);
+        if (fromSession && !refResolved) {
+            // A reference that leads nowhere usable (missing, chained) has no
+            // settings to show; the session's own jump_* fields are not in use
+            // and are left out rather than shown as the referenced session's.
+            for (int id : { IDC_JUMP_HOST, IDC_JUMP_USER, IDC_JUMP_PASSWORD,
+                            IDC_JUMP_PUBKEY, IDC_JUMP_PRIVKEY })
+                SetDlgItemTextI(hWnd, id, "");
+            SetDlgItemTextI(hWnd, IDC_JUMP_PORT, "");
+            CheckDlgButton(hWnd, IDC_JUMP_USEAGENT, BST_UNCHECKED);
+        } else if (refResolved) {
             const JumpHostSettings& j = shown.endpoint;
             SetDlgItemTextI(hWnd, IDC_JUMP_HOST, j.host.c_str());
             SetDlgItemInt(hWnd, IDC_JUMP_PORT, j.port ? j.port : 22, FALSE);
@@ -180,7 +193,10 @@ static INT_PTR CALLBACK JumpHostDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
 
         // The row the removed duplicate checkbox used to occupy now carries
         // the reason the fields are locked.
-        if (fromSession) {
+        if (fromSession && !refResolved) {
+            SetDlgItemTextW(hWnd, IDC_JUMP_FROM_SESSION,
+                            unicode_util::utf8_to_wstring(shown.error).c_str());
+        } else if (fromSession) {
             std::string note = LngStrU8(IDS_JUMP_FROM_SESSION,
                 "These settings come from session '{}' and are shown read-only. "
                 "Pick (manual) in the jump-host list to configure a host here instead.");
@@ -199,6 +215,7 @@ static INT_PTR CALLBACK JumpHostDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
             EnableWindow(GetDlgItem(hWnd, IDC_JUMP_CRYPTPASS), FALSE);
         DlgLayout::OnInitDialog(hWnd);
         DlgLayout::LayoutJumpHostDialog(hWnd);
+        LimitPasswordEdit(hWnd, IDC_JUMP_PASSWORD);
 
         // Center dialog over parent.
         RECT r1{}, r2{};
@@ -231,6 +248,8 @@ static INT_PTR CALLBACK JumpHostDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
             // values, shown for reading. Storing them here would copy that
             // session's host into this one's own jump_* fields and leave a
             // stale copy behind the moment the referenced session changes.
+            if (!PasswordFitsOrWarn(hWnd, IDC_JUMP_PASSWORD))
+                return 1;
             if (!cs->jump_session_ref.empty()) {
                 EndDialog(hWnd, IDOK);
                 return 1;
@@ -417,6 +436,35 @@ static UINT GetDlgItemTextI(HWND hWnd, int nIDDlgItem, std::string& out, size_t 
     const UINT len = ::GetDlgItemTextI(hWnd, nIDDlgItem, out.data(), static_cast<int>(capacity));
     out.resize(len);
     return len;
+}
+
+// A password is read and kept in buffers of MAX_PATH bytes of UTF-8 (the
+// dialog read, the INI value, Total Commander's password store). Its edit
+// takes at most that many characters; one in another alphabet can still need
+// more bytes, and is refused on OK with a message instead of being cut.
+static void LimitPasswordEdit(HWND hWnd, int id)
+{
+    SendDlgItemMessageW(hWnd, id, EM_LIMITTEXT, MAX_PATH - 1, 0);
+}
+
+static bool PasswordFitsOrWarn(HWND hWnd, int id)
+{
+    const HWND ctrl = GetDlgItem(hWnd, id);
+    if (!ctrl || !IsWindowVisible(ctrl))
+        return true;
+    const int wlen = GetWindowTextLengthW(ctrl);
+    if (wlen <= 0)
+        return true;
+    std::wstring text(static_cast<size_t>(wlen) + 1, L'\0');
+    const int got = GetWindowTextW(ctrl, text.data(), wlen + 1);
+    const int bytes = got > 0
+        ? WideCharToMultiByte(CP_UTF8, 0, text.data(), got, nullptr, 0, nullptr, nullptr) : 0;
+    SecureZeroMemory(text.data(), text.size() * sizeof(wchar_t));
+    if (bytes < MAX_PATH)
+        return true;
+    MessageBoxW(hWnd, LoadResStringW(IDS_ERR_PASSWORD_TOO_LONG).c_str(), L"SFTP", MB_OK | MB_ICONWARNING);
+    SetFocus(ctrl);
+    return false;
 }
 
 // Writes `password` for `key` in `section`: into Total Commander's password
@@ -1168,16 +1216,10 @@ static void OnPhpShellCommand(HWND hWnd, ConnectDialogContext* dlgCtx, pConnectS
 
     std::string authError;
     if (PhpAgentValidateAuth(&shellSettings, authError) != SFTP_OK) {
-        auto lngU8 = [](UINT id, const char* fb) -> std::string {
-            const char* s = LngGetString(id);
-            if (s) return s;
-            std::array<char, 512> buf{};
-            const int n = LoadStringA(hinst, id, buf.data(), static_cast<int>(buf.size()) - 1);
-            return n > 0 ? std::string(buf.data(), static_cast<size_t>(n)) : (fb ? fb : "");
-        };
+        const auto lngU8 = [](UINT id, const char* fb) { return LngStrU8(id, fb); };
         std::string localPhpPath;
         std::string pluginDir;
-        if (GetPluginDirectoryA(pluginDir)) {
+        if (GetPluginDirectoryU8(pluginDir)) {
             localPhpPath = pluginDir;
             localPhpPath += "\\sftp.php";
         }
@@ -1630,10 +1672,18 @@ void UpdateScpOnlyDependentControls(HWND hWnd)
     // and Pair... are not there, and a PHP Agent / LAN Pair session made by
     // the extra build is shown read-only.
     const int transferMode = (int)SendDlgItemMessage(hWnd, IDC_TRANSFERMODE, CB_GETCURSEL, 0, 0);
+    const bool editable = transferMode == static_cast<int>(sftp::TransferMode::ssh_auto);
     EnableWindow(GetDlgItem(hWnd, IDC_TRANSFERMODE), FALSE);
     EnableWindow(GetDlgItem(hWnd, IDC_PHPSHELL), FALSE);
-    EnableWindow(GetDlgItem(hWnd, IDOK),
-                 transferMode == static_cast<int>(sftp::TransferMode::ssh_auto));
+    EnableWindow(GetDlgItem(hWnd, IDOK), editable);
+    // Read-only means nothing is written: the proxy list (whose "add" entry
+    // creates a record), the proxy settings and the password manager are
+    // closed too, since they save on their own.
+    if (!editable) {
+        EnableWindow(GetDlgItem(hWnd, IDC_PROXYCOMBO), FALSE);
+        EnableWindow(GetDlgItem(hWnd, IDC_PROXYBUTTON), FALSE);
+        EnableWindow(GetDlgItem(hWnd, IDC_EDITPASS), FALSE);
+    }
 #endif
 }
 
@@ -1822,6 +1872,7 @@ INT_PTR WINAPI ProxyDlgProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lPara
 
         DlgLayout::OnInitDialog(hWnd);
         DlgLayout::LayoutProxyDialog(hWnd);
+        LimitPasswordEdit(hWnd, IDC_PROXYPASSWORD);
 
         // Center the dialog relative to its parent window.
         if (GetWindowRect(hWnd, &rt1) && GetWindowRect(GetParent(hWnd), &rt2)) {
@@ -1859,6 +1910,8 @@ INT_PTR WINAPI ProxyDlgProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lPara
             else if (IsDlgButtonChecked(hWnd, IDC_SOCKS5PROXY))
                 ConnectData.proxytype = sftp::Proxy::socks5;
 
+            if (!PasswordFitsOrWarn(hWnd, IDC_PROXYPASSWORD))
+                return 1;
             GetDlgItemTextI(hWnd, IDC_PROXYSERVER, ConnectData.proxyserver);
             GetDlgItemTextI(hWnd, IDC_PROXYUSERNAME, ConnectData.proxyuser);
             GetDlgItemTextI(hWnd, IDC_PROXYPASSWORD, ConnectData.proxypassword);
@@ -2357,6 +2410,7 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
 
     DlgLayout::OnInitDialog(m_hWnd);
     DlgLayout::LayoutConnectionDialog(m_hWnd);
+    LimitPasswordEdit(m_hWnd, IDC_PASSWORD);
 
 
     if (m_ctx->lanPeerId.empty())
@@ -2698,6 +2752,9 @@ void ConnectionDialog::OnOk()
         return;
     }
 #endif
+
+    if (!PasswordFitsOrWarn(m_hWnd, IDC_PASSWORD))
+        return;
 
     LPCSTR dlgDisplayName = m_ctx->displayName;
     LPCSTR dlgIniFileName = m_ctx->iniFileName;

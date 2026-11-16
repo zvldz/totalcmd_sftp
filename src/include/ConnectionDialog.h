@@ -24,7 +24,8 @@ void EnableControlsPageant(HWND hWnd, bool enable);
 void UpdateKeyControlsForPrivateKey(HWND hWnd);
 void UpdateScpOnlyDependentControls(HWND hWnd);
 bool UpdateLocalPhpAgentScriptWithPassword(LPCSTR plainPassword);
-bool GetPluginDirectoryA(std::string& outDir);
+// The plugin's folder in UTF-8, without a trailing backslash.
+bool GetPluginDirectoryU8(std::string& outDir);
 void OpenPluginHelp(HWND hWnd);
 std::wstring GetPluginVersionW();
 

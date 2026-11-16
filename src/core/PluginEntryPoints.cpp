@@ -1014,16 +1014,19 @@ void WINAPI FsSetDefaultParams(FsDefaultParamStruct * dps)
             }
         }
 
-        // Copy INI template from plugin directory if present.
-        std::array<char, MAX_PATH> templateName{};
-        DWORD len = GetModuleFileName(hinst, templateName.data(), templateName.size() - 1);
-        if (len > 0) {
-            LPSTR p = strrchr(templateName.data(), '\\');
-            if (p) {
-                p[1] = 0;
-                strlcat(templateName.data(), templatefile, templateName.size() - 1);
+        // Copy the INI template from the plugin's folder if present; an
+        // existing INI is never replaced. Wide paths, so a plugin folder the
+        // system codepage cannot spell works too.
+        std::vector<wchar_t> modulePath(32768);
+        const DWORD len = GetModuleFileNameW(hinst, modulePath.data(), static_cast<DWORD>(modulePath.size()));
+        if (len > 0 && len < modulePath.size()) {
+            std::wstring templateName(modulePath.data(), len);
+            const size_t slash = templateName.find_last_of(L'\\');
+            if (slash != std::wstring::npos) {
+                templateName.resize(slash + 1);
+                templateName += L"" templatefile;
+                CopyFileW(templateName.c_str(), inifilenameW, TRUE);
             }
-            CopyFileA(templateName.data(), inifilename, true);  // only copy if target doesn't exist
         }
     });
 }

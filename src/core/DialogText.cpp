@@ -17,9 +17,11 @@ std::wstring LoadResStringW(UINT id)
         MultiByteToWideChar(CP_UTF8, 0, lngStr, -1, out.data(), len);
         return out;
     }
-    std::array<wchar_t, 1024> buf{};
-    const int n = LoadStringW(hinst, id, buf.data(), static_cast<int>(buf.size() - 1));
-    return n > 0 ? std::wstring(buf.data(), static_cast<size_t>(n)) : std::wstring();
+    // Read in place: a zero buffer size makes LoadStringW return a pointer
+    // to the resource, so a string of any length comes whole.
+    const wchar_t* res = nullptr;
+    const int n = LoadStringW(hinst, id, reinterpret_cast<LPWSTR>(&res), 0);
+    return (n > 0 && res) ? std::wstring(res, static_cast<size_t>(n)) : std::wstring();
 }
 
 void LocalizeDlgControls(HWND hDlg, UINT captionId, std::span<const DialogString> controls)

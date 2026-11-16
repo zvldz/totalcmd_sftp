@@ -204,7 +204,7 @@
 287=SSH-agent gebruiken (Pageant)
 288=Wachtwoord wijzigen...
 289=Wachtwoord beveiligen met wachtwoordbeheerder
-290=Clientcertificaat voor &verificatie:
+290=&Clientcertificaat voor verificatie:
 291=Certificaat (*-cert.pub), optioneel:
 292=Bestand met privésleutel (*.pem;*.ppk):
 293=Comprimeren met &ZLIB (werkt mogelijk niet op sommige servers)
@@ -214,7 +214,7 @@
 297=SCP voor alles gebruiken (zonder SFTP)
 298=Overdracht:
 299=Codering (codepagina) bestandsnamen:
-300= &Gebruikersrechten voor nieuwe bestanden/mappen: 
+300= Gebruikers&rechten voor nieuwe bestanden/mappen: 
 301=Nieuwe bestanden (uploaden):
 302=Nieuwe mappen:
 303=Sessie:
@@ -239,7 +239,7 @@
 320=&Wachtwoord:
 321=Certificaat (*-cert.pub), optioneel:
 322=Bestand met privésleutel (*.pem;*.ppk):
-323=SSH-agent &(Pageant) gebruiken voor verificatie van de tussenliggende host
+323=SSH-&agent (Pageant) gebruiken voor verificatie van de tussenliggende host
 324=Help
 325=Annuleren
 326=TAR-stroom
@@ -417,6 +417,12 @@
 12170=De jump-sessie '{}' gaat via een proxy. Een jump-host wordt direct bereikt, die proxy zou worden overgeslagen, dus de verbinding wordt geweigerd. Kies een jump-sessie zonder proxy.
 12171=Deze sessie is na de laatste scan gewijzigd in het programma waaruit ze is geïmporteerd (host, gebruiker, proxy of jump-host). Gebruik [Refresh] in haar map en probeer het opnieuw.
 12172=Deze naam kan niet aan een sessie worden gegeven. Hij mag geen stuurtekens, backslash of $$ bevatten, niet met een spatie beginnen of eindigen, niet met [ beginnen, geen van de eigen secties van de plugin zijn (Configuration, Imports, proxy) en niet binnen een andere sessie liggen.
+12173=Dit wachtwoord is te lang om te bewaren. Een wachtwoord mag in UTF-8 maximaal 259 bytes beslaan: 259 Latijnse letters, minder in andere alfabetten.
+12174=ProxyJump: tussenliggende host {} kan niet worden opgezocht
+12175=ProxyJump: kan geen verbinding maken met tussenliggende host {}
+12176=ProxyJump: SSH-handshake met de tussenliggende host mislukt: {}
+12177=ProxyJump: aanmelden bij de tussenliggende host mislukt.\nGebruiker: {}
+12178=ProxyJump: kan geen tunnel openen naar {}\n{}
 12089=SFTP
 12104=(handmatig)
 12105= (ontbreekt)

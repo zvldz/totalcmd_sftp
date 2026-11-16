@@ -43,7 +43,7 @@ using LngMap = std::unordered_map<UINT, std::string>;
 static std::atomic<const LngMap*> g_lngMap{nullptr};
 static std::mutex g_lngLoadMutex;                    // serialises loads
 static std::vector<std::unique_ptr<LngMap>> g_lngMaps;  // every map loaded
-static std::string g_lngLoadedPath;                  // file of g_lngMap; "" = none
+static std::wstring g_lngLoadedPath;                 // file of g_lngMap; "" = none
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -121,9 +121,9 @@ static const char* LangIdToTcCode(LANGID id) noexcept
 // Internal file loader
 // ---------------------------------------------------------------------------
 
-static void LoadLngFromPath(const std::string& lngPath, LngMap& map) noexcept
+static void LoadLngFromPath(const std::wstring& lngPath, LngMap& map) noexcept
 {
-    HANDLE hFile = CreateFileA(lngPath.c_str(), GENERIC_READ, FILE_SHARE_READ,
+    HANDLE hFile = CreateFileW(lngPath.c_str(), GENERIC_READ, FILE_SHARE_READ,
                                nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (hFile == INVALID_HANDLE_VALUE)
         return;
@@ -171,17 +171,25 @@ static void LoadLngFromPath(const std::string& lngPath, LngMap& map) noexcept
     }
 }
 
-static std::string GetPluginLangDir(HINSTANCE hPluginInst) noexcept
+// The language folder beside the plugin, as a wide path: the plugin may sit
+// in a folder whose name the system codepage cannot spell.
+static std::wstring GetPluginLangDir(HINSTANCE hPluginInst) noexcept
 {
-    std::array<char, MAX_PATH> dllPath{};
-    if (GetModuleFileNameA(hPluginInst, dllPath.data(),
-                           static_cast<DWORD>(dllPath.size()) - 1) == 0)
+    try {
+        std::vector<wchar_t> dllPath(32768);
+        const DWORD n = GetModuleFileNameW(hPluginInst, dllPath.data(),
+                                           static_cast<DWORD>(dllPath.size()));
+        if (n == 0 || n >= dllPath.size())
+            return {};
+        std::wstring dir(dllPath.data(), n);
+        const size_t lastSlash = dir.find_last_of(L'\\');
+        if (lastSlash == std::wstring::npos)
+            return {};
+        dir.resize(lastSlash + 1);
+        return dir + L"language\\";
+    } catch (...) {
         return {};
-    char* lastSlash = strrchr(dllPath.data(), '\\');
-    if (!lastSlash)
-        return {};
-    lastSlash[1] = '\0';
-    return std::string(dllPath.data()) + "language\\";
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -190,7 +198,7 @@ static std::string GetPluginLangDir(HINSTANCE hPluginInst) noexcept
 
 // Publishes the translation in `lngPath` ("" = built-in English). The same
 // file is not loaded again, so calling this on every root listing is cheap.
-static void PublishLanguage(const std::string& lngPath) noexcept
+static void PublishLanguage(const std::wstring& lngPath) noexcept
 {
     std::lock_guard<std::mutex> lock(g_lngLoadMutex);
     if (lngPath == g_lngLoadedPath)
@@ -210,12 +218,18 @@ static void PublishLanguage(const std::string& lngPath) noexcept
     }
 }
 
-static std::string LngPathForCode(const char* code, HINSTANCE hPluginInst) noexcept
+static std::wstring LngPathForCode(const char* code, HINSTANCE hPluginInst) noexcept
 {
     if (!code || !code[0])
         return {};
-    const std::string dir = GetPluginLangDir(hPluginInst);
-    return dir.empty() ? std::string() : dir + code + ".lng";
+    const std::wstring dir = GetPluginLangDir(hPluginInst);
+    if (dir.empty())
+        return {};
+    // Language codes are ASCII ("rus", "pt-br").
+    std::wstring path = dir;
+    for (const char* p = code; *p; ++p)
+        path += static_cast<wchar_t>(static_cast<unsigned char>(*p));
+    return path + L".lng";
 }
 
 void LngLoadForLanguage(LANGID langId, HINSTANCE hPluginInst) noexcept

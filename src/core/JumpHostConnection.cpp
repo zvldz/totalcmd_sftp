@@ -10,6 +10,8 @@
 #include <format>
 #include <memory>
 #include <string>
+#include <string_view>
+#include <initializer_list>
 
 #include "JumpHostConnection.h"
 #include "ITransportStream.h"
@@ -146,6 +148,22 @@ JumpConfig ResolveJumpConfig(pConnectSettings cs, LPCSTR iniFileName)
     return out;
 }
 
+
+// A translated message with each "{}" filled in turn by the next argument.
+static std::string JumpMessage(UINT id, const char* fallback,
+                               std::initializer_list<std::string_view> args)
+{
+    std::string text = LngStrU8(id, fallback);
+    size_t pos = 0;
+    for (const std::string_view arg : args) {
+        pos = text.find("{}", pos);
+        if (pos == std::string::npos)
+            break;
+        text.replace(pos, 2, arg);
+        pos += arg.size();
+    }
+    return text;
+}
 
 // Minimal alloc/free callbacks for the jump session (same as main session).
 static LPVOID jmp_alloc(size_t n, LPVOID* /*ab*/)   { return malloc(n); }
@@ -579,7 +597,8 @@ std::unique_ptr<ITransportStream> ConnectViaJumpHost(
     if (GetAddrInfoW(unicode_util::internal_to_wide(jump.host).c_str(), portStr.c_str(), &hints, &res) != 0) {
         ShowStatus(("Jump host: DNS failed for " + jump.host).c_str());
         if (cs->feedback)
-            cs->feedback->ShowError(("ProxyJump: cannot resolve jump host: " + jump.host).c_str());
+            cs->feedback->ShowError(JumpMessage(IDS_ERR_JUMP_RESOLVE,
+                "ProxyJump: cannot resolve jump host {}", { jump.host }).c_str());
         return nullptr;
     }
 
@@ -620,7 +639,8 @@ std::unique_ptr<ITransportStream> ConnectViaJumpHost(
             closesocket(jmpSock);
         ShowStatusId(IDS_LOG_JUMP_TCP_FAIL, jump.host.c_str(), true);
         if (cs->feedback)
-            cs->feedback->ShowError(("ProxyJump: cannot connect to jump host: " + jump.host).c_str());
+            cs->feedback->ShowError(JumpMessage(IDS_ERR_JUMP_CONNECT,
+                "ProxyJump: cannot connect to jump host {}", { jump.host }).c_str());
         return nullptr;
     }
     ShowStatusId(IDS_LOG_JUMP_TCP_OK, jump.host.c_str(), true);
@@ -662,7 +682,8 @@ std::unique_ptr<ITransportStream> ConnectViaJumpHost(
             jmpSession->lastError(&msg, &mlen, false);
             ShowStatusId(IDS_LOG_JUMP_HANDSHAKE_FAIL, msg ? msg : "unknown", true);
             if (cs->feedback)
-                cs->feedback->ShowError(("ProxyJump: jump host SSH handshake failed: " + (msg ? std::string(msg) : "")).c_str());
+                cs->feedback->ShowError(JumpMessage(IDS_ERR_JUMP_HANDSHAKE,
+                    "ProxyJump: jump host SSH handshake failed: {}", { msg ? msg : "" }).c_str());
             // jmpSession destructor (unique_ptr scope-exit) handles disconnect+free.
             closesocket(jmpSock);
             return nullptr;
@@ -690,7 +711,8 @@ std::unique_ptr<ITransportStream> ConnectViaJumpHost(
         // jmpSession destructor (unique_ptr scope-exit) handles disconnect+free.
         closesocket(jmpSock);
         if (cs->feedback)
-            cs->feedback->ShowError(("ProxyJump: authentication to jump host failed.\nUser: " + jump.user).c_str());
+            cs->feedback->ShowError(JumpMessage(IDS_ERR_JUMP_AUTH,
+                "ProxyJump: authentication to jump host failed.\nUser: {}", { jump.user }).c_str());
         return nullptr;
     }
 
@@ -730,7 +752,9 @@ std::unique_ptr<ITransportStream> ConnectViaJumpHost(
         jmpSession->lastError(&msg, &mlen, false);
         ShowStatus(("Jump host: direct-tcpip failed to " + targetHost + ": " + (msg ? msg : "unknown")).c_str());
         if (cs->feedback)
-            cs->feedback->ShowError(("ProxyJump: cannot open tunnel to " + targetHost + ":" + std::to_string(targetPort) + "\n" + (msg ? msg : "")).c_str());
+            cs->feedback->ShowError(JumpMessage(IDS_ERR_JUMP_TUNNEL,
+                "ProxyJump: cannot open tunnel to {}\n{}",
+                { targetHost + ":" + std::to_string(targetPort), msg ? msg : "" }).c_str());
         jmpSession->disconnect("direct-tcpip failed");
         // jmpSession destructor (unique_ptr scope-exit) handles disconnect+free.
         closesocket(jmpSock);

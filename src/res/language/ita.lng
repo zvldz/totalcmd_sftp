@@ -214,7 +214,7 @@
 297=Usa SCP per tutto (senza SFTP)
 298=Modalità:
 299=Codifica (tabella codici) dei nomi di file:
-300= &Diritti utente per nuovi file/directory: 
+300= D&iritti utente per nuovi file/directory: 
 301=Nuovi file (caricamento):
 302=Nuove cartelle:
 303=Sessione:
@@ -417,6 +417,12 @@
 12170=La sessione jump '{}' passa da un proxy. Il jump host viene raggiunto direttamente, quel proxy verrebbe scavalcato, perciò la connessione è rifiutata. Scelga una sessione jump senza proxy.
 12171=Questa sessione è stata modificata nel programma da cui è importata (host, utente, proxy o jump host) dopo l'ultima scansione. Usi [Refresh] nella sua cartella e riprovi.
 12172=Questo nome non può essere dato a una sessione. Non può contenere caratteri di controllo, barra rovesciata o $$, iniziare o finire con uno spazio, iniziare con [, essere una delle sezioni proprie del plugin (Configuration, Imports, proxy) né trovarsi dentro un'altra sessione.
+12173=Questa password è troppo lunga per essere conservata. Una password può occupare fino a 259 byte in UTF-8: 259 lettere latine, meno in altri alfabeti.
+12174=ProxyJump: impossibile risolvere l'host intermediario {}
+12175=ProxyJump: impossibile connettersi all'host intermediario {}
+12176=ProxyJump: handshake SSH con l'host intermediario non riuscito: {}
+12177=ProxyJump: autenticazione sull'host intermediario non riuscita.\nUtente: {}
+12178=ProxyJump: impossibile aprire il tunnel verso {}\n{}
 12089=SFTP
 12104=(manuale)
 12105= (mancante)
