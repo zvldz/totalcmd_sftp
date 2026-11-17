@@ -968,9 +968,34 @@ void WINAPI FsSetDefaultParams(FsDefaultParamStruct * dps)
             inifilename[0] = 0;
         strlcat(inifilename, defininame, countof(inifilename)-1);
 
-        // Build the Unicode version of the ini path so that ini access works
-        // correctly even when the user profile directory contains non-ANSI characters.
+        // Total Commander passes this path in ANSI only. A folder whose name
+        // the codepage cannot write arrives with '?' in it and does not
+        // exist; Total Commander's own wide COMMANDER_INI names the same
+        // folder correctly. The ANSI copy, which part of the code still
+        // uses, then takes the folder's short (8.3) name where there is one.
         MultiByteToWideChar(CP_ACP, 0, inifilename, -1, inifilenameW, MAX_PATH);
+        {
+            std::wstring dirW(inifilenameW);
+            const size_t slash = dirW.find_last_of(L'\\');
+            dirW.resize(slash == std::wstring::npos ? 0 : slash + 1);
+            std::array<wchar_t, MAX_PATH> tcIni{};
+            const DWORD n = GetEnvironmentVariableW(L"COMMANDER_INI", tcIni.data(), static_cast<DWORD>(tcIni.size()));
+            if (!dirW.empty() && GetFileAttributesW(dirW.c_str()) == INVALID_FILE_ATTRIBUTES &&
+                n > 0 && n < tcIni.size()) {
+                std::wstring tcDir(tcIni.data());
+                const size_t s = tcDir.find_last_of(L'\\');
+                if (s != std::wstring::npos) {
+                    tcDir.resize(s + 1);
+                    wcslcpy(inifilenameW, (tcDir + defininamew).c_str(), MAX_PATH - 1);
+                    std::array<wchar_t, MAX_PATH> shortDir{};
+                    if (GetShortPathNameW(tcDir.c_str(), shortDir.data(), static_cast<DWORD>(shortDir.size())) > 0) {
+                        WideCharToMultiByte(CP_ACP, 0, shortDir.data(), -1, inifilename, MAX_PATH, nullptr, nullptr);
+                        strlcat(inifilename, defininame, countof(inifilename) - 1);
+                    }
+                    SFTP_LOG("ENTRY", "plugin INI folder taken from COMMANDER_INI");
+                }
+            }
+        }
 
         // Apply language override from sftpplug.ini [Configuration] Language= (overrides TC detection).
         {

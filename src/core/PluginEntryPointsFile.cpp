@@ -72,9 +72,8 @@ static void AppendPlainPassword(std::string& content, const char* key, const std
 static void AppendStoredPassword(std::string& content, LPCSTR section, const char* key,
                                  const std::string& storeName, LPCSTR srcIni)
 {
-    std::array<char, 2048> raw{};
-    IniGetString(section, key, "", raw.data(), static_cast<DWORD>(raw.size() - 1), srcIni);
-    std::string plain = LoadPlainPassword(raw.data(), storeName);
+    std::string raw = IniGetValue(section, key, srcIni);
+    std::string plain = LoadPlainPassword(raw, storeName);
     SecureZeroMemory(raw.data(), raw.size());
     AppendPlainPassword(content, key, plain);
     SecureZeroMemory(plain.data(), plain.size());
@@ -102,19 +101,14 @@ static bool AppendProxyRecord(std::string& content, int proxynr, LPCSTR srcIni)
 {
     const std::string proxySection = proxynr > 1
         ? std::format("proxy{}", proxynr) : std::string("proxy");
-    std::array<char, 4096> proxyKeys{};
-    IniGetString(proxySection.c_str(), nullptr, "",
-        proxyKeys.data(), static_cast<DWORD>(proxyKeys.size() - 1), srcIni);
-    if (!proxyKeys[0])
+    const std::vector<std::string> proxyKeys = IniKeyNameList(proxySection.c_str(), srcIni);
+    if (proxyKeys.empty())
         return false;
     content.append(kExportProxySection).append(RN);
-    for (const char* k = proxyKeys.data(); *k; k += strlen(k) + 1) {
-        if (_stricmp(k, "proxypassword") == 0)
+    for (const std::string& k : proxyKeys) {
+        if (_stricmp(k.c_str(), "proxypassword") == 0)
             continue;
-        std::array<char, 2048> value{};
-        IniGetString(proxySection.c_str(), k, "",
-            value.data(), static_cast<DWORD>(value.size() - 1), srcIni);
-        content.append(k).append("=").append(value.data()).append(RN);
+        content.append(k).append("=").append(IniGetValue(proxySection.c_str(), k.c_str(), srcIni)).append(RN);
     }
     AppendStoredPassword(content, proxySection.c_str(), "proxypassword",
                          ProxyPasswordStoreName(proxynr), srcIni);
@@ -124,22 +118,26 @@ static bool AppendProxyRecord(std::string& content, int proxynr, LPCSTR srcIni)
 static int WriteExportFile(LPCWSTR destFile, BOOL OverWrite, const std::string& content)
 {
     if (!OverWrite) {
-        const DWORD attrs = GetFileAttributesW(destFile);
+        const DWORD attrs = GetFileAttributesT(destFile);
         if (attrs != INVALID_FILE_ATTRIBUTES &&
             !(attrs & FILE_ATTRIBUTE_DIRECTORY))
         {
             return FS_FILE_EXISTS;
         }
     }
-    HANDLE h = CreateFileW(destFile, GENERIC_WRITE, 0, nullptr,
+    HANDLE h = CreateFileT(destFile, GENERIC_WRITE, 0, nullptr,
                            CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (h == INVALID_HANDLE_VALUE)
         return FS_FILE_WRITEERROR;
+    // A file cut short (a full disk) is an error, not a session file.
     DWORD written = 0;
-    WriteFile(h, content.data(),
-              static_cast<DWORD>(content.size()),
-              &written, nullptr);
+    const bool ok = WriteFile(h, content.data(), static_cast<DWORD>(content.size()), &written, nullptr) &&
+                    written == static_cast<DWORD>(content.size());
     CloseHandle(h);
+    if (!ok) {
+        DeleteFileT(destFile);
+        return FS_FILE_WRITEERROR;
+    }
     return FS_FILE_OK;
 }
 
@@ -158,22 +156,11 @@ static int ExportSessionAsIniFile(
         content.append("; ").append(headerComment).append("\r\n");
     content.append("[").append(exportSection).append("]\r\n");
 
-    std::array<char, 8192> keyList{};
-    IniGetString(srcSection, nullptr, "",
-        keyList.data(),
-        static_cast<DWORD>(keyList.size() - 1),
-        srcIni);
-    const char* p = keyList.data();
-    while (p[0]) {
-        if (p[0] != '_' && !IsPasswordKey(p)) {
-            std::array<char, 2048> valueBuf{};
-            IniGetString(srcSection, p, "",
-                valueBuf.data(),
-                static_cast<DWORD>(valueBuf.size() - 1),
-                srcIni);
-            content.append(p).append("=").append(valueBuf.data()).append("\r\n");
-        }
-        p += strlen(p) + 1;
+    // Every key and value whole: a long post-login or server command is
+    // not cut.
+    for (const std::string& key : IniKeyNameList(srcSection, srcIni)) {
+        if (key[0] != '_' && !IsPasswordKey(key.c_str()))
+            content.append(key).append("=").append(IniGetValue(srcSection, key.c_str(), srcIni)).append("\r\n");
     }
     if (!importedPassword.empty()) {
         AppendPlainPassword(content, "password", importedPassword);
@@ -585,31 +572,22 @@ static bool CopyIniSectionAcrossFiles(LPCSTR srcSection, LPCWSTR srcIni,
                                        LPCSTR dstSection, LPCSTR dstIni,
                                        bool dropHostKeys)
 {
-    std::array<char, 4096> keyList{};
-    IniGetString(srcSection, nullptr, "",
-                  keyList.data(),
-                  static_cast<DWORD>(keyList.size() - 1),
-                  srcIni);
-    if (!keyList[0]) return false;
+    const std::vector<std::string> keys = IniKeyNameList(srcSection, srcIni);
+    if (keys.empty()) return false;
 
     IniWriteString(dstSection, nullptr, nullptr, dstIni);
 
+    // Every key and value whole, however many and long.
     bool any = false;
-    char* p = keyList.data();
-    while (p[0]) {
+    for (const std::string& key : keys) {
+        const char* p = key.c_str();
         const bool hostKey = _stricmp(p, "fingerprint") == 0 || _stricmp(p, "jumpfingerprint") == 0;
         if (p[0] != '_' && !IsPasswordKey(p) && !(dropHostKeys && hostKey)) {
-            std::array<char, 2048> valueBuf{};
-            IniGetString(srcSection, p, "",
-                         valueBuf.data(),
-                         static_cast<DWORD>(valueBuf.size() - 1),
-                         srcIni);
-            IniWriteString(dstSection, p,
-                           valueBuf[0] ? valueBuf.data() : nullptr,
-                           dstIni);
+            const std::string value = IniGetValue(srcSection, p, srcIni);
+            if (!IniWriteString(dstSection, p, value.empty() ? nullptr : value.c_str(), dstIni))
+                return false;
             any = true;
         }
-        p += strlen(p) + 1;
     }
     return any;
 }
@@ -623,10 +601,7 @@ static bool CopyIniSectionAcrossFiles(LPCSTR srcSection, LPCWSTR srcIni,
 static void AdoptPasswordFromFile(LPCSTR srcSection, LPCWSTR srcIni, const char* key,
                                   LPCSTR dstSection, const std::string& storeName)
 {
-    std::array<char, 2048> raw{};
-    IniGetString(srcSection, key, "", raw.data(), static_cast<DWORD>(raw.size() - 1), srcIni);
-    std::string stored = raw.data();
-    SecureZeroMemory(raw.data(), raw.size());
+    std::string stored = IniGetValue(srcSection, key, srcIni);
     std::string plain = stored == "!" ? std::string() : LoadPlainPassword(stored, storeName);
     SecureZeroMemory(stored.data(), stored.size());
     const bool saved = SavePasswordInStore(storeName, plain);
@@ -1183,6 +1158,9 @@ int WINAPI FsExecuteFileW(HWND MainWin, LPWSTR RemoteName, LPCWSTR Verb)
                     return FS_EXEC_YOURSELF;
 
                 if (!SftpLinkFolderTargetW(serverid, remotedir.data(), wdirtypemax - 1)) {
+                    // A target too long to name: refused, not opened as a file.
+                    if (!remotedir[0])
+                        return FS_EXEC_ERROR;
                     // Tilde home shortcut — never let TC download it.
                     std::wstring_view rv(remotedir.data());
                     while (!rv.empty() && (rv.front() == L'\\' || rv.front() == L'/'))
@@ -1561,6 +1539,14 @@ static int CopyBetweenSessions(LPCWSTR OldName, LPCWSTR NewName,
         return FS_FILE_USERABORT;
     }
 
+    // Total Commander expects to be told when the destination is taken: it
+    // asks the user and calls again with the flag set. The upload underneath
+    // truncates without looking, so without this the answer would be given by
+    // overwriting the file. Asked before the temporary file is made, which
+    // would otherwise stay behind empty.
+    if (!OverWrite && RemoteFileExists(dst, dstRel.c_str()))
+        return FS_FILE_EXISTS;
+
     std::array<wchar_t, MAX_PATH> tempDir{};
     std::array<wchar_t, MAX_PATH> tempFile{};
     if (!GetTempPathW(static_cast<DWORD>(tempDir.size()), tempDir.data()) ||
@@ -1568,13 +1554,6 @@ static int CopyBetweenSessions(LPCWSTR OldName, LPCWSTR NewName,
     {
         return FS_FILE_WRITEERROR;
     }
-
-    // Total Commander expects to be told when the destination is taken: it
-    // asks the user and calls again with the flag set. The upload underneath
-    // truncates without looking, so without this the answer would be given by
-    // overwriting the file.
-    if (!OverWrite && RemoteFileExists(dst, dstRel.c_str()))
-        return FS_FILE_EXISTS;
 
     SFTP_LOG("ENTRY", "CopyBetweenSessions '%s' -> '%s' via '%s'",
              unicode_util::wstring_to_utf8(srcRel).c_str(), unicode_util::wstring_to_utf8(dstRel).c_str(),
@@ -2032,16 +2011,10 @@ int WINAPI FsGetFileW(LPCWSTR RemoteName, LPWSTR LocalName, int CopyFlags, Remot
                 // of what the entry does instead of a scary error.
                 const std::string managePrefix =
                     std::string(kManageCustomFolder) + "/";
+                // Written like an export: a file already there is asked
+                // about, and a write that fails is an error.
                 auto writeStub = [&](const std::string& note) -> int {
-                    HANDLE h = CreateFileW(LocalName, GENERIC_WRITE, 0,
-                        nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-                    if (h == INVALID_HANDLE_VALUE) return FS_FILE_WRITEERROR;
-                    DWORD written = 0;
-                    WriteFile(h, note.data(),
-                              static_cast<DWORD>(note.size()),
-                              &written, nullptr);
-                    CloseHandle(h);
-                    return FS_FILE_OK;
+                    return WriteExportFile(LocalName, OverWrite, note);
                 };
 
                 if (subPath == kRefreshEntry) {
@@ -2154,14 +2127,7 @@ int WINAPI FsGetFileW(LPCWSTR RemoteName, LPWSTR LocalName, int CopyFlags, Remot
                     note = "Press F8 here to disconnect every active session.\r\n";
                 else
                     note = "Press F8 here to disconnect session '" + entry + "'.\r\n";
-                HANDLE hStub = CreateFileW(LocalName, GENERIC_WRITE, 0, nullptr,
-                                           CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-                if (hStub != INVALID_HANDLE_VALUE) {
-                    DWORD written = 0;
-                    WriteFile(hStub, note.data(), static_cast<DWORD>(note.size()), &written, nullptr);
-                    CloseHandle(hStub);
-                }
-                return FS_FILE_OK;
+                return WriteExportFile(LocalName, OverWrite, note);
             }
         }
 
@@ -2742,6 +2708,7 @@ BOOL WINAPI FsRemoveDirW(LPCWSTR RemoteName)
             if (toDelete.empty())
                 return false;
 
+            bool allDeleted = true;
             for (const auto& name : toDelete) {
                 // Same disconnect-before-delete dance as the single-session
                 // path: avoid leaving a ghost entry in the registry.
@@ -2749,7 +2716,13 @@ BOOL WINAPI FsRemoveDirW(LPCWSTR RemoteName)
                 disconnPath.reserve(name.size() + 1);
                 disconnPath.append("\\").append(name);
                 DisconnectSessionPath(disconnPath);
-                DeleteServerFromIniW(name.c_str(), inifilenameW);
+                // Its passwords and the jump references to it go only with
+                // the session itself: one the INI kept (read-only, say) stays
+                // whole.
+                if (!DeleteServerFromIniW(name.c_str(), inifilenameW)) {
+                    allDeleted = false;
+                    continue;
+                }
                 DeletePasswordFromStore(name);
                 DeletePasswordFromStore(JumpPasswordStoreName(name));
                 UpdateJumpRefsOnSessionRename(name.c_str(), nullptr, inifilename);
@@ -2758,7 +2731,7 @@ BOOL WINAPI FsRemoveDirW(LPCWSTR RemoteName)
             LoadServersFromIniW(inifilenameW, s_quickconnect);
             HWND hTcMain = FindWindowA("TTOTAL_CMD", nullptr);
             if (hTcMain) PostMessage(hTcMain, WM_USER + 51, 540, 0);
-            return true;
+            return allDeleted;
         }
 
         return false;

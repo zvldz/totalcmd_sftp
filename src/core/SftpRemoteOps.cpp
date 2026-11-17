@@ -1239,7 +1239,13 @@ void SftpGetLastActivePathW(pConnectSettings cs, LPWSTR RelativePath, size_t max
     RelativePath[0] = 0;
     if (!cs)
         return;
-    wcslcpy(RelativePath, cs->lastactivepath, maxlen - 1);
+    // Cut short it could name another folder: one that does not fit opens
+    // the session at its root instead.
+    if (wcslen(cs->lastactivepath) >= maxlen) {
+        SFTP_LOG("FIND", "last folder too long for the panel path, opening the root");
+        return;
+    }
+    wcslcpy(RelativePath, cs->lastactivepath, maxlen);
 }
 
 bool SftpChmodW(pConnectSettings cs, LPCWSTR RemoteName, LPCWSTR chmod)
@@ -1295,9 +1301,13 @@ bool SftpLinkFolderTargetW(pConnectSettings cs, LPWSTR RemoteName, size_t maxlen
         return false;
 
     const std::wstring_view remoteView(RemoteName);
-    // Match both root-level tilde (\~) and tilde anywhere in path (\home\~).
-    const bool isTildeHome = (remoteView == L"\\~" || remoteView == L"/~" || remoteView == L"~")
-        || remoteView.ends_with(L"\\~") || remoteView.ends_with(L"/~");
+    // The "~" pseudo entry the listing adds at the session root and in
+    // \home; a real link or file named "~" anywhere else is itself.
+    const bool isTildeHome = remoteView == L"\\~" || remoteView == L"/~" || remoteView == L"~" ||
+        _wcsicmp(RemoteName, L"\\home\\~") == 0 || _wcsicmp(RemoteName, L"/home/~") == 0;
+    // A target that does not fit leaves nothing; the caller then refuses
+    // instead of opening the session's root as if it were the target.
+    const auto fits = [&] { return RemoteName[0] != 0; };
 
     // Real SFTP symlink: resolve via readlink + realpath.
     if (!isTildeHome && cs->sftpsession) {
@@ -1345,7 +1355,7 @@ bool SftpLinkFolderTargetW(pConnectSettings cs, LPWSTR RemoteName, size_t maxlen
             CopyStringA2W(cs, targetBuf.c_str(), RemoteName, maxlen);
         }
         ReplaceSlashByBackslashW(RemoteName);
-        return true;
+        return fits();
     }
 
     if (!isTildeHome)
@@ -1383,7 +1393,7 @@ bool SftpLinkFolderTargetW(pConnectSettings cs, LPWSTR RemoteName, size_t maxlen
                 continue;
             CopyStringA2W(cs, home.c_str(), RemoteName, maxlen);
             ReplaceSlashByBackslashW(RemoteName);
-            return true;
+            return fits();
         }
         return false;
     }
@@ -1406,7 +1416,7 @@ bool SftpLinkFolderTargetW(pConnectSettings cs, LPWSTR RemoteName, size_t maxlen
         realBuf[static_cast<size_t>(rc)] = '\0';
         CopyStringA2W(cs, realBuf.data(), RemoteName, maxlen);
         ReplaceSlashByBackslashW(RemoteName);
-        return true;
+        return fits();
     }
 
     return false;

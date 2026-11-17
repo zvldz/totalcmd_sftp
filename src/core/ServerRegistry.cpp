@@ -564,6 +564,10 @@ bool IsUsableSessionName(const std::string& name) noexcept
                 return false;
             start = slash + 1;
         }
+        // Nor the name of a folder that holds sessions: the session would
+        // take the folder's place, and the sessions in it out of reach.
+        if (RegistryHasAnyUnderFolder(name))
+            return false;
         return true;
     } catch (...) {
         return false;

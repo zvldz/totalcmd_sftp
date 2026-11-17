@@ -39,8 +39,13 @@ DWORD IniGetString(LPCWSTR section, LPCWSTR key, LPCWSTR defaultValue,
                    LPWSTR out, DWORD outSize, LPCWSTR path);
 
 // The whole value of `key` as an internal string, however long; empty when
-// the key is missing.
+// the key is missing. The second form reads a file whose path is not in the
+// system codepage (one dropped on the plugin).
 std::string IniGetValue(LPCSTR section, LPCSTR key, LPCSTR path);
+std::string IniGetValue(LPCSTR section, LPCSTR key, LPCWSTR path);
+// Every key of `section`, as internal strings, however many there are.
+std::vector<std::string> IniKeyNameList(LPCSTR section, LPCSTR path);
+std::vector<std::string> IniKeyNameList(LPCSTR section, LPCWSTR path);
 
 UINT IniGetInt(LPCSTR section, LPCSTR key, INT defaultValue, LPCSTR path);
 UINT IniGetInt(LPCWSTR section, LPCWSTR key, INT defaultValue, LPCWSTR path);

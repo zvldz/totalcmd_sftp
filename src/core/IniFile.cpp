@@ -401,11 +401,16 @@ public:
         swprintf_s(name, L"Local\\sftpplug-ini-%08x", hash);
         m_handle = CreateMutexW(nullptr, FALSE, name);
         if (m_handle) {
-            // A writer that never lets go must not block us forever.
+            // A writer that never lets go must not block us forever; the
+            // write then fails rather than go ahead unlocked and lose what
+            // the other writer is saving.
             const DWORD r = WaitForSingleObject(m_handle, 5000);
             m_owned = (r == WAIT_OBJECT_0 || r == WAIT_ABANDONED);
         }
     }
+    // True also when no lock could be made at all: then there is nothing to
+    // wait for, and writing stays possible.
+    bool Owned() const noexcept { return m_owned || !m_handle; }
     ~PathLock()
     {
         if (m_owned)
@@ -659,6 +664,8 @@ BOOL WriteStringT(const Ch* section, const Ch* key, const Ch* value, const Ch* p
         return FALSE;
     const std::wstring full = FullPath(PathOf(path));
     PathLock fileLock(DocKey(full));
+    if (!fileLock.Owned())
+        return FALSE;
     std::lock_guard<std::mutex> lock(g_mutex);
     // Re-read under the lock: another process may have written meanwhile.
     IniDoc& doc = GetDoc(full);
@@ -732,7 +739,8 @@ DWORD IniGetString(LPCSTR section, LPCSTR key, LPCSTR defaultValue,
     }
 }
 
-std::string IniGetValue(LPCSTR section, LPCSTR key, LPCSTR path)
+template <class P>
+std::string GetValueT(LPCSTR section, LPCSTR key, const P* path)
 {
     try {
         if (!section || !key || !path)
@@ -751,6 +759,34 @@ std::string IniGetValue(LPCSTR section, LPCSTR key, LPCSTR path)
         return {};
     }
 }
+
+template <class P>
+std::vector<std::string> KeyNameListT(LPCSTR section, const P* path)
+{
+    try {
+        if (!section || !path)
+            return {};
+        std::lock_guard<std::mutex> lock(g_mutex);
+        const IniDoc& doc = GetDoc(FullPath(PathOf(path)));
+        const auto r = FindSection(doc, ToUtf8(section));
+        if (!r)
+            return {};
+        std::vector<std::string> names = KeyNames(doc, *r);
+        for (auto& n : names) {
+            std::string internal;
+            FromUtf8(n, internal);
+            n = std::move(internal);
+        }
+        return names;
+    } catch (...) {
+        return {};
+    }
+}
+
+std::string IniGetValue(LPCSTR section, LPCSTR key, LPCSTR path)  { return GetValueT(section, key, path); }
+std::string IniGetValue(LPCSTR section, LPCSTR key, LPCWSTR path) { return GetValueT(section, key, path); }
+std::vector<std::string> IniKeyNameList(LPCSTR section, LPCSTR path)  { return KeyNameListT(section, path); }
+std::vector<std::string> IniKeyNameList(LPCSTR section, LPCWSTR path) { return KeyNameListT(section, path); }
 
 UINT IniGetInt(LPCSTR section, LPCSTR key, INT defaultValue, LPCSTR path)
 {

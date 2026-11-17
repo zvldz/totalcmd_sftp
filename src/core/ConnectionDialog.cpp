@@ -2890,16 +2890,34 @@ void ConnectionDialog::OnOk()
                 warnNameTaken();
                 return;
             }
-        } else if (_stricmp(targetProfile.data(), dlgDisplayName) != 0) {
+        } else if (strcmp(targetProfile.data(), dlgDisplayName) != 0) {
             // The same rename as F6: passwords in the password manager move
-            // with the session, and jump hosts naming it follow.
-            int moveRc = CopyMoveSavedSession(dlgDisplayName, targetProfile.data(), true, false, dlgIniFileName);
+            // with the session, and jump hosts naming it follow. Section names
+            // are compared without regard to case, so a rename that changes
+            // only the case goes through a name of its own.
+            const bool caseOnly = _stricmp(targetProfile.data(), dlgDisplayName) == 0;
+            int moveRc;
+            if (caseOnly) {
+                const std::string interim = std::string(targetProfile.data()) + "~rename";
+                moveRc = CopyMoveSavedSession(dlgDisplayName, interim, true, false, dlgIniFileName);
+                if (moveRc == FS_FILE_OK)
+                    moveRc = CopyMoveSavedSession(interim, targetProfile.data(), true, false, dlgIniFileName);
+            } else {
+                moveRc = CopyMoveSavedSession(dlgDisplayName, targetProfile.data(), true, false, dlgIniFileName);
+            }
             if (moveRc == FS_FILE_EXISTS) {
                 warnNameTaken();
                 return;
             }
-            if (moveRc == FS_FILE_OK)
-                UpdateJumpRefsOnSessionRename(dlgDisplayName, targetProfile.data(), dlgIniFileName);
+            // Writing the settings under the new name after a rename that did
+            // not happen would make a second session without its passwords.
+            if (moveRc != FS_FILE_OK) {
+                const std::wstring text = unicode_util::utf8_to_wstring(
+                    LngStrU8(IDS_ERR_RENAME, "Rename FAILED: ") + dlgDisplayName);
+                MessageBoxW(m_hWnd, text.c_str(), L"SFTP", MB_OK | MB_ICONWARNING);
+                return;
+            }
+            UpdateJumpRefsOnSessionRename(dlgDisplayName, targetProfile.data(), dlgIniFileName);
         }
 
         m_settings->DisplayName = targetProfile.data();

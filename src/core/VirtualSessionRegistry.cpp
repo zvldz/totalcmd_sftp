@@ -29,6 +29,16 @@ std::unordered_map<std::string, VirtualSessionInfo>& Map()
     return m;
 }
 
+// 64-bit FNV-1a: two cache sections sharing an alias would share a
+// connection, so the alias is kept far from any collision.
+unsigned long long Fnv1a64(std::string_view s) noexcept
+{
+    unsigned long long h = 14695981039346656037ull;
+    for (const unsigned char c : s)
+        h = (h ^ c) * 1099511628211ull;
+    return h;
+}
+
 }  // namespace
 
 std::string MakeVirtualSessionAlias(const std::string& sourceId,
@@ -38,8 +48,8 @@ std::string MakeVirtualSessionAlias(const std::string& sourceId,
     // input always produces the same alias — reconnect after disconnect
     // routes to the same slot, and mismatched sourceId cannot collide with
     // a session from a different adapter.
-    char hex[16];
-    std::snprintf(hex, sizeof(hex), "%08x", Fnv1aHash(cacheSection));
+    char hex[24];
+    std::snprintf(hex, sizeof(hex), "%016llx", Fnv1a64(cacheSection));
 
     std::string out(kAliasPrefix);
     out.append(sourceId);

@@ -307,6 +307,40 @@ From this version the plugin comes in two builds: **classic**
 
 ### Fixes
 
+- **Session names and the settings file.**
+  - A session could be named like a folder of sessions ("a" beside
+    "a/x"), and the folder went out of reach behind it; F6 did it after
+    the overwrite question. Such a name is refused now.
+  - Renaming a session in its dialog only in letter case did nothing and
+    said nothing; a rename that failed for another reason went on and
+    wrote a second session without its passwords. Case-only renames go
+    through, and a failed one stops with a message.
+  - Deleting a folder of sessions while the settings file could not be
+    written left the sessions but removed their passwords and the jump
+    host references to them. Those go now only with the session itself.
+  - Exporting, importing and copying a session from [Imports] cut values
+    at 2048 characters (a long post-login or SFTP server command). They
+    are copied whole.
+  - When another program held the settings file locked for more than five
+    seconds, the plugin wrote without the lock and could lose what the
+    other writer saved. That write now fails instead.
+  - Settings in a profile folder whose name the ANSI codepage cannot write
+    were not found: the folder is taken from Total Commander's
+    COMMANDER_INI then.
+- **Local files.**
+  - F5 of a row of [Imports] or [Active Sessions] to a local folder
+    replaced a file of the same name without asking, and reported success
+    when nothing was written. It asks, and a write that fails (a full
+    disk) is an error, also for session exports.
+  - Each "overwrite?" between two sessions left an empty `sftp*.tmp` in
+    the temporary folder.
+- **Links and the home folder.**
+  - A link or the home folder whose path did not fit opened the session's
+    root as if it were the target. It is refused.
+  - Any file or link named `~` was opened as the home folder; only the
+    `~` entry the plugin adds at the root and in `/home` is.
+  - Enter on a session whose last folder path is too long for the panel
+    opens the session's root instead of a cut path naming another folder.
 - **Connections and background transfers.**
   - A connection made from "[F7 = new connection]" without a session name
     was never kept: the panel stayed at the root, the SSH session stayed
