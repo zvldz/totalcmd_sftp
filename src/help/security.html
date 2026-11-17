@@ -7,8 +7,8 @@
 <h2>Transport security</h2>
 <ul>
   <li>SSH connections (SFTP, SCP, Shell fallback, Jump Host) are always encrypted by the SSH protocol.</li>
-  <li>Use HTTPS for all PHP Agent / PHP Shell traffic. Avoid plain HTTP on any network you do not fully control.</li>
-  <li>LAN Pair sessions are authenticated with SPAKE2 and encrypted with AES-256-GCM (PAIR3 protocol) within the local network.</li>
+  <!--extra--><li>Use HTTPS for all PHP Agent / PHP Shell traffic. Avoid plain HTTP on any network you do not fully control.</li><!--/extra-->
+  <!--extra--><li>LAN Pair sessions are authenticated with SPAKE2 and encrypted with AES-256-GCM (PAIR3 protocol) within the local network.</li><!--/extra-->
 </ul>
 
 <h2>Password and credential storage</h2>
@@ -23,7 +23,7 @@
   <li>The jump host's password is stored the same ways, under its own key <code>jumppassword</code>; in the password manager it is kept as <code>&lt;session&gt;$$jump</code>.</li>
   <li>A proxy's password is stored the same ways, under <code>proxypassword</code> in the proxy's section; in the password manager it is kept as <code>proxy$$pass</code> (first proxy) or <code>proxyN$$pass</code>.</li>
   <li>A password that comes into the plugin from elsewhere — a session file dropped onto it, a session copied from <code>[Imports]</code> — goes into the password manager or is not kept. A <code>!</code> in a session file is ignored.</li>
-  <li>The PHP Agent PSK is stored as a salted SHA-256 hash inside <code>sftp.php</code> — the raw secret is not written to disk on the server.</li>
+  <!--extra--><li>The PHP Agent PSK is stored as a salted SHA-256 hash inside <code>sftp.php</code> — the raw secret is not written to disk on the server.</li><!--/extra-->
   <li>A PuTTY <code>.ppk</code> key is converted for the SSH library in memory only; the decrypted key is never written to disk.</li>
 </ul>
 
@@ -42,6 +42,7 @@ icacls "C:\Program Files\Total Commander\wcx_ftp.ini" /grant "${env:USERNAME}:F"
   <li>Accepting a new fingerprint should always be a deliberate decision.</li>
 </ul>
 
+<!--extra-->
 <h2>LAN Pair cryptography</h2>
 <ul>
   <li>The pairing password, the same on both computers, becomes a pair key through PBKDF2-HMAC-SHA256 with <b>120,000 iterations</b>, salted with the two computers' ids.</li>
@@ -53,6 +54,7 @@ icacls "C:\Program Files\Total Commander\wcx_ftp.ini" /grant "${env:USERNAME}:F"
   <li>The cryptography is OpenSSL (statically linked) and Windows BCrypt — no third-party DLLs.</li>
 </ul>
 
+<!--/extra-->
 <h2>Plugin error isolation</h2>
 <p>Every exported plugin function is wrapped by an exception firewall. If an unexpected error occurs inside the plugin:</p>
 <ul>
@@ -80,8 +82,8 @@ icacls "C:\Program Files\Total Commander\wcx_ftp.ini" /grant "${env:USERNAME}:F"
 <ul>
   <li>Keep "Protect password with password manager" (default) ticked, or use DPAPI storage — never plain text — for all sessions.</li>
   <li>Restrict access to the TC directory containing <code>sftpplug.ini</code> — it holds encrypted credentials.</li>
-  <li>Restrict URL exposure for PHP Agent deployments; use HTTPS with a valid certificate.</li>
-  <li>Rotate SSH keys and PHP Agent passwords periodically.</li>
+  <!--extra--><li>Restrict URL exposure for PHP Agent deployments; use HTTPS with a valid certificate.</li><!--/extra-->
+  <li>Rotate SSH keys<!--extra--> and PHP Agent passwords<!--/extra--> periodically.</li>
   <li>Do not commit <code>sftpplug.ini</code> or <code>sftp.php</code> with live credentials to public repositories.</li>
   <li>Keep the plugin and PHP runtime up to date.</li>
 </ul>

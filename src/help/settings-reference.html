@@ -12,7 +12,7 @@
   <li><b>Connect to:</b> 
     <ul>
       <li>For SSH/SFTP: Enter hostname (e.g., <code>example.com</code>) or IP address</li>
-      <li>For PHP Agent/Shell: Enter full URL (e.g., <code>https://example.com/sftp.php</code>)</li>
+      <!--extra--><li>For PHP Agent/Shell: Enter full URL (e.g., <code>https://example.com/sftp.php</code>)</li><!--/extra-->
       <li>Supports custom ports: <code>host:2222</code> or <code>https://host:8443/sftp.php</code></li>
       <li>IPv6 support: <code>[::1]:22</code></li>
     </ul>
@@ -24,7 +24,7 @@
   <li><b>Password:</b> 
     <ul>
       <li>SSH password authentication</li>
-      <li>PHP Agent shared secret, sent with every request (use HTTPS)</li>
+      <!--extra--><li>PHP Agent shared secret, sent with every request (use HTTPS)</li><!--/extra-->
       <li>Kept in Total Commander's password manager when "Protect password with password manager" is ticked (default), otherwise encrypted via Windows DPAPI in <code>sftpplug.ini</code>; leave it empty to be asked on connect</li>
     </ul>
   </li>
@@ -58,14 +58,14 @@
       <li><b>Use SCP for data transfers</b> (checkbox) - SFTP for listing, SCP for transfers</li>
       <li><b>Use SCP for everything (no SFTP)</b> (checkbox) - Pure SCP mode</li>
       <li><b>Use shell transfer (for blocked hosts)</b> (checkbox) - Shell command pipeline</li>
-      <li><code>PHP Agent (HTTP)</code> - HTTP-based file operations</li>
-      <li><code>PHP Shell (HTTP)</code> - HTTP pseudo-terminal</li>
-      <li><code>LAN Pair</code> - direct Windows-to-Windows pairing</li>
+      <!--extra--><li><code>PHP Agent (HTTP)</code> - HTTP-based file operations</li><!--/extra-->
+      <!--extra--><li><code>PHP Shell (HTTP)</code> - HTTP pseudo-terminal</li><!--/extra-->
+      <!--extra--><li><code>LAN Pair</code> - direct Windows-to-Windows pairing</li><!--/extra-->
     </ul>
   </li>
-  <li><b>TAR stream</b> (checkbox, PHP Agent / PHP Shell modes only): when checked, directory downloads use a single <code>TAR_STREAM</code> GET request and batch uploads use a single <code>TAR_EXTRACT</code> POST instead of per-file requests. Greatly reduces round-trip overhead for many small files.</li>
-  <li><b>Method</b> (PHP Agent / PHP Shell modes only): HTTP verb for single-file uploads — Auto (POST→PUT fallback), POST, or PUT.</li>
-  <li><b>Chunks</b> (PHP Agent / PHP Shell modes only): upload chunk size — Auto (from server PROBE, 1–64 MiB), or fixed 2 / 4 / 8 / 16 / 32 / 64 MiB.</li>
+  <!--extra--><li><b>TAR stream</b> (checkbox, PHP Agent / PHP Shell modes only): when checked, directory downloads use a single <code>TAR_STREAM</code> GET request and batch uploads use a single <code>TAR_EXTRACT</code> POST instead of per-file requests. Greatly reduces round-trip overhead for many small files.</li><!--/extra-->
+  <!--extra--><li><b>Method</b> (PHP Agent / PHP Shell modes only): HTTP verb for single-file uploads — Auto (POST→PUT fallback), POST, or PUT.</li><!--/extra-->
+  <!--extra--><li><b>Chunks</b> (PHP Agent / PHP Shell modes only): upload chunk size — Auto (from server PROBE, 1–64 MiB), or fixed 2 / 4 / 8 / 16 / 32 / 64 MiB.</li><!--/extra-->
   <li><b>Compress data with ZLIB:</b> Enable SSH compression (may help on slow links)</li>
   <li><b>Use shell transfer (for blocked hosts):</b> 
     <ul>
@@ -81,7 +81,7 @@
   <li><b>Use jump host:</b> Enables ProxyJump / bastion routing for SSH mode</li>
   <li><b>Jump...</b> Opens dedicated Jump Host configuration dialog</li>
   <li>Jump Host settings are only active for <code>SSH (SFTP/SCP)</code></li>
-  <li>Jump Host is disabled for PHP Agent, PHP Shell, and LAN Pair modes</li>
+  <!--extra--><li>Jump Host is disabled for PHP Agent, PHP Shell, and LAN Pair modes</li><!--/extra-->
 </ul>
 
 <h3>More session settings (More... button)</h3>
@@ -91,6 +91,7 @@
   <li><b>Command after login</b> (<code>sendcommand</code>) — runs on the server after every login, except in SCP-only mode; its output goes to Total Commander's log window. <i>Wait for it and show its output</i> runs it in a shell until it ends; <i>Start it without waiting</i> starts it and goes on (<code>sendcommandmode=2</code>).</li>
 </ul>
 
+<!--extra-->
 <h3>LAN Pair Controls</h3>
 <ul>
   <li><b>Role:</b> Auto / Receiver / Donor — controls which side initiates the connection; see <a href="lan-pair.html">LAN Pair</a> for details</li>
@@ -100,6 +101,7 @@
   <li><b>Pair...</b> Starts pairing or role negotiation</li>
 </ul>
 
+<!--/extra-->
 <h2>Plugin-wide Configuration (sftpplug.ini)</h2>
 <p>Plugin-wide settings (language override, etc.) are stored in the <code>[Configuration]</code> section of <code>sftpplug.ini</code>. See the dedicated page for the file location, all available keys, and examples including custom translation files:</p>
 <p><a href="plugin-config.html">→ Plugin Configuration (sftpplug.ini)</a></p>
@@ -118,7 +120,7 @@
   <li><b>owner</b> and <b>group</b> — names; a server that sends no names shows the numeric ids</li>
   <li><b>link target</b> — where a symbolic link points</li>
 </ul>
-<p>Total Commander picks up a default view for the plugin on its own: size, date, permissions, owner and group. Other combinations are set up under <i>Configuration → Custom columns</i>, file system <i>Secure FTP</i>. The values come from the directory listing in SFTP and SCP mode; PHP Agent and LAN Pair leave the columns empty.</p>
+<p>Total Commander picks up a default view for the plugin on its own: size, date, permissions, owner and group. Other combinations are set up under <i>Configuration → Custom columns</i>, file system <i>Secure FTP</i>. The values come from the directory listing in SFTP and SCP mode<!--extra-->; PHP Agent and LAN Pair leave the columns empty<!--/extra-->.</p>
 <p><b>Alt+Enter</b> on a remote file opens its properties: path, link target, owner, group, permissions, size and date as the listing gave them, and below that the reply of <code>stat</code> run on the server. A server without a shell shows what the SFTP protocol reports instead. The window is for viewing only.</p>
 <p>To change permissions, use <b>Files → Change Attributes</b> (Alt+A) on one or more remote files. Over SFTP the mode is set through the protocol, which also works on servers without a shell; in SCP mode the plugin runs <code>chmod</code>. Owner and group cannot be changed from the plugin.</p>
 

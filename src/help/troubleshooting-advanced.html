@@ -217,6 +217,7 @@ Subsystem sftp /usr/lib/openssh/sftp-server  # Must be present
   <li><b>Parallel transfers:</b> Multiple small files</li>
 </ul>
 
+<!--extra-->
 <h2>PHP Agent Problems</h2>
 
 <h3>HTTP 401 Unauthorized</h3>
@@ -308,6 +309,7 @@ tail -f /var/log/php/error.log
 php -r "var_dump(scandir('.'));"
 </pre>
 
+<!--/extra-->
 <h2>Character Encoding Issues</h2>
 
 <h3>Garbled Filenames</h3>
@@ -413,6 +415,7 @@ XFER: Complete
 
 <h2>Recent Bug Fixes (March 2026)</h2>
 
+<!--extra-->
 <h3>PHP Agent TAR batch download — 0 files received</h3>
 <p><b>Symptom:</b> Downloading multiple files with TAR stream enabled completes without error but writes 0 local files.</p>
 <p><b>Cause:</b> Remote path passed to <code>TarDownloadSessionQueue</code> included the host prefix and script path (e.g. <code>host.example.com/sftp.php/dir/file.txt</code>), so the lookup key never matched the TAR entry names returned by the server.</p>
@@ -428,6 +431,7 @@ XFER: Complete
 <p><b>Cause:</b> <code>WinHttpSendRequest</code> was called with <code>(DWORD)totalTarSize</code> as the <code>dwTotalLength</code> parameter. <code>DWORD</code> is 32-bit; values above 4 294 967 295 bytes wrap around, causing WinHTTP to send a false <code>Content-Length</code> and the server to close the connection mid-stream.</p>
 <p><b>Fix:</b> <code>Content-Length</code> is now added as a 64-bit string to the custom headers and <code>WINHTTP_IGNORE_REQUEST_TOTAL_LENGTH</code> is passed as <code>dwTotalLength</code>. Update to the latest plugin build.</p>
 
+<!--/extra-->
 <h3>SFTP Resume Not Working</h3>
 <p><b>Symptom:</b> Resume upload always starts from beginning instead of last position.</p>
 <p><b>Cause:</b> Missing LIBSSH2_SFTP_ATTR_SIZE flag in fstat request.</p>

@@ -30,9 +30,21 @@ for f in sorted(os.listdir(SRC)):
     if f.endswith('.html') and f not in seen and f not in SKIP:
         pages.append(f)
 
+# Text only one build has: <!--extra-->...<!--/extra--> is about PHP Agent,
+# PHP Shell or LAN Pair and is left out of the classic help (built with SKIP);
+# <!--classic-->...<!--/classic--> is the classic help's own wording.
+CLASSIC = bool(SKIP)
+
+
+def build_variant(text):
+    drop, keep = ('extra', 'classic') if CLASSIC else ('classic', 'extra')
+    text = re.sub(r'(?s)<!--' + drop + r'-->.*?<!--/' + drop + r'-->', '', text)
+    return re.sub(r'<!--/?' + keep + r'-->', '', text)
+
+
 sections = []
 for f in pages:
-    raw = open(os.path.join(SRC, f), encoding='utf-8', errors='surrogateescape').read()
+    raw = build_variant(open(os.path.join(SRC, f), encoding='utf-8', errors='surrogateescape').read())
     stem = os.path.splitext(f)[0]
 
     m = re.search(r'(?is)<title>(.*?)</title>', raw)

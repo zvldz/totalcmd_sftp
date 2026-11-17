@@ -75,7 +75,11 @@ constexpr size_t wdirtypemax = 1024;
 // A stable release is built with LOG_ENABLED 0; the release workflow refuses
 // a stable tag otherwise.
 
+// A build can override it (cl /DLOG_ENABLED=0): CI builds and tests the
+// stable configuration that way on every tag, before a stable one exists.
+#ifndef LOG_ENABLED
 #define LOG_ENABLED  1                              // Master switch: 0 = off, 1 = on
+#endif
 #define LOG_TO_FILE  1                            // 0 = OutputDebugString only, 1 = + file
 #define LOG_FILE_NAME L"sftpplug.log"              // File name inside %TEMP%
 
@@ -97,12 +101,36 @@ inline void sftp_debug_emit_line(const char* line) noexcept
         return;
     wcsncat_s(logPath, LOG_FILE_NAME, _TRUNCATE);
 
-    HANDLE hf = CreateFileW(logPath, FILE_APPEND_DATA, FILE_SHARE_READ, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    // Shared for writing: background transfers log at the same time, and an
+    // append-only handle adds each line whole at the end. Past 20 MB the log
+    // moves to sftpplug.log.old and starts again.
+    const DWORD share = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
+    HANDLE hf = CreateFileW(logPath, FILE_APPEND_DATA, share, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (hf != INVALID_HANDLE_VALUE) {
-        SetFilePointer(hf, 0, nullptr, FILE_END);
+        LARGE_INTEGER size{};
+        if (GetFileSizeEx(hf, &size) && size.QuadPart > 20LL * 1024 * 1024) {
+            CloseHandle(hf);
+            wchar_t oldPath[MAX_PATH + 40] = {};
+            wcsncpy_s(oldPath, logPath, _TRUNCATE);
+            wcsncat_s(oldPath, L".old", _TRUNCATE);
+            MoveFileExW(logPath, oldPath, MOVEFILE_REPLACE_EXISTING);
+            hf = CreateFileW(logPath, FILE_APPEND_DATA, share, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+            if (hf == INVALID_HANDLE_VALUE)
+                return;
+        }
+        // One write per line, so lines of two threads never interleave.
+        char buf[1100];
+        const size_t len = strlen(line);
         DWORD written = 0;
-        WriteFile(hf, line, (DWORD)strlen(line), &written, nullptr);
-        WriteFile(hf, "\r\n", 2, &written, nullptr);
+        if (len + 2 <= sizeof(buf)) {
+            memcpy(buf, line, len);
+            buf[len] = '\r';
+            buf[len + 1] = '\n';
+            WriteFile(hf, buf, static_cast<DWORD>(len + 2), &written, nullptr);
+        } else {
+            WriteFile(hf, line, static_cast<DWORD>(len), &written, nullptr);
+            WriteFile(hf, "\r\n", 2, &written, nullptr);
+        }
         CloseHandle(hf);
     }
 #endif

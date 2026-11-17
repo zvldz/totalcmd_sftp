@@ -552,7 +552,8 @@ std::unique_ptr<ISshChannel> Libssh2Session::directTcpip(
 
 void* Libssh2Session::callbackSet(int cbtype, void* cb)
 {
-    return libssh2_session_callback_set(session_, cbtype, cb);
+    return reinterpret_cast<void*>(libssh2_session_callback_set2(
+        session_, cbtype, reinterpret_cast<libssh2_cb_generic*>(cb)));
 }
 
 int Libssh2Session::trace(int bitmask)
@@ -562,7 +563,7 @@ int Libssh2Session::trace(int bitmask)
 
 int Libssh2Session::bannerSet(const char* banner)
 {
-    return libssh2_banner_set(session_, banner);
+    return libssh2_session_banner_set(session_, banner);
 }
 
 // ===========================================================================

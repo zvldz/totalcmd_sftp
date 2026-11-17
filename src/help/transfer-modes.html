@@ -16,6 +16,7 @@
 <h2>4) Use shell transfer (for blocked hosts)</h2>
 <p>Use when even SCP is problematic. Plugin can switch to shell stream/chunk strategies.</p>
 
+<!--extra-->
 <h2>5) PHP Agent (HTTP)</h2>
 <p class="small"><b>Extra build only.</b></p>
 <p>Use when no shell/SSH account is available. Requires uploaded <code>sftp.php</code>.</p>
@@ -29,6 +30,7 @@
 <p>Use for direct Windows-to-Windows pairing on the local network. This mode does not use SSH, PHP, or the system SMB stack.</p>
 <p>Select <b>Auto</b> role and click <b>Pair...</b> to start the guided 60-second pairing wizard — the plugin listens in the background and prompts for a role when the peer is found. See <a href="lan-pair.html">LAN Pair</a> for full details.</p>
 
+<!--/extra-->
 <h2>Jump Host note</h2>
 <p>Jump Host / ProxyJump is not a separate transfer mode. It is an SSH transport extension for the standard <b>SSH (SFTP/SCP)</b> mode when the target host is reachable only through a bastion server.</p>
 
@@ -38,9 +40,9 @@
   <li>If transfer fails: enable SCP for data.</li>
   <li>If still failing: SCP only.</li>
   <li>If host blocks channels: shell transfer fallback.</li>
-  <li>If SSH unavailable: PHP Agent/PHP Shell.</li>
+  <!--extra--><li>If SSH unavailable: PHP Agent/PHP Shell.</li><!--/extra-->
   <li>If target SSH is behind a bastion: keep SSH mode and enable Jump Host.</li>
-  <li>If you need local Windows-to-Windows pairing: use LAN Pair.</li>
+  <!--extra--><li>If you need local Windows-to-Windows pairing: use LAN Pair.</li><!--/extra-->
 </ol>
 
 <p><a href="index.html">Back to index</a></p>

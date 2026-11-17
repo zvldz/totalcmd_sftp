@@ -7,10 +7,10 @@
 </head>
 <body>
   <h1>SFTPplug Help</h1>
-  <p class="small">Comprehensive manual for Total Commander SFTP/SCP/Shell/PHP Agent/LAN Pair/Jump Host plugin.</p>
+  <p class="small">Comprehensive manual for Total Commander SFTP/SCP/Shell/<!--extra-->PHP Agent/LAN Pair/<!--/extra-->Jump Host plugin.</p>
 
   <div class="note">
-    <b>Scope:</b> This help covers the complete plugin functionality: SSH authentication (password, public key, Pageant), SFTP/SCP transfer modes, shell fallback for blocked hosts, PHP Agent for HTTP-based file operations, LAN Pair, Jump Host (ProxyJump), proxy configuration, session management, and advanced troubleshooting.
+    <b>Scope:</b> This help covers the complete plugin functionality: SSH authentication (password, public key, Pageant), SFTP/SCP transfer modes, shell fallback for blocked hosts, <!--extra-->PHP Agent for HTTP-based file operations, LAN Pair, <!--/extra-->Jump Host (ProxyJump), proxy configuration, session management, and advanced troubleshooting.
   </div>
 
   <div class="note">
@@ -24,7 +24,7 @@
     <li><a href="quickstart.html">Quick Start</a> - Connect in three steps</li>
     <li><a href="settings-reference.html">Settings Reference</a> - Complete dialog guide</li>
     <li><a href="transfer-modes.html">Transfer Modes Decision Guide</a> - Choose the right mode</li>
-    <li><a href="lan-pair.html">LAN Pair</a> - Windows-to-Windows direct pairing</li>
+    <!--extra--><li><a href="lan-pair.html">LAN Pair</a> - Windows-to-Windows direct pairing</li><!--/extra-->
     <li><a href="jump-host.html">Jump Host / ProxyJump</a> - Reach target SSH through bastion host</li>
   </ul>
 
@@ -39,9 +39,11 @@
   <ul>
     <li><a href="shell-fallback.html">Shell Fallback Overview</a> - When SFTP/SCP fail</li>
     <li><a href="shell-commands.html">Shell Command Reference</a> - cat, base64 details</li>
+    <!--extra-->
     <li><a href="php-agent.html">PHP Agent (HTTP)</a> - File operations over HTTP</li>
     <li><a href="php-agent-operations.html">PHP Agent Operations</a> - Complete API reference</li>
     <li><a href="php-shell.html">PHP Shell Console</a> - HTTP pseudo-terminal</li>
+    <!--/extra-->
   </ul>
 
   <h3>Configuration</h3>
@@ -89,6 +91,7 @@
     <li>Compatible with minimal shell environments</li>
   </ul>
 
+  <!--extra-->
   <h3>PHP Agent (HTTP)</h3>
   <ul>
     <li>No SSH account needed - works with web hosting</li>
@@ -101,6 +104,7 @@
     <li>Configurable upload method (Auto/POST/PUT) and chunk size (Auto/2–64 MiB)</li>
     <li>Shell execution via HTTP (when enabled)</li>
   </ul>
+  <!--/extra-->
 
   <h3>Character Encoding</h3>
   <ul>
@@ -111,11 +115,13 @@
     <li>UTF-8 BOM preservation</li>
   </ul>
 
-  <h3>LAN Pair &amp; Jump Host</h3>
+  <h3><!--extra-->LAN Pair &amp; <!--/extra-->Jump Host</h3>
   <ul>
+    <!--extra-->
     <li>LAN Pair for direct Windows-to-Windows pairing</li>
     <li>Role-based pairing: Auto / Receiver / Donor</li>
     <li>Per-session LAN Pair timeout with persistent INI storage</li>
+    <!--/extra-->
     <li>Jump Host / ProxyJump using SSH direct-tcpip without external ssh.exe</li>
     <li>Separate fingerprint and authentication state for jump host and target host</li>
   </ul>
@@ -147,9 +153,9 @@
     <li>If SFTP fails: try <b>Use SCP for data transfers</b></li>
     <li>If SCP fails: try <b>Use SCP for everything</b></li>
     <li>If still failing: enable <b>Shell transfer</b> fallback</li>
-    <li>No SSH access: use <b>PHP Agent (HTTP)</b></li>
+    <!--extra--><li>No SSH access: use <b>PHP Agent (HTTP)</b></li><!--/extra-->
     <li>Need bastion access to SSH target: use <b>Jump Host</b></li>
-    <li>Need direct Windows-to-Windows local transfer: use <b>LAN Pair</b></li>
+    <!--extra--><li>Need direct Windows-to-Windows local transfer: use <b>LAN Pair</b></li><!--/extra-->
   </ol>
 
   <h3>Authentication Selection</h3>
@@ -157,7 +163,7 @@
     <li>Have SSH key? Use <b>Private key file</b> (PEM or PPK)</li>
     <li>Using Pageant? Check <b>Use SSH agent</b></li>
     <li>Only password? Enter in <b>Password</b> field</li>
-    <li>Hosting without SSH? Use <b>PHP Agent</b> mode</li>
+    <!--extra--><li>Hosting without SSH? Use <b>PHP Agent</b> mode</li><!--/extra-->
   </ol>
 
   <h3>Common Ports</h3>
@@ -174,13 +180,13 @@
   </div>
 
   <h2>About This Plugin</h2>
-  <p>SFTPplug is a Total Commander filesystem plugin providing secure file transfer over SSH (SFTP, SCP), HTTP (PHP Agent), and direct local pairing (LAN Pair). It features comprehensive authentication support, Jump Host / ProxyJump for bastion-based access, shell fallback for restrictive hosts, PHP-based agent mode for web hosting environments, session import from PuTTY / WinSCP / KiTTY Portable, and runtime localization in 15 languages (PL/DE/FR/ES/IT/RU/CS/HU/NL/PT-BR/RO/SK/UK/JA/ZH-CN).</p>
+  <p>SFTPplug is a Total Commander filesystem plugin providing secure file transfer over SSH (SFTP, SCP)<!--extra-->, HTTP (PHP Agent), and direct local pairing (LAN Pair)<!--/extra-->. It features comprehensive authentication support, Jump Host / ProxyJump for bastion-based access, shell fallback for restrictive hosts, <!--extra-->PHP-based agent mode for web hosting environments, <!--/extra-->session import from PuTTY / WinSCP / KiTTY Portable, and runtime localization in 15 languages (PL/DE/FR/ES/IT/RU/CS/HU/NL/PT-BR/RO/SK/UK/JA/ZH-CN).</p>
 
   <h2>Version Information</h2>
   <ul>
     <li>Plugin version: Displayed in the connection dialog title bar and the help window title</li>
     <li>libssh2 version: Displayed in connection log</li>
-    <li>PHP Agent version: 1.0.1</li>
+    <!--extra--><li>PHP Agent version: 1.1.0</li><!--/extra-->
   </ul>
 </body>
 </html>

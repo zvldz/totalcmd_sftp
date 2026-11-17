@@ -81,12 +81,17 @@ void EnsureSymbols() noexcept
 
     ::AcquireSRWLockExclusive(&g_sym_lock);
     if (!g_sym_initialized.load(std::memory_order_relaxed)) {
-        // SYMOPT_UNDNAME    — demangle C++ names
-        // SYMOPT_LOAD_LINES — load source file / line number info from PDB
-        // SYMOPT_DEFERRED_LOADS is not set: the PDB is matched eagerly so
-        // CaptureStackBackTrace + SymFromAddr resolves frames inside libssh2
-        // and OpenSSL static-lib code, whose symbols are in sftpplug.pdb.
-        ::SymSetOptions(SYMOPT_UNDNAME | SYMOPT_LOAD_LINES);
+        // SYMOPT_UNDNAME        — demangle C++ names
+        // SYMOPT_LOAD_LINES     — load source file / line number info from PDB
+        // SYMOPT_DEFERRED_LOADS — a module's symbols load when a frame in it
+        //   is resolved, not for every DLL in Total Commander at once; frames
+        //   in libssh2 and OpenSSL resolve the same, their symbols are in
+        //   sftpplug.pdb
+        // SYMOPT_FAIL_CRITICAL_ERRORS, SYMOPT_NO_PROMPTS — a PDB path on an
+        //   empty drive or an unreachable share gives up instead of showing
+        //   a "no disk" box or waiting on the network
+        ::SymSetOptions(SYMOPT_UNDNAME | SYMOPT_LOAD_LINES | SYMOPT_DEFERRED_LOADS |
+                        SYMOPT_FAIL_CRITICAL_ERRORS | SYMOPT_NO_PROMPTS);
 
         // Build a symbol search path that explicitly includes the plugin's
         // own directory: a sftpplug.pdb put next to the plugin (from the

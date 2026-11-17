@@ -305,17 +305,22 @@ LANGID GetConfiguredUiLanguageId() noexcept
 
 
 // dbghelp.dll and version.dll are delay-loaded (see SFTPplug.vsprops) and
-// taken from System32 only: a file of that name beside TC or the plugin is
-// never loaded in their place. Should System32-only loading be unavailable,
-// the loader's own search is used.
+// taken from System32 by their full path, which every Windows version takes:
+// a file of that name beside TC or the plugin is not loaded in their place.
+// Only if System32 lacks the file does the loader's own search run.
 static FARPROC WINAPI LoadDelayedFromSystem32(unsigned notify, PDelayLoadInfo info)
 {
     if (notify != dliNotePreLoadLibrary || !info || !info->szDll)
         return nullptr;
+    std::array<wchar_t, MAX_PATH> dir{};
+    const UINT dirLen = GetSystemDirectoryW(dir.data(), static_cast<UINT>(dir.size()));
+    if (dirLen == 0 || dirLen >= dir.size())
+        return nullptr;
     std::array<wchar_t, MAX_PATH> name{};
     if (!MultiByteToWideChar(CP_ACP, 0, info->szDll, -1, name.data(), static_cast<int>(name.size())))
         return nullptr;
-    return reinterpret_cast<FARPROC>(LoadLibraryExW(name.data(), nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32));
+    const std::wstring full = std::wstring(dir.data()) + L"\\" + name.data();
+    return reinterpret_cast<FARPROC>(LoadLibraryExW(full.c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH));
 }
 
 extern "C" const PfnDliHook __pfnDliNotifyHook2 = LoadDelayedFromSystem32;

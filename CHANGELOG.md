@@ -820,6 +820,26 @@ From this version the plugin comes in two builds: **classic**
 
 ### Changes
 
+- **Build and release.**
+  - The deprecation warnings `/sdl` turns into errors are on: three calls
+    to old libssh2 functions and one `strcpy` were replaced.
+  - The plugin names its symbols file by name only, not by the path of
+    the machine that built it.
+  - Every release run also builds and tests the configuration a stable
+    release ships (debug log off), so the first stable tag is not the
+    first time it is compiled.
+  - The release workflow passes the tag to its scripts as data, does not
+    leave the access token in the checkout, and runs on a named Windows
+    image with a fixed NASM version.
+  - `build.ps1 -x64only` no longer fails at packaging, and a help page
+    that could not be built is never replaced by an old one.
+  - The debug log of a test build keeps lines from parallel transfers and
+    starts over past 20 MB (the old one is kept as `sftpplug.log.old`).
+  - A crash report no longer loads symbols for every module of Total
+    Commander nor shows a "no disk" box for a missing drive.
+  - dbghelp.dll and version.dll come from System32 on every Windows
+    version, also where System32-only loading is not available.
+  - The classic help no longer describes PHP Agent and LAN Pair.
 - **Unused code removed, more tests.** About 500 lines of functions,
   constants and branches nothing called anymore are gone, and comments that
   told the code's history now say what it does. New tests: a text file

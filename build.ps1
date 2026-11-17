@@ -7,6 +7,9 @@ param(
     [switch]$deployextra    # deploy the extra variant instead of classic
 )
 
+# A package holds both architectures, so an x64-only build makes none.
+if ($x64only) { $nozip = $true }
+
 # ============================================================================
 # Configuration
 # ============================================================================
@@ -328,8 +331,6 @@ $msBuildBase = @(
     "/p:Configuration=Release",
     "/p:PlatformToolset=v145",
     "/p:WindowsTargetPlatformVersion=10.0",
-    "/p:DebugSymbols=false",
-    "/p:DebugType=none",
     "/m",
     "/nologo",
     "/v:m"
@@ -364,6 +365,9 @@ Clean-BuildOutput
 # ============================================================================
 if ($buildHelp) {
     foreach ($v in $variants) {
+        # A page left from an earlier build must not be packed when this
+        # one fails: without it the package step stops on the missing part.
+        if (Test-Path $v.Help) { Remove-Item $v.Help -Force }
         $skip = if ($v.Extra) { '' } else { $extraOnlyHelpPages }
         Build-HelpPage $v.Help $skip | Out-Null
     }
@@ -422,9 +426,8 @@ version=$pluginVersion
         try {
             Add-ZipFile  (Join-Path $buildOutputDir    "$projectName.wfx") "$projectName.wfx64"
             Add-ZipFile  (Join-Path $buildOutputDirX86 "$projectName.wfx") "$projectName.wfx"
-            # NOTE: sftpplug.pdb is intentionally not packed for release. To ship
-            # a diagnostic build that resolves stack frames in %TEMP%\sftpplug.log,
-            # set LOG_ENABLED=1 in global.h and re-enable PDB inclusion here.
+            # The symbols go into an archive of their own (the PDB step below),
+            # not into the plugin package.
             Add-ZipString $pluginstInf "pluginst.inf"
 
             # Every part of the package is required: a missing one fails the

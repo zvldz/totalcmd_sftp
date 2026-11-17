@@ -53,6 +53,7 @@
   <b>Performance note:</b> Shell fallback is significantly slower than SFTP or SCP due to base64 encoding overhead and shell command round-trips. Use it only when SFTP and SCP are both unavailable on the server.
 </div>
 
+<!--extra-->
 <h2>PHP Agent — single-file resume</h2>
 <ul>
   <li>Download: the plugin asks the agent for the file from the size of the local partial file on (<code>GET</code> with an offset) and appends to it.</li>
@@ -63,14 +64,15 @@
 <h2>LAN Pair — download resume</h2>
 <p>LAN Pair downloads support resume: the peer sends the file from the size of the local partial file on. If the session times out or the connection drops mid-transfer, you can reconnect and resume using TC's standard resume prompt. Uploads always send the whole file.</p>
 
+<!--/extra-->
 <h2>Summary</h2>
 <table border="1" cellpadding="5" cellspacing="0">
   <tr><th>Mode</th><th>Download resume</th><th>Upload resume</th><th>Notes</th></tr>
   <tr><td>SFTP</td><td>Yes</td><td>Yes</td><td>Full seek support via libssh2</td></tr>
   <tr><td>SCP (native)</td><td>No</td><td>No</td><td>Resume goes over SFTP, or Shell Fallback on SCP-only sessions</td></tr>
   <tr><td>Shell Fallback</td><td>Yes</td><td>Yes</td><td>Byte-exact; upload refused if remote size unknown or larger</td></tr>
-  <tr><td>PHP Agent</td><td>Yes</td><td>Yes</td><td>Upload continues the <code>.part</code> file; no resume for TAR streams</td></tr>
-  <tr><td>LAN Pair</td><td>Yes</td><td>No</td><td>Download continues from the local size</td></tr>
+  <!--extra--><tr><td>PHP Agent</td><td>Yes</td><td>Yes</td><td>Upload continues the <code>.part</code> file; no resume for TAR streams</td></tr><!--/extra-->
+  <!--extra--><tr><td>LAN Pair</td><td>Yes</td><td>No</td><td>Download continues from the local size</td></tr><!--/extra-->
 </table>
 
 <p><a href="index.html">Back to index</a></p>

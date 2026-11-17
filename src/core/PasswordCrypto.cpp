@@ -137,7 +137,7 @@ void EncryptString(LPCTSTR pszPlain, LPTSTR pszEncrypted, UINT cchEncrypted)
         if (b64) {
             std::string result = kDpapiPrefix + *b64;
             if (result.size() < cchEncrypted) {
-                strcpy(pszEncrypted, result.c_str());
+                strcpy_s(pszEncrypted, cchEncrypted, result.c_str());
                 return;
             }
         }

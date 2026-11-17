@@ -20,7 +20,9 @@ permissions:
 
 jobs:
   build:
-    runs-on: windows-latest
+    # A named image: the toolchain changes when the workflow says so, not when
+    # GitHub moves windows-latest.
+    runs-on: windows-2025
 
     steps:
       - name: Checkout with submodules
@@ -33,13 +35,21 @@ jobs:
           submodules: true
           # Full history so `git describe` and CHANGELOG lookup work.
           fetch-depth: 0
+          # The token is not left in .git/config for the build steps; only
+          # the publishing step uses it, through its own input.
+          persist-credentials: false
 
       - name: Compute build metadata
         id: meta
         shell: pwsh
+        # The tag reaches the script as data (env), never as script text: a
+        # tag name with a `$(...)` in it would otherwise run.
+        env:
+          TAG: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
         run: |
-          $tag = "${{ github.ref_name }}"
-          $sha = "${{ github.sha }}".Substring(0, 7)
+          $tag = $env:TAG
+          $sha = $env:SHA.Substring(0, 7)
           $date = (Get-Date -Format "yyyy-MM-dd").ToString()
           # Anything carrying a pre-release suffix stays off the "latest"
           # download; only a bare version tag is published as stable.
@@ -68,8 +78,11 @@ jobs:
         # The tag names the version the plugin reports, and a stable release
         # never ships with the debug log on (it writes every operation to
         # %TEMP%\sftpplug.log). Pre-releases keep the log for testing.
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
+          PRERELEASE: ${{ steps.meta.outputs.prerelease }}
         run: |
-          $version = "${{ steps.meta.outputs.tag }}".TrimStart('v') -replace '-(beta|rc)\d*$', ''
+          $version = $env:TAG.TrimStart('v') -replace '-(beta|rc)\d*$', ''
           $header = Get-Content -Raw src\include\version.h
           if ($header -notmatch '#define VER_FILEVERSION_STR\s+"([^"]+)"') {
             throw "version.h: VER_FILEVERSION_STR not found"
@@ -77,7 +90,7 @@ jobs:
           if ($Matches[1] -ne $version) {
             throw "Tag $version does not match version.h $($Matches[1])"
           }
-          if ("${{ steps.meta.outputs.prerelease }}" -ne "true") {
+          if ($env:PRERELEASE -ne "true") {
             $global = Get-Content -Raw src\include\global.h
             if ($global -notmatch '(?m)^#define LOG_ENABLED\s+0\b') {
               throw "Stable tag with LOG_ENABLED on in global.h"
@@ -90,11 +103,12 @@ jobs:
 
       - name: Install NASM
         # OpenSSL 3.x requires NASM for both x64 and x86 assembly. Not
-        # pre-installed on windows-2022. Chocolatey drops nasm.exe into
+        # pre-installed on the runner. Chocolatey drops nasm.exe into
         # C:\Program Files\NASM\, which matches build-deps.ps1's search
-        # path — no PATH tweaking needed.
+        # path — no PATH tweaking needed. A fixed version: its output goes
+        # straight into libcrypto's crypto code.
         shell: pwsh
-        run: choco install nasm -y --no-progress
+        run: choco install nasm --version=2.16.3 -y --no-progress
 
       - name: Build dependencies (OpenSSL, libssh2) — FULL from source
         shell: pwsh
@@ -113,6 +127,19 @@ jobs:
         # release before the plugin is built.
         run: ./tests/run-unit-tests.ps1
 
+      - name: Stable configuration (log off) builds and passes
+        shell: pwsh
+        # Every tag builds the configuration a stable release ships, with the
+        # debug log off, and runs the unit tests in it, so the first stable
+        # tag is not the first time it is compiled. cl reads CL from the
+        # environment; the release build below is a full rebuild without it.
+        env:
+          CL: /DLOG_ENABLED=0
+        run: |
+          ./build.ps1 -x64only -classiconly -nodeploy -nohelp
+          if ($LASTEXITCODE -ne 0) { throw "Build with LOG_ENABLED=0 failed" }
+          ./tests/run-unit-tests.ps1 -Arch x64
+
       - name: Build plugin (classic + extra, Release x64 + x86)
         shell: pwsh
         # The help page is generated from src/help by a Python script, so the
@@ -123,8 +150,10 @@ jobs:
       - name: Rename release artifacts
         id: zip
         shell: pwsh
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
         run: |
-          $tag = "${{ steps.meta.outputs.tag }}"
+          $tag = $env:TAG
           # Two builds: classic (SSH only) and extra (+ PHP Agent, LAN Pair).
           $paths = @()
           # The symbols archive resolves crash-report addresses of this build.
@@ -152,8 +181,10 @@ jobs:
       - name: Extract CHANGELOG section for release notes
         id: notes
         shell: pwsh
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
         run: |
-          $tag = "${{ steps.meta.outputs.tag }}"
+          $tag = $env:TAG
           # Tags carry the `v` prefix; CHANGELOG headings do not.
           $version = $tag.TrimStart('v')
 
