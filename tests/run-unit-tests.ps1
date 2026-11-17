@@ -6,8 +6,9 @@ Builds and runs the unit tests for x64 and x86.
 .DESCRIPTION
 The tests compile the plugin's own sources for the modules they cover
 (PPK converter, text conversion, terminal filter, LAN Pair key, handshake
-and session) against the
-OpenSSL that build-deps.ps1 produced, so run that once first. Each test
+and session, address and base64 helpers, the session registry, the
+OpenSSH, FileZilla and KiTTY importers) against the OpenSSL that
+build-deps.ps1 produced, so run that once first. Each test
 binary goes to tests\out\<arch>.
 
 .PARAMETER Arch
@@ -39,9 +40,19 @@ $UnitSources = @(
     'src\core\LanPair.cpp',
     'src\core\LanPairSession.cpp',
     'src\core\TrustedInstallerToken.cpp',
-    'src\core\DllExceptionBarrier.cpp'
+    'src\core\DllExceptionBarrier.cpp',
+    'src\core\CoreUtils.cpp',
+    'src\core\UnicodeHelpers.cpp',
+    'src\core\ImportIoUtil.cpp',
+    'src\core\SecureCrtAdapter.cpp',
+    'src\core\VanDykeIniParser.cpp',
+    'src\core\OpenSshAdapter.cpp',
+    'src\core\FileZillaAdapter.cpp',
+    'src\core\KittyAdapter.cpp',
+    'src\core\PuttyAdapter.cpp',
+    'src\core\ServerRegistry.cpp'
 )
-$SystemLibs = 'ws2_32.lib crypt32.lib advapi32.lib user32.lib bcrypt.lib iphlpapi.lib shell32.lib ole32.lib dbghelp.lib'
+$SystemLibs = 'ws2_32.lib comdlg32.lib crypt32.lib advapi32.lib user32.lib bcrypt.lib iphlpapi.lib shell32.lib ole32.lib dbghelp.lib'
 
 $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
 if (-not (Test-Path $vswhere)) { throw 'vswhere.exe not found. Install Visual Studio 2022 or later.' }

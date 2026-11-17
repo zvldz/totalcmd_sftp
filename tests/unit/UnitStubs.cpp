@@ -6,22 +6,6 @@
 #include <string_view>
 #include "fsplugin.h"
 
-namespace unicode_util {
-
-std::wstring narrow_to_wide(std::string_view a, int codepage)
-{
-    if (a.empty())
-        return {};
-    const int n = MultiByteToWideChar(static_cast<UINT>(codepage), 0, a.data(), static_cast<int>(a.size()), nullptr, 0);
-    if (n <= 0)
-        return {};
-    std::wstring w(static_cast<size_t>(n), L'\0');
-    MultiByteToWideChar(static_cast<UINT>(codepage), 0, a.data(), static_cast<int>(a.size()), w.data(), n);
-    return w;
-}
-
-} // namespace unicode_util
-
 // No Total Commander here, so no password store either.
 bool HaveCryptProc() noexcept
 {
@@ -37,13 +21,20 @@ int CryptProcI(int, int, int, LPCSTR, LPSTR, int) noexcept
     return FS_FILE_NOTSUPPORTED;
 }
 
-extern "C" LPSTR strlcpy(LPSTR p, LPCSTR p2, size_t maxlen)
+// Total Commander's callbacks are never set: the wrappers that call them
+// check for null and do nothing.
+tProgressProc  ProgressProc  = nullptr;
+tProgressProcW ProgressProcW = nullptr;
+tLogProc       LogProc       = nullptr;
+tLogProcW      LogProcW      = nullptr;
+tRequestProc   RequestProc   = nullptr;
+tRequestProcW  RequestProcW  = nullptr;
+
+// The registry tests never connect, so nothing is ever closed.
+struct tConnectSettings;
+DWORD mainthreadid = 0;
+
+int SftpCloseConnection(tConnectSettings*)
 {
-    if (!p || !maxlen)
-        return p;
-    size_t i = 0;
-    for (; p2 && p2[i] && i < maxlen - 1; ++i)
-        p[i] = p2[i];
-    p[i] = '\0';
-    return p;
+    return 0;
 }

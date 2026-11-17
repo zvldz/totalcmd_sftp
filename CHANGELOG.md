@@ -912,6 +912,14 @@ From this version the plugin comes in two builds: **classic**
   is sent again over base64 from the start. The README describes the Jump
   button with a session reference as it works (read-only, `(manual)` to
   switch back); the troubleshooting page no longer asks for argon2.dll.
+- **More checks before a release.** Unit tests cover server addresses
+  (ports, IPv6, schemes), base64, session names and panel paths, code page
+  names, PuTTY name encoding, and the OpenSSH (Include, Match, ProxyJump),
+  FileZilla (sites with one name) and KiTTY importers. Every language file
+  is checked for missing strings and placeholders, and every dialog for
+  repeated shortcuts; each package for its contents, the architecture of
+  its plugin files, ASLR/DEP/CFG, the exported functions and system-only
+  DLLs. All of it runs in the release workflow.
 
 ## 10.0.2.3 — 2026-11-15
 

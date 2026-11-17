@@ -4,7 +4,9 @@
 #include "KittyDecrypt.h"     // DecryptKittyPassword (native, no external exe)
 #include "global.h"
 
+#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
+#endif
 #include <windows.h>
 
 #include "ImportIoUtil.h"

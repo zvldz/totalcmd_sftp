@@ -127,6 +127,16 @@ jobs:
         # release before the plugin is built.
         run: ./tests/run-unit-tests.ps1
 
+      - name: Language files and shortcuts
+        shell: pwsh
+        # Every string translated with the same placeholders, and no dialog
+        # with two controls on one shortcut letter, in any language.
+        run: |
+          ./tests/check-languages.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Language check failed" }
+          ./tests/check-mnemonics.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Shortcut check failed" }
+
       - name: Stable configuration (log off) builds and passes
         shell: pwsh
         # Every tag builds the configuration a stable release ships, with the
@@ -146,6 +156,14 @@ jobs:
         # runner builds it like everything else — nothing is carried in the
         # repository and nothing can go stale between an edit and a tag.
         run: ./build.ps1
+
+      - name: Package check
+        shell: pwsh
+        # What each package holds, and how its plugin files are built:
+        # architecture, ASLR/DEP/CFG, exports, system DLLs only.
+        run: |
+          ./tests/check-package.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Package check failed" }
 
       - name: Rename release artifacts
         id: zip

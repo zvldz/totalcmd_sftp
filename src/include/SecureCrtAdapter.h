@@ -52,4 +52,7 @@ public:
     { return CustomPathPickerKind::Folder; }
 };
 
+// A name that is a path below its folder: not absolute, no drive, no "..".
+bool IsNameBelowRoot(const std::string& name);
+
 }  // namespace sftp

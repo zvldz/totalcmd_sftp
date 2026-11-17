@@ -3,7 +3,9 @@
 #include "VanDykeIniParser.h"
 #include "SftpClient.h"
 
+#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
+#endif
 #include <shlobj.h>
 #include <windows.h>
 
@@ -142,10 +144,8 @@ void CollectSessions(const std::string& root,
         });
 }
 
-// Reverse the DisplayName-to-file mapping. DisplayName segments map 1:1
-// to on-disk folder segments (no name is treated as reserved). Returns
-// empty on miss.
-// A name that is a path below its folder: not absolute, no drive, no "..".
+}  // namespace
+
 // Names come from the session files, which may point anywhere otherwise.
 bool IsNameBelowRoot(const std::string& name)
 {
@@ -163,6 +163,11 @@ bool IsNameBelowRoot(const std::string& name)
     return true;
 }
 
+namespace {
+
+// Reverse the DisplayName-to-file mapping. DisplayName segments map 1:1
+// to on-disk folder segments (no name is treated as reserved). Returns
+// empty on miss.
 std::string ResolveSessionPath(const std::string& channelRoot,
                                 const std::string& displayName)
 {

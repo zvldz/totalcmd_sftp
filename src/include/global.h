@@ -3,7 +3,9 @@
 // Modern C++ SFTP Plugin for Total Commander
 // Compatible with Visual Studio 2026 (v145 toolset)
 
+#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
+#endif
 
 // Force static linking for libssh2 (removes __imp__ prefix)
 #ifndef LIBSSH2_STATIC
