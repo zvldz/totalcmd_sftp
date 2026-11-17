@@ -316,7 +316,7 @@ int  SftpCreateDirectoryW(pConnectSettings ConnectSettings, LPCWSTR Path);
 int  SftpRenameMoveFileW(pConnectSettings ConnectSettings, LPCWSTR OldName, LPCWSTR NewName, bool Move, bool Overwrite, bool isdir);
 // `binary` skips text-mode conversion whatever the name says: a file copied
 // between two sessions through a local temporary file keeps its bytes.
-int  SftpDownloadFileW(pConnectSettings ConnectSettings, LPCWSTR RemoteName, LPCWSTR LocalName, bool alwaysoverwrite, int64_t filesize, LPFILETIME ft, bool Resume, bool binary = false);
+int  SftpDownloadFileW(pConnectSettings ConnectSettings, LPCWSTR RemoteName, LPCWSTR LocalName, int64_t filesize, LPFILETIME ft, bool Resume, bool binary = false);
 int  SftpUploadFileW(pConnectSettings ConnectSettings, LPCWSTR LocalName, LPCWSTR RemoteName, bool Resume, bool setattr, bool binary = false);
 int  SftpDeleteFileW(pConnectSettings ConnectSettings, LPCWSTR RemoteName, bool isdir);
 int  SftpSetAttrW(pConnectSettings ConnectSettings, LPCWSTR RemoteName, int NewAttr);

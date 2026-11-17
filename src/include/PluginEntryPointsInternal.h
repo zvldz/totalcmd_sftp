@@ -10,7 +10,6 @@
 
 // Constants shared across all entry-point TUs.
 static constexpr DWORD kHomeSymlinkMode = 0555;
-static const HANDLE kFsFindRootSentinel = reinterpret_cast<HANDLE>(static_cast<ULONG_PTR>(1));
 
 // Globals defined in PluginEntryPoints.cpp, used across all entry-point TUs.
 extern char    inifilename[MAX_PATH];

@@ -59,21 +59,6 @@ public:
     ScpChannel& operator=(const ScpChannel&) = delete;
 
     ISshChannel* get() const { return channel_.get(); }
-    ISshChannel* release() { return channel_.release(); }
-
-    bool WriteAll(const char* data, size_t len, DWORD timeoutMs) {
-        size_t sent = 0;
-        while (sent < len) {
-            int rc = WaitForOperation([&] {
-                int w = static_cast<int>(channel_->write(data + sent, len - sent));
-                if (w > 0) sent += w;
-                return w;
-            }, timeoutMs, cs_);
-            if (rc < 0)
-                return false;
-        }
-        return true;
-    }
 
     // One byte, or false: the end of the channel must not pass for a zero
     // byte, which is the protocol's "OK".
@@ -101,25 +86,7 @@ public:
 
     bool SendAck(DWORD timeoutMs) {
         static const char ack = 0;
-        return WriteAll(&ack, 1, timeoutMs);
-    }
-
-    bool ReadAck(std::string& err, DWORD timeoutMs) {
-        char code = 0;
-        if (!ReadByte(code, timeoutMs))
-            return false;
-        if (code == 0)
-            return true;
-        if (code == 1 || code == 2) {
-            std::string line;
-            if (ReadLine(line, timeoutMs))
-                err = line;
-            else
-                err = LngStrA(IDS_SCP_PROTOCOL_ERROR, "SCP protocol error.");
-            return false;
-        }
-        err = LngStrA(IDS_SCP_PROTOCOL_ERROR, "SCP protocol error.");
-        return false;
+        return ScpWriteAll(channel_.get(), cs_, &ack, 1, timeoutMs);
     }
 
 private:
@@ -240,14 +207,6 @@ bool PrepareScpTransferSession(pConnectSettings cs)
     return true;
 }
 
-std::string BuildScpPathArgument(const std::string& path)
-{
-    // The path reaches `scp` as it is, unquoted and not made relative: a
-    // relative path would depend on the directory the login left the shell in.
-    if (path.empty()) return {};
-    return path;
-}
-
 // Whether an scp download was refused because the file is not there. Asked
 // over SFTP, which "SCP for data" keeps open beside scp; without it there is
 // no telling, and the answer is no. `filename` is the scp argument.
@@ -262,19 +221,15 @@ static ScpSource ScpSourceState(pConnectSettings cs, const char* filename)
                  cs->sftpsession ? 1 : 0, cs->scponly ? 1 : 0);
         return ScpSource::unknown;
     }
-    std::string path = filename;
-    if (path.size() >= 2 && path.front() == '"' && path.back() == '"')
-        path = path.substr(1, path.size() - 2);
-
     LIBSSH2_SFTP_ATTRIBUTES attr{};
     int rc = 0;
     do {
-        rc = cs->sftpsession->lstat(path.c_str(), &attr);
+        rc = cs->sftpsession->lstat(filename, &attr);
         if (rc == LIBSSH2_ERROR_EAGAIN)
             IsSocketReadable(cs->sock);
     } while (rc == LIBSSH2_ERROR_EAGAIN);
     const unsigned long fx = (rc == LIBSSH2_ERROR_SFTP_PROTOCOL) ? cs->sftpsession->lastError() : 0;
-    SFTP_LOG("SCP", "missing-check '%s': lstat rc=%d fx=%lu", path.c_str(), rc, fx);
+    SFTP_LOG("SCP", "missing-check '%s': lstat rc=%d fx=%lu", filename, rc, fx);
     if (rc == 0)
         return ScpSource::present;
     if (fx == LIBSSH2_FX_NO_SUCH_FILE || fx == LIBSSH2_FX_NO_SUCH_PATH)

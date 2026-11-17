@@ -892,6 +892,15 @@ From this version the plugin comes in two builds: **classic**
   single-line 1 KiB form. The command's end marker is sent split, so a
   terminal that still echoes cannot pass the echo for the end.
   *From wesmar/sftp 10.3.0.0.*
+- **Dead code and unused texts removed.** About seventy strings nothing
+  showed any more (WinINet error texts, old FTP and rename prompts) are gone
+  from the resources and every language file; the key file browse titles,
+  the proxy label and the code page prompt use the translated texts they
+  already had. Gone too: a root listing path nothing reached, the
+  never-used "do not overwrite" branch of downloads, a 90-second line limit
+  in shell transfers that the per-line read limits always hit first, a
+  stray `argon2.h`, and duplicate SCP channel helpers. The SCP "file
+  missing?" check no longer strips quotes from a name that has them.
 
 ## 10.0.2.3 — 2026-11-15
 

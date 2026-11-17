@@ -1563,7 +1563,7 @@ static int CopyBetweenSessions(LPCWSTR OldName, LPCWSTR NewName,
     int rc = 0;
     {
         ProgressSlice _slice(src, 0, 50, OldName, NewName);
-        rc = SftpDownloadFileW(src, srcRel.c_str(), tempFile.data(), true,
+        rc = SftpDownloadFileW(src, srcRel.c_str(), tempFile.data(),
                                ri ? ri->Size64 : 0,
                                ri ? &ri->LastWriteTime : nullptr, false, true);
     }
@@ -2290,7 +2290,7 @@ int WINAPI FsGetFileW(LPCWSTR RemoteName, LPWSTR LocalName, int CopyFlags, Remot
         };
         int64_t partialSize = -1;
         while (true) {  // auto-resume loop
-            int rc = SftpDownloadFileW(serverid, remotedir.data(), LocalName, true, ri->Size64, &ri->LastWriteTime, Resume);
+            int rc = SftpDownloadFileW(serverid, remotedir.data(), LocalName, ri->Size64, &ri->LastWriteTime, Resume);
             SFTP_LOG("ENTRY", "FsGetFileW SftpDownloadFileW rc=%d", rc);
             switch (rc) {
                 case SFTP_OK:          return FinishDownloadMove(serverid, remotedir.data(), Move, resumeAsked);

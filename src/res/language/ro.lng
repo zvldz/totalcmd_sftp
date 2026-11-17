@@ -2,59 +2,6 @@
 # Format: ID=text (UTF-8, escape sequences: \r \n \t \\)
 # Generated from sftpplug.rc
 
-12001=Nu există handle-uri
-12002=Expirare timp
-12003=Eroare extinsă
-12004=Eroare internă
-12005=URL nevalidă
-12006=Schemă necunoscută
-12007=Imposibil de rezolvat numele
-12008=Protocolul nu a fost găsit
-12009=Opțiune nevalidă
-12010=Lungime opțiune incorectă
-12011=Imposibil de setat opțiunea
-12012=Închidere
-12013=Nume de utilizator nevalid
-12014=Parolă nevalidă
-12015=Eroare de autentificare
-12016=Operație nevalidă
-12017=Operație anulată
-12018=Tip handle nevalid
-12019=Stare handle nevalidă
-12020=Nu este o cerere proxy
-12021=Valoarea registrului nu a fost găsită
-12022=Parametru de registru incorect
-12023=Fără acces direct
-12024=Fără context
-12025=Fără funcție de apel invers
-12026=Cerere în așteptare
-12027=Format nevalid
-12028=Element negăsit
-12029=Imposibil de conectat
-12030=Conexiune întreruptă
-12031=Conexiune resetată
-12032=Forțare reîncercare
-12033=Cerere proxy nevalidă
-12034=Interfață utilizator necesară
-12035=Necunoscut
-12036=Handle-ul există
-12037=Data certificatului este nevalidă
-12038=CN-ul certificatului este nevalid
-12039=Redirecționare de la http la https
-12040=Redirecționare de la https la http
-12041=Securitate mixtă
-12042=CHG Post nesecurizat
-12043=Post nesecurizat
-12044=Certificat client necesar pentru autentificare
-12045=Autoritate de certificare nevalidă
-12046=Autentificarea clientului nu este configurată
-12047=Eroare fir de execuție asincron
-12048=Modificare schemă de redirecționare
-12049=Fereastră de dialog în așteptare
-12050=Repetare fereastră de dialog
-12051=Necunoscut
-12052=Redirecționare trimitere HTTPS la HTTP
-12053=Introduceți CD-ROM-ul
 130=F7 - ajutor.txt
 131=Ajutor modul plugin:\r\nF7:\tCreați o nouă conexiune (TC afișează Director nou – introduceți numele conexiunii)\r\nF8/Del:\tȘtergeți conexiunea\r\nEnter:\tConectați\r\nDeconectare:\tDin interiorul sesiunii, sau F8 pe rândul ei din [Active Sessions]. Butonul din bară o lasă deschisă din rădăcina pluginului.\r\nAlt+Enter:\tModificați opțiunile\r\nF3/F4:\tAfișează setările ca INI (modificare cu Alt+Enter)\r\n\r\nSesiuni în foldere:\r\nF7 într-un folder:\tCreează sesiunea în acel folder\r\nF7 cu numele folder/x:\tCreează sesiunea în folderul indicat\r\nF6 în \\folder\\nume:\tMută o sesiune într-un folder\r\nF6 pe un folder:\tRedenumește toate sesiunile; referințele jump host se actualizează\r\nF5 sau tragere:\tCopiază sesiunea sau folderul (duplicat)\r\nF8 pe un folder:\tȘterge folderul și toate sesiunile din el\r\n\r\nModuri de transfer:\r\nSSH (SFTP/SCP):\tImplicit și cel mai rapid când accesul SSH funcționează\r\nFolosire SCP pentru date:\tCând SFTP este blocat sau instabil\r\nNumai SCP:\tDezactivează complet SFTP (gazde vechi)\r\nForțare transfer shell:\tForțează transferul prin shell (dd/base64)\r\nPHP Agent (HTTP):\tFără cont SSH; folosește sftp.php încărcat\r\nPHP Shell (HTTP):\tPseudo-terminal HTTP prin sftp.php
 132=Conexiune rapidă
@@ -63,7 +10,6 @@
 148=Vă puteți conecta direct sau printr-un server proxy în format proxy(:port). Dacă proxy-ul necesită un nume de utilizator și parolă, introduceți-le aici. Proxy-ul trebuie să accepte comanda CONNECT la portul serverului SSH sau protocolul SOCKS.
 149=Aici puteți specifica locația perechii de chei publice/private pentru autentificarea prin certificat client.\nCheile trebuie să fie în format OpenSSH/PEM.\n\nFișierele PuTTY PPK (*.ppk) sunt convertite nativ de plugin.\nNu este necesar niciun instrument extern.\n\nAcceptă variabile de mediu, de ex. %commander_path%.\n%USER% (cu MAJUSCULE!) va fi înlocuit cu numele utilizatorului curent.
 150=Conectare la: 
-151=Prin proxy:
 152=Eroare: imposibil de conectat la PROXY!
 153=Eroare: imposibil de conectat la serverul specificat!
 154=Eroare: imposibil de conectat la server prin proxy!
@@ -84,7 +30,6 @@
 169=Folosiți această conexiune pentru prima dată.\nVerificați dacă amprenta gazdei de mai jos corespunde cu amprenta serverului dvs.:\n\n
 170=ATENȚIE!\nAmprenta gazdei s-a modificat!\nAsigurați-vă că noua amprentă corespunde cu serverul dvs.:\n\n
 171=Amprentă: 
-172=Conectare...
 173=Preluare metode de autentificare acceptate...
 174=Metode de autentificare acceptate: 
 175=Imposibil de deschis fișierul cheii publice!\n
@@ -98,27 +43,18 @@
 183=Autentificare prin parolă
 184=Autentificare interactivă prin tastatură pentru utilizatorul: 
 185=Autentificare interactivă prin tastatură
-186=Stabilire conexiune SFTP...
 187=Deconectare...
 188=Preluare director
 189=Conectare la server prin proxy...
 190=Imposibil de rezolvat gazda, getaddrinfo a eșuat!
 191=Preluare director: 
-192=Directorul nu a fost deschis: 
 193=Creare director: 
-194=Directorul nu a fost creat: 
-195=Redenumire din: 
-196=Redenumire în:
 197=Redenumirea A EȘUAT: 
 198=Descărcare fișier: 
 199=Încărcare fișier: 
 200=Ștergere fișier: 
 201=Ștergerea A EȘUAT: 
 202=Auto-detectare
-203=Da
-204=Nu
-205=Destinația legăturii este în afara directorului de bază al pluginului:\n
-206=\nDacă urmați această legătură, directorul rădăcină al pluginului va fi schimbat cu directorul rădăcină / al serverului!
 207=Eroare nume utilizator/parolă proxy SOCKS 5!
 208=Eroare generală server SOCKS!
 209=Conexiune interzisă de reguli!
@@ -129,9 +65,6 @@
 214=Comandă SOCKS neacceptată!
 215=Tip adresă neacceptat!
 216=Eroare SOCKS5 necunoscută %d!
-217=1
-218=2
-219=3
 220=UTF-8
 221=ANSI (local) (0)
 222=ASCII/DOS (1)
@@ -195,7 +128,6 @@
 12055=Durată sesiune: [__] min (0=fără limită)
 281=Receptorul LAN Pair rulează deja.
 282=LAN Pair acceptat: {} ({})
-283=LAN Pair: ascultare activă. Fereastra de rol va apărea după detectarea unui peer.
 
 # Dialog label translations (IDS_DLG_* range 284-323)
 284=Conectare la server SFTP
@@ -232,7 +164,6 @@
 455=SOCKS 5
 314=Setări SSH Jump Host (ProxyJump)
 315=Conexiune prin gazdă intermediară
-316=Folosire &gazdă intermediară (ProxyJump)
 317=Gazdă intermediară:
 318=Port:
 319=Nume utilizator:
@@ -343,7 +274,6 @@
 12091={} s
 12092=LAN Pair: niciun peer găsit.
 12093=TrustedInstaller
-12094=LAN Pair: personificarea TrustedInstaller a esuat. Este posibil ca procesul sa nu ruleze ca Administrator.
 12095=LAN Pair: conectare la {}...
 12096=LAN Pair: conexiune eșuată
 12103=LAN Pair: acest computer este configurat ca Donator. Receptorul de la distanță trebuie să se conecteze aici.

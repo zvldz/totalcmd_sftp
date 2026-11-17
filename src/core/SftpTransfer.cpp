@@ -203,8 +203,8 @@ bool ResolveScpPolicy(pConnectSettings cs, int64_t filesize, bool resume, bool& 
     return true;
 }
 
-// Open local file for download
-bool OpenLocalForWrite(LocalFile& file, LPCWSTR path, bool overwrite, bool resume,
+// Open local file for download: appended to on resume, otherwise created anew.
+bool OpenLocalForWrite(LocalFile& file, LPCWSTR path, bool resume,
                        int64_t& loaded, int64_t filesize)
 {
     loaded = 0;
@@ -223,8 +223,7 @@ bool OpenLocalForWrite(LocalFile& file, LPCWSTR path, bool overwrite, bool resum
         return true;
     }
     return file.Open(path, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
-                     overwrite ? CREATE_ALWAYS : CREATE_NEW,
-                     FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN);
+                     CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN);
 }
 
 // Download data loop (common for SFTP and SCP)
@@ -304,12 +303,12 @@ int DownloadLoop(pConnectSettings cs, Handle& remote, LocalFile& local,
 } // anonymous namespace
 
 int SftpDownloadFileW(pConnectSettings cs, LPCWSTR RemoteName, LPCWSTR LocalName,
-                      bool alwaysOverwrite, int64_t filesize, LPFILETIME ft, bool Resume, bool binary)
+                      int64_t filesize, LPFILETIME ft, bool Resume, bool binary)
 {
     if (!cs) return SFTP_FAILED;
 #if SFTP_EXTRA
     if (IsPhpAgentTransport(cs))
-        return PhpAgentDownloadFileW(cs, RemoteName, LocalName, alwaysOverwrite, filesize, Resume);
+        return PhpAgentDownloadFileW(cs, RemoteName, LocalName, true, filesize, Resume);
 #endif
 
     // Converted text has different offsets on each side, so a text file is
@@ -349,14 +348,9 @@ int SftpDownloadFileW(pConnectSettings cs, LPCWSTR RemoteName, LPCWSTR LocalName
     libssh2_struct_stat scpInfo{};
     int64_t scpRemain = 0;
 
-    // An existing target goes back to Total Commander to ask about
-    // overwriting before anything is opened on the server.
-    if (!alwaysOverwrite && !Resume && GetFileAttributesT(LocalName) != INVALID_FILE_ATTRIBUTES)
-        return SFTP_EXISTS;
-
     if (!shellPath) {
         if (useScp) {
-            if (!OpenScpDownloadChannel(cs, BuildScpPathArgument(remotePath).c_str(), scpHandle, &scpInfo))
+            if (!OpenScpDownloadChannel(cs, remotePath.c_str(), scpHandle, &scpInfo))
                 return SFTP_READFAILED;
             scpRemain = scpInfo.st_size;
         } else {
@@ -371,7 +365,7 @@ int SftpDownloadFileW(pConnectSettings cs, LPCWSTR RemoteName, LPCWSTR LocalName
     // therefore left alone until the download is complete: the data goes to
     // a file beside it, under a name no other file has, which replaces it at
     // the end.
-    const bool viaTemp = shellPath && alwaysOverwrite && !Resume &&
+    const bool viaTemp = shellPath && !Resume &&
                          GetFileAttributesT(LocalName) != INVALID_FILE_ATTRIBUTES;
     std::wstring tempName;
     if (viaTemp) {
@@ -386,17 +380,15 @@ int SftpDownloadFileW(pConnectSettings cs, LPCWSTR RemoteName, LPCWSTR LocalName
 
     // A file being overwritten is removed rather than truncated in place:
     // CREATE_ALWAYS is refused on a hidden or system file.
-    if (alwaysOverwrite && !Resume)
+    if (!Resume)
         DeleteFileT(target);
 
     // Open local file
     LocalFile local;
     int64_t loaded = 0;
-    if (!OpenLocalForWrite(local, target, alwaysOverwrite, Resume, loaded, filesize)) {
+    if (!OpenLocalForWrite(local, target, Resume, loaded, filesize)) {
         if (Resume && loaded == filesize)
             return SFTP_OK;
-        if (!Resume && GetLastError() == ERROR_FILE_EXISTS)
-            return SFTP_EXISTS;
         return SFTP_WRITEFAILED;
     }
 

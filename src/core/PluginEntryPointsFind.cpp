@@ -120,19 +120,15 @@ struct PluginFolderFindState {
 typedef struct {
     LPVOID           sftpdataptr;    /* LIBSSH2_SFTP_HANDLE, SCP_DATA, LanPairFindState*, or PluginFolderFindState* */
     pConnectSettings serverid;
-    SERVERHANDLE     rootfindhandle;
-    bool             rootfindfirst;
     bool             isLanPair;       /* if true, sftpdataptr is LanPairFindState* */
     bool             isPluginFolder;  /* if true, sftpdataptr is PluginFolderFindState* */
 } tLastFindStuct, *pLastFindStuct;
 
-static HANDLE CreateLastFindHandle(LPVOID sftpdataptr, pConnectSettings serverid, bool rootfindfirst) noexcept
+static HANDLE CreateLastFindHandle(LPVOID sftpdataptr, pConnectSettings serverid) noexcept
 {
     auto lfMem = std::make_unique<tLastFindStuct>();
     lfMem->sftpdataptr = sftpdataptr;
     lfMem->serverid = serverid;
-    lfMem->rootfindhandle = nullptr;
-    lfMem->rootfindfirst = rootfindfirst;
     lfMem->isLanPair = false;
     lfMem->isPluginFolder = false;
     return static_cast<HANDLE>(lfMem.release());
@@ -183,8 +179,6 @@ static HANDLE LanCreateFindHandle(std::vector<LanPairSession::DirEntry> entries,
 
     auto lf = std::make_unique<tLastFindStuct>();
     lf->serverid      = serverid;
-    lf->rootfindhandle = nullptr;
-    lf->rootfindfirst  = false;
     lf->isLanPair      = true;
     lf->isPluginFolder = false;
 
@@ -450,8 +444,6 @@ static HANDLE BuildPluginFolderListing(const std::string& folderPrefix,
     auto lf = std::make_unique<tLastFindStuct>();
     lf->sftpdataptr    = state.release();
     lf->serverid       = nullptr;
-    lf->rootfindhandle = nullptr;
-    lf->rootfindfirst  = false;
     lf->isLanPair      = false;
     lf->isPluginFolder = true;
 
@@ -506,8 +498,6 @@ static HANDLE BuildActiveSessionsListing(WIN32_FIND_DATAW* FindData)
     auto lf = std::make_unique<tLastFindStuct>();
     lf->sftpdataptr    = state.release();
     lf->serverid       = nullptr;
-    lf->rootfindhandle = nullptr;
-    lf->rootfindfirst  = false;
     lf->isLanPair      = false;
     lf->isPluginFolder = true;
 
@@ -671,8 +661,6 @@ static HANDLE BuildImportsSourceListing(const std::string& sourceId,
     auto lf = std::make_unique<tLastFindStuct>();
     lf->sftpdataptr    = state.release();
     lf->serverid       = nullptr;
-    lf->rootfindhandle = nullptr;
-    lf->rootfindfirst  = false;
     lf->isLanPair      = false;
     lf->isPluginFolder = true;
 
@@ -703,8 +691,6 @@ static HANDLE BuildImportsUmbrellaListing(WIN32_FIND_DATAW* FindData)
     auto lf = std::make_unique<tLastFindStuct>();
     lf->sftpdataptr    = state.release();
     lf->serverid       = nullptr;
-    lf->rootfindhandle = nullptr;
-    lf->rootfindfirst  = false;
     lf->isLanPair      = false;
     lf->isPluginFolder = true;
 
@@ -783,8 +769,6 @@ static HANDLE BuildProxiesListing(WIN32_FIND_DATAW* FindData)
     auto lf = std::make_unique<tLastFindStuct>();
     lf->sftpdataptr    = state.release();
     lf->serverid       = nullptr;
-    lf->rootfindhandle = nullptr;
-    lf->rootfindfirst  = false;
     lf->isLanPair      = false;
     lf->isPluginFolder = true;
 
@@ -874,7 +858,6 @@ HANDLE WINAPI FsFindFirstW(LPCWSTR Path, LPWIN32_FIND_DATAW FindData)
     sftp::DllExceptionBarrier _barrier;
     SFTP_LOG("FIND", "FsFindFirstW ENTRY path='%s'", unicode_util::wstring_to_utf8(Path ? Path : L"(null)").c_str());
     return sftp::dll_invoke(_barrier, INVALID_HANDLE_VALUE, [&]() -> HANDLE {
-        int hr = ERROR_SUCCESS;
         std::array<WCHAR, wdirtypemax> remotedir{};
         std::array<char, wdirtypemax> displayName{};
         std::array<char, wdirtypemax> pathA{};
@@ -1137,7 +1120,7 @@ HANDLE WINAPI FsFindFirstW(LPCWSTR Path, LPWIN32_FIND_DATAW FindData)
             FindData->dwReserved0 = LIBSSH2_SFTP_S_IFLNK | kHomeSymlinkMode;
 
             newConnGuard.commit();  // root listing: connection is permanent
-            return CreateLastFindHandle(ok ? sftpdataptr : nullptr, serverid, false);
+            return CreateLastFindHandle(ok ? sftpdataptr : nullptr, serverid);
         }
         if (!ok) {
             // newConnGuard destructor fires: SetServerIdForName(name, nullptr) → close + delete
@@ -1147,7 +1130,7 @@ HANDLE WINAPI FsFindFirstW(LPCWSTR Path, LPWIN32_FIND_DATAW FindData)
 
         newConnGuard.commit();  // directory listing succeeded: connection is permanent
         if (SFTP_OK == SftpFindNextFileW(serverid, sftpdataptr, FindData)) {
-            return CreateLastFindHandle(sftpdataptr, serverid, false);
+            return CreateLastFindHandle(sftpdataptr, serverid);
         }
         SftpFindClose(serverid, sftpdataptr);
         SetLastError(ERROR_NO_MORE_FILES);
@@ -1172,41 +1155,10 @@ BOOL WINAPI FsFindNextW(HANDLE Hdl, LPWIN32_FIND_DATAW FindData)
 {
     sftp::DllExceptionBarrier _barrier;
     return sftp::dll_invoke(_barrier, FALSE, [&]() -> BOOL {
-        pLastFindStuct lf;
-        std::array<char, wdirtypemax> name{};
-
-        // Root enumeration sentinel used by FsFindFirstW for helper pseudo-entry.
-        if (Hdl == kFsFindRootSentinel)
-            return false;
-
-        lf = (pLastFindStuct)Hdl;
+        pLastFindStuct lf = (pLastFindStuct)Hdl;
         if (!lf || lf == INVALID_HANDLE_VALUE)
             return false;
 
-        if (lf->rootfindfirst) {
-            name[0] = 0;
-            SERVERHANDLE hdl = FindFirstServer(name.data(), name.size() - 1);
-            if (!hdl)
-                return false;
-            iwlcopy(FindData->cFileName, name.data(), countof(FindData->cFileName)-1);
-            lf->rootfindhandle = hdl;
-            lf->rootfindfirst = false;
-            SetInt64ToFileTime(&FindData->ftLastWriteTime, FS_TIME_UNKNOWN);
-            FindData->dwFileAttributes = FS_ATTR_UNIXMODE;
-            FindData->dwReserved0 = LIBSSH2_SFTP_S_IFLNK; // Link entry.
-            FindData->nFileSizeLow = 0;
-            return true;
-        }
-        if (lf->rootfindhandle) {
-            name[0] = 0;
-            lf->rootfindhandle = FindNextServer(lf->rootfindhandle, name.data(), name.size() - 1);
-            if (!lf->rootfindhandle)
-                return false;
-            iwlcopy(FindData->cFileName, name.data(), countof(FindData->cFileName)-1);
-            FindData->dwFileAttributes = FS_ATTR_UNIXMODE;
-            FindData->dwReserved0 = LIBSSH2_SFTP_S_IFLNK; // Link entry.
-            return true;
-        }
         if (lf->isPluginFolder) {
             auto* state = static_cast<PluginFolderFindState*>(lf->sftpdataptr);
             if (!state || state->index >= state->entries.size())
@@ -1261,10 +1213,6 @@ int WINAPI FsFindClose(HANDLE Hdl)
         } else if (lf->sftpdataptr) {
             SftpFindClose(lf->serverid, lf->sftpdataptr);
             lf->sftpdataptr = nullptr;
-        }
-        if (lf->rootfindhandle) {
-            FindCloseServer(lf->rootfindhandle);
-            lf->rootfindhandle = nullptr;
         }
         delete lf;
         return 0;

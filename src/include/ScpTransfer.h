@@ -6,7 +6,6 @@
 #include "SftpClient.h"
 
 bool PrepareScpTransferSession(pConnectSettings cs);
-std::string BuildScpPathArgument(const std::string& path);
 bool OpenScpDownloadChannel(
     pConnectSettings ConnectSettings,
     const char* filename,

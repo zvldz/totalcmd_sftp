@@ -2,59 +2,6 @@
 # Format: ID=text (UTF-8, escape sequences: \r \n \t \\)
 # Generated from sftpplug.rc
 
-12001=Nincs leíró
-12002=Időtúllépés
-12003=Kiterjesztett hiba
-12004=Belső hiba
-12005=Érvénytelen URL
-12006=Ismeretlen séma
-12007=A névfeloldás sikertelen
-12008=A protokoll nem található
-12009=Érvénytelen beállítás
-12010=Helytelen beállításhossz
-12011=A beállítás nem adható meg
-12012=Leállítás
-12013=Érvénytelen felhasználónév
-12014=Érvénytelen jelszó
-12015=Bejelentkezési hiba
-12016=Érvénytelen művelet
-12017=Művelet megszakítva
-12018=Érvénytelen leíró típus
-12019=Érvénytelen leíró állapot
-12020=Nem proxy-kérés
-12021=A beállításjegyzék-érték nem található
-12022=Helytelen beállításjegyzék-paraméter
-12023=Nincs közvetlen hozzáférés
-12024=Nincs kontextus
-12025=Nincs visszahívó függvény
-12026=Kérés függőben
-12027=Érvénytelen formátum
-12028=Az elem nem található
-12029=Nem lehet csatlakozni
-12030=A kapcsolat megszakadt
-12031=A kapcsolat alaphelyzetbe állt
-12032=Újrapróbálkozás kényszerítése
-12033=Érvénytelen proxy-kérés
-12034=Felhasználói felület szükséges
-12035=Ismeretlen
-12036=A leíró létezik
-12037=A tanúsítvány dátuma érvénytelen
-12038=A tanúsítvány CN-je érvénytelen
-12039=Átirányítás http-ről https-re
-12040=Átirányítás https-ről http-re
-12041=Vegyes biztonság
-12042=CHG Post nem biztonságos
-12043=Post nem biztonságos
-12044=Ügyfél-tanúsítvány szükséges a hitelesítéshez
-12045=Érvénytelen tanúsítványkiállító
-12046=Az ügyfél-hitelesítés nincs konfigurálva
-12047=Aszinkron szál hibája
-12048=Átirányítási séma módosítása
-12049=Párbeszédablak függőben
-12050=Párbeszédablak megismétlése
-12051=Ismeretlen
-12052=HTTPS küldés átirányítása HTTP-re
-12053=Helyezze be a CD-ROM-ot
 130=F7 - súgó.txt
 131=Beépülő modul súgója:\r\nF7:\tÚj kapcsolat létrehozása (a TC megjeleníti az Új mappát – adja meg a kapcsolat nevét)\r\nF8/Del:\tKapcsolat törlése\r\nEnter:\tCsatlakozás\r\nBontás:\tA munkamenetből, vagy F8 a során az [Active Sessions] alatt. Az eszköztár gombja a bővítmény gyökeréből nyitva hagyja.\r\nAlt+Enter:\tBeállítások módosítása\r\nF3/F4:\tBeállítások megjelenítése INI-ként (szerkesztés: Alt+Enter)\r\n\r\nMunkamenetek mappákban:\r\nF7 mappán belül:\tA munkamenetet abban a mappában hozza létre\r\nF7 folder/x névvel:\tA munkamenetet a megadott mappában hozza létre\r\nF6 \\mappa\\név alakra:\tMappába helyezi a munkamenetet\r\nF6 mappán:\tAz összes munkamenetet átnevezi; a jump-host hivatkozások követik\r\nF5 vagy húzás:\tMásolja a munkamenetet vagy mappát\r\nF8 mappán:\tTörli a mappát és a benne lévő munkameneteket\r\n\r\nÁtviteli módok:\r\nSSH (SFTP/SCP):\tAlapértelmezett és leggyorsabb, ha az SSH-hozzáférés működik\r\nSCP használata adatokhoz:\tHa az SFTP blokkolva vagy instabil\r\nCsak SCP:\tTeljesen letiltja az SFTP-t (régi kiszolgálók)\r\nShell-átvitel kényszerítése:\tShellen keresztüli átvitelt kényszerít (dd/base64)\r\nPHP ügynök (HTTP):\tSSH-fiók nélkül; feltöltött sftp.php-t használ\r\nPHP Shell (HTTP):\tHTTP pszeudo-terminál sftp.php-n keresztül
 132=Gyors csatlakozás
@@ -63,7 +10,6 @@
 148=Csatlakozhat közvetlenül vagy proxy kiszolgálón keresztül proxy(:port) formában. Ha a proxy felhasználónevet és jelszót igényel, adja meg azokat itt. A proxynak támogatnia kell a CONNECT parancsot az SSH-kiszolgáló portjára vagy a SOCKS protokollt.
 149=Itt adhatja meg a nyilvános/titkos kulcspár helyét az ügyféltanúsítvánnyal történő hitelesítéshez.\nA kulcsoknak OpenSSH/PEM formátumban kell lenniük.\n\nA PuTTY PPK-fájlokat (*.ppk) a beépülő modul natívan konvertálja.\nNem szükséges külső eszköz.\n\nTámogatja a környezeti változókat, pl. %commander_path%.\n%USER% (NAGYBETŰKKEL!) az aktuális felhasználó nevével lesz helyettesítve.
 150=Csatlakozás ehhez: 
-151=Proxyn keresztül:
 152=Hiba: nem sikerül csatlakozni a PROXY-hoz!
 153=Hiba: nem sikerül csatlakozni a megadott kiszolgálóhoz!
 154=Hiba: nem sikerül csatlakozni a kiszolgálóhoz proxyn keresztül!
@@ -84,7 +30,6 @@
 169=Ezt a kapcsolatot először használja.\nEllenőrizze, hogy az alábbi gazdagép-ujjlenyomat megegyezik-e a kiszolgálója ujjlenyomatával:\n\n
 170=FIGYELMEZTETÉS!\nA gazdagép ujjlenyomata megváltozott!\nGyőződjön meg arról, hogy az új ujjlenyomat megegyezik a kiszolgálójával:\n\n
 171=Ujjlenyomat: 
-172=Csatlakozás...
 173=A támogatott hitelesítési módszerek lekérése...
 174=Támogatott hitelesítési módszerek: 
 175=Nem nyitható meg a nyilvános kulcs fájlja!\n
@@ -98,27 +43,18 @@
 183=Jelszavas hitelesítés
 184=Billentyűzet-interaktív hitelesítés a következő felhasználóhoz: 
 185=Billentyűzet-interaktív hitelesítés
-186=SFTP-kapcsolat létrehozása...
 187=Kapcsolat bontása...
 188=Könyvtár betöltése
 189=Csatlakozás a kiszolgálóhoz proxyn keresztül...
 190=A gazdagép névfeloldása sikertelen, a getaddrinfo nem működött!
 191=Könyvtár betöltése: 
-192=A könyvtár nem nyílt meg: 
 193=Könyvtár létrehozása: 
-194=A könyvtár nem jött létre: 
-195=Átnevezés erről: 
-196=Átnevezés erre:
 197=Az átnevezés SIKERTELEN: 
 198=Fájl letöltése: 
 199=Fájl feltöltése: 
 200=Fájl törlése: 
 201=A törlés SIKERTELEN: 
 202=Auto-észlelés
-203=Igen
-204=Nem
-205=A szimbolikus hivatkozás célpontja a beépülő modul alapkönyvtárán kívül esik:\n
-206=\nHa követi ezt a hivatkozást, a beépülő modul gyökérkönyvtára a kiszolgáló / gyökérkönyvtárára változik!
 207=SOCKS 5 proxy felhasználónév/jelszó hiba!
 208=Általános SOCKS kiszolgálóhiba!
 209=A kapcsolatot a szabályok tiltják!
@@ -129,9 +65,6 @@
 214=A SOCKS parancs nem támogatott!
 215=A címtípus nem támogatott!
 216=Ismeretlen SOCKS5 hiba: %d!
-217=1
-218=2
-219=3
 220=UTF-8
 221=ANSI (helyi) (0)
 222=ASCII/DOS (1)
@@ -195,7 +128,6 @@
 12055=Munkamenet ideje: [__] perc (0=korlátlan)
 281=A LAN Pair fogadó már fut.
 282=LAN Pair elfogadva: {} ({})
-283=LAN Pair: figyelés aktív. A szerepválasztó ablak megjelenik, amint partnert észlel.
 
 # Dialog label translations (IDS_DLG_* range 284-323)
 284=Csatlakozás SFTP-kiszolgálóhoz
@@ -232,7 +164,6 @@
 455=SOCKS 5
 314=SSH Jump Host beállításai (ProxyJump)
 315=Csatlakozás közvetítő gazdagépen keresztül
-316=&Közvetítő gazdagép használata (ProxyJump)
 317=Közvetítő gazdagép:
 318=Port:
 319=Felhasználónév:
@@ -343,7 +274,6 @@
 12091={} s
 12092=LAN Pair: nem található partner.
 12093=TrustedInstaller
-12094=LAN Pair: a TrustedInstaller megszemélyesítése sikertelen. A folyamat esetleg nem fut rendszergazdaként.
 12095=LAN Pair: csatlakozás: {}...
 12096=LAN Pair: kapcsolódás sikertelen
 12103=LAN Pair: ez a számítógép Adóként van konfigurálva. A távoli Vevőnek ide kell csatlakoznia.

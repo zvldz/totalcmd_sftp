@@ -2,59 +2,6 @@
 # Format: ID=text (UTF-8, escape sequences: \r \n \t \\)
 # Generated from sftpplug.rc
 
-12001=Handle esauriti
-12002=Timeout
-12003=Errore esteso
-12004=Errore interno
-12005=URL non valido
-12006=Schema non riconosciuto
-12007=Nome non risolto
-12008=Protocollo non trovato
-12009=Opzione non valida
-12010=Lunghezza opzione errata
-12011=Opzione non impostabile
-12012=Arresto
-12013=Nome utente errato
-12014=Password errata
-12015=Errore di accesso
-12016=Operazione non valida
-12017=Operazione annullata
-12018=Tipo handle errato
-12019=Stato handle errato
-12020=Non è una richiesta proxy
-12021=Valore registro non trovato
-12022=Parametro registro errato
-12023=Nessun accesso diretto
-12024=Nessun contesto
-12025=Nessuna callback
-12026=Richiesta in attesa
-12027=Formato errato
-12028=Elemento non trovato
-12029=Impossibile connettersi
-12030=Connessione interrotta
-12031=Connessione reimpostata
-12032=Forza nuovo tentativo
-12033=Richiesta proxy non valida
-12034=Richiesta interfaccia utente
-12035=Sconosciuto
-12036=Handle già esistente
-12037=Data certificato non valida
-12038=CN certificato non valido
-12039=Reindirizzamento da http a https
-12040=Reindirizzamento da https a http
-12041=Sicurezza mista
-12042=CHG Post non sicuro
-12043=Post non sicuro
-12044=È richiesto un certificato client per l'autenticazione
-12045=Autorità di certificazione non valida
-12046=Autenticazione client non configurata
-12047=Errore thread asincrono
-12048=Cambio schema di reindirizzamento
-12049=Finestra di dialogo in attesa
-12050=Riprova finestra di dialogo
-12051=Sconosciuto
-12052=Reindirizzamento invio HTTPS a HTTP
-12053=Inserire il CD-ROM
 130=F7 - aiuto.txt
 131=Guida plugin:\r\nF7:\tCrea nuova connessione (TC mostra Nuova cartella - inserisci il nome)\r\nF8/Canc:\tElimina connessione\r\nInvio:\tConnetti\r\nDisconnetti:\tDall'interno della sessione, o F8 sulla sua riga in [Active Sessions]. Il pulsante della barra la lascia aperta dalla radice del plugin.\r\nAlt+Invio:\tModifica opzioni\r\nF3/F4:\tMostra le impostazioni come INI (modifica con Alt+Invio)\r\n\r\nSessioni nelle cartelle:\r\nF7 dentro una cartella:\tCrea la sessione in quella cartella\r\nF7 con nome folder/x:\tCrea la sessione nella cartella indicata\r\nF6 in \\cartella\\nome:\tSposta una sessione in una cartella\r\nF6 su una cartella:\tRinomina tutte le sessioni; i riferimenti al jump host seguono\r\nF5 o trascinamento:\tCopia la sessione o la cartella (duplicato)\r\nF8 su una cartella:\tElimina la cartella e tutte le sessioni in essa\r\n\r\nModalità trasferimento:\r\nSSH (SFTP/SCP):\tPredefinita, più veloce con accesso SSH\r\nUsa SCP per dati:\tUsare quando SFTP è bloccato/instabile\r\nSolo SCP:\tDisabilita SFTP (host legacy)\r\nForza shell transfer:\tTrasferimento via shell (dd/base64)\r\nPHP Agent (HTTP):\tSenza account SSH; usa sftp.php caricato\r\nPHP Shell (HTTP):\tPseudo-terminale HTTP via sftp.php
 132=Connessione rapida
@@ -63,7 +10,6 @@
 148=Puoi connetterti direttamente oppure definire un server proxy nel formato proxy(:porta). Se il proxy richiede nome utente e password, inseriscili qui. Il proxy deve consentire il comando CONNECT verso la porta del server SSH, oppure utilizzare il protocollo SOCKS.
 149=Qui puoi inserire il percorso della coppia di chiavi pubblica/privata per l'autenticazione tramite certificato client.\nLe chiavi devono essere in formato OpenSSH/PEM.\n\nI file PuTTY PPK (*.ppk) vengono convertiti nativamente dal plugin.\nNessuno strumento esterno è necessario.\n\nSupporta variabili d'ambiente come %commander_path%.\n%USER% (MAIUSCOLO!) verrà sostituito con l'utente corrente.
 150=Connessione a: 
-151=Tramite proxy:
 152=Errore: connessione al PROXY non riuscita!
 153=Errore: connessione al server non riuscita!
 154=Errore: impossibile connettersi al server tramite proxy!
@@ -84,7 +30,6 @@
 169=Stai usando questa connessione per la prima volta.\nVerifica che il seguente fingerprint dell'host corrisponda a quello del tuo server:\n\n
 170=ATTENZIONE!\nIl fingerprint dell'host è cambiato!\nVerifica che il nuovo fingerprint corrisponda al tuo server:\n\n
 171=Fingerprint: 
-172=Connessione in corso...
 173=Recupero metodi di autenticazione supportati...
 174=Metodi di autenticazione supportati: 
 175=Impossibile aprire il file della chiave pubblica!\n
@@ -98,27 +43,18 @@
 183=Autenticazione con password
 184=Autenticazione keyboard-interactive per utente: 
 185=Autenticazione keyboard-interactive
-186=Stabilire connessione SFTP...
 187=Disconnessione...
 188=Recupero directory
 189=Connessione al server via proxy...
 190=Impossibile risolvere l'host, getaddrinfo non riuscito!
 191=Directory: 
-192=Directory non aperta: 
 193=Crea directory: 
-194=Directory non creata: 
-195=Rinomina da: 
-196=Rinomina in:
 197=Rinomina NON RIUSCITA: 
 198=Download file: 
 199=Upload file: 
 200=Elimina file: 
 201=Eliminazione NON RIUSCITA: 
 202=Auto-rilevamento
-203=Sì
-204=No
-205=Il target del collegamento è fuori dalla directory base del plugin:\n
-206=\nSeguendo questo collegamento, la root del plugin verrà cambiata alla directory radice / del server!
 207=Errore utente/password proxy SOCKS 5!
 208=Errore generale del server SOCKS!
 209=Connessione non consentita dal ruleset!
@@ -129,9 +65,6 @@
 214=Comando SOCKS non supportato!
 215=Tipo di indirizzo non supportato!
 216=Errore SOCKS5 sconosciuto %d!
-217=1
-218=2
-219=3
 220=UTF-8
 221=ANSI (locale) (0)
 222=ASCII/DOS (1)
@@ -195,7 +128,6 @@
 12055=Timeout sessione: [__] min (0=nessun limite)
 281=Ricevente LAN Pair già in esecuzione.
 282=LAN Pair accettato: {} ({})
-283=LAN Pair: in ascolto. Il dialogo del ruolo apparirà quando viene rilevato un peer.
 
 # Dialog label translations (IDS_DLG_* range 284-323)
 284=Connetti al server SFTP
@@ -232,7 +164,6 @@
 455=SOCKS 5
 314=Impostazioni SSH Jump Host (ProxyJump)
 315=Connessione tramite host intermediario
-316=Usa &host intermediario (ProxyJump)
 317=Host intermediario:
 318=Porta:
 319=Nome utente:
@@ -343,7 +274,6 @@
 12091={} s
 12092=LAN Pair: nessun peer trovato.
 12093=TrustedInstaller
-12094=LAN Pair: impossibile impersonare TrustedInstaller. Il processo potrebbe non essere in esecuzione come Amministratore.
 12095=LAN Pair: connessione a {}...
 12096=LAN Pair: connessione non riuscita
 12103=LAN Pair: questo computer è configurato come Donante. Il Ricevitore remoto deve connettersi qui.

@@ -2,59 +2,6 @@
 # Format: ID=text (UTF-8, escape sequences: \r \n \t \\)
 # Generated from sftpplug.rc
 
-12001=Geen handles beschikbaar
-12002=Time-out
-12003=Uitgebreide fout
-12004=Interne fout
-12005=Ongeldige URL
-12006=Onbekend schema
-12007=Naam kan niet worden omgezet
-12008=Protocol niet gevonden
-12009=Ongeldige optie
-12010=Onjuiste optielengte
-12011=Optie kan niet worden ingesteld
-12012=Afsluiten
-12013=Ongeldige gebruikersnaam
-12014=Ongeldig wachtwoord
-12015=Aanmeldfout
-12016=Ongeldige bewerking
-12017=Bewerking geannuleerd
-12018=Ongeldig handletype
-12019=Ongeldige handlestatus
-12020=Geen proxyverzoek
-12021=Registerwaarde niet gevonden
-12022=Onjuiste registerparameter
-12023=Geen directe toegang
-12024=Geen context
-12025=Geen terugroepfunctie
-12026=Verzoek in behandeling
-12027=Ongeldig formaat
-12028=Item niet gevonden
-12029=Kan niet verbinden
-12030=Verbinding verbroken
-12031=Verbinding gereset
-12032=Opnieuw proberen forceren
-12033=Ongeldig proxyverzoek
-12034=Gebruikersinterface vereist
-12035=Onbekend
-12036=Handle bestaat al
-12037=Certificaatdatum is ongeldig
-12038=Certificaat-CN is ongeldig
-12039=Omleiding van http naar https
-12040=Omleiding van https naar http
-12041=Gemengde beveiliging
-12042=CHG Post is niet beveiligd
-12043=Post is niet beveiligd
-12044=Clientcertificaat vereist voor verificatie
-12045=Ongeldige certificeringsinstantie
-12046=Clientverificatie is niet geconfigureerd
-12047=Fout in asynchroon thread
-12048=Wijziging omleidingsschema
-12049=Dialoogvenster in behandeling
-12050=Dialoogvenster opnieuw proberen
-12051=Onbekend
-12052=HTTPS-verzending omleiden naar HTTP
-12053=Plaats de cd-rom
 130=F7 - help.txt
 131=Help plug-in:\r\nF7:\tNieuwe verbinding maken (TC toont Nieuwe map – typ de naam van de verbinding)\r\nF8/Del:\tVerbinding verwijderen\r\nEnter:\tVerbinden\r\nVerbreken:\tVanuit de sessie, of F8 op de regel in [Active Sessions]. De knop op de werkbalk laat hem open vanaf de plug-inhoofdmap.\r\nAlt+Enter:\tOpties wijzigen\r\nF3/F4:\tInstellingen als INI tonen (bewerken met Alt+Enter)\r\n\r\nSessies in mappen:\r\nF7 in een map:\tMaakt de sessie in die map\r\nF7 met naam folder/x:\tMaakt de sessie in de opgegeven map\r\nF6 naar \\map\\naam:\tVerplaatst een sessie naar een map\r\nF6 op een map:\tHernoemt alle sessies erin; jump-hostverwijzingen volgen\r\nF5 of slepen:\tKopieert sessie of map (duplicaat)\r\nF8 op een map:\tVerwijdert de map en alle sessies erin\r\n\r\nOverdrachtswijzen:\r\nSSH (SFTP/SCP):\tStandaard en snelst wanneer SSH-toegang werkt\r\nSCP gebruiken voor gegevens:\tWanneer SFTP geblokkeerd of instabiel is\r\nAlleen SCP:\tSFTP volledig uitschakelen (oude hosts)\r\nShell-overdracht forceren:\tOverdracht via shell forceren (dd/base64)\r\nPHP-agent (HTTP):\tZonder SSH-account; gebruikt geüploade sftp.php\r\nPHP Shell (HTTP):\tHTTP-pseudoterminal via sftp.php
 132=Snelle verbinding
@@ -63,7 +10,6 @@
 148=U kunt rechtstreeks verbinding maken of via een proxyserver in de vorm proxy(:poort). Als de proxy een gebruikersnaam en wachtwoord vereist, voer deze dan hier in. De proxy moet het CONNECT-commando naar de SSH-serverpoort of het SOCKS-protocol ondersteunen.
 149=Hier kunt u de locatie opgeven van het publiek/privé-sleutelpaar voor verificatie met een clientcertificaat.\nSleutels moeten in OpenSSH/PEM-formaat zijn.\n\nPuTTY PPK-bestanden (*.ppk) worden native geconverteerd door de plug-in.\nGeen extern hulpprogramma vereist.\n\nOndersteuning voor omgevingsvariabelen, bijv. %commander_path%.\n%USER% (HOOFDLETTERS!) wordt vervangen door de naam van de huidige gebruiker.
 150=Verbinden met: 
-151=Via proxy:
 152=Fout: kan geen verbinding maken met PROXY!
 153=Fout: kan geen verbinding maken met de opgegeven server!
 154=Fout: kan geen verbinding maken met de server via proxy!
@@ -84,7 +30,6 @@
 169=U gebruikt deze verbinding voor de eerste keer.\nControleer of de onderstaande hostvingerafdruk overeenkomt met de vingerafdruk van uw server:\n\n
 170=WAARSCHUWING!\nDe hostvingerafdruk is gewijzigd!\nControleer of de nieuwe vingerafdruk overeenkomt met uw server:\n\n
 171=Vingerafdruk: 
-172=Verbinden...
 173=Ondersteunde verificatiemethoden ophalen...
 174=Ondersteunde verificatiemethoden: 
 175=Kan het bestand met de publieke sleutel niet openen!\n
@@ -98,27 +43,18 @@
 183=Wachtwoordverificatie
 184=Toetsenbord-interactieve verificatie voor gebruiker: 
 185=Toetsenbord-interactieve verificatie
-186=SFTP-verbinding tot stand brengen...
 187=Verbinding verbreken...
 188=Map ophalen
 189=Verbinden met server via proxy...
 190=Host kan niet worden omgezet, getaddrinfo mislukt!
 191=Map ophalen: 
-192=Map niet geopend: 
 193=Map aanmaken: 
-194=Map niet aangemaakt: 
-195=Naam wijzigen van: 
-196=Naam wijzigen naar:
 197=Naam wijzigen MISLUKT: 
 198=Bestand downloaden: 
 199=Bestand uploaden: 
 200=Bestand verwijderen: 
 201=Verwijderen MISLUKT: 
 202=Auto-detectie
-203=Ja
-204=Nee
-205=Het doel van de koppeling bevindt zich buiten de basismap van de plug-in:\n
-206=\nAls u deze koppeling volgt, wordt de hoofdmap van de plug-in gewijzigd naar de hoofdmap / van de server!
 207=Fout gebruikersnaam/wachtwoord SOCKS 5-proxy!
 208=Algemene SOCKS-serverfout!
 209=Verbinding niet toegestaan door regels!
@@ -129,9 +65,6 @@
 214=SOCKS-commando niet ondersteund!
 215=Adrestype niet ondersteund!
 216=Onbekende SOCKS5-fout %d!
-217=1
-218=2
-219=3
 220=UTF-8
 221=ANSI (lokaal) (0)
 222=ASCII/DOS (1)
@@ -195,7 +128,6 @@
 12055=Sessieduur: [__] min (0=geen limiet)
 281=LAN Pair-ontvanger is al actief.
 282=LAN Pair geaccepteerd: {} ({})
-283=LAN Pair: luisteren actief. Het rolvenster verschijnt wanneer een peer wordt gedetecteerd.
 
 # Dialog label translations (IDS_DLG_* range 284-323)
 284=Verbinden met SFTP-server
@@ -232,7 +164,6 @@
 455=SOCKS 5
 314=SSH Jump Host-instellingen (ProxyJump)
 315=Verbinding via tussenliggende host
-316=&Tussenliggende host gebruiken (ProxyJump)
 317=Tussenliggende host:
 318=Poort:
 319=Gebruikersnaam:
@@ -343,7 +274,6 @@
 12091={} s
 12092=LAN Pair: geen partner gevonden.
 12093=TrustedInstaller
-12094=LAN Pair: imitatie van TrustedInstaller mislukt. Het proces wordt mogelijk niet als Administrator uitgevoerd.
 12095=LAN Pair: verbinding maken met {}...
 12096=LAN Pair: verbinding mislukt
 12103=LAN Pair: deze computer is geconfigureerd als Donor. De externe Ontvanger moet hier verbinding maken.

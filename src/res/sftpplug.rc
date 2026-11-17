@@ -355,71 +355,6 @@ END
 
 STRINGTABLE
 BEGIN
-    IDS_STRING12001         "Out of handles"
-    IDS_STRING12002         "Timeout"
-    IDS_STRING12003         "Extended error"
-    IDS_STRING12004         "Internal Error"
-    IDS_STRING12005         "Invalid URL"
-    IDS_STRING12006         "Unrecognized Scheme"
-    IDS_STRING12007         "Name not resolved"
-    IDS_STRING12008         "Protocol not found"
-    IDS_STRING12009         "Invalid Option"
-    IDS_STRING12010         "Bad option length"
-    IDS_STRING12011         "Option not settable"
-    IDS_STRING12012         "Shutdown"
-    IDS_STRING12013         "Incorrect user name"
-    IDS_STRING12014         "Incorrect password"
-    IDS_STRING12015         "Login failure"
-END
-
-STRINGTABLE
-BEGIN
-    IDS_STRING12016         "Invalid operation"
-    IDS_STRING12017         "Operation cancelled"
-    IDS_STRING12018         "Incorrect handle type"
-    IDS_STRING12019         "Incorrect handle state"
-    IDS_STRING12020         "Not a proxy request"
-    IDS_STRING12021         "Registry value not found"
-    IDS_STRING12022         "Bad registry parameter"
-    IDS_STRING12023         "No direct access"
-    IDS_STRING12024         "No context"
-    IDS_STRING12025         "No callback"
-    IDS_STRING12026         "Request pending"
-    IDS_STRING12027         "Incorrect format"
-    IDS_STRING12028         "Item not found"
-    IDS_STRING12029         "Cannot connect"
-    IDS_STRING12030         "Connection aborted"
-    IDS_STRING12031         "Connection reset"
-END
-
-STRINGTABLE
-BEGIN
-    IDS_STRING12032         "Force retry"
-    IDS_STRING12033         "Invalid proxy request"
-    IDS_STRING12034         "Need UI"
-    IDS_STRING12035         "Unknown"
-    IDS_STRING12036         "Handle exists"
-    IDS_STRING12037         "Certificate date is invalid"
-    IDS_STRING12038         "Certificate CN is invalid"
-    IDS_STRING12039         "Redirect from http to https"
-    IDS_STRING12040         "Redirect from https to http"
-    IDS_STRING12041         "Mixed security"
-    IDS_STRING12042         "CHG Post is non-secure"
-    IDS_STRING12043         "Post is non secure"
-    IDS_STRING12044         "A client certificate is needed for authentication"
-    IDS_STRING12045         "Invalid Certification Agency"
-    IDS_STRING12046         "Client authentication hasn't been setup"
-    IDS_STRING12047         "Async thread failed"
-END
-
-STRINGTABLE
-BEGIN
-    IDS_STRING12048         "Redirect scheme change"
-    IDS_STRING12049         "Dialog pending"
-    IDS_STRING12050         "Retry dialog"
-    IDS_STRING12051         "Unknown"
-    IDS_STRING12052         "HTTPS to HTTP submit redirection"
-    IDS_STRING12053         "Insert CD-ROM"
     IDS_LAN_ROLE_PROMPT     "LAN Pair peer found.\nChoose role:\n\nYes = Donor\nNo = Receiver\nCancel = no change"
     IDS_LAN_SESSION_TIMEOUT "Session timeout: [__] min (0=no limit)"
 END
@@ -452,7 +387,6 @@ Press F3 to see its settings, or F5 to copy it into your own session list."
     IDS_PAIRING_SECS        "{} s"
     IDS_PAIRING_TIMEOUT     "LAN Pair: no peer found."
     IDS_LAN_TI              "TrustedInstaller"
-    IDS_LAN_TI_ERR          "LAN Pair: TrustedInstaller impersonation failed. The process may not be running as Administrator."
     IDS_LAN_CONNECTING      "LAN Pair: connecting to {}..."
 END
 
@@ -613,7 +547,6 @@ BEGIN
     IDS_HELP_PROXY          "You can choose to connect directly, or to define a proxy server in the form proxy(:port). If your proxy requires username/password, you need to enter them here. The proxy must allow the CONNECT command to the port of your SSH server, or use the SOCKS protocol."
     IDS_HELP_CERT           "Here you can enter the location of the public/private key pair for client certificate authentication.\nThe keys must be in OpenSSH/PEM format.\n\nPuTTY PPK files (*.ppk) are converted natively by the plugin.\nNo external conversion tool is required.\n\nSupports environment variables like %commander_path%.\n%USER% (uppercase!) will be replaced by current user."
     IDS_CONNECT_TO          "Connecting to: "
-    IDS_VIA_PROXY           "Via proxy:"
     IDS_ERR_PROXYCONNECT    "Error: failed to connect to the PROXY!"
     IDS_ERR_SERVERCONNECT   "Error: failed to connect to the given server!"
     IDS_VIA_PROXY_CONNECT   "Error: Could not connect via proxy to the server!"
@@ -639,7 +572,6 @@ BEGIN
                             "You are using this connection for the first time.\nPlease verify that the following host fingerprint matches the fingerprint of your server:\n\n"
     IDS_FINGERPRINT_CHANGED "WARNING!\nThe fingerprint of the host has changed!\nPlease make sure that the new fingerprint matches your server:\n\n"
     IDS_FINGERPRINT         "Fingerprint: "
-    IDS_CONNECTING          "Connecting..."
     IDS_USER_AUTH_LIST      "Getting supported authentication methods..."
     IDS_SUPPORTED_AUTH_METHODS "Supported authentication methods: "
     IDS_ERR_LOAD_PUBKEY     "Cannot open public key file!\n"
@@ -658,7 +590,6 @@ BEGIN
     IDS_AUTH_PASSWORD       "Authenticate with password"
     IDS_AUTH_KEYBDINT_FOR   "Auth via keyboard interactive for user: "
     IDS_AUTH_KEYBDINT       "Authenticate with keyboard-interactive"
-    IDS_FTP_INIT            "Establishing SFTP connection..."
     IDS_DISCONNECTING       "Disconnect..."
     IDS_GET_DIRECTORY       "Get Directory"
     IDS_PROXY_CONNECT       "Proxy connect to server..."
@@ -668,21 +599,13 @@ END
 
 STRINGTABLE
 BEGIN
-    IDS_ERR_GET_DIR         "Directory not opened: "
     IDS_MK_DIR              "Create directory: "
-    IDS_ERR_MK_DIR          "Directory not created: "
-    IDS_RENFR               "Rename from: "
-    IDS_RENTO               "Rename to:"
     IDS_ERR_RENAME          "Rename FAILED: "
     IDS_DOWNLOAD            "Download file: "
     IDS_UPLOAD              "Upload file: "
     IDS_DELETE              "Delete file: "
     IDS_ERR_DELETE          "Delete FAILED: "
     IDS_AUTO                "Auto-detect"
-    IDS_YES                 "Yes"
-    IDS_NO                  "No"
-    IDS_OUTOFREACH          "The link target is outside of the plugin base directory:\n"
-    IDS_FOLLOWLINKROOT      "\nIf you follow this link, the plugin's root will be changed to the root directory / of the server!"
     IDS_SOCKS5PROXYERR      "SOCKS 5 Proxy user/password error!"
 END
 
@@ -697,9 +620,6 @@ BEGIN
     IDS_CMDNOTSUPPORTED     "SOCKS Command not supported!"
     IDS_ADDRTYPENOTSUPPORTED "Address type not supported!"
     IDS_UNKNOWNSOCKERR      "Unknown SOCKS5 error %d!"
-    IDS_DUMMY               "1"
-    IDS_DUMMY2              "2"
-    IDS_DUMMY3              "3"
     IDS_UTF8                "UTF-8"
     IDS_ANSI                "ANSI (local) (0)"
     IDS_ASCII               "ASCII/DOS (1)"
@@ -779,7 +699,6 @@ BEGIN
     IDS_LAN_PASSWORD_LABEL  "Pairing password:"
     IDS_LAN_MSG_RECEIVER_RUNNING "LAN Pair receiver already running."
     IDS_LAN_MSG_ACCEPTED    "LAN Pair accepted: {} ({})"
-    IDS_LAN_MSG_AUTO_LISTEN "LAN Pair: listening. Role dialog will appear when peer is detected."
     IDS_DLG_CAPTION         "Connect to SFTP Server"
     IDS_DLG_CONNECTTO       "&Connect to: (server/path or server:port/path)"
     IDS_DLG_USERNAME        "&User name:"
@@ -874,7 +793,6 @@ BEGIN
     IDS_PROXY_DLG_PASS      "Proxy password:"
     IDS_JUMP_DLG_CAPTION    "SSH Jump Host (ProxyJump) Settings"
     IDS_JUMP_DLG_GROUP      "Jump host connection"
-    IDS_JUMP_DLG_USE        "&Use jump host (ProxyJump)"
     IDS_JUMP_DLG_HOST       "Jump host:"
     IDS_JUMP_DLG_PORT       "Port:"
     IDS_JUMP_DLG_USER       "User name:"

@@ -529,7 +529,8 @@ static std::wstring Utf8ToWide(const std::string& s)
     return out;
 }
 
-// Repositions label + checkbox + button on one row based on actual text widths.
+#if SFTP_EXTRA
+// Substitutes each "{}" in the template with the next argument, left to right.
 static std::wstring FormatBracesW(std::wstring templ, std::initializer_list<std::wstring_view> args)
 {
     size_t pos = 0;
@@ -561,6 +562,7 @@ static std::wstring GetSessionDisplayNameW(HWND hWnd)
     }
     return value;
 }
+#endif // SFTP_EXTRA
 
 static void SetDialogLabelTextAndRedraw(HWND hWnd, int ctrlId, const wchar_t* textW)
 {
@@ -1124,14 +1126,16 @@ static void OnBrowseKeyFileCommand(HWND hWnd, bool isPublicKey)
     ofn.lpstrFile = szFileName.data();
     ofn.nMaxFile = static_cast<DWORD>(szFileName.size());
 
+    // The title in the plugin's language; it lives until the dialog closes.
+    const std::wstring title = LoadResStringW(isPublicKey ? IDS_DLG_SELECT_PUBKEY : IDS_DLG_SELECT_PRIVKEY);
     if (isPublicKey) {
         wcscpy_s(szFileName.data(), szFileName.size(), L"*-cert.pub");
         ofn.lpstrFilter = L"Certificates (*-cert.pub)\0*-cert.pub\0Public keys (*.pub)\0*.pub\0All Files\0*.*\0";
-        ofn.lpstrTitle = L"Select certificate file";
+        ofn.lpstrTitle = title.empty() ? L"Select certificate file" : title.c_str();
     } else {
         wcscpy_s(szFileName.data(), szFileName.size(), L"*.pem");
         ofn.lpstrFilter = L"Private key files (*.pem;*.ppk)\0*.pem;*.ppk\0OpenSSH private key (*.pem)\0*.pem\0PuTTY private key (*.ppk)\0*.ppk\0All Files\0*.*\0";
-        ofn.lpstrTitle = L"Select private key file";
+        ofn.lpstrTitle = title.empty() ? L"Select private key file" : title.c_str();
     }
     ofn.Flags = OFN_FILEMUSTEXIST | OFN_HIDEREADONLY;
 
@@ -1991,8 +1995,16 @@ std::wstring DescribeProxyRecordW(int proxynr, LPCSTR iniFileName)
         out += httpproxy.data();
         break;
     }
-    case sftp::Proxy::socks4: out += L"SOCKS4a: "; break;
-    case sftp::Proxy::socks5: out += L"SOCKS5: ";  break;
+    case sftp::Proxy::socks4: {
+        const std::wstring label = LoadResStringW(IDS_PROXY_LABEL_SOCKS4A);
+        out += label.empty() ? L"SOCKS4a: " : label;
+        break;
+    }
+    case sftp::Proxy::socks5: {
+        const std::wstring label = LoadResStringW(IDS_PROXY_LABEL_SOCKS5);
+        out += label.empty() ? L"SOCKS5: " : label;
+        break;
+    }
     default: break;
     }
 
@@ -2799,7 +2811,9 @@ void ConnectionDialog::OnOk()
                         // Cancel, or a number Windows does not know as a code
                         // page, keeps the one the session had.
                         cp = m_settings->codepage;
-                        if (RequestProcI(PluginNumber, RT_Other, "Code page", "Code page (e.g. 28591):",
+                        const std::string cpTitle  = LngStrU8(IDS_DLG_CODEPAGE_TITLE, "Code page");
+                        const std::string cpPrompt = LngStrU8(IDS_DLG_CODEPAGE_PROMPT, "Code page (e.g. 28591):");
+                        if (RequestProcI(PluginNumber, RT_Other, cpTitle.c_str(), cpPrompt.c_str(),
                                         strbuf.data(), strbuf.size() - 1)) {
                             const int typed = atoi(strbuf.data());
                             if (typed > 0 && IsValidCodePage(static_cast<UINT>(typed)))

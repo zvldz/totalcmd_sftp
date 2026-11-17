@@ -2,59 +2,6 @@
 # Format: ID=text (UTF-8, escape sequences: \r \n \t \\)
 # Generated from sftpplug.rc
 
-12001=Out of handles
-12002=Timeout
-12003=Erreur étendue
-12004=Erreur interne
-12005=URL non valide
-12006=Schéma non reconnu
-12007=Nom non résolu
-12008=Protocole introuvable
-12009=Option non valide
-12010=Longueur d'option incorrecte
-12011=Option non paramétrable
-12012=Arrêt
-12013=Nom d'utilisateur incorrect
-12014=Mot de passe incorrect
-12015=Échec de connexion
-12016=Opération non valide
-12017=Opération annulée
-12018=Type de handle incorrect
-12019=État de handle incorrect
-12020=Pas une requête proxy
-12021=Valeur de registre introuvable
-12022=Paramètre de registre incorrect
-12023=Pas d'accès direct
-12024=Pas de contexte
-12025=Pas de rappel
-12026=Requête en attente
-12027=Format incorrect
-12028=Élément introuvable
-12029=Connexion impossible
-12030=Connexion interrompue
-12031=Connexion réinitialisée
-12032=Forcer la réessai
-12033=Requête proxy non valide
-12034=Interface utilisateur requise
-12035=Inconnu
-12036=Le handle existe déjà
-12037=La date du certificat n'est pas valide
-12038=Le CN du certificat n'est pas valide
-12039=Redirection de http vers https
-12040=Redirection de https vers http
-12041=Sécurité mixte
-12042=CHG Post non sécurisé
-12043=Post non sécurisé
-12044=Un certificat client est nécessaire pour l'authentification
-12045=Autorité de certification non valide
-12046=L'authentification client n'a pas été configurée
-12047=Échec du thread asynchrone
-12048=Changement de schéma de redirection
-12049=Dialogue en attente
-12050=Réessayer le dialogue
-12051=Inconnu
-12052=Redirection de soumission HTTPS vers HTTP
-12053=Insérer le CD-ROM
 130=F7 - aide.txt
 131=Aide du plugin:\r\nF7:\tCréer une nouvelle connexion (TC affiche Nouveau Dossier – entrer le nom de la connexion)\r\nF8/Suppr:\tSupprimer la connexion\r\nEntrée:\tConnecter\r\nDéconnecter :\tDepuis la session, ou F8 sur sa ligne dans [Active Sessions]. Le bouton de la barre la laisse ouverte depuis la racine du plugin.\r\nAlt+Entrée:\tModifier les options\r\nF3/F4:\tAfficher les paramètres en INI (modifier via Alt+Entrée)\r\n\r\nSessions dans des dossiers:\r\nF7 dans un dossier:\tCrée la session dans ce dossier\r\nF7 avec le nom folder/x:\tCrée la session dans le dossier indiqué\r\nF6 vers \\dossier\\nom:\tDéplace une session dans un dossier\r\nF6 sur un dossier:\tRenomme toutes les sessions; les références de rebond suivent\r\nF5 ou glisser:\tCopie la session ou le dossier (duplicata)\r\nF8 sur un dossier:\tSupprime le dossier et toutes ses sessions\r\n\r\nModes de transfert:\r\nSSH (SFTP/SCP):\tDéfaut, le plus rapide quand SSH est disponible\r\nUtiliser SCP pour les données:\tUtiliser quand SFTP est bloqué/instable\r\nUtiliser SCP uniquement:\tDésactiver SFTP complètement (hôtes anciens)\r\nForcer transfert shell:\tForcer le transfert par shell (dd/base64)\r\nAgent PHP (HTTP):\tPas de compte SSH nécessaire; utiliser sftp.php téléversé\r\nShell PHP (HTTP):\tPseudo-terminal via HTTP par sftp.php
 132=Connexion rapide
@@ -63,7 +10,6 @@
 148=Vous pouvez choisir de vous connecter directement ou de définir un serveur proxy sous la forme proxy(:port). Si votre proxy nécessite un identifiant/mot de passe, entrez-les ici. Le proxy doit autoriser la commande CONNECT vers le port de votre serveur SSH, ou utiliser le protocole SOCKS.
 149=Ici vous pouvez entrer l'emplacement de la paire de clés publique/privée pour l'authentification par certificat client.\nLes clés doivent être au format OpenSSH/PEM.\n\nLes fichiers PuTTY PPK (*.ppk) sont convertis nativement par le plugin.\nAucun outil de conversion externe n'est requis.\n\nSupporte les variables d'environnement comme %commander_path%.\n%USER% (majuscules !) sera remplacé par l'utilisateur actuel.
 150=Connexion à :
-151=Via proxy :
 152=Erreur : échec de connexion au PROXY !
 153=Erreur : échec de connexion au serveur indiqué !
 154=Erreur : impossible de se connecter au serveur via le proxy !
@@ -84,7 +30,6 @@
 169=Vous utilisez cette connexion pour la première fois.\nVeuillez vérifier que l'empreinte d'hôte suivante correspond à l'empreinte de votre serveur :\n\n
 170=AVERTISSEMENT !\nL'empreinte de l'hôte a changé !\nAssurez-vous que la nouvelle empreinte correspond à votre serveur :\n\n
 171=Empreinte :
-172=Connexion en cours...
 173=Récupération des méthodes d'authentification prises en charge...
 174=Méthodes d'authentification prises en charge :
 175=Impossible d'ouvrir le fichier de clé publique !\n
@@ -98,27 +43,18 @@
 183=S'authentifier avec un mot de passe
 184=Authentification interactive par clavier pour l'utilisateur :
 185=S'authentifier avec le clavier interactif
-186=Établissement de la connexion SFTP...
 187=Déconnexion...
 188=Obtenir le répertoire
 189=Connexion proxy au serveur...
 190=Impossible de résoudre l'hôte, getaddrinfo a échoué !
 191=Obtenir le répertoire :
-192=Répertoire non ouvert :
 193=Créer le répertoire :
-194=Répertoire non créé :
-195=Renommer depuis :
-196=Renommer en :
 197=Renommage ÉCHOUÉ :
 198=Télécharger le fichier :
 199=Téléverser le fichier :
 200=Supprimer le fichier :
 201=Suppression ÉCHOUÉE :
 202=Auto-détection
-203=Oui
-204=Non
-205=La cible du lien est en dehors du répertoire de base du plugin :\n
-206=\nSi vous suivez ce lien, la racine du plugin sera changée vers le répertoire racine / du serveur !
 207=Erreur d'utilisateur/mot de passe du proxy SOCKS 5 !
 208=Échec général du serveur SOCKS !
 209=Connexion non autorisée par le jeu de règles !
@@ -129,9 +65,6 @@
 214=Commande SOCKS non prise en charge !
 215=Type d'adresse non pris en charge !
 216=Erreur SOCKS5 inconnue %d !
-217=1
-218=2
-219=3
 220=UTF-8
 221=ANSI (local) (0)
 222=ASCII/DOS (1)
@@ -195,7 +128,6 @@
 12055=Délai session: [__] min (0=illimité)
 281=Receveur LAN Pair déjà en cours.
 282=LAN Pair accepté: {} ({})
-283=LAN Pair: en écoute. Dialogue de rôle au premier peer détecté.
 
 # Dialog label translations (IDS_DLG_* range 284-323)
 284=Connexion au serveur SFTP
@@ -232,7 +164,6 @@
 455=SOCKS 5
 314=Paramètres SSH Jump Host (ProxyJump)
 315=Connexion via hôte intermédiaire
-316=Utiliser l'&hôte intermédiaire (ProxyJump)
 317=Hôte intermédiaire :
 318=Port :
 319=Nom d'utilisateur :
@@ -344,7 +275,6 @@
 12091={} s
 12092=LAN Pair: aucun pair trouvé.
 12093=TrustedInstaller
-12094=LAN Pair: l'emprunt d'identite TrustedInstaller a echoue. Le processus ne s'execute peut-etre pas en tant qu'Administrateur.
 12095=LAN Pair: connexion à {}...
 12096=LAN Pair: connexion échouée
 12103=LAN Pair : cet ordinateur est configuré en tant que Donneur. Le Récepteur distant doit se connecter ici.

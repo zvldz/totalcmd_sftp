@@ -126,7 +126,6 @@ template <typename LineHandler>
 static bool ShellExecPersistentProcessLines(
     pConnectSettings cs,
     const std::string& payload,
-    DWORD timeoutMs,
     LineHandler onLine,
     int* outExitCode = nullptr)
 {
@@ -168,9 +167,8 @@ static bool ShellExecPersistentProcessLines(
         return false;
     }
 
-    // `timeoutMs` counts from the last line received, not from the start: a
-    // large download is many lines, each arriving well within it.
-    SYSTICKS lastLine = get_sys_ticks();
+    // Each line is waited for by ReadChannelLine's own idle and total limits,
+    // so a large download of many lines has no overall time limit.
     bool gotBeginMarker = false;
     bool gotEndMarker = false;
     std::array<char, 8192> line{};
@@ -224,11 +222,6 @@ static bool ShellExecPersistentProcessLines(
             CloseScpShell(cs);
             return false;
         }
-        if (get_ticks_between(lastLine) > (int)timeoutMs) {
-            CloseScpShell(cs);
-            return false;
-        }
-        lastLine = get_sys_ticks();
     }
     if (!gotBeginMarker || !gotEndMarker) {
         CloseScpShell(cs);
@@ -244,7 +237,7 @@ static bool ShellExecPersistentCollectLines(
     int* outExitCode = nullptr)
 {
     outLines.clear();
-    return ShellExecPersistentProcessLines(cs, payload, 90000,
+    return ShellExecPersistentProcessLines(cs, payload,
         [&](const char* p, size_t len) -> bool {
             outLines.emplace_back(p, len);
             return true;
@@ -527,7 +520,7 @@ static int ShellDdDownloadBase64(
     int64_t decodedTotal = resumeFrom;
     int streamRc = SFTP_OK;
     int exitCode = -1;
-    bool ok = ShellExecPersistentProcessLines(cs, payload, 90000,
+    bool ok = ShellExecPersistentProcessLines(cs, payload,
         [&](const char* p, size_t lineLen) -> bool {
             lineCount++;
             if (lineLen > 0 && (lineCount <= 3 || (lineCount % 100) == 0)) {
