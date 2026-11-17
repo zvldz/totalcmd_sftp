@@ -267,8 +267,8 @@ void EmitDedupBuckets(DedupBuckets&                     buckets,
 
 }  // anonymous namespace
 
-// Fill a WIN32_FIND_DATAW from one PluginFolderEntry. Pseudo entries advertise
-// the help-file body length so TC's viewer sizes correctly; folder entries
+// Fill a WIN32_FIND_DATAW from one PluginFolderEntry. Pseudo entries show the
+// length of the IDS_HELPTEXT string (ANSI, up to 255 bytes); folder entries
 // carry FILE_ATTRIBUTE_DIRECTORY; saved sessions are shown as IFLNK entries,
 // which is what F8 (delete) and Enter (open) on a session rely on.
 static void FillFindDataFromPluginEntry(WIN32_FIND_DATAW& fd, const PluginFolderEntry& e)
@@ -1254,7 +1254,6 @@ BOOL WINAPI FsMkDirW(LPCWSTR Path)
         const PathResolution r = ResolvePathKindW(Path);
 
         if (r.kind == PathKind::SessionWithSubpath) {
-            // Use std::wstring instead of std::array<WCHAR, wdirtypemax>
             std::wstring remotedir(wdirtypemax, L'\0');
             pConnectSettings serverid = GetServerIdAndRelativePathFromPathW(Path, remotedir.data(), remotedir.size() - 1);
             remotedir.resize(wcslen(remotedir.data()));

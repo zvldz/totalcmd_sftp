@@ -228,8 +228,8 @@ C0644 1234 file.txt  (file mode, size, name)
 
 <h3>Command Timeout</h3>
 <ul>
-  <li>A base64 download waits up to 90 seconds for each next line</li>
-  <li>The wait counts from the last line received, so large files are not cut off</li>
+  <li>Each line of a command's output is waited for up to 10 seconds of silence, and at most 45 seconds in all</li>
+  <li>The limits apply per line, so a large base64 download of many lines is not cut off</li>
 </ul>
 
 <h3>Partial Transfer</h3>
@@ -253,7 +253,7 @@ C0644 1234 file.txt  (file mode, size, name)
 <h3>Command Injection Protection</h3>
 <ul>
   <li>Every name is single-quoted; a quote inside is written as <code>'\''</code></li>
-  <li>A command for the interactive shell that would contain a control character (for example a newline or escape in a file name) is not sent; the plugin reports that the name contains a control character</li>
+  <li>A command for the interactive shell that would contain a control character other than a newline (for example an escape in a file name) is not sent; the plugin reports that the name contains a control character. A newline in a name is sent inside its quotes</li>
   <li>Commands run with the user's own permissions</li>
 </ul>
 

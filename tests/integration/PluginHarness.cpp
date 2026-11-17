@@ -836,9 +836,9 @@ int wmain(int argc, wchar_t** argv)
     if (!phpMode) {
         // A file the server refuses to read: the download fails and leaves
         // no local file, and a local file it was to overwrite stays intact.
-        // The shell paths learn of the refusal only after the local file
-        // exists: they remove an empty one, but an overwritten copy is gone
-        // (open in TODO).
+        // The shell paths learn of the refusal only after the download has
+        // started, so they write to a file beside the target and replace it
+        // only at the end.
         const std::wstring name = L"unreadable.bin";
         WriteFileBytes(local + name, RandomBytes(5000, 4));
         g_plugin.PutFileW((local + name).c_str(), (dir + L"\\" + name).c_str(), 0);

@@ -2143,31 +2143,16 @@ int WINAPI FsGetFileW(LPCWSTR RemoteName, LPWSTR LocalName, int CopyFlags, Remot
             }
         }
 
-        // F3/F4 on a saved-session entry (root-level OR nested in a folder)
-        // → open the Edit Session dialog instead of downloading the entry as
-        // a file. Same effect as RMB → Properties / Alt+Enter, but reachable
-        // from the keyboard.
-        //
-        // TC's View/Edit always wants a downloaded file: any non-OK return
-        // shows "Error downloading file", and FS_FILE_OK makes TC open the
-        // viewer/editor on the temp file afterwards (this cannot be
-        // suppressed — confirmed against the Registry plugin's behaviour).
-        // So after the dialog we write a short stub note into the temp file
-        // and return OK: no error, and the trailing viewer/editor shows a
-        // self-explanatory message instead of misleading editable settings.
         // F3/F4/F5 on a saved session (root-level or nested in a folder)
         // → export the session's INI section into the download target as a
         // human-readable INI snippet. Symmetric with the reverse-import
         // path in FsPutFileW, and with the virtual-session export above.
         //
-        // OPEN UX DECISION (see TODO — "F3/F4 vs F5 behaviour"):
         // TC's WFX API routes F3 (view), F4 (edit) and F5 (copy) through
-        // the same FsGetFile entry point with no reliable "intent" hint.
-        // All three gestures export the session's raw INI content — F3/F5
-        // work naturally; F4 opens an editor on the snapshot but saving
-        // does NOT round-trip back to sftpplug.ini. Alt+Enter (a separate
-        // FsExecuteFile path) still opens the editable Configure dialog.
-        // See AUDIT.md "F3/F4/F5 UX для обычных сессий" for the follow-up.
+        // the same FsGetFile entry point with no reliable "intent" hint, so
+        // all three export the snapshot. F4 opens an editor on it, but
+        // saving does not go back to sftpplug.ini; Alt+Enter (FsExecuteFile)
+        // opens the editable Configure dialog.
         {
             const PathResolution r = ResolvePathKindW(RemoteName);
             if (r.kind == PathKind::SessionLeaf &&
@@ -2360,10 +2345,8 @@ int WINAPI FsPutFileW(LPCWSTR LocalName, LPCWSTR RemoteName, int CopyFlags)
         // pressed abort in progress dialog"; TC pops "Error uploading
         // file" for it when no dialog was involved. Return FS_FILE_OK
         // instead — the plugin discards the incoming bytes, TC thinks
-        // the upload succeeded, and the user gets no error. Matches the
-        // silent-no-op UX pattern the regular-session F4 write-back path
-        // uses. Real-disk → panel session-INI import lives on the else
-        // branch below.
+        // the upload succeeded, and the user gets no error. Real-disk →
+        // panel session-INI import is handled below.
         if (IsImportsPath(RemoteName))
             return FS_FILE_OK;
 
@@ -2754,7 +2737,6 @@ BOOL WINAPI FsSetAttrW(LPCWSTR RemoteName, int NewAttr)
     return sftp::dll_invoke(_barrier, FALSE, [&]() -> BOOL {
         if (!RemoteName || !RemoteName[0])
             return false;
-        // Use std::wstring instead of std::array<WCHAR, wdirtypemax>
         std::wstring remotedirW(wdirtypemax, L'\0');
         pConnectSettings serverid = GetServerIdAndRelativePathFromPathW(RemoteName, remotedirW.data(), remotedirW.size() - 1);
         remotedirW.resize(wcslen(remotedirW.data()));
@@ -2787,7 +2769,6 @@ BOOL WINAPI FsSetTimeW(LPCWSTR RemoteName, LPFILETIME CreationTime, LPFILETIME L
         if (remoteView.size() < 3 || !LastWriteTime)
             return false;
 
-        // Use std::wstring instead of std::array<WCHAR, wdirtypemax>
         std::wstring remotedir(wdirtypemax, L'\0');
         pConnectSettings serverid = GetServerIdAndRelativePathFromPathW(RemoteName, remotedir.data(), remotedir.size() - 1);
         remotedir.resize(wcslen(remotedir.data()));

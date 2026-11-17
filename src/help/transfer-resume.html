@@ -46,6 +46,7 @@
   <li>Download: the remote side reads from the offset with <code>tail -c +N</code> (raw, or piped through <code>base64</code>), and the data is appended to the local partial file.</li>
   <li>Upload: the plugin reads the remote size with <code>wc -c</code> and appends from that offset. Each base64 chunk is encoded and decoded on its own, so no alignment is needed and no bytes are sent twice.</li>
   <li>An upload resume is refused when the remote size cannot be read or the remote file is larger than the local one.</li>
+  <li>When a raw upload fails or leaves the wrong size on the server, the file is sent again over base64 from the start, replacing what is there, resumed or not.</li>
   <li>A resumed raw download that ends with the wrong size is reported as a failure.</li>
 </ul>
 

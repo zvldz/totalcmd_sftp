@@ -113,7 +113,8 @@ std::string DecodeEntities(const std::string& in)
         else if (ent == "quot") out.push_back('"');
         else if (ent == "apos") out.push_back('\'');
         else if (!ent.empty() && ent[0] == '#') {
-            // Numeric char ref — best-effort, single byte only.
+            // Numeric char ref, written as UTF-8; code points above U+FFFF
+            // and zero are dropped.
             const bool hex = ent.size() > 1 && (ent[1] == 'x' || ent[1] == 'X');
             unsigned cp = 0;
             const char* start = ent.c_str() + (hex ? 2 : 1);

@@ -4,115 +4,59 @@
 <body>
 <h1>Character Encoding and Codepages</h1>
 
-<p>The plugin handles character encoding for filenames and file contents. Proper encoding settings ensure correct display of non-ASCII characters.</p>
+<p>Two session settings decide how the plugin treats text: the encoding of file names on the server, and the server's line breaks, which text mode transfers use.</p>
 
-<h2>Filename Encoding</h2>
+<h2>File Name Encoding</h2>
 
-<h3>UTF-8 Detection</h3>
-<p>The plugin can auto-detect server filename encoding:</p>
+<p>Set in the session's connection settings:</p>
 <ul>
-  <li><b>Auto-detect:</b> Plugin tries UTF-8 first, falls back to ANSI if needed</li>
-  <li><b>Force UTF-8:</b> Always interpret filenames as UTF-8</li>
-  <li><b>Force ANSI:</b> Use system codepage (e.g., Windows-1250, Windows-1251)</li>
+  <li><b>Auto-detect</b> (default): after login the plugin runs <code>echo $LC_ALL $LC_CTYPE $LANG</code>, then <code>locale</code>. A value naming <code>UTF-8</code> or <code>utf8</code> (any case, e.g. <code>en_US.utf8</code>) means UTF-8; otherwise the Windows ANSI codepage is used. The result is saved in the session, so the check runs once.</li>
+  <li>A system with no locale variables and no <code>locale</code> command (busybox on a camera or router) is taken as UTF-8.</li>
+  <li>An account that runs no commands at all (SFTP only) uses UTF-8 for that connection; nothing is saved, and the next connection checks again.</li>
+  <li><b>UTF-8:</b> always UTF-8.</li>
+  <li><b>A codepage:</b> ANSI (local), ASCII/DOS (OEM), MacOS, Windows 1250&ndash;1258, 932 (Japanese), 936 (Simplified Chinese), 949 (Korean), 950 (Traditional Chinese), 874 (Thai), 437 and 850 (DOS), 20866 (KOI8-R).</li>
+  <li><b>Other (enter manually):</b> asks for a codepage number (e.g. 28591); a number Windows does not know as a codepage keeps the previous one.</li>
 </ul>
 
-<h3>Supported Codepages</h3>
-<p>For ANSI mode, the following codepages are supported:</p>
+<h3>Names that are not valid UTF-8</h3>
+<p>In a UTF-8 session, a name containing bytes that are not valid UTF-8 (written by an older program in another codepage) is shown whole, and every byte is kept: such a file can be opened, renamed, copied and deleted like any other.</p>
+
+<h2>Text Mode Transfers</h2>
+
+<p>Total Commander's transfer mode (Binary, Text, or Auto with its list of text file patterns) is passed to the plugin. It only has an effect when the session's line breaks are <b>Unix (LF)</b>; with <b>Windows (CR/LF)</b> every file is transferred as it is.</p>
 <ul>
-  <li><b>Windows:</b> 1250 (Central European), 1251 (Cyrillic), 1252 (Western), 1253 (Greek), 1254 (Turkish), 1255 (Hebrew), 1256 (Arabic), 1257 (Baltic), 1258 (Vietnamese)</li>
-  <li><b>Asian:</b> 932 (Japanese), 936 (Simplified Chinese), 949 (Korean), 950 (Traditional Chinese)</li>
-  <li><b>Other:</b> 437 (DOS US), 850 (DOS Multilingual), 874 (Thai), 20866 (KOI8-R)</li>
+  <li><b>Binary:</b> bytes are transferred unchanged.</li>
+  <li><b>Text:</b> download converts LF to CRLF (a CRLF already there stays); upload converts CRLF to LF. A lone CR is left alone.</li>
+  <li><b>Auto:</b> text mode for files whose name matches Total Commander's text patterns, binary for the rest. The patterns are set in Total Commander, not in the plugin.</li>
+  <li>A file with a NUL byte is binary and is not converted: on download a NUL in the first 64 KB decides, on upload one anywhere in the file.</li>
+  <li>A byte order mark is ordinary data: it is neither added nor removed.</li>
+  <li>A text mode transfer is never resumed: the sizes on both sides differ, so it starts over.</li>
 </ul>
 
-<h2>Transfer Mode</h2>
-
-<h3>Binary Mode</h3>
-<p>Raw byte transfer without modification. Use for:</p>
-<ul>
-  <li>Executable files</li>
-  <li>Archives (ZIP, RAR, 7z)</li>
-  <li>Images, audio, video</li>
-  <li>Most modern text files (UTF-8, UTF-16)</li>
-</ul>
-
-<h3>ASCII Mode</h3>
-<p>Converts line endings during transfer:</p>
-<ul>
-  <li>Upload: LF → CRLF (Unix → Windows)</li>
-  <li>Download: CRLF → LF (Windows → Unix)</li>
-  <li>Use for: Plain text files, scripts, configs</li>
-</ul>
-
-<h3>Auto Mode</h3>
-<p>Uses wildcard patterns to determine transfer mode automatically.</p>
-
-<h2>Text File Type Patterns</h2>
-<p>Configure which files use ASCII mode:</p>
-<ul>
-  <li>Default patterns: <code>*.txt;*.log;*.ini;*.cfg;*.xml;*.json</code></li>
-  <li>Multiple patterns separated by semicolons</li>
-  <li>Wildcards supported: <code>*</code> (any), <code>?</code> (single char)</li>
-  <li>Case-insensitive matching</li>
-</ul>
-
-<h3>Pattern Examples</h3>
-<pre>
-*.txt;*.log;*.ini          - Common text files
-*.c;*.h;*.cpp;*.hpp        - Source code files
-*.md;*.rst;*.adoc          - Documentation files
-*.htm;*.html;*.css;*.js    - Web files
-</pre>
-
-<h2>Line Ending Detection</h2>
-<p>The plugin can auto-detect line ending format:</p>
-<ul>
-  <li><b>LF (Unix):</b> 0x0A - Linux, macOS, modern Windows tools</li>
-  <li><b>CRLF (Windows):</b> 0x0D 0x0A - Traditional Windows</li>
-  <li><b>CR (Classic Mac):</b> 0x0D - Legacy Mac (pre-OS X)</li>
-</ul>
-
-<h2>UTF-8 BOM Handling</h2>
-<p>The plugin preserves UTF-8 BOM (Byte Order Mark) during transfers:</p>
-<ul>
-  <li>BOM detected at file start</li>
-  <li>Preserved during binary transfer</li>
-  <li>Handled correctly in ASCII mode</li>
-</ul>
+<h3>Line break auto-detection</h3>
+<p>With line breaks on <b>Auto</b>, the plugin runs <code>echo $OSTYPE</code> after login: Linux, Unix or AIX means Unix (LF). Otherwise it looks at the line endings of an <code>ls -l</code> reply. The result is saved in the session.</p>
 
 <h2>Unicode in Paths</h2>
-<p>Full Unicode support for:</p>
 <ul>
-  <li>Local paths (Windows UTF-16)</li>
-  <li>Remote paths (UTF-8 or configured codepage)</li>
-  <li>Session names (stored in INI as UTF-8)</li>
+  <li>Local paths: Windows UTF-16, including paths over 260 characters</li>
+  <li>Remote paths: UTF-8 or the session's codepage</li>
+  <li>Session names: stored in <code>sftpplug.ini</code> as UTF-8</li>
 </ul>
 
 <h2>Common Issues</h2>
 
-<h3>Garbled filenames after transfer</h3>
+<h3>Garbled file names</h3>
 <ul>
-  <li>Check UTF-8 setting matches server configuration</li>
-  <li>Try forcing UTF-8 or forcing ANSI</li>
-  <li>Verify correct codepage for ANSI mode</li>
+  <li>Auto-detect saved the wrong answer: pick UTF-8 or the right codepage in the session</li>
+  <li>Asian names: UTF-8 if the server uses it, otherwise 932/936/949/950</li>
 </ul>
 
 <h3>Text files have wrong line endings</h3>
 <ul>
-  <li>Ensure file matches text pattern for ASCII mode</li>
-  <li>Check if file is actually UTF-16 (needs binary)</li>
-  <li>Use binary mode for mixed-encoding files</li>
+  <li>Set the session's line breaks to Unix (LF), then choose Text or Auto in Total Commander</li>
+  <li>In Auto mode, check that the file matches Total Commander's text patterns</li>
+  <li>UTF-16 files contain NUL bytes and are always transferred as binary</li>
 </ul>
-
-<h3>Asian characters display incorrectly</h3>
-<ul>
-  <li>Use UTF-8 mode if server supports it</li>
-  <li>Select correct Asian codepage (932/936/949/950)</li>
-  <li>Ensure system has appropriate fonts installed</li>
-</ul>
-
-<div class="note">
-  <b>Best practice:</b> Modern servers typically use UTF-8. Start with UTF-8 auto-detect, then adjust if you see encoding issues.
-</div>
 
 <p><a href="index.html">Back to index</a></p>
 </body>

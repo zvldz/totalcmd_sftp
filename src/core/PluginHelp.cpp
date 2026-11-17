@@ -77,9 +77,8 @@ void OpenPluginHelp(HWND hWnd)
     helpTitle += L" extra";
 #endif
 
-    // One self-contained page, opened by whatever handles .html. It replaced
-    // a CHM: the only compiler for that format was withdrawn, and a CHM
-    // arriving inside a downloaded ZIP is blocked by Windows and opens blank.
+    // One self-contained page, opened by whatever handles .html: unlike a
+    // CHM, it is not blocked by Windows when it arrives in a downloaded ZIP.
     const std::wstring pluginDirW = unicode_util::utf8_to_wstring(pluginDir);
     const std::wstring helpPathW = pluginDirW + L"\\SFTPplug-help.html";
     DWORD attrs = GetFileAttributesW(helpPathW.c_str());

@@ -258,9 +258,9 @@ From this version the plugin comes in two builds: **classic**
   F5 then put its password into `sftpplug.ini`, past Total Commander's
   master password. Now the password of one session is read from the source
   when that session is connected and kept in memory only. F5 puts it into
-  Total Commander's password manager when a master password is set, and
-  otherwise does not copy it: it is asked for on connect and can be saved
-  under Alt+Enter. A new password the server makes an imported session
+  Total Commander's password manager only, never into `sftpplug.ini`; with
+  no master password set yet, Total Commander offers to create one, and
+  if that is declined the password is asked for on connect. A new password the server makes an imported session
   set is not written back either. Passwords already in the cache file are
   removed from it. *wesmar/sftp#9.*
 - **Stack buffer checks are on.** The plugin is built with `/GS`, so a
@@ -879,8 +879,9 @@ From this version the plugin comes in two builds: **classic**
   *From wesmar/sftp 10.3.0.0, on OpenSSL 3.5 here.*
 - **UTF-8 and UTF-16 are converted by Windows itself.** A name with bytes
   that are not valid UTF-8 — a file on the server named in another
-  encoding — shows whole, with `�` in their place, instead of being cut at
-  the first bad byte. The bundled ConvertUTF library is gone.
+  encoding — shows whole instead of being cut at the first bad byte, and
+  is kept byte for byte (see Fixes). The bundled ConvertUTF library is
+  gone.
   *From wesmar/sftp 10.3.0.0.*
 - **Unit tests.** The PPK converter (against 20 puttygen keys), text-mode
   line endings, the terminal filter, wildcard matching, stored-password
@@ -901,6 +902,16 @@ From this version the plugin comes in two builds: **classic**
   in shell transfers that the per-line read limits always hit first, a
   stray `argon2.h`, and duplicate SCP channel helpers. The SCP "file
   missing?" check no longer strips quotes from a name that has them.
+- **Help matches the plugin.** The encoding page is rewritten from the
+  code: how the file name encoding is detected, that Total Commander's
+  transfer mode and text patterns decide text mode and only with Unix line
+  breaks, that a NUL byte makes a file binary, and that a byte order mark
+  or a lone CR is left alone. The shell pages give the real per-line wait
+  (10 seconds of silence, 45 in all), say that a newline in a name is sent
+  quoted, that SCP runs over an exec channel, and that a failed raw upload
+  is sent again over base64 from the start. The README describes the Jump
+  button with a session reference as it works (read-only, `(manual)` to
+  switch back); the troubleshooting page no longer asks for argon2.dll.
 
 ## 10.0.2.3 — 2026-11-15
 

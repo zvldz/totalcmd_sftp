@@ -2409,8 +2409,8 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
         m_hWnd,
         strcmp(dlgDisplayName, s_quickconnect) != 0 ? dlgDisplayName : "",
         m_settings ? m_settings->jump_session_ref.c_str() : "");
-    // Jump button is disabled while a session reference is set
-    // (ref takes priority over manual configuration via the Jump dialog).
+    // The Jump button edits the jump host settings, so it is enabled only
+    // while "Use jump host" is on.
     {
         const bool buttonEnabled = m_settings && m_settings->use_jump_host;
         EnableWindow(GetDlgItem(m_hWnd, IDC_JUMP_BUTTON), buttonEnabled ? TRUE : FALSE);

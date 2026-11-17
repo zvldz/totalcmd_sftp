@@ -42,14 +42,13 @@ namespace sftp {
 //                                              reversible obfuscation is
 //                                              decoded by our built-in
 //                                              KittyDecrypt, then re-wrapped
-//                                              with EncryptString so the
-//                                              cache stores the same DPAPI
+//                                              with EncryptString, the DPAPI
 //                                              format sftpplug.ini uses)
 //
 // Password import is on for KiTTY — the KiTTY `Save password` box is an
 // explicit user gesture, so carrying the value forward matches user intent.
-// Decoded via the native KittyDecrypt module and re-wrapped with the
-// plugin's own EncryptString before it lands in the cache.
+// A listing scan only notes that a password is there ("*"); it is decoded
+// when the session itself is opened or copied.
 class KittyAdapter final : public IExternalSessionSource {
 public:
     const char* SourceId()   const noexcept override { return "kitty";  }

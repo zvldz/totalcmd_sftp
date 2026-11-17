@@ -134,7 +134,7 @@ chmod 600 ~/.ssh/authorized_keys
 
 <h4>PPK Conversion Issues</h4>
 <ul>
-  <li><b>PPK v3 requires argon2.dll:</b> Ensure DLL is in plugin directory</li>
+  <li><b>PPK v3 (Argon2):</b> supported by the plugin itself; no extra DLL is needed</li>
   <li><b>Corrupted PPK:</b> Try opening in PuTTYgen</li>
   <li><b>Wrong format:</b> Plugin auto-detects, but may fail with unusual keys</li>
 </ul>
@@ -446,11 +446,6 @@ XFER: Complete
 <p><b>Symptom:</b> Clicking "~" (home symlink) opens download dialog instead of opening folder.</p>
 <p><b>Cause:</b> Stale shell session after PHP→SCP mode switch, TC interpreted FS_EXEC_YOURSELF as "download file".</p>
 <p><b>Fix:</b> Added reconnect+retry logic and safety net in FsGetFileW. Update to latest version.</p>
-
-<h3>Debug Logging Performance</h3>
-<p><b>Symptom:</b> Slow file transfers in Release build.</p>
-<p><b>Cause:</b> Debug logging was enabled by default, writing to sftpplug.log on every operation.</p>
-<p><b>Fix:</b> Stable releases are built with debug logging off (LOG_ENABLED 0 in global.h; the release workflow refuses a stable tag otherwise). Test (rc/beta) builds keep it and write <code>%TEMP%\sftpplug.log</code>. No action needed.</p>
 
 <h2>Getting Help</h2>
 
