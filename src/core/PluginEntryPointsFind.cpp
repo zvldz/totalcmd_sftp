@@ -1380,10 +1380,14 @@ BOOL WINAPI FsMkDirW(LPCWSTR Path)
         // User pressed F7 on the [F7 = new connection] / Quick Connection
         // helper entries and accepted the autofilled name → open the quick
         // connect dialog instead of creating a literally-named session.
+        // A connection made there is kept as the Quick Connection (replacing
+        // an earlier one), so the row opens it instead of connecting again.
         if (_stricmp(newDisplay.c_str(), s_quickconnect) == 0 ||
             _stricmp(newDisplay.c_str(), s_f7newconnection) == 0) {
-            SftpConnectToServer(s_quickconnect, inifilename, nullptr);
+            pConnectSettings quick = SftpConnectToServer(s_quickconnect, inifilename, nullptr);
             LoadServersFromIniW(inifilenameW, s_quickconnect);
+            if (quick)
+                SetServerIdForName(s_quickconnect, static_cast<SERVERID>(quick));
             if (hTcMain) PostMessage(hTcMain, WM_USER + 51, 540, 0);
             return true;
         }

@@ -697,9 +697,13 @@ static int MaterialiseVirtualSession(const std::string& sourceId,
         return FS_FILE_USERABORT;
     }
 
-    // Refuse overwrite unless TC's OverWrite flag is set.
-    if (!OverWrite && sftp::IniSectionExists(newDisplay, inifilename))
-        return FS_FILE_EXISTS;
+    // Refuse overwrite unless TC's OverWrite flag is set. A session that is
+    // replaced does not go on with its old connection.
+    if (sftp::IniSectionExists(newDisplay, inifilename)) {
+        if (!OverWrite)
+            return FS_FILE_EXISTS;
+        DisconnectSessionPath("\\" + newDisplay);
+    }
 
     const std::string cacheSection =
         sftp::GetImportCache().SectionNameForConnect(sourceId, subPath);
@@ -996,11 +1000,26 @@ int WINAPI FsExecuteFileW(HWND MainWin, LPWSTR RemoteName, LPCWSTR Verb)
 
             // Pseudo helper entry "[F7 = new connection]" opens the
             // new-connection dialog directly, no resolver involvement.
+            // A connection made there without a session name is the Quick
+            // Connection: registered under that name (replacing an earlier
+            // one) and opened in the panel, as Enter on its row does.
             if (RemoteName[0] && RemoteName[1] &&
                 _wcsicmp(RemoteName + 1, s_f7newconnectionW.data()) == 0) {
                 pConnectSettings serveridQuick = SftpConnectToServer(s_quickconnect, inifilename, nullptr);
                 LoadServersFromIniW(inifilenameW, s_quickconnect);
-                return serveridQuick ? FS_EXEC_OK : FS_EXEC_YOURSELF;
+                if (!serveridQuick)
+                    return FS_EXEC_OK;  // cancelled, or saved without connecting
+                SetServerIdForName(s_quickconnect, static_cast<SERVERID>(serveridQuick));
+                std::wstring target = L"\\" + std::wstring(s_quickconnectW.data());
+                const size_t used = target.size();
+                if (used + 2 < wdirtypemax) {
+                    wcslcpy(RemoteName, target.c_str(), wdirtypemax - 1);
+                    SftpGetLastActivePathW(serveridQuick, RemoteName + used,
+                                           static_cast<int>(wdirtypemax - used - 1));
+                    ReplaceSlashByBackslashW(RemoteName);
+                    return FS_EXEC_SYMLINK;
+                }
+                return FS_EXEC_OK;
             }
 
             // Entries inside the [Imports] magic folder — dispatch by the
@@ -1398,6 +1417,10 @@ int CopyMoveSavedSession(const std::string& oldName, const std::string& newName,
 {
     if (move)
         DisconnectSessionPath("\\" + oldName);
+    // A session replaced by the copy must not go on with its old connection.
+    if (overwrite && _stricmp(oldName.c_str(), newName.c_str()) != 0 &&
+        sftp::IniSectionExists(newName, iniFile))
+        DisconnectSessionPath("\\" + newName);
     const int rc = CopyMoveServerInIni(oldName.c_str(), newName.c_str(), move, overwrite, iniFile);
     if (rc != FS_FILE_OK)
         return rc;

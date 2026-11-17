@@ -54,7 +54,22 @@ struct ScpData {
     std::array<char, 2048> msgbuf;
     std::array<char, 2048> errbuf;
     std::unique_ptr<ScpListState> listingState;
+    std::wstring dirKey;   // the listed directory, as listingExtras keys it
 };
+
+// The extras of one listed directory, emptied for a fresh listing. They are
+// kept for the folders listed lately only: past kMaxListedDirs the others go
+// (a search or a tree copy lists thousands), and a folder shown again is
+// listed, and filled, again.
+constexpr size_t kMaxListedDirs = 64;
+DirectoryExtras& FreshListingExtras(pConnectSettings cs, const std::wstring& key)
+{
+    if (cs->listingExtras.size() >= kMaxListedDirs && !cs->listingExtras.count(key))
+        cs->listingExtras.clear();
+    DirectoryExtras& extras = cs->listingExtras[key];
+    extras.clear();
+    return extras;
+}
 
 ScpData* AsScpData(LPVOID data) noexcept
 {
@@ -540,7 +555,7 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
             *davdataptr = scpd.release();
             ++cs->openFindHandles;
             wcslcpy(cs->lastactivepath, remotedir, _countof(cs->lastactivepath) - 1);
-            cs->listingExtras[ListingDirKey(remotedir)] = std::move(extras);
+            FreshListingExtras(cs, ListingDirKey(remotedir)) = std::move(extras);
 
             return SFTP_OK;
         }
@@ -613,11 +628,14 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
     dirData->magic = kScpDataMagic;
     dirData->sftpDir = std::move(dirhandle);
     dirData->sftpGeneration = cs->sftpGeneration;
+    // Refilled entry by entry as SftpFindNextFileW reads the directory, under
+    // this key: a listing opened meanwhile in another folder moves
+    // lastactivepath, not this.
+    dirData->dirKey = ListingDirKey(remotedir);
+    FreshListingExtras(cs, dirData->dirKey);
     *davdataptr = dirData.release();
     ++cs->openFindHandles;
     wcslcpy(cs->lastactivepath, remotedir, _countof(cs->lastactivepath) - 1);
-    // Refilled entry by entry as SftpFindNextFileW reads the directory.
-    cs->listingExtras[ListingDirKey(remotedir)].clear();
     return SFTP_OK;
 }
 
@@ -745,7 +763,7 @@ static int SftpFindNextEntryW(pConnectSettings cs, LPVOID davdataptr, LPWIN32_FI
             extra.owner = std::to_wstring(file.uid);
             extra.group = std::to_wstring(file.gid);
         }
-        cs->listingExtras[ListingDirKey(cs->lastactivepath)][FindData->cFileName] = std::move(extra);
+        cs->listingExtras[scpd->dirKey][FindData->cFileName] = std::move(extra);
         return SFTP_OK;
     }
     return SFTP_FAILED;

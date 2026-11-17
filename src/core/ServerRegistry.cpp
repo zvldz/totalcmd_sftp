@@ -25,6 +25,10 @@ struct SERVERENTRY {
 
 static std::mutex g_registryMutex;
 static std::vector<std::unique_ptr<SERVERENTRY>> g_servers;
+// The panel's connections another thread took out of the registry. Only the
+// main thread uses them, so only it closes them — between its own calls,
+// once no listing it has open still points at one.
+static std::vector<pConnectSettings> g_pendingClose;
 extern DWORD mainthreadid;
 
 void ShutdownMultiServer() noexcept
@@ -43,11 +47,37 @@ static SERVERENTRY* FindEntry(DWORD tid, LPCSTR name, bool is_bg)
     return nullptr;
 }
 
+// Closes the pending connections that no open listing holds. Main thread
+// only: it runs between that thread's own calls, so nothing else of it is
+// using them.
+static void ClosePendingOnMainThread() noexcept
+{
+    if (GetCurrentThreadId() != mainthreadid)
+        return;
+    std::vector<pConnectSettings> ready;
+    {
+        std::lock_guard<std::mutex> lock(g_registryMutex);
+        for (auto it = g_pendingClose.begin(); it != g_pendingClose.end(); ) {
+            if ((*it)->openFindHandles <= 0) {
+                ready.push_back(*it);
+                it = g_pendingClose.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+    for (auto cs : ready) {
+        SftpCloseConnection(cs);
+        delete cs;
+    }
+}
+
 SERVERID GetServerIdFromName(LPCSTR name, DWORD threadId) noexcept
 {
     if (!name || !name[0])
         return nullptr;
-        
+    ClosePendingOnMainThread();
+
     std::lock_guard<std::mutex> lock(g_registryMutex);
     
     bool is_bg = (threadId != mainthreadid && threadId != 0);
@@ -66,14 +96,22 @@ static size_t RemoveAndClose(Match match) noexcept
 {
     std::vector<pConnectSettings> toClose;
     size_t removed = 0;
+    const bool onMainThread = GetCurrentThreadId() == mainthreadid;
     {
         std::lock_guard<std::mutex> lock(g_registryMutex);
         for (const auto& srv : g_servers) {
             if (!match(*srv) || !srv->serverid)
                 continue;
             auto cs = static_cast<pConnectSettings>(srv->serverid);
-            if (std::find(toClose.begin(), toClose.end(), cs) == toClose.end())
+            // The panel's connection, dropped from another thread: the main
+            // thread may be using it this very moment, and its open listings
+            // point at it. It closes it itself (ClosePendingOnMainThread).
+            if (!srv->is_background && !onMainThread) {
+                if (std::find(g_pendingClose.begin(), g_pendingClose.end(), cs) == g_pendingClose.end())
+                    g_pendingClose.push_back(cs);
+            } else if (std::find(toClose.begin(), toClose.end(), cs) == toClose.end()) {
                 toClose.push_back(cs);
+            }
             srv->serverid = nullptr;
         }
         const size_t before = g_servers.size();
@@ -344,6 +382,7 @@ void FreeServerList() noexcept
     std::vector<pConnectSettings> to_close;
     {
         std::lock_guard<std::mutex> lock(g_registryMutex);
+        to_close.swap(g_pendingClose);
         for (auto& entry : g_servers) {
             if (entry->serverid) {
                 to_close.push_back(static_cast<pConnectSettings>(entry->serverid));
@@ -398,13 +437,21 @@ std::string NormaliseTcPath(std::string_view path) noexcept
     return out;
 }
 
+// Rows a path lookup sees: the panel's, and the calling thread's own
+// background rows, so a background transfer still finds its session after
+// the panel disconnected it and its row went away.
+bool VisibleToCaller(const SERVERENTRY& e) noexcept
+{
+    return !e.is_background || e.threadid == GetCurrentThreadId();
+}
+
 // Returns the canonical (case-preserving) session name if a session exists
 // with a case-insensitive match for `name`; empty string otherwise.
 // Caller must hold g_registryMutex.
 std::string RegistryFindSession(const std::string& name) noexcept
 {
     for (const auto& e : g_servers) {
-        if (!e->is_background && _stricmp(e->name.c_str(), name.c_str()) == 0)
+        if (VisibleToCaller(*e) && _stricmp(e->name.c_str(), name.c_str()) == 0)
             return e->name;
     }
     return {};
@@ -417,7 +464,7 @@ bool RegistryHasAnyUnderFolder(const std::string& prefix) noexcept
 {
     const std::string needle = prefix + "/";
     for (const auto& e : g_servers) {
-        if (!e->is_background &&
+        if (VisibleToCaller(*e) &&
             e->name.size() > needle.size() &&
             _strnicmp(e->name.c_str(), needle.c_str(), needle.size()) == 0)
             return true;

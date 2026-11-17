@@ -307,6 +307,25 @@ From this version the plugin comes in two builds: **classic**
 
 ### Fixes
 
+- **Connections and background transfers.**
+  - A connection made from "[F7 = new connection]" without a session name
+    was never kept: the panel stayed at the root, the SSH session stayed
+    open until Total Commander exited, and each try opened another. It is
+    now the Quick Connection, opened in the panel.
+  - A background copy whose session the panel disconnected meanwhile
+    failed for every remaining file, though its own connection was still
+    open; for a session in a folder, that connection was never closed.
+    It finds and closes its own connection now.
+  - Disconnecting or replacing a session from a background thread (a
+    session file dropped in a background copy) freed the panel's
+    connection while the panel could still be listing on it. The panel
+    closes it itself, once nothing of it is using the connection.
+  - Copying or importing a session over one that is connected left the
+    panel on the old host until the next reconnect. The replaced session
+    is disconnected.
+  - The owner and permission columns could show values from another
+    folder after a search, and were kept for every folder ever listed.
+    They are kept per listing, for the folders listed lately.
 - **F6 with overwrite works on OpenSSH.** The overwrite flags of an SFTP
   rename reach only SFTP v5 servers; OpenSSH (v3) refused an existing
   target although the overwrite was confirmed. The plugin now uses
