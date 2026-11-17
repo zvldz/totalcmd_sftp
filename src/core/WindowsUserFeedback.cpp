@@ -65,22 +65,26 @@ bool WindowsUserFeedback::RequestText(const std::string& title, const std::strin
         std::array<WCHAR, 1024> wbuf{};
         if (RequestProcW(PluginNumber, type, wtitle.c_str(), wprompt.c_str(), wbuf.data(), static_cast<int>(wbuf.size() - 1))) {
             const int utf8Len = WideCharToMultiByte(CP_UTF8, 0, wbuf.data(), -1, nullptr, 0, nullptr, nullptr);
+            // The buffers may hold a password: wiped on every way out.
             if (utf8Len > 0) {
                 returnedText.assign(static_cast<size_t>(utf8Len - 1), '\0');
                 WideCharToMultiByte(CP_UTF8, 0, wbuf.data(), -1, returnedText.data(), utf8Len, nullptr, nullptr);
-                return true;
+            } else {
+                std::array<char, 1024> fallback{};
+                WideCharToMultiByte(CP_ACP, 0, wbuf.data(), -1, fallback.data(), static_cast<int>(fallback.size() - 1), nullptr, nullptr);
+                returnedText = fallback.data();
+                SecureZeroMemory(fallback.data(), fallback.size());
             }
-            std::array<char, 1024> fallback{};
-            WideCharToMultiByte(CP_ACP, 0, wbuf.data(), -1, fallback.data(), static_cast<int>(fallback.size() - 1), nullptr, nullptr);
-            returnedText = fallback.data();
+            SecureZeroMemory(wbuf.data(), wbuf.size() * sizeof(WCHAR));
             return true;
         }
     } else if (RequestProc) {
         std::array<char, 1024> buf{};
-        if (RequestProc(PluginNumber, type, title.c_str(), prompt.c_str(), buf.data(), static_cast<int>(buf.size() - 1))) {
+        const bool ok = RequestProc(PluginNumber, type, title.c_str(), prompt.c_str(), buf.data(), static_cast<int>(buf.size() - 1)) != 0;
+        if (ok)
             returnedText = buf.data();
-            return true;
-        }
+        SecureZeroMemory(buf.data(), buf.size());
+        return ok;
     }
     return false;
 }

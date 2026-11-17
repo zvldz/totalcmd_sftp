@@ -222,6 +222,14 @@ bool SavePasswordInStore(const std::string& storeName, const std::string& plain)
 {
     if (plain.empty() || !HaveCryptProc())
         return false;
+    // Passwords are read back from the store into MAX_PATH buffers; a longer
+    // one (an imported session's) would come back cut. It is not stored, and
+    // is asked for on connect instead. The dialogs refuse such a password.
+    if (plain.size() >= MAX_PATH) {
+        SFTP_LOG("CRYPT", "password for '%s' longer than %d bytes: not stored", storeName.c_str(),
+                 MAX_PATH - 1);
+        return false;
+    }
     std::string copy = plain;
     const bool ok = CryptProcI(PluginNumber, CryptoNumber, FS_CRYPT_SAVE_PASSWORD,
                                storeName.c_str(), copy.data(), 0) == FS_FILE_OK;

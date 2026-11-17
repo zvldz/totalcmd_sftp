@@ -1,4 +1,5 @@
 #include "global.h"
+#include "TerminalText.h"
 #include <windows.h>
 #include <array>
 #include <string>
@@ -92,10 +93,13 @@ int SftpSessionDetectLineBreaks(pConnectSettings ConnectSettings)
 
 namespace {
 
-// Shows one chunk of the command's output as a status line, without the
-// surrounding whitespace. Bytes above 0x7F belong to UTF-8 text and stay.
-void ShowCommandOutput(std::string_view text)
+// Shows one chunk of the command's output as a status line, without terminal
+// control sequences (colours, titles) and the surrounding whitespace. Bytes
+// above 0x7F belong to UTF-8 text and stay.
+void ShowCommandOutput(std::string_view raw)
 {
+    const std::string plain = terminal_text::StripControls(raw);
+    std::string_view text = plain;
     const auto isSpace = [](char c) { return static_cast<unsigned char>(c) <= ' '; };
     while (!text.empty() && isSpace(text.front()))
         text.remove_prefix(1);
@@ -141,6 +145,9 @@ void SendUserCommand(pConnectSettings ConnectSettings, LPCSTR progressText, int 
         return;
     }
 
+    // Started without waiting for it; starting it is bounded like any other
+    // request, and can be cancelled.
+    const SYSTICKS start = get_sys_ticks();
     for (;;) {
         int rc = channel->exec(ConnectSettings->connectsendcommand.c_str());
         if (rc >= 0)
@@ -149,6 +156,10 @@ void SendUserCommand(pConnectSettings ConnectSettings, LPCSTR progressText, int 
             rc = ConnectSettings->session->lastErrno();
         if (rc != LIBSSH2_ERROR_EAGAIN || EscapePressed())
             break;
+        if (get_ticks_between(start) > SSH_AUTH_STAGE_TIMEOUT_MS) {
+            SFTP_LOG("CONN", "post-login command did not start in time");
+            break;
+        }
         WaitForSshIo(ConnectSettings);
     }
 }

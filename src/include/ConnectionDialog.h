@@ -25,6 +25,11 @@ void UpdateScpOnlyDependentControls(HWND hWnd);
 bool UpdateLocalPhpAgentScriptWithPassword(LPCSTR plainPassword);
 // The plugin's folder in UTF-8, without a trailing backslash.
 bool GetPluginDirectoryU8(std::string& outDir);
+// Stores `password` for `key` in `section`: in Total Commander's password
+// store under `storeName` when `useStore`, otherwise encrypted in the INI.
+void SavePasswordSetting(HWND hWnd, const char* section, const char* key,
+                         const char* storeName, const std::string& password,
+                         bool useStore, const char* iniFileName);
 void OpenPluginHelp(HWND hWnd);
 std::wstring GetPluginVersionW();
 

@@ -180,11 +180,14 @@ struct JmpKbdCtx {
     // The password goes out once per authentication: a server asking again
     // has refused it, and repeating it only counts towards a lockout.
     bool               sent     = false;
+    std::string        title;            // "Jump host user@host" for prompts
+    SYSTICKS           promptDone = 0;   // when the user last answered
 };
 
 // Keyboard-interactive callback for jump host: the stored password answers
 // the first password prompt (or an empty one, which some servers send for
-// it); one-time-code prompts and anything after get an empty answer.
+// it); every other prompt — a one-time code, a second factor, the password
+// asked again — is put to the user.
 extern "C" static void jmp_kbd_callback(
     LPCSTR /*name*/,   int /*name_len*/,
     LPCSTR /*instr*/,  int /*instr_len*/,
@@ -209,8 +212,18 @@ extern "C" static void jmp_kbd_callback(
                 ctx->sent = true;
             }
         }
+        std::array<char, 256> answer{};
+        if (pw[0] == 0 && ctx && prompts && prompts[i].length) {
+            const std::string prompt(reinterpret_cast<LPCSTR>(prompts[i].text), prompts[i].length);
+            ShowStatusId(IDS_LOG_REQUEST_PASS, nullptr, true);
+            if (RequestProcI(PluginNumber, RT_Password, ctx->title.c_str(), prompt.c_str(),
+                             answer.data(), static_cast<int>(answer.size() - 1)))
+                pw = answer.data();
+            ctx->promptDone = get_sys_ticks();
+        }
         responses[i].text   = _strdup(pw);
         responses[i].length = static_cast<unsigned int>(strlen(pw));
+        SecureZeroMemory(answer.data(), answer.size());
     }
 }
 
@@ -408,7 +421,8 @@ static bool AuthJumpHost(
     SOCKET              jmpSock,
     int&                progress,
     int&                loop,
-    SYSTICKS&           lasttime)
+    SYSTICKS&           lasttime,
+    JmpKbdCtx*          kbdCtx)
 {
     // Get available auth methods. The jump session is non-blocking, so the
     // first call typically returns NULL with lastErrno() == LIBSSH2_ERROR_EAGAIN
@@ -417,6 +431,7 @@ static bool AuthJumpHost(
     // the server actually offers publickey/password/keyboard-interactive.
     SFTP_LOG("JUMP", "Querying auth methods for user='%s'", jump.user.c_str());
     char* authList = nullptr;
+    bool listCancelled = false;
     SYSTICKS authListStart = get_sys_ticks();
     do {
         authList = jmpSession->userauthList(
@@ -432,10 +447,14 @@ static bool AuthJumpHost(
             SFTP_LOG("JUMP", "userauthList timeout after %d ms", SSH_PROBE_TIMEOUT_MS);
             break;
         }
-        if (ProgressLoop("Jump host: querying auth methods...", progress, progress + 2, &loop, &lasttime))
+        if (ProgressLoop("Jump host: querying auth methods...", progress, progress + 2, &loop, &lasttime)) {
+            listCancelled = true;
             break;
+        }
         IsSocketReadable(jmpSock);
     } while (true);
+    if (listCancelled)
+        return false;
 
     if (!authList && jmpSession->userauthAuthenticated()) {
         SFTP_LOG("JUMP", "Server reported already authenticated (no auth list needed)");
@@ -443,9 +462,11 @@ static bool AuthJumpHost(
         return true;
     }
 
-    const bool canPassword = authList && strstr(authList, "password");
-    const bool canPubkey   = authList && strstr(authList, "publickey");
-    const bool canKbd      = authList && strstr(authList, "keyboard-interactive");
+    // No list (the server did not answer in time): every method is tried,
+    // as for the target host, instead of Pageant alone.
+    const bool canPassword = !authList || strstr(authList, "password");
+    const bool canPubkey   = !authList || strstr(authList, "publickey");
+    const bool canKbd      = !authList || strstr(authList, "keyboard-interactive");
 
     SFTP_LOG("JUMP", "Auth methods: '%s' (pw=%d pk=%d kbd=%d)",
              authList ? authList : "(none)", canPassword, canPubkey, canKbd);
@@ -514,6 +535,9 @@ static bool AuthJumpHost(
             ShowStatusId(IDS_LOG_REQUEST_PASS, nullptr, true);
             if (RequestProcI(PluginNumber, RT_Password, title.c_str(), nullptr, buf.data(), buf.size() - 1))
                 cs->jump_entered_password = buf.data();
+            SecureZeroMemory(buf.data(), buf.size());
+            if (kbdCtx)
+                kbdCtx->promptDone = get_sys_ticks();
         }
         jump.password = cs->jump_entered_password;
     }
@@ -555,7 +579,9 @@ static bool AuthJumpHost(
                 IsSocketReadable(jmpSock);
             if (ProgressLoop("Jump host: kbd-int auth...", progress, progress + 5, &loop, &lasttime))
                 break;
-            if (r == LIBSSH2_ERROR_EAGAIN && get_ticks_between(authStart) > SSH_AUTH_STAGE_TIMEOUT_MS)
+            // Time spent typing at a prompt does not count.
+            const SYSTICKS since = kbdCtx ? (std::max)(authStart, kbdCtx->promptDone) : authStart;
+            if (r == LIBSSH2_ERROR_EAGAIN && get_ticks_between(since) > SSH_AUTH_STAGE_TIMEOUT_MS)
                 break;
         }
         if (r == LIBSSH2_ERROR_NONE) {
@@ -565,6 +591,9 @@ static bool AuthJumpHost(
         ShowStatusId(IDS_LOG_JUMP_KBD_FAIL, nullptr, true);
     }
 
+    // A typed password the jump host refused is not kept for reconnects.
+    SecureZeroMemory(cs->jump_entered_password.data(), cs->jump_entered_password.size());
+    cs->jump_entered_password.clear();
     ShowStatusId(IDS_LOG_JUMP_AUTH_FAIL, nullptr, true);
     return false;
 }
@@ -651,6 +680,7 @@ std::unique_ptr<ITransportStream> ConnectViaJumpHost(
     // -----------------------------------------------------------------------
     // We store a JmpKbdCtx in the jump session's abstract so kbd-int works.
     JmpKbdCtx kbdCtx{ &jump.password };
+    kbdCtx.title = std::format("Jump host {}@{}", jump.user, jump.host);
 
     auto jmpSession = backend->createSession(jmp_alloc, jmp_free, jmp_realloc, &kbdCtx);
     if (!jmpSession) {
@@ -707,7 +737,7 @@ std::unique_ptr<ITransportStream> ConnectViaJumpHost(
     // 4. Authenticate to jump host
     // -----------------------------------------------------------------------
     ShowStatus(("Jump host: authenticating as " + jump.user + "...").c_str());
-    if (!AuthJumpHost(cs, jmpSession.get(), jump, jmpSock, progress, loop, lasttime)) {
+    if (!AuthJumpHost(cs, jmpSession.get(), jump, jmpSock, progress, loop, lasttime, &kbdCtx)) {
         jmpSession->disconnect("auth failed");
         // jmpSession destructor (unique_ptr scope-exit) handles disconnect+free.
         closesocket(jmpSock);

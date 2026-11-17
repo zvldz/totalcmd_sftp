@@ -77,14 +77,13 @@ void kbd_callback(LPCSTR name, int name_len,
             if (answered) {
                 responses[i].text = _strdup(retbuf.data());
                 responses[i].length = (unsigned int)strlen(retbuf.data());
-                // Remember the password for background transfers and
-                // reconnects. Only an answer to a password prompt: a one-time
-                // code kept here would be replayed as the password next time.
-                if (passwordPrompt && ConnectSettings && ConnectSettings->account_password.empty()) {
-                    ConnectSettings->account_password = retbuf.data();
-                    if (ConnectSettings->password.empty())
-                        ConnectSettings->password = retbuf.data();
-                }
+                // Kept for background transfers and reconnects once the
+                // login succeeds (CommitTypedPassword); until then it is not
+                // offered again, so a mistyped one is asked for anew. Only an
+                // answer to a password prompt: a one-time code kept here
+                // would be replayed as the password next time.
+                if (passwordPrompt && ConnectSettings)
+                    ConnectSettings->typed_password = retbuf.data();
                 ShowStatusId(IDS_LOG_SEND_USER_PASS, nullptr, true);
             } else {
                 responses[i].text = nullptr;
@@ -498,8 +497,10 @@ int SftpAuthPubKeyOn(const SshAuthTarget& target, LPCSTR progressbuf, int progre
 
     std::array<char, 1024> buf{};
     std::array<char, 256> passphrase{};
-    std::array<char, MAX_PATH> pubkeyfile{};
-    std::array<char, MAX_PATH> privkeyfile{};
+    // UTF-8 paths: room for a long or non-Latin one after %USER% and
+    // environment expansion.
+    std::array<char, 1024> pubkeyfile{};
+    std::array<char, 1024> privkeyfile{};
     bool convertedPpk = false;
     std::string convertedPem;     // a PuTTY key converted in memory
     std::string privData;         // what goes to libssh2
@@ -526,6 +527,13 @@ int SftpAuthPubKeyOn(const SshAuthTarget& target, LPCSTR progressbuf, int progre
     AUTH_LOG("host=%s", target.host.c_str());
     AUTH_LOG("user=%s", target.user.c_str());
 
+    // A path that does not fit is refused rather than cut to another one.
+    if (target.pubkeyfile.size() >= pubkeyfile.size() - 1 ||
+        target.privkeyfile.size() >= privkeyfile.size() - 1) {
+        ShowStatusId(IDS_ERR_LOAD_PRIVKEY, target.privkeyfile.c_str(), true);
+        clearPassphrase();
+        return -LIBSSH2_ERROR_FILE;
+    }
     strlcpy(pubkeyfile.data(), target.pubkeyfile.c_str(), pubkeyfile.size()-1);
     ExpandAuthPath(pubkeyfile.data(), pubkeyfile.size(), target.user.c_str());
     strlcpy(privkeyfile.data(), target.privkeyfile.c_str(), privkeyfile.size()-1);

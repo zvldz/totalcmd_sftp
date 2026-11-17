@@ -25,6 +25,20 @@ struct ISshBackend;
 // All jump-host-specific parameters (separate from target host auth).
 // ---------------------------------------------------------------------------
 struct JumpHostSettings {
+    JumpHostSettings() = default;
+    JumpHostSettings(const JumpHostSettings&) = default;
+    JumpHostSettings(JumpHostSettings&&) = default;
+    JumpHostSettings& operator=(const JumpHostSettings&) = default;
+    JumpHostSettings& operator=(JumpHostSettings&&) = default;
+    // The jump password and passphrase are wiped with every copy.
+    ~JumpHostSettings()
+    {
+        for (std::string* s : { &password, &keyPassphrase }) {
+            s->resize(s->capacity());
+            SecureZeroMemory(s->data(), s->size());
+        }
+    }
+
     std::string host;
     unsigned short port     = 22;
     std::string user;

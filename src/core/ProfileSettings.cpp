@@ -124,12 +124,8 @@ bool LoadProxySettingsFromNr(int proxynr, pConnectSettings ConnectResults, LPCST
         int type = IniGetInt(proxyentry.data(), "proxytype", -1, iniFileName);
         if (type >= 0)
             ConnectResults->proxytype = (sftp::Proxy)type;
-        std::array<char, MAX_PATH> proxyServer{};
-        std::array<char, MAX_PATH> proxyUser{};
-        IniGetString(proxyentry.data(), "proxyserver", "", proxyServer.data(), proxyServer.size() - 1, iniFileName);
-        IniGetString(proxyentry.data(), "proxyuser", "", proxyUser.data(), proxyUser.size() - 1, iniFileName);
-        ConnectResults->proxyserver = proxyServer.data();
-        ConnectResults->proxyuser = proxyUser.data();
+        ConnectResults->proxyserver = IniGetValue(proxyentry.data(), "proxyserver", iniFileName);
+        ConnectResults->proxyuser = IniGetValue(proxyentry.data(), "proxyuser", iniFileName);
         ConnectResults->proxypassword = LoadPasswordSetting(proxyentry.data(), "proxypassword", iniFileName);
         return (type != -1 || proxynr == 1);
     } else {
@@ -143,29 +139,20 @@ bool LoadProxySettingsFromNr(int proxynr, pConnectSettings ConnectResults, LPCST
 
 bool LoadServerSettings(LPCSTR DisplayName, pConnectSettings ConnectResults, LPCSTR iniFileName)
 {
-    std::array<char, 1024> szPassword{};
     std::array<char, 6> modbuf{};
     ConnectResults->DisplayName = DisplayName ? DisplayName : "";
     ConnectResults->IniFileName = iniFileName ? iniFileName : "";
-    std::array<char, MAX_PATH> serverBuf{};
-    IniGetString(DisplayName, "server", "", serverBuf.data(), serverBuf.size() - 1, iniFileName);
-    ConnectResults->server = serverBuf.data();
+    ConnectResults->server = IniGetValue(DisplayName, "server", iniFileName);
     ConnectResults->protocoltype=IniGetInt(DisplayName, "protocol", 0, iniFileName);
     ConnectResults->transfermode = IniGetInt(DisplayName, "transfermode", 0, iniFileName);
     if (ConnectResults->transfermode < 0 || ConnectResults->transfermode > 3)
         ConnectResults->transfermode = 0;
-    std::array<char, MAX_PATH> userBuf{};
-    std::array<char, MAX_PATH> fingerprintBuf{};
-    std::array<char, MAX_PATH> pubKeyBuf{};
-    std::array<char, MAX_PATH> privKeyBuf{};
-    IniGetString(DisplayName, "user", "", userBuf.data(), userBuf.size() - 1, iniFileName);
-    IniGetString(DisplayName, "fingerprint", "", fingerprintBuf.data(), fingerprintBuf.size() - 1, iniFileName);
-    IniGetString(DisplayName, "pubkeyfile", "", pubKeyBuf.data(), pubKeyBuf.size() - 1, iniFileName);
-    IniGetString(DisplayName, "privkeyfile", "", privKeyBuf.data(), privKeyBuf.size() - 1, iniFileName);
-    ConnectResults->user = userBuf.data();
-    ConnectResults->savedfingerprint = fingerprintBuf.data();
-    ConnectResults->pubkeyfile = pubKeyBuf.data();
-    ConnectResults->privkeyfile = privKeyBuf.data();
+    // UTF-8 values, read whole: a fixed buffer would cut a long key path
+    // that the dialog saved complete.
+    ConnectResults->user = IniGetValue(DisplayName, "user", iniFileName);
+    ConnectResults->savedfingerprint = IniGetValue(DisplayName, "fingerprint", iniFileName);
+    ConnectResults->pubkeyfile = IniGetValue(DisplayName, "pubkeyfile", iniFileName);
+    ConnectResults->privkeyfile = IniGetValue(DisplayName, "privkeyfile", iniFileName);
     ConnectResults->useagent = IniGetInt(DisplayName, "useagent", 0, iniFileName) != 0;
 
     IniGetString(DisplayName, "filemod", "644", modbuf.data(), modbuf.size() - 1, iniFileName);
@@ -198,9 +185,7 @@ bool LoadServerSettings(LPCSTR DisplayName, pConnectSettings ConnectResults, LPC
     ConnectResults->lan_pair_role = IniGetInt(DisplayName, "lanpairrole", 0, iniFileName);
     if (ConnectResults->lan_pair_role < 0 || ConnectResults->lan_pair_role > 2)
         ConnectResults->lan_pair_role = 0;
-    std::array<char, MAX_PATH> lanPeerBuf{};
-    IniGetString(DisplayName, "lanpairpeer", "", lanPeerBuf.data(), lanPeerBuf.size() - 1, iniFileName);
-    ConnectResults->lan_pair_peer = lanPeerBuf.data();
+    ConnectResults->lan_pair_peer = IniGetValue(DisplayName, "lanpairpeer", iniFileName);
     ConnectResults->lan_pair_timeout_min = IniGetInt(DisplayName, "lanpairtimeout", 0, iniFileName);
     if (ConnectResults->lan_pair_timeout_min < 0)
         ConnectResults->lan_pair_timeout_min = 0;
@@ -212,14 +197,9 @@ bool LoadServerSettings(LPCSTR DisplayName, pConnectSettings ConnectResults, LPC
     ConnectResults->codepage = IniGetInt(DisplayName, "codepage", 0, iniFileName);
     ConnectResults->unixlinebreaks = IniGetInt(DisplayName, "unixlinebreaks", -1, iniFileName);
     ConnectResults->scpserver64bit = IniGetInt(DisplayName, "largefilesupport", -1, iniFileName);
-    ConnectResults->password.clear();
-    if (IniGetString(DisplayName, "password", "",  szPassword.data(),  szPassword.size(),  iniFileName)) {
-        if (!ConnectResults->useagent)
-            ConnectResults->password = LoadPasswordSetting(DisplayName, "password", iniFileName);
-        else if (strcmp(szPassword.data(), "!") == 0)
-            ConnectResults->password = "\001";
-    }
-    SecureZeroMemory(szPassword.data(), szPassword.size());
+    // Loaded whatever the agent setting says: the key file and the password
+    // are tried after the agent, and the dialog writes back what it shows.
+    ConnectResults->password = LoadPasswordSetting(DisplayName, "password", iniFileName);
     ConnectResults->proxynr = IniGetInt(DisplayName, "proxynr", 0, iniFileName);
 
     LoadProxySettingsFromNr(ConnectResults->proxynr, ConnectResults, iniFileName);
@@ -229,40 +209,24 @@ bool LoadServerSettings(LPCSTR DisplayName, pConnectSettings ConnectResults, LPC
     // -----------------------------------------------------------------------
     ConnectResults->use_jump_host = IniGetInt(DisplayName, "usejumphost", 0, iniFileName) != 0;
     {
-        std::array<char, MAX_PATH> jumpHost{};
-        std::array<char, MAX_PATH> jumpUser{};
-        std::array<char, MAX_PATH> jumpPub{};
-        std::array<char, MAX_PATH> jumpPriv{};
-        std::array<char, MAX_PATH> jumpFp{};
-        IniGetString(DisplayName, "jumphost",       "", jumpHost.data(),  jumpHost.size() - 1,  iniFileName);
-        IniGetString(DisplayName, "jumpuser",       "", jumpUser.data(),  jumpUser.size() - 1,  iniFileName);
-        IniGetString(DisplayName, "jumppubkeyfile", "", jumpPub.data(),   jumpPub.size() - 1,   iniFileName);
-        IniGetString(DisplayName, "jumpprivkeyfile","", jumpPriv.data(),  jumpPriv.size() - 1,  iniFileName);
-        IniGetString(DisplayName, "jumpfingerprint","", jumpFp.data(),    jumpFp.size() - 1,    iniFileName);
-        ConnectResults->jump_host        = jumpHost.data();
-        ConnectResults->jump_user        = jumpUser.data();
-        ConnectResults->jump_pubkeyfile  = jumpPub.data();
-        ConnectResults->jump_privkeyfile = jumpPriv.data();
-        ConnectResults->jump_fingerprint = jumpFp.data();
+        ConnectResults->jump_host        = IniGetValue(DisplayName, "jumphost", iniFileName);
+        ConnectResults->jump_user        = IniGetValue(DisplayName, "jumpuser", iniFileName);
+        ConnectResults->jump_pubkeyfile  = IniGetValue(DisplayName, "jumppubkeyfile", iniFileName);
+        ConnectResults->jump_privkeyfile = IniGetValue(DisplayName, "jumpprivkeyfile", iniFileName);
+        ConnectResults->jump_fingerprint = IniGetValue(DisplayName, "jumpfingerprint", iniFileName);
         const int jumpPort = static_cast<int>(IniGetInt(DisplayName, "jumpport", 22, iniFileName));
         ConnectResults->jump_port        = static_cast<unsigned short>(
             jumpPort > 0 && jumpPort <= 65535 ? jumpPort : 22);
         ConnectResults->jump_useagent    = IniGetInt(DisplayName, "jumpuseagent", 0, iniFileName) != 0;
-        std::array<char, MAX_PATH> jumpSessRef{};
-        IniGetString(DisplayName, "jumpsessionref", "", jumpSessRef.data(), jumpSessRef.size() - 1, iniFileName);
-        ConnectResults->jump_session_ref  = jumpSessRef.data();
+        ConnectResults->jump_session_ref  = IniGetValue(DisplayName, "jumpsessionref", iniFileName);
 
         ConnectResults->jump_password = LoadPasswordSetting(DisplayName, "jumppassword", iniFileName);
     }
 
     ConnectResults->neednewchannel = false;
-    std::array<char, MAX_PATH> sendCommandBuf{};
-    IniGetString(DisplayName, "sendcommand", "", sendCommandBuf.data(), sendCommandBuf.size() - 1, iniFileName);
-    ConnectResults->connectsendcommand = sendCommandBuf.data();
+    ConnectResults->connectsendcommand = IniGetValue(DisplayName, "sendcommand", iniFileName);
     ConnectResults->sendcommandmode = IniGetInt(DisplayName, "sendcommandmode", 0, iniFileName);
-    std::array<char, MAX_PATH> serverCommandBuf{};
-    IniGetString(DisplayName, "sftpservercommand", "", serverCommandBuf.data(), serverCommandBuf.size() - 1, iniFileName);
-    ConnectResults->sftpservercommand = serverCommandBuf.data();
+    ConnectResults->sftpservercommand = IniGetValue(DisplayName, "sftpservercommand", iniFileName);
     return !ConnectResults->server.empty();
 }
 

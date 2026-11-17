@@ -68,9 +68,14 @@ int SftpConnectProxyHttp(pConnectSettings ConnectSettings, LPCSTR progressbuf, i
                 password = entered.data();
             SecureZeroMemory(entered.data(), entered.size());
         }
-        std::string credentials = ConnectSettings->proxyuser + ":" + password;
+        // Sized up front: a string that grows reallocates and leaves the
+        // credentials behind in the freed buffer, where no wipe reaches.
+        std::string credentials;
+        credentials.reserve(ConnectSettings->proxyuser.size() + 1 + password.size());
+        credentials.append(ConnectSettings->proxyuser).append(":").append(password);
         std::vector<char> encoded(4 * ((credentials.size() + 2) / 3) + 1);
         MimeEncodeData(credentials.data(), credentials.size(), encoded.data(), encoded.size());
+        request.reserve(request.size() + 32 + encoded.size());
         request += "Proxy-Authorization: Basic ";
         request += encoded.data();
         request += "\r\n";

@@ -194,6 +194,20 @@ extern "C" void kbd_callback(LPCSTR name, int name_len,
 // the split lives here alone and every caller reads the part it names rather
 // than deciding for itself what a bare string means.
 struct StoredSecret {
+    StoredSecret() = default;
+    StoredSecret(const StoredSecret&) = default;
+    StoredSecret(StoredSecret&&) = default;
+    StoredSecret& operator=(const StoredSecret&) = default;
+    StoredSecret& operator=(StoredSecret&&) = default;
+    // Both secrets are wiped with the object, a moved-from one included.
+    ~StoredSecret()
+    {
+        for (std::string* s : { &accountPassword, &keyPassphrase }) {
+            s->resize(s->capacity());
+            SecureZeroMemory(s->data(), s->size());
+        }
+    }
+
     std::string accountPassword;
     std::string keyPassphrase;
     // True when the two-value form stated which secret is which. A plain

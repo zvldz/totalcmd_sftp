@@ -10,6 +10,7 @@
 #include "IUserFeedback.h"
 #include "AuthMethodParser.h"
 #include "ConnectionAuth.h"
+#include "ConnectionDialog.h"
 #include "IniFile.h"
 #include "res/resource.h"
 #include "UnicodeHelpers.h"
@@ -40,30 +41,40 @@ void newpassfunc(LIBSSH2_SESSION* /*session*/, LPSTR* newpw, int* newpw_len, LPV
         strlcpy(*newpw, newpass.data(), bufsize);
         *newpw_len = (int)strlen(newpass.data());
         if (PassConnectSettings) {
-            // A server-mandated password change replaces the whole stored
-            // secret, so both forms become the new plain password.
-            PassConnectSettings->password         = newpass.data();
+            // A server-mandated password change replaces the login password.
+            // A stored secret that also names the key's passphrase keeps it.
+            const StoredSecret old = SplitStoredSecret(PassConnectSettings->password);
+            std::string stored = newpass.data();
+            if (old.labelled)
+                stored = "\"" + stored + "\",\"" + old.keyPassphrase + "\"";
+            PassConnectSettings->password         = stored;
             PassConnectSettings->account_password = newpass.data();
-            switch (PassConnectSettings->passSaveMode) {
-            case sftp::PassSaveMode::crypt:
-                if (CryptProcI(PluginNumber, CryptoNumber, FS_CRYPT_SAVE_PASSWORD, PassConnectSettings->DisplayName.c_str(), newpass.data(), 0) == FS_FILE_OK)
-                    break;
-                // The store refused: keep the new password in the INI, as
-                // the connection dialog does, rather than losing it.
-                [[fallthrough]];
-            case sftp::PassSaveMode::plain:
-                if (newpass[0] == 0) {
-                    IniWriteString(PassConnectSettings->DisplayName.c_str(), "password", nullptr, PassConnectSettings->IniFileName.c_str());
-                } else {
-                    std::array<char, 1024> szEncryptedPassword{};
-                    EncryptString(newpass.data(), szEncryptedPassword.data(), szEncryptedPassword.size());
-                    IniWriteString(PassConnectSettings->DisplayName.c_str(), "password", szEncryptedPassword.data(), PassConnectSettings->IniFileName.c_str());
-                }
-                break;
-            }
+            // Saved the way the profile keeps its password, with the
+            // dialog's rules: a refusing store is reported, a failed
+            // encryption keeps the old value, a stale store entry goes.
+            if (PassConnectSettings->passSaveMode != sftp::PassSaveMode::empty)
+                SavePasswordSetting(nullptr, PassConnectSettings->DisplayName.c_str(), "password",
+                                    PassConnectSettings->DisplayName.c_str(), stored,
+                                    PassConnectSettings->passSaveMode == sftp::PassSaveMode::crypt,
+                                    PassConnectSettings->IniFileName.c_str());
+            SecureZeroMemory(stored.data(), stored.size());
         }
     }
     SecureZeroMemory(newpass.data(), newpass.size());
+}
+
+// A password typed at a keyboard-interactive prompt becomes the session's
+// password only when that login succeeded; a rejected one is dropped, so the
+// password method that may follow asks again instead of sending it.
+static void CommitTypedPassword(pConnectSettings cs, bool loggedIn)
+{
+    if (loggedIn && !cs->typed_password.empty() && cs->account_password.empty()) {
+        cs->account_password = cs->typed_password;
+        if (cs->password.empty())
+            cs->password = cs->typed_password;
+    }
+    SecureZeroMemory(cs->typed_password.data(), cs->typed_password.size());
+    cs->typed_password.clear();
 }
 
 int NegotiateProxy(
@@ -273,6 +284,7 @@ int PerformAuthentication(
                 WaitForSshIo(cs);
             }
             SFTP_LOG("AUTH", "kbd done auth=%d iters=%d cbSent=%d", auth, kbdIter, ConnectSettings->InteractivePasswordSent ? 1 : 0);
+            CommitTypedPassword(ConnectSettings, auth == 0);
             if (auth) {
                 SftpLogLastError("libssh2_userauth_keyboard_interactive: ", auth);
                 if ((auth_pw & SSH_AUTH_PASSWORD) == 0)
@@ -361,6 +373,7 @@ int PerformAuthentication(
                 WaitForSshIo(cs);
             }
             SFTP_LOG("AUTH", "kbd2 done auth=%d iters=%d cbSent=%d", auth, kbdIter2, ConnectSettings->InteractivePasswordSent ? 1 : 0);
+            CommitTypedPassword(ConnectSettings, auth == 0);
             if (auth) {
                 SftpLogLastError("libssh2_userauth_keyboard_interactive: ", auth);
                 ShowErrorId(IDS_ERR_AUTH_KEYBDINT);

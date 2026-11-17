@@ -732,6 +732,26 @@ DWORD IniGetString(LPCSTR section, LPCSTR key, LPCSTR defaultValue,
     }
 }
 
+std::string IniGetValue(LPCSTR section, LPCSTR key, LPCSTR path)
+{
+    try {
+        if (!section || !key || !path)
+            return {};
+        std::lock_guard<std::mutex> lock(g_mutex);
+        const IniDoc& doc = GetDoc(FullPath(PathOf(path)));
+        if (const auto r = FindSection(doc, ToUtf8(section))) {
+            if (const auto k = FindKey(doc, *r, ToUtf8(key))) {
+                std::string v;
+                FromUtf8(LineValue(doc.lines[*k]), v);
+                return v;
+            }
+        }
+        return {};
+    } catch (...) {
+        return {};
+    }
+}
+
 UINT IniGetInt(LPCSTR section, LPCSTR key, INT defaultValue, LPCSTR path)
 {
     try {

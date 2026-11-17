@@ -461,9 +461,9 @@ static bool PasswordFitsOrWarn(HWND hWnd, int id)
 // settings sit in a read-only folder — is reported, and the password goes
 // into the INI rather than being lost. A password that leaves the store is
 // deleted from it, so no entry is left for a later "!" to pick up.
-static void SavePasswordSetting(HWND hWnd, const char* section, const char* key,
-                                const char* storeName, const std::string& password,
-                                bool useStore, const char* iniFileName)
+void SavePasswordSetting(HWND hWnd, const char* section, const char* key,
+                         const char* storeName, const std::string& password,
+                         bool useStore, const char* iniFileName)
 {
     std::array<char, 8> previous{};
     IniGetString(section, key, "", previous.data(), static_cast<DWORD>(previous.size() - 1), iniFileName);
@@ -1440,11 +1440,11 @@ static void EnableCertSection(HWND hWnd, bool enable)
 }
 
 // Single authoritative function: sets the cert section state for the current
-// transfer mode, Pageant checkbox, and private-key path.
-//   SSH + no Pageant + non-.ppk priv key → all enabled, pub key enabled
-//   SSH + no Pageant + .ppk priv key     → all enabled, pub key disabled
-//   SSH + Pageant                        → all disabled
-//   PHP Agent / PHP Shell / LAN Pair     → all disabled
+// transfer mode and private-key path. The key file stays editable with
+// Pageant on: it is tried when Pageant has no key the server accepts.
+//   SSH + non-.ppk priv key          → all enabled, pub key enabled
+//   SSH + .ppk priv key              → all enabled, pub key disabled
+//   PHP Agent / PHP Shell / LAN Pair → all disabled
 static void UpdateCertSectionState(HWND hWnd)
 {
     const int transferMode = (int)SendDlgItemMessage(hWnd, IDC_TRANSFERMODE, CB_GETCURSEL, 0, 0);
@@ -1454,12 +1454,9 @@ static void UpdateCertSectionState(HWND hWnd)
         EnableCertSection(hWnd, false);
         return;
     }
+    EnableCertSection(hWnd, true);
 
-    const bool useAgent = IsDlgButtonChecked(hWnd, IDC_USEAGENT) == BST_CHECKED;
-    EnableCertSection(hWnd, !useAgent);
-    if (useAgent) return;
-
-    // Without Pageant: pub key only needed when priv key is NOT a .ppk
+    // The pub key is only needed when the priv key is NOT a .ppk
     std::array<char, MAX_PATH> privKeyPath{};
     GetDlgItemTextI(hWnd, IDC_PRIVKEY, privKeyPath.data(), static_cast<int>(privKeyPath.size() - 1));
     const bool pubKeyNeeded = !IsPpkPath(privKeyPath.data());
@@ -2484,6 +2481,7 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
                 m_settings->password = sessionPassword.data();
                 SetDlgItemTextI(m_hWnd, IDC_PASSWORD, m_settings->password);
                 CheckDlgButton(m_hWnd, IDC_CRYPTPASS, BST_CHECKED);
+                SecureZeroMemory(sessionPassword.data(), sessionPassword.size());
             } else {
                 ShowWindow(GetDlgItem(m_hWnd, IDC_PASSWORD), SW_HIDE);
                 ShowWindow(GetDlgItem(m_hWnd, IDC_CRYPTPASS), SW_HIDE);
@@ -3246,6 +3244,7 @@ bool ShowConnectDialog(pConnectSettings ConnectSettings, LPCSTR DisplayName, LPC
                 if (!RequestProcI(PluginNumber, RT_PasswordFirewall, titleStr.c_str(), titleStr.c_str(), proxyPassword.data(), static_cast<int>(proxyPassword.size() - 1)))
                     return false;
                 ConnectSettings->proxypassword = proxyPassword.data();
+                SecureZeroMemory(proxyPassword.data(), proxyPassword.size());
             }
             return true;
         }
@@ -3288,7 +3287,7 @@ pConnectSettings SftpConnectToServer(LPCSTR DisplayName, LPCSTR inifilename,
         // from elsewhere takes its place. An imported session (only those
         // pass a logging alias) lives in the scan cache, which must not hold
         // passwords, and one never saved stays unsaved.
-        if (ConnectSettings.useagent || ConnectSettings.password.empty() || loggingAliasName)
+        if (ConnectSettings.password.empty() || loggingAliasName)
             ConnectSettings.passSaveMode = sftp::PassSaveMode::empty;
         else if (ConnectSettings.password == "\001")
             ConnectSettings.passSaveMode = sftp::PassSaveMode::crypt;
@@ -3313,6 +3312,7 @@ pConnectSettings SftpConnectToServer(LPCSTR DisplayName, LPCSTR inifilename,
             std::array<char, MAX_PATH> passwordBuf{};
             int rc = CryptProcI(PluginNumber, CryptoNumber, FS_CRYPT_LOAD_PASSWORD, DisplayName, passwordBuf.data(), static_cast<int>(passwordBuf.size() - 1));
             if (rc != FS_FILE_OK) {
+                SecureZeroMemory(passwordBuf.data(), passwordBuf.size());
                 ConnectSettings.feedback->ShowError(LngStrU8(IDS_ERR_LOAD_PASS, "Failed to load password!"));
                 return nullptr;
             }
@@ -3330,6 +3330,7 @@ pConnectSettings SftpConnectToServer(LPCSTR DisplayName, LPCSTR inifilename,
             std::array<char, MAX_PATH> proxyPasswordBuf{};
             int rc = CryptProcI(PluginNumber, CryptoNumber, FS_CRYPT_LOAD_PASSWORD, proxyentry.data(), proxyPasswordBuf.data(), static_cast<int>(proxyPasswordBuf.size() - 1));
             if (rc != FS_FILE_OK) {
+                SecureZeroMemory(proxyPasswordBuf.data(), proxyPasswordBuf.size());
                 ConnectSettings.feedback->ShowError(LngStrU8(IDS_ERR_LOAD_PROXY_PASS, "Failed to load proxy password!"));
                 return nullptr;
             }

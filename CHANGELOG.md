@@ -24,6 +24,19 @@ From this version the plugin comes in two builds: **classic**
   jump-host fingerprints, so a crafted file could make the first
   connection accept a key without asking. Those keys are now left out and
   the first connection asks as for any new host.
+- **"Use SSH agent" no longer loses the saved password.** With the agent
+  ticked, a password or passphrase kept in the plugin's settings (not in
+  Total Commander's password manager) was not loaded: the key file tried
+  after Pageant missed its passphrase, the password was asked for, and
+  OK in the session's dialog wrote the empty field back, deleting it.
+  Imported PuTTY, KiTTY and WinSCP sessions have the agent ticked by
+  default. The key-file fields also stay editable with the agent on.
+- **A mistyped password is not sent again.** A password typed at a
+  keyboard-interactive prompt became the session's password at once and
+  was sent again, unasked, at the next prompt and by the password method:
+  one typo cost two or three failed logins (fail2ban, account lockout).
+  It is kept only once the login succeeds; a refused one is asked anew.
+  The same for a jump host's password typed at its prompt.
 - **A jump session that needs a jump host itself is refused.** A session
   with "use jump host" ticked but none named (its reference was deleted)
   is refused when opened on its own, yet was used as a plain jump host by
@@ -294,6 +307,34 @@ From this version the plugin comes in two builds: **classic**
 
 ### Fixes
 
+- **Jump host login.**
+  - When the jump host did not list its login methods in time, only
+    Pageant was tried: no key file, no password prompt. Every method is
+    tried now, as for the target host.
+  - A jump host asking for a second factor (a one-time code after the
+    password) got an empty answer and could never be passed. Such
+    prompts are put to the user, and time spent typing does not count
+    towards the login timeout.
+- **A password the server makes you change is saved like one from the
+  dialog.** If Total Commander's password manager refuses it, that is
+  reported instead of silently moving the password into the plugin's
+  settings; a failed encryption no longer erases the stored value; the
+  old manager entry is removed; a stored "password","passphrase" pair
+  keeps its passphrase.
+- **Imported passwords longer than 259 bytes** were put into the password
+  manager whole but read back cut. They are not stored now and are asked
+  for on connect, as the dialogs already refuse them.
+- **Long settings are read whole.** Server, user, key file paths, jump-host
+  fields, the post-login and SFTP server commands were read into 260-byte
+  buffers: a long Cyrillic key path, saved complete, connected cut ("key
+  file not found"). A key path too long for authentication is refused
+  instead of cut.
+- **Cancelling a connect** no longer shows "cannot connect" afterwards.
+- **Post-login command:** its output shows without terminal colour and
+  title codes, and starting it in "do not wait" mode is bounded in time.
+- **More secrets wiped:** the buffer of the password prompt at connect,
+  the proxy password prompt, the HTTP proxy request (no longer copied
+  around while it grows), stored-secret and jump-host settings copies.
 - **PHP Agent: a 0-byte file uploads again.** An empty file was sent
   straight to the final step without its `.part`, and the upload failed.
   *From wesmar/sftp 10.3.1.0.*

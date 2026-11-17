@@ -38,6 +38,10 @@ DWORD IniGetString(LPCSTR section, LPCSTR key, LPCSTR defaultValue,
 DWORD IniGetString(LPCWSTR section, LPCWSTR key, LPCWSTR defaultValue,
                    LPWSTR out, DWORD outSize, LPCWSTR path);
 
+// The whole value of `key` as an internal string, however long; empty when
+// the key is missing.
+std::string IniGetValue(LPCSTR section, LPCSTR key, LPCSTR path);
+
 UINT IniGetInt(LPCSTR section, LPCSTR key, INT defaultValue, LPCSTR path);
 UINT IniGetInt(LPCWSTR section, LPCWSTR key, INT defaultValue, LPCWSTR path);
 

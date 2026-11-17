@@ -83,6 +83,11 @@ int EstablishSocketConnection(pConnectSettings ConnectSettings, LPCSTR connectto
     FreeAddrInfoW(res);
 
     if (!connected) {
+        // A connect the user cancelled ends without an error box.
+        if (cancelled) {
+            ShowStatus("Connect cancelled");
+            return -30;
+        }
         if (ConnectSettings->proxytype != sftp::Proxy::notused)
             ShowErrorId(IDS_ERR_PROXYCONNECT);
         else
