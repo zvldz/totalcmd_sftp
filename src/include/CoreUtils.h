@@ -128,7 +128,7 @@ inline std::wstring_view make_string_view(const wchar_t* str) noexcept {
     return str ? std::wstring_view(str) : std::wstring_view();
 }
 
-// Bezpieczne wstrzykiwanie do powłoki
+// Single-quote a string for safe use in a POSIX shell command
 std::string ShellQuoteSingle(const std::string& s);
 std::wstring ShellQuoteSingleW(const std::wstring& s);
 

@@ -2679,7 +2679,7 @@ INT_PTR ConnectionDialog::OnLanPeerMessage(WPARAM /*wParam*/, LPARAM lParam)
                 const std::wstring msgW   = LoadResStringW(IDS_LAN_ROLE_PROMPT);
                 const int choice = MessageBoxW(
                     m_hWnd,
-                    msgW.empty() ? L"Znaleziono peera LAN Pair.\nWybierz rolę:\n\nTak = Dawca\nNie = Biorca\nAnuluj = bez zmian" : msgW.c_str(),
+                    msgW.empty() ? L"LAN Pair peer found.\nChoose role:\n\nYes = Donor\nNo = Receiver\nCancel = no change" : msgW.c_str(),
                     titleW.empty() ? L"LAN Pair" : titleW.c_str(),
                     MB_ICONQUESTION | MB_YESNOCANCEL | MB_DEFBUTTON1);
                 

@@ -1,12 +1,12 @@
-# Skrypty lokalne (nie wchodzą do repo)
+# Local scripts (not part of the repo)
 git-push.sh
 release-update.sh
 
-# Pliki środowiskowe
+# Environment files
 .env
 .env.*
 
-# Build outputs (generowane przez build.ps1 / MSBuild)
+# Build outputs (produced by build.ps1 / MSBuild)
 build/bin/sftpplug.zip
 build/bin/sftpplug-installer.zip
 build/bin/*.wfx64
@@ -62,7 +62,7 @@ src/lib/include-*/
 # it up via __has_include and overrides the fallback tag/sha/date constants.
 src/include/build_info_gen.h
 
-# Archiwa lokalne
+# Local archives
 *.7z
 *.tar.gz
 debug.log
