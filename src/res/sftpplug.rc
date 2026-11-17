@@ -25,17 +25,17 @@ EXSTYLE WS_EX_NOPARENTNOTIFY
 CAPTION "Connect to SFTP Server"
 FONT 8, "MS Shell Dlg", 0, 0, 0x1
 BEGIN
-    LTEXT           "&Connect to: (server/path or server:port/path)",IDC_LABEL_CONNECTTO,5,5,207,8
     CONTROL         "Auto",IDC_PROTOAUTO,"Button",BS_AUTORADIOBUTTON | WS_GROUP | WS_TABSTOP,215,5,27,10
     CONTROL         "IPv4",IDC_PROTOV4,"Button",BS_AUTORADIOBUTTON,247,5,31,10
     CONTROL         "IPv6",IDC_PROTOV6,"Button",BS_AUTORADIOBUTTON,279,5,31,10
+    LTEXT           "&Connect to: (server/path or server:port/path)",IDC_LABEL_CONNECTTO,5,5,207,8
     EDITTEXT        IDC_CONNECTTO,5,15,305,12,ES_AUTOHSCROLL
     LTEXT           "&User name:",IDC_LABEL_USERNAME,5,31,295,8
     EDITTEXT        IDC_USERNAME,5,42,305,12,ES_AUTOHSCROLL
-    LTEXT           "&Password:",IDC_PASSLABEL,5,58,54,8
     PUSHBUTTON      "?",IDC_PASSWORDHELP,43,57,12,10
     CONTROL         "Use SSH agent (Pageant)",IDC_USEAGENT,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,170,58,135,8
     PUSHBUTTON      "Change password...",IDC_EDITPASS,5,71,305,14,NOT WS_VISIBLE
+    LTEXT           "&Password:",IDC_PASSLABEL,5,58,54,8
     EDITTEXT        IDC_PASSWORD,5,68,305,12,ES_PASSWORD | ES_AUTOHSCROLL
     CONTROL         "Protect password with password manager",IDC_CRYPTPASS,
                     "Button",BS_AUTOCHECKBOX | WS_TABSTOP,5,82,305,10

@@ -772,14 +772,19 @@ void ArrangeLabelFillButton(HWND hDlg, int labelId, int fillId, int btnId)
 
     // The button keeps its right edge and widens leftwards for a longer label
     // ("Shell..." becomes "Pair..." in LAN mode, and both are translated).
+    // A hidden button (Shell... in the classic build) leaves its place to
+    // the field. Judged by the style: before the dialog is shown no control
+    // counts as visible.
+    const bool btnShown = (GetWindowLongW(hBtn, GWL_STYLE) & WS_VISIBLE) != 0;
     const int btnW = (std::max)(static_cast<int>(rBtn.right - rBtn.left), RequiredWidth(hBtn));
     const int btnX = rBtn.right - btnW;
     const int labelW = RequiredWidth(hLabel);
     const int fillX = rLabel.left + labelW + gap;
-    const int fillW = btnX - gap - fillX;
+    const int fillW = btnShown ? btnX - gap - fillX : static_cast<int>(rBtn.right) - fillX;
 
     Move(hDlg, labelId, rLabel.left, rLabel.top, labelW, rLabel.bottom - rLabel.top);
-    Move(hDlg, btnId, btnX, rBtn.top, btnW, rBtn.bottom - rBtn.top);
+    if (btnShown)
+        Move(hDlg, btnId, btnX, rBtn.top, btnW, rBtn.bottom - rBtn.top);
     if (fillW > 0)
         Move(hDlg, fillId, fillX, rFill.top, fillW, rFill.bottom - rFill.top);
 }

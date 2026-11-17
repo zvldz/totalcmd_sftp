@@ -307,6 +307,15 @@ From this version the plugin comes in two builds: **classic**
 
 ### Fixes
 
+- **Connection dialog.**
+  - Alt+C went to the Auto/IPv4/IPv6 buttons and Alt+P to the "?" button,
+    in every language, instead of the address and password fields.
+  - The classic build no longer shows the PHP Agent's "Shell..." button
+    and "TAR" box (they were there, greyed out); the session name takes
+    the room.
+  - The dark theme switched Total Commander's whole process to dark menus
+    and scroll bars and left it so; the previous mode comes back when the
+    plugin's last dialog closes.
 - **[Imports] scans.**
   - A large FileZilla site list or PuTTY `.reg` export froze Total
     Commander when its folder was opened after a change: the file was

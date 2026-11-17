@@ -14,6 +14,10 @@ namespace DarkMode {
 namespace {
 
 int g_override = -1;
+// The app mode is the whole process's (Total Commander's): the mode before
+// the first dark dialog, given back when the last one closes. UI thread only.
+int g_darkDialogs = 0;
+int g_appModeBefore = 0;
 
 constexpr COLORREF kBackground = RGB(32, 32, 32);
 constexpr COLORREF kControl = RGB(43, 43, 43);
@@ -307,6 +311,11 @@ LRESULT CALLBACK DialogProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR 
         return reinterpret_cast<LRESULT>(BackgroundBrush());
     case WM_NCDESTROY:
         RemoveWindowSubclass(hwnd, DialogProc, id);
+        if (g_darkDialogs > 0 && --g_darkDialogs == 0 && Ux().setPreferredAppMode) {
+            Ux().setPreferredAppMode(g_appModeBefore);
+            if (Ux().refreshImmersiveColorPolicyState)
+                Ux().refreshImmersiveColorPolicyState();
+        }
         break;
     default:
         break;
@@ -370,9 +379,13 @@ void Apply(HWND hDlg)
     if (!hDlg || !IsEnabled())
         return;
     // ForceDark: the dark theme variants regardless of the Windows setting,
-    // since Total Commander may be dark while Windows is light.
-    if (Ux().setPreferredAppMode)
-        Ux().setPreferredAppMode(2);
+    // since Total Commander may be dark while Windows is light. The mode it
+    // replaces comes back with the last dark dialog (WM_NCDESTROY).
+    if (Ux().setPreferredAppMode) {
+        const int before = Ux().setPreferredAppMode(2);
+        if (g_darkDialogs++ == 0)
+            g_appModeBefore = before;
+    }
     if (Ux().refreshImmersiveColorPolicyState)
         Ux().refreshImmersiveColorPolicyState();
     if (Ux().allowDarkModeForWindow)

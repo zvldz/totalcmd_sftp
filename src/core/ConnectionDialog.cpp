@@ -1630,7 +1630,11 @@ void UpdateScpOnlyDependentControls(HWND hWnd)
     const int transferMode = (int)SendDlgItemMessage(hWnd, IDC_TRANSFERMODE, CB_GETCURSEL, 0, 0);
     const bool editable = transferMode == static_cast<int>(sftp::TransferMode::ssh_auto);
     EnableWindow(GetDlgItem(hWnd, IDC_TRANSFERMODE), FALSE);
-    EnableWindow(GetDlgItem(hWnd, IDC_PHPSHELL), FALSE);
+    // Shell... and TAR belong to PHP Agent / PHP Shell: not shown at all,
+    // and the session name takes the room of the button.
+    ShowWindow(GetDlgItem(hWnd, IDC_PHPSHELL), SW_HIDE);
+    ShowWindow(GetDlgItem(hWnd, IDC_PHP_TAR), SW_HIDE);
+    DlgLayout::LayoutConnectionDialog(hWnd);
     EnableWindow(GetDlgItem(hWnd, IDOK), editable);
     // Read-only means nothing is written: the proxy list (whose "add" entry
     // creates a record), the proxy settings and the password manager are
