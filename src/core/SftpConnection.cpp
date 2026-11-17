@@ -156,8 +156,22 @@ bool CopyStringW2A(pConnectSettings ConnectSettings, LPCWSTR instr, LPSTR outstr
     if (!FitsW2A(codepage, instr, outmax))
         return false;
     BOOL usedDefault = FALSE;
-    const int n = WideCharToMultiByte(codepage, WC_NO_BEST_FIT_CHARS, instr, -1, outstr,
-                                      static_cast<int>(outmax), nullptr, &usedDefault);
+    int n = WideCharToMultiByte(codepage, WC_NO_BEST_FIT_CHARS, instr, -1, outstr,
+                                static_cast<int>(outmax), nullptr, &usedDefault);
+    if (n <= 0 && (GetLastError() == ERROR_INVALID_FLAGS || GetLastError() == ERROR_INVALID_PARAMETER)) {
+        // Some codepages (UTF-7/8, the ISO-2022 and ISCII families, GB18030,
+        // symbol) take neither the flag nor the substitution report. They are
+        // converted plainly, and the result counts only when it converts back
+        // to the very same name — anything Windows replaced shows there.
+        n = WideCharToMultiByte(codepage, 0, instr, -1, outstr, static_cast<int>(outmax), nullptr, nullptr);
+        if (n > 0) {
+            const int wlen = MultiByteToWideChar(codepage, 0, outstr, -1, nullptr, 0);
+            std::wstring back(wlen > 0 ? static_cast<size_t>(wlen) : 0, L'\0');
+            if (wlen <= 0 || MultiByteToWideChar(codepage, 0, outstr, -1, back.data(), wlen) != wlen ||
+                wcscmp(back.c_str(), instr) != 0)
+                n = 0;
+        }
+    }
     if (n <= 0 || usedDefault) {
         outstr[0] = '\0';
         return false;

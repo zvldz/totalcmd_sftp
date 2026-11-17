@@ -1184,6 +1184,9 @@ int WINAPI FsContentGetSupportedField(int FieldIndex, char* FieldName, char* Uni
     return sftp::dll_invoke(_barrier, ft_nomorefields, [&]() -> int {
         if (FieldIndex < 0 || FieldIndex >= cfCount)
             return ft_nomorefields;
+        // Room for at least one character and the terminator.
+        if (!FieldName || !Units || maxlen < 2)
+            return ft_nomorefields;
         strlcpy(FieldName, kContentFieldNames[FieldIndex], maxlen - 1);
         Units[0] = 0;
         return ft_string;
@@ -1196,6 +1199,10 @@ int WINAPI FsContentGetValueW(WCHAR* FileName, int FieldIndex, int UnitIndex, vo
     return sftp::dll_invoke(_barrier, ft_fileerror, [&]() -> int {
         if (FieldIndex < 0 || FieldIndex >= cfCount)
             return ft_nosuchfield;
+        // maxlen is in bytes: room for at least one character and the
+        // terminator, or the copy below would run past the buffer.
+        if (!FieldValue || maxlen < static_cast<int>(2 * sizeof(WCHAR)))
+            return ft_fieldempty;
         std::array<WCHAR, wdirtypemax> relative{};
         pConnectSettings serverid = GetServerIdAndRelativePathFromPathW(FileName, relative.data(), relative.size() - 1);
         const ListingExtra* extra = FindListingExtra(serverid, relative.data());
@@ -1235,7 +1242,9 @@ int WINAPI FsContentGetValue(char* FileName, int FieldIndex, int UnitIndex, void
                                           static_cast<int>(valueW.size() * sizeof(WCHAR)), flags);
         if (rc != ft_stringw)
             return rc;
-        walcopy(static_cast<char*>(FieldValue), valueW.data(), maxlen - 1);
+        if (!FieldValue || maxlen < 2)
+            return ft_fieldempty;
+        (void)walcopy(static_cast<char*>(FieldValue), valueW.data(), maxlen - 1);
         return ft_string;
     });
 }
@@ -1249,6 +1258,8 @@ int WINAPI FsContentGetSupportedFieldFlags(int FieldIndex)
 // date next to the Unix columns.
 BOOL WINAPI FsContentGetDefaultView(char* ViewContents, char* ViewHeaders, char* ViewWidths, char* ViewOptions, int maxlen)
 {
+    if (!ViewContents || !ViewHeaders || !ViewWidths || !ViewOptions || maxlen < 2)
+        return FALSE;
     strlcpy(ViewContents, "[=tc.size]\\n[=tc.writedate]\\n[=<fs>.permissions]\\n[=<fs>.owner]\\n[=<fs>.group]", maxlen - 1);
     strlcpy(ViewHeaders, "Size\\nDate\\nPermissions\\nOwner\\nGroup", maxlen - 1);
     strlcpy(ViewWidths, "148,23,-40,60,40,40,40", maxlen - 1);

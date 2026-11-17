@@ -213,17 +213,14 @@ void copyfinddatawa(LPWIN32_FIND_DATA lpFindFileDataA, LPWIN32_FIND_DATAW lpFind
 {
     if (!lpFindFileDataA || !lpFindFileDataW) return;
     
-    // Convert WCHAR arrays to CHAR arrays
-    for (size_t i = 0; i < _countof(lpFindFileDataA->cFileName) - 1 && i < _countof(lpFindFileDataW->cFileName); ++i) {
-        lpFindFileDataA->cFileName[i] = static_cast<char>(lpFindFileDataW->cFileName[i] & 0xFF);
-    }
-    lpFindFileDataA->cFileName[_countof(lpFindFileDataA->cFileName) - 1] = '\0';
-    
-    for (size_t i = 0; i < _countof(lpFindFileDataA->cAlternateFileName) - 1 && i < _countof(lpFindFileDataW->cAlternateFileName); ++i) {
-        lpFindFileDataA->cAlternateFileName[i] = static_cast<char>(lpFindFileDataW->cAlternateFileName[i] & 0xFF);
-    }
-    lpFindFileDataA->cAlternateFileName[_countof(lpFindFileDataA->cAlternateFileName) - 1] = '\0';
-    
+    // In the system codepage, as the ANSI exports' callers read names (and
+    // as the paths they pass in are converted): a name it cannot write comes
+    // out with '?' rather than as a different name cut to its low bytes.
+    (void)walcopy(lpFindFileDataA->cFileName, lpFindFileDataW->cFileName,
+                  _countof(lpFindFileDataA->cFileName) - 1);
+    (void)walcopy(lpFindFileDataA->cAlternateFileName, lpFindFileDataW->cAlternateFileName,
+                  _countof(lpFindFileDataA->cAlternateFileName) - 1);
+
     lpFindFileDataA->dwFileAttributes = lpFindFileDataW->dwFileAttributes;
     lpFindFileDataA->ftCreationTime = lpFindFileDataW->ftCreationTime;
     lpFindFileDataA->ftLastAccessTime = lpFindFileDataW->ftLastAccessTime;
@@ -232,31 +229,6 @@ void copyfinddatawa(LPWIN32_FIND_DATA lpFindFileDataA, LPWIN32_FIND_DATAW lpFind
     lpFindFileDataA->nFileSizeLow = lpFindFileDataW->nFileSizeLow;
     lpFindFileDataA->dwReserved0 = lpFindFileDataW->dwReserved0;
     lpFindFileDataA->dwReserved1 = lpFindFileDataW->dwReserved1;
-}
-
-void copyfinddataaw(LPWIN32_FIND_DATAW lpFindFileDataW, LPWIN32_FIND_DATA lpFindFileDataA) noexcept
-{
-    if (!lpFindFileDataW || !lpFindFileDataA) return;
-    
-    // Convert CHAR arrays to WCHAR arrays
-    for (size_t i = 0; i < _countof(lpFindFileDataW->cFileName) - 1 && i < _countof(lpFindFileDataA->cFileName); ++i) {
-        lpFindFileDataW->cFileName[i] = static_cast<wchar_t>(static_cast<unsigned char>(lpFindFileDataA->cFileName[i]));
-    }
-    lpFindFileDataW->cFileName[_countof(lpFindFileDataW->cFileName) - 1] = L'\0';
-    
-    for (size_t i = 0; i < _countof(lpFindFileDataW->cAlternateFileName) - 1 && i < _countof(lpFindFileDataA->cAlternateFileName); ++i) {
-        lpFindFileDataW->cAlternateFileName[i] = static_cast<wchar_t>(static_cast<unsigned char>(lpFindFileDataA->cAlternateFileName[i]));
-    }
-    lpFindFileDataW->cAlternateFileName[_countof(lpFindFileDataW->cAlternateFileName) - 1] = L'\0';
-    
-    lpFindFileDataW->dwFileAttributes = lpFindFileDataA->dwFileAttributes;
-    lpFindFileDataW->ftCreationTime = lpFindFileDataA->ftCreationTime;
-    lpFindFileDataW->ftLastAccessTime = lpFindFileDataA->ftLastAccessTime;
-    lpFindFileDataW->ftLastWriteTime = lpFindFileDataA->ftLastWriteTime;
-    lpFindFileDataW->nFileSizeHigh = lpFindFileDataA->nFileSizeHigh;
-    lpFindFileDataW->nFileSizeLow = lpFindFileDataA->nFileSizeLow;
-    lpFindFileDataW->dwReserved0 = lpFindFileDataA->dwReserved0;
-    lpFindFileDataW->dwReserved1 = lpFindFileDataA->dwReserved1;
 }
 
 // ============================================================================

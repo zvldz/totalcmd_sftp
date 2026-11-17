@@ -195,6 +195,10 @@ bool LoadServerSettings(LPCSTR DisplayName, pConnectSettings ConnectResults, LPC
     ConnectResults->detailedlog = IniGetInt(DisplayName, "detailedlog", 0, iniFileName) != 0;
     ConnectResults->utf8names = IniGetInt(DisplayName, "utf8", -1, iniFileName);
     ConnectResults->codepage = IniGetInt(DisplayName, "codepage", 0, iniFileName);
+    // One Windows does not know (a hand edit, a file from another machine)
+    // would fail every conversion: the system codepage is used instead.
+    if (ConnectResults->codepage != 0 && !IsValidCodePage(static_cast<UINT>(ConnectResults->codepage)))
+        ConnectResults->codepage = 0;
     ConnectResults->unixlinebreaks = IniGetInt(DisplayName, "unixlinebreaks", -1, iniFileName);
     ConnectResults->scpserver64bit = IniGetInt(DisplayName, "largefilesupport", -1, iniFileName);
     // Loaded whatever the agent setting says: the key file and the password

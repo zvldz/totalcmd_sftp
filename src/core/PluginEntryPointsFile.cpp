@@ -400,7 +400,7 @@ static std::optional<int> TryImportSessionFromUpload(
 
     // Quick source-file sanity checks — openable, non-empty.
     {
-        HANDLE hCheck = CreateFileW(LocalName, GENERIC_READ,
+        HANDLE hCheck = CreateFileT(LocalName, GENERIC_READ,
             FILE_SHARE_READ | FILE_SHARE_WRITE,
             nullptr, OPEN_EXISTING,
             FILE_ATTRIBUTE_NORMAL, nullptr);
@@ -2195,7 +2195,7 @@ int WINAPI FsGetFileW(LPCWSTR RemoteName, LPWSTR LocalName, int CopyFlags, Remot
 
         int startPct = 0;
         if (Resume && ri && ri->Size64 > 0) {
-            HANDLE h = CreateFileW(LocalName, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
+            HANDLE h = CreateFileT(LocalName, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
                                    nullptr, OPEN_EXISTING, 0, nullptr);
             if (h != INVALID_HANDLE_VALUE) {
                 LARGE_INTEGER li{};
@@ -2241,7 +2241,7 @@ int WINAPI FsGetFileW(LPCWSTR RemoteName, LPWSTR LocalName, int CopyFlags, Remot
         if (ri && (ri->Attr & FILE_ATTRIBUTE_DIRECTORY) &&
             IsPhpAgentTransport(serverid) && serverid->php_tar)
         {
-            CreateDirectoryW(LocalName, nullptr);
+            CreateDirectoryT(LocalName, nullptr);
             const int rc = PhpAgentDownloadDirAsTar(serverid, remotedir.data(), LocalName, OverWrite);
             if (rc == SFTP_OK)    return FS_FILE_OK;
             if (rc == SFTP_ABORT) return FS_FILE_USERABORT;
@@ -2276,10 +2276,10 @@ int WINAPI FsGetFileW(LPCWSTR RemoteName, LPWSTR LocalName, int CopyFlags, Remot
         // local file the failed download never touched — the server refused
         // the file before a byte arrived — is the user's, and stays.
         WIN32_FILE_ATTRIBUTE_DATA before{};
-        const bool existedBefore = GetFileAttributesExW(LocalName, GetFileExInfoStandard, &before) != 0;
+        const bool existedBefore = GetFileAttributesExT(LocalName, &before) != 0;
         const auto touched = [&] {
             WIN32_FILE_ATTRIBUTE_DATA now{};
-            if (!GetFileAttributesExW(LocalName, GetFileExInfoStandard, &now))
+            if (!GetFileAttributesExT(LocalName, &now))
                 return false;
             return !existedBefore || now.nFileSizeHigh != before.nFileSizeHigh ||
                    now.nFileSizeLow != before.nFileSizeLow ||
@@ -2301,7 +2301,7 @@ int WINAPI FsGetFileW(LPCWSTR RemoteName, LPWSTR LocalName, int CopyFlags, Remot
                 case SFTP_ABORT:       return FS_FILE_USERABORT;
                 case SFTP_PARTIAL: {
                     WIN32_FILE_ATTRIBUTE_DATA fad{};
-                    const int64_t now = GetFileAttributesExW(LocalName, GetFileExInfoStandard, &fad)
+                    const int64_t now = GetFileAttributesExT(LocalName, &fad)
                         ? (static_cast<int64_t>(fad.nFileSizeHigh) << 32) | fad.nFileSizeLow
                         : -1;
                     if (now <= partialSize) {
@@ -2408,7 +2408,7 @@ int WINAPI FsPutFileW(LPCWSTR LocalName, LPCWSTR RemoteName, int CopyFlags)
             if (fsResult == FS_FILE_OK && Move) {
                 if (Resume) {
                     ShowStatusId(IDS_MOVE_KEPT_RESUMED, nullptr, true);
-                } else if (!DeleteFileW(LocalName)) {
+                } else if (!DeleteFileT(LocalName)) {
                     SFTP_LOG("ENTRY", "FsPutFileW LAN move: could not delete '%s' (%lu)",
                              unicode_util::wstring_to_utf8(LocalName).c_str(), GetLastError());
                     ShowStatusId(IDS_ERR_DELETE, nullptr, true);
@@ -2459,7 +2459,7 @@ int WINAPI FsPutFileW(LPCWSTR LocalName, LPCWSTR RemoteName, int CopyFlags)
                 if (Move && Resume) {
                     SFTP_LOG("ENTRY", "FsPutFileW move: resumed, source kept");
                     ShowStatusId(IDS_MOVE_KEPT_RESUMED, nullptr, true);
-                } else if (Move && !DeleteFileW(LocalName)) {
+                } else if (Move && !DeleteFileT(LocalName)) {
                     SFTP_LOG("ENTRY", "FsPutFileW move: could not delete '%s' (%lu)",
                              unicode_util::wstring_to_utf8(LocalName).c_str(), GetLastError());
                     ShowStatusId(IDS_ERR_DELETE, nullptr, true);

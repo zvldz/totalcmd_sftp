@@ -1235,8 +1235,7 @@ BOOL WINAPI FsFindNext(HANDLE Hdl, LPWIN32_FIND_DATA FindData)
 {
     sftp::DllExceptionBarrier _barrier;
     return sftp::dll_invoke(_barrier, FALSE, [&]() -> BOOL {
-        WIN32_FIND_DATAW FindDataW;
-        copyfinddataaw(&FindDataW, FindData);
+        WIN32_FIND_DATAW FindDataW{};
         BOOL retval = FsFindNextW(Hdl, &FindDataW);
         if (retval)
             copyfinddatawa(FindData, &FindDataW);

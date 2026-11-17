@@ -307,6 +307,19 @@ From this version the plugin comes in two builds: **classic**
 
 ### Fixes
 
+- **Encodings and local paths.**
+  - Some code pages "Other..." accepts (UTF-8 as 65001, UTF-7, the
+    ISO-2022 and ISCII families, GB18030, symbol) failed every file
+    operation: the folder listed, but nothing could be opened, copied,
+    renamed or deleted. They work now, still refusing a name the code page
+    would change; one from the settings file that Windows does not know
+    falls back to the system code page.
+  - With a local path of 260 characters or more, a failed download that
+    was skipped left its partial file, an interrupted one did not resume,
+    and an upload with Move kept its source with an error.
+  - Through the plugin's ANSI functions (Total Commander before 7.5),
+    names were cut to the low byte of each character; they are converted
+    in the system code page.
 - **Session names and the settings file.**
   - A session could be named like a folder of sessions ("a" beside
     "a/x"), and the folder went out of reach behind it; F6 did it after
