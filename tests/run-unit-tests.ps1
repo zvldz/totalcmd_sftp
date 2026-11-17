@@ -30,6 +30,7 @@ $UnitSources = @(
     'src\core\TextConversion.cpp',
     'src\core\PpkConverter.cpp',
     'src\core\TerminalText.cpp',
+    'src\core\RemoteNames.cpp',
     'src\core\WildcardMatch.cpp',
     'src\core\PasswordCrypto.cpp',
     'src\core\AuthSecrets.cpp',

@@ -1855,43 +1855,6 @@ static bool FileExistsT(LPCWSTR LocalName)
     return true;
 }
 
-// The local file name for a remote one, made something Windows stores under
-// that name. A character Windows does not allow becomes '_'; so does a dot
-// or space at the end, which Windows would drop ("report." onto "report");
-// and a device name ("nul", "con.txt", "com1"), which would send the data
-// nowhere and let a move delete the source, gets its last letter replaced.
-// The buffer is Total Commander's, so the name keeps its length.
-static void SanitizeLocalFileNameW(LPWSTR localPath) noexcept
-{
-    if (!localPath || !localPath[0])
-        return;
-    const std::wstring_view pathView(localPath);
-    const size_t slashPos = pathView.find_last_of(L"\\/");
-    if (slashPos == std::wstring_view::npos || slashPos + 1 >= pathView.size())
-        return;
-    wchar_t* const name = localPath + slashPos + 1;
-    for (wchar_t* p = name; *p; ++p) {
-        if (static_cast<unsigned>(*p) < 32u || wcschr(L"<>:\"|?*\\/", *p))
-            *p = L'_';
-    }
-    const size_t len = wcslen(name);
-    if (len > 0 && (name[len - 1] == L'.' || name[len - 1] == L' '))
-        name[len - 1] = L'_';
-
-    size_t baseLen = wcscspn(name, L".");
-    while (baseLen > 0 && name[baseLen - 1] == L' ')
-        --baseLen;
-    const std::wstring_view base(name, baseLen);
-    auto is = [&](const wchar_t* dev) {
-        return base.size() == wcslen(dev) && _wcsnicmp(base.data(), dev, base.size()) == 0;
-    };
-    bool device = is(L"CON") || is(L"PRN") || is(L"AUX") || is(L"NUL") || is(L"CONIN$") || is(L"CONOUT$");
-    if (!device && base.size() == 4 && base[3] >= L'1' && base[3] <= L'9')
-        device = _wcsnicmp(base.data(), L"COM", 3) == 0 || _wcsnicmp(base.data(), L"LPT", 3) == 0;
-    if (device)
-        name[baseLen - 1] = L'_';
-}
-
 static int CreateHelpFileLocalW(LPCWSTR localName, bool overwrite)
 {
     const DWORD disposition = overwrite ? CREATE_ALWAYS : CREATE_NEW;

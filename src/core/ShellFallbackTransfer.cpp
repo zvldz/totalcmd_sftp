@@ -1061,30 +1061,6 @@ int ShellDdUploadFile(
     return rc;
 }
 
-// The file name from a path argument as BuildShellScpArgument quotes it:
-// single quotes, with each quote inside written as '\''.
-static std::string BaseNameFromPath(const std::string& path)
-{
-    if (path.empty())
-        return "upload.bin";
-    std::string normalized;
-    bool quoted = false;
-    for (size_t i = 0; i < path.size(); ++i) {
-        const char c = path[i];
-        if (c == '\'') {
-            quoted = !quoted;
-        } else if (!quoted && c == '\\' && i + 1 < path.size()) {
-            normalized.push_back(path[++i]);
-        } else {
-            normalized.push_back(c);
-        }
-    }
-    size_t pos = normalized.find_last_of('/');
-    if (pos == std::string::npos || pos + 1 >= normalized.size())
-        return normalized;
-    return normalized.substr(pos + 1);
-}
-
 int ShellScpUploadFile(
     pConnectSettings cs,
     const std::string& remotePathArg,

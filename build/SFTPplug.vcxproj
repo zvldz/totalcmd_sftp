@@ -166,6 +166,7 @@
     <ClCompile Include="..\src\core\TransferUtils.cpp" />
     <ClCompile Include="..\src\core\TextConversion.cpp" />
     <ClCompile Include="..\src\core\TerminalText.cpp" />
+    <ClCompile Include="..\src\core\RemoteNames.cpp" />
     <ClCompile Include="..\src\core\WildcardMatch.cpp" />
     <ClCompile Include="..\src\core\SftpRemoteOps.cpp" />
     <ClCompile Include="..\src\core\SftpShell.cpp" />

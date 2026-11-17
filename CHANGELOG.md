@@ -914,8 +914,10 @@ From this version the plugin comes in two builds: **classic**
   switch back); the troubleshooting page no longer asks for argon2.dll.
 - **More checks before a release.** Unit tests cover server addresses
   (ports, IPv6, schemes), base64, session names and panel paths, code page
-  names, PuTTY name encoding, and the OpenSSH (Include, Match, ProxyJump),
-  FileZilla (sites with one name) and KiTTY importers. Every language file
+  names, PuTTY name encoding, the OpenSSH (Include, Match, ProxyJump),
+  FileZilla (sites with one name) and KiTTY importers, the `ls` mode and
+  date columns, which shell commands may be sent, and how a remote name
+  becomes a local one (device names, characters Windows refuses). Every language file
   is checked for missing strings and placeholders, and every dialog for
   repeated shortcuts; each package for its contents, the architecture of
   its plugin files, ASLR/DEP/CFG, the exported functions and system-only

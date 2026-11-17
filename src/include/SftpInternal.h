@@ -5,6 +5,7 @@
 #include "global.h"
 #include "SftpClient.h"
 #include "UnicodeHelpers.h"
+#include "RemoteNames.h"
 #include <array>
 #include <mutex>
 #include <vector>
@@ -291,13 +292,6 @@ bool  GetChannelCommandReply(ISshSession* session, ISshChannel* channel, LPCSTR 
 void  DisconnectShell(ISshChannel* channel, int* exitStatus = nullptr);
 bool  EnsureScpShell(pConnectSettings cs);
 void  CloseScpShell(pConnectSettings cs);
-// The persistent shell runs on a terminal, whose line discipline acts on
-// control bytes (^U kills the line, ^C interrupts, DEL erases) before the
-// shell sees any quoting, so a file name carrying one could rewrite the
-// command around it; a TAB invokes completion in an interactive shell, a CR
-// the terminal turns into a newline. A command is safe to send when it holds
-// no control byte but the newline, which inside quotes is part of the word.
-bool  ShellCommandIsSafe(std::string_view command) noexcept;
 // Writes `command` to the persistent shell; false, without writing, for one
 // that is not safe, and false when the channel fails or `timeoutMs` passes.
 bool  WriteShellCommand(pConnectSettings cs, const std::string& command, DWORD timeoutMs);

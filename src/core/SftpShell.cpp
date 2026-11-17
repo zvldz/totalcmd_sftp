@@ -292,16 +292,6 @@ bool EnsureScpShell(pConnectSettings cs)
     return true;
 }
 
-bool ShellCommandIsSafe(std::string_view command) noexcept
-{
-    for (const char ch : command) {
-        const unsigned char c = static_cast<unsigned char>(ch);
-        if ((c < 0x20 && c != '\n') || c == 0x7F)
-            return false;
-    }
-    return true;
-}
-
 bool WriteShellCommand(pConnectSettings cs, const std::string& command, DWORD timeoutMs)
 {
     if (!cs || !cs->scpShellChannel)

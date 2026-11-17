@@ -73,6 +73,9 @@
     <ClCompile Include="..\src\core\TerminalText.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\core\RemoteNames.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\src\core\WildcardMatch.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
