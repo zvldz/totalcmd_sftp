@@ -233,7 +233,8 @@ static int ExportProxyAsIniFile(int proxynr, const std::string& rowName,
 }
 
 static bool CopyIniSectionAcrossFiles(LPCSTR srcSection, LPCWSTR srcIni,
-                                       LPCSTR dstSection, LPCSTR dstIni);
+                                       LPCSTR dstSection, LPCSTR dstIni,
+                                       bool dropHostKeys);
 static void AdoptPasswordFromFile(LPCSTR srcSection, LPCWSTR srcIni, const char* key,
                                   LPCSTR dstSection, const std::string& storeName);
 
@@ -374,7 +375,7 @@ static int ImportProxyFromUpload(LPCWSTR LocalName)
 
     const int nr = NextFreeProxyNr(inifilename);
     const std::string dest = nr > 1 ? std::format("proxy{}", nr) : std::string("proxy");
-    if (!CopyIniSectionAcrossFiles("proxy", LocalName, dest.c_str(), inifilename)) {
+    if (!CopyIniSectionAcrossFiles("proxy", LocalName, dest.c_str(), inifilename, false)) {
         SFTP_LOG("ENTRY", "Proxy import: writing record %d failed", nr);
         return abortWithMessage(IDS_PIMPORT_ERR_WRITE);
     }
@@ -504,7 +505,7 @@ static std::optional<int> TryImportSessionFromUpload(
     }
 
     if (!CopyIniSectionAcrossFiles(chosenSection.c_str(),
-            LocalName, display.c_str(), inifilename))
+            LocalName, display.c_str(), inifilename, true))
     {
         return abortWithMessage(IDS_SIMPORT_ERR_WRITE);
     }
@@ -526,7 +527,7 @@ static std::optional<int> TryImportSessionFromUpload(
             // A password the file has goes into TC's password manager;
             // without one the proxy asks for it on connect, which is why
             // the user name has to survive the trip.
-            if (!CopyIniSectionAcrossFiles("proxy", LocalName, dest.c_str(), inifilename) ||
+            if (!CopyIniSectionAcrossFiles("proxy", LocalName, dest.c_str(), inifilename, false) ||
                 IniGetInt(dest.c_str(), "proxytype", 0, inifilename) != proxytype) {
                 IniWriteString(dest.c_str(), nullptr, nullptr, inifilename);
                 IniWriteString(display.c_str(), nullptr, nullptr, inifilename);
@@ -576,10 +577,13 @@ static std::vector<std::string> CollectSessionsUnderFolder(
 // comes along goes through AdoptPasswordFromFile. The destination section
 // is cleared first so an overwrite is a full clean replace — leftover keys
 // from a prior session (password, proxy, jump-host refs) never survive
-// materialisation.
+// materialisation. With `dropHostKeys` the stored host fingerprints are left
+// out as well: a session file from elsewhere must not decide which host key
+// is trusted, so its first connection asks as for a new host.
 // Returns true if at least one key was copied.
 static bool CopyIniSectionAcrossFiles(LPCSTR srcSection, LPCWSTR srcIni,
-                                       LPCSTR dstSection, LPCSTR dstIni)
+                                       LPCSTR dstSection, LPCSTR dstIni,
+                                       bool dropHostKeys)
 {
     std::array<char, 4096> keyList{};
     IniGetString(srcSection, nullptr, "",
@@ -593,7 +597,8 @@ static bool CopyIniSectionAcrossFiles(LPCSTR srcSection, LPCWSTR srcIni,
     bool any = false;
     char* p = keyList.data();
     while (p[0]) {
-        if (p[0] != '_' && !IsPasswordKey(p)) {
+        const bool hostKey = _stricmp(p, "fingerprint") == 0 || _stricmp(p, "jumpfingerprint") == 0;
+        if (p[0] != '_' && !IsPasswordKey(p) && !(dropHostKeys && hostKey)) {
             std::array<char, 2048> valueBuf{};
             IniGetString(srcSection, p, "",
                          valueBuf.data(),
@@ -724,7 +729,7 @@ static int MaterialiseVirtualSession(const std::string& sourceId,
 
     if (!CopyIniSectionAcrossFiles(cacheSection.c_str(),
                                     unicode_util::narrow_to_wide(cachePath, CP_ACP).c_str(),
-                                    newDisplay.c_str(), inifilename))
+                                    newDisplay.c_str(), inifilename, false))
     {
         return FS_FILE_NOTFOUND;
     }
@@ -829,12 +834,15 @@ void ShowImportStaleRefusal()
         IDS_SIMPORT_TITLE, "SFTP plugin - session import");
 }
 
-// The password of one imported session, read from its source at connect
-// time and kept in memory only; the cache holds just the mark that the
-// source has one. Empty when there is none or the source no longer has the
-// session — the standard prompt asks then. The rest of the session comes
-// from the cache: when the source now names another host, user or route,
-// the password belongs to that one, and `*stale` is set instead.
+// Before an imported session is connected or copied, the session is read
+// again from its source. The cache's host, user and route (proxy, jump host)
+// are used, so when the source now names another one — a proxy or jump host
+// added in the source program since the last scan — `*stale` is set and the
+// caller refuses, whether or not the session has a password. Otherwise the
+// password, read from the source and kept in memory only, is returned when
+// the cache marks that the source has one; empty when there is none or the
+// source no longer has the session — the standard prompt asks then. A
+// source that cannot be read keeps the cached route.
 std::string LoadImportedPassword(const std::string& sourceId, const std::string& cacheSection,
                                  const std::string& displayName, bool* stale)
 {
@@ -846,8 +854,7 @@ std::string LoadImportedPassword(const std::string& sourceId, const std::string&
     std::array<char, 8> mark{};
     IniGetString(cacheSection.c_str(), "_haspassword", "", mark.data(),
                  static_cast<DWORD>(mark.size()), cachePath.c_str());
-    if (mark[0] != '1')
-        return {};
+    const bool hasPassword = mark[0] == '1';
     auto* adapter = sftp::GetImportSourceRegistry().Find(sourceId.c_str());
     if (!adapter)
         return {};
@@ -868,26 +875,38 @@ std::string LoadImportedPassword(const std::string& sourceId, const std::string&
             continue;
         tConnectSettings settings{};
         sftp::SessionDependency dependency;
-        if (!adapter->LoadSettings(entry, &settings, &dependency) || settings.password.empty())
+        if (!adapter->LoadSettings(entry, &settings, &dependency))
             return {};
         AdapterStringsToInternal(settings, dependency);
-        std::array<char, 1024> cachedServer{}, cachedUser{};
-        IniGetString(cacheSection.c_str(), "server", "", cachedServer.data(),
-                     static_cast<DWORD>(cachedServer.size()), cachePath.c_str());
-        IniGetString(cacheSection.c_str(), "user", "", cachedUser.data(),
-                     static_cast<DWORD>(cachedUser.size()), cachePath.c_str());
+        const auto cached = [&](const char* key) {
+            std::array<char, 1024> v{};
+            IniGetString(cacheSection.c_str(), key, "", v.data(),
+                         static_cast<DWORD>(v.size()), cachePath.c_str());
+            return std::string(v.data());
+        };
+        // The jump host as the cache keeps it: written only with a host.
+        const bool jump = settings.use_jump_host && !settings.jump_host.empty();
+        const int jumpPort = settings.jump_port != 0 ? settings.jump_port : 22;
+        const std::string cachedJumpPort = cached("jumpport");
         const sftp::SessionDependency cachedDep =
             sftp::ImportCache::ReadDependency(cacheSection, cachePath);
-        if (settings.server != cachedServer.data() || settings.user != cachedUser.data() ||
+        if (settings.server != cached("server") || settings.user != cached("user") ||
             dependency.kind != cachedDep.kind || dependency.proxyType != cachedDep.proxyType ||
             dependency.proxyServer != cachedDep.proxyServer ||
-            dependency.proxyUser != cachedDep.proxyUser) {
+            dependency.proxyUser != cachedDep.proxyUser ||
+            jump != (cached("usejumphost") == "1") ||
+            (jump && (settings.jump_host != cached("jumphost") ||
+                      settings.jump_user != cached("jumpuser") ||
+                      jumpPort != (cachedJumpPort.empty() ? 22 : std::atoi(cachedJumpPort.c_str()))))) {
             SFTP_LOG("IMPORT", "'%s' changed in source %s since the last scan", displayName.c_str(),
                      sourceId.c_str());
             if (stale)
                 *stale = true;
+            SecureZeroMemory(settings.password.data(), settings.password.size());
             return {};
         }
+        if (!hasPassword || settings.password.empty())
+            return {};
         // Adapters hand the password over encoded, as the INI stores it.
         std::array<char, 1024> plain{};
         DecryptString(settings.password.c_str(), plain.data(), static_cast<UINT>(plain.size()));

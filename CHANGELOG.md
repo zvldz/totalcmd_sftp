@@ -19,6 +19,15 @@ From this version the plugin comes in two builds: **classic**
 
 ### Security
 
+- **A session file from elsewhere no longer pre-trusts a host key.**
+  Dropping a session file onto the plugin took over its stored host and
+  jump-host fingerprints, so a crafted file could make the first
+  connection accept a key without asking. Those keys are now left out and
+  the first connection asks as for any new host.
+- **A jump session that needs a jump host itself is refused.** A session
+  with "use jump host" ticked but none named (its reference was deleted)
+  is refused when opened on its own, yet was used as a plain jump host by
+  sessions referring to it, skipping the bastion it asks for.
 - **Debug log and crash hooks.**
   - The log of a test build is written to `%TEMP%\sftpplug.log`, which
     only the user can open, instead of `C:\temp`, where other users of the
@@ -103,10 +112,17 @@ From this version the plugin comes in two builds: **classic**
     on every connect.
   - A session changed in its source program since the last scan is
     refused until [Refresh]: its new password was sent to the old host, or
-    its new proxy skipped.
+    its new proxy or jump host skipped. The session is read again from the
+    source on every connect, copy and background transfer, with or without
+    a saved password.
   - OpenSSH: a ProxyJump or ProxyCommand in a `Match` block was ignored.
     `Match all` and `Match host` are now applied like `Host`; with other
     conditions, which the plugin cannot evaluate, the session is refused.
+  - OpenSSH: an `Include` inside a `Host` block could switch that block off
+    for the lines after it, so a `ProxyJump` written below the `Include`
+    was dropped and the session imported as a direct connection. As in
+    `ssh`, the block's state now comes back after the included file, and
+    an `Include` inside a block that does not apply brings nothing in.
   - WinSCP: a proxy or tunnel set in "Default Settings", which WinSCP
     applies to every session that does not override it, was not seen. The
     same for the port, user name and protocol.

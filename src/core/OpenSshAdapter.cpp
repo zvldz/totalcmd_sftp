@@ -25,6 +25,11 @@ namespace {
 // splits them: whitespace or a single '=' between keyword and value,
 // double quotes around arguments that contain spaces.
 struct ConfigLine {
+    // The lines of an included file sit between an IncludeBegin and an
+    // IncludeEnd marker, which have no key: `ssh` restores the enclosing
+    // block's state after an Include.
+    enum class Kind { Keyword, IncludeBegin, IncludeEnd };
+    Kind                     kind = Kind::Keyword;
     std::string              key;    // lower case
     std::vector<std::string> args;
 };
@@ -207,8 +212,10 @@ void ParseFileIn(const std::wstring& path, std::vector<ConfigLine>& out, int dep
             continue;
 
         if (cl.key == "include") {
+            out.push_back(ConfigLine{ConfigLine::Kind::IncludeBegin});
             for (const auto& arg : cl.args)
                 ExpandInclude(arg, out, depth, visited, chain);
+            out.push_back(ConfigLine{ConfigLine::Kind::IncludeEnd});
             continue;
         }
         out.push_back(std::move(cl));
@@ -313,21 +320,43 @@ MatchResult MatchLineApplies(const std::vector<std::string>& args, const std::st
 
 // What `ssh <alias>` would use: lines before the first `Host` apply to
 // every host, a `Match` block applies when its conditions can be told to,
-// and the first value seen for a keyword wins.
+// and the first value seen for a keyword wins. An included file starts in
+// the state of the block that includes it, and that block's state comes
+// back after it; an Include inside a block that does not apply brings
+// nothing in, whatever `Host` lines the file has (as `ssh` does).
 HostConfig Resolve(const std::vector<ConfigLine>& lines, const std::string& alias)
 {
+    struct BlockState { bool active, unknownMatch, neverMatch; };
     HostConfig c;
     bool hasPort = false;
     bool active = true;
     bool unknownMatch = false;
+    bool neverMatch = false;
+    std::vector<BlockState> includes;
     for (const auto& l : lines) {
+        if (l.kind == ConfigLine::Kind::IncludeBegin) {
+            includes.push_back({active, unknownMatch, neverMatch});
+            neverMatch = neverMatch || !active;
+            unknownMatch = false;
+            continue;
+        }
+        if (l.kind == ConfigLine::Kind::IncludeEnd) {
+            if (!includes.empty()) {
+                active = includes.back().active;
+                unknownMatch = includes.back().unknownMatch;
+                neverMatch = includes.back().neverMatch;
+                includes.pop_back();
+            }
+            continue;
+        }
         if (l.key == "host") {
-            active = HostLineMatches(l.args, alias);
+            active = !neverMatch && HostLineMatches(l.args, alias);
             unknownMatch = false;
             continue;
         }
         if (l.key == "match") {
-            const MatchResult m = MatchLineApplies(l.args, alias, c.hostName);
+            const MatchResult m = neverMatch ? MatchResult::DoesNot
+                                             : MatchLineApplies(l.args, alias, c.hostName);
             active = m == MatchResult::Applies;
             unknownMatch = m == MatchResult::Unknown;
             continue;

@@ -895,10 +895,15 @@ static void StatusInfo(const std::string& remoteDir, int InfoStartEnd, int InfoO
                 const std::string& cachePath = sftp::GetImportCache().CacheFilePath();
                 if (!info || cachePath.empty() || RefuseIfDependencyBlocks(info->cacheSection))
                     return;
+                // The source is read again even with the panel's password:
+                // a route changed there since the scan refuses the transfer.
                 bool stale = false;
-                std::string password = inherited.password.empty()
-                    ? LoadImportedPassword(info->sourceId, info->cacheSection, info->displayName, &stale)
-                    : inherited.password;
+                std::string password = LoadImportedPassword(info->sourceId, info->cacheSection,
+                                                            info->displayName, &stale);
+                if (!inherited.password.empty()) {
+                    SecureZeroMemory(password.data(), password.size());
+                    password = inherited.password;
+                }
                 if (stale) {
                     ShowImportStaleRefusal();
                     return;

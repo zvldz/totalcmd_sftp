@@ -68,9 +68,10 @@ JumpConfig ResolveJumpConfig(pConnectSettings cs, LPCSTR iniFileName)
         }
 
         // Only one hop is supported. Catching this here also covers the
-        // A -> B -> A loop.
-        if (!ref.jump_session_ref.empty() ||
-            (ref.use_jump_host && !ref.jump_host.empty())) {
+        // A -> B -> A loop. A referenced session that asks for a jump host
+        // but names none is refused too: on its own it is refused as not
+        // configured, so it must not be reached directly as a bastion.
+        if (!ref.jump_session_ref.empty() || ref.use_jump_host) {
             out.status = JumpConfigStatus::RefChained;
             out.error  = LngStrU8(IDS_JUMP_SESSION_CHAINED,
                 "Jump session '{}' has its own jump-host configuration "
