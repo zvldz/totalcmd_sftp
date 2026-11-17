@@ -74,3 +74,4 @@ if ($problems.Count) {
     exit 1
 }
 Write-Host "Languages: $($files.Count) files x $($english.Count) strings, placeholders match"
+exit 0

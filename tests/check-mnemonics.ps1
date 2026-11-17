@@ -97,3 +97,4 @@ if ($problems.Count) {
     exit 1
 }
 Write-Host "Mnemonics: $($languages.Count) languages x $($dialogs.Count) dialogs, no repeats" -ForegroundColor Green
+exit 0

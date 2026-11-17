@@ -95,3 +95,4 @@ if ($problems.Count) {
     exit 1
 }
 Write-Host "Packages: classic and extra, entries, architecture, hardening, $($exports.Count) exports and system DLLs only"
+exit 0
