@@ -464,6 +464,34 @@ BOOL MoveFileT(LPCWSTR lpExistingFileName, LPCWSTR lpNewFileName) noexcept
     return MoveFileW(wbuf1.data(), wbuf2.data());
 }
 
+BOOL MoveFileReplaceT(LPCWSTR lpExistingFileName, LPCWSTR lpNewFileName) noexcept
+{
+    if (!lpExistingFileName || !lpNewFileName) return FALSE;
+
+    std::array<WCHAR, wdirtypemax> wbuf1{};
+    std::array<WCHAR, wdirtypemax> wbuf2{};
+    if (!MakeExtraLongNameW(wbuf1.data(), lpExistingFileName, wbuf1.size() - 1) ||
+        !MakeExtraLongNameW(wbuf2.data(), lpNewFileName, wbuf2.size() - 1))
+        return FALSE;
+    // A read-only, hidden or system target refuses to be replaced.
+    const DWORD attrs = GetFileAttributesW(wbuf2.data());
+    if (attrs != INVALID_FILE_ATTRIBUTES &&
+        (attrs & (FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM)))
+        SetFileAttributesW(wbuf2.data(), attrs & ~(FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_HIDDEN |
+                                                    FILE_ATTRIBUTE_SYSTEM));
+    return MoveFileExW(wbuf1.data(), wbuf2.data(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
+}
+
+BOOL GetFileAttributesExT(LPCWSTR lpFileName, WIN32_FILE_ATTRIBUTE_DATA* data) noexcept
+{
+    if (!lpFileName || !data) return FALSE;
+
+    std::array<WCHAR, wdirtypemax> wbuf{};
+    if (!MakeExtraLongNameW(wbuf.data(), lpFileName, wbuf.size() - 1))
+        return FALSE;
+    return GetFileAttributesExW(wbuf.data(), GetFileExInfoStandard, data);
+}
+
 BOOL SetFileAttributesT(LPCWSTR lpFileName, DWORD dwFileAttributes) noexcept
 {
     if (!lpFileName) return FALSE;

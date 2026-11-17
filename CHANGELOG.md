@@ -307,6 +307,52 @@ From this version the plugin comes in two builds: **classic**
 
 ### Fixes
 
+- **F6 with overwrite works on OpenSSH.** The overwrite flags of an SFTP
+  rename reach only SFTP v5 servers; OpenSSH (v3) refused an existing
+  target although the overwrite was confirmed. The plugin now uses
+  OpenSSH's posix-rename, and on a server without it removes the target
+  file first.
+- **A long name no longer ends an SFTP listing.** An entry longer than the
+  listing buffer (a Windows OpenSSH server with a long non-Latin name)
+  ended the listing there without a word, so a delete or move of the
+  folder missed what followed. The buffers hold any name now, and a
+  listing that still cannot go on says so in the log.
+- **Shell transfer mode.**
+  - Replacing a file with a download could lose both copies: the old one
+    was deleted, then the new one could not be moved in (an antivirus
+    holding it) and was deleted too. The replace is one step now, and a
+    failure keeps both. A file of the user's named like the temporary one
+    is no longer deleted.
+  - A raw upload whose size the server could not report was redone over
+    base64, which starts by truncating the file; on a host without
+    `base64` a correct upload ended empty. An unknown size is accepted.
+  - One file that could not be read switched the whole session to the
+    slow base64 path. Only base64 succeeding where raw failed does that.
+  - On a host that allows no exec channel, folder creation, rename, copy,
+    chmod and the existence check now run on the session's shell as
+    transfers do; each upload asked about overwriting, renames answered
+    "exists", F7 and chmod failed.
+- **SCP-only mode.**
+  - Large folders and long deletes: a command could run 30 s in all and
+    stay silent 10 s; `ls -l` of a large folder, which prints nothing
+    while it sorts, never listed, and deleting a large file was reported
+    failed while it went on. The limit is now two minutes of silence, and
+    Esc ends the wait.
+  - Uploads keep the local file's modification time (scp -p), as do
+    shell-mode uploads (`touch`).
+  - The read-only attribute is set with `chmod` instead of reporting
+    success for nothing.
+  - A listing line the plugin cannot read is named in the log instead of
+    left out silently.
+  - A file name with a line break on a host whose terminal still echoes
+    could make a failed delete look done: the end marker of every shell
+    command is now sent split, so its echo never matches.
+- **Text mode decides on the same bytes everywhere.** Whether a download is
+  binary (a NUL byte) was judged on the first chunk, which is 57 bytes over
+  base64 and almost 2 MB over SFTP: a log with a NUL further in was
+  converted on one path and kept on another. Every path now looks at the
+  first 64 KB.
+- **The detailed log** shows SFTP listing lines in the session's encoding.
 - **Jump host login.**
   - When the jump host did not list its login methods in time, only
     Pageant was tried: no key file, no password prompt. Every method is

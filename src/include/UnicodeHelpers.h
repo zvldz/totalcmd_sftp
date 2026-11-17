@@ -83,6 +83,10 @@ BOOL CreateDirectoryT(LPCWSTR lpPathName, LPSECURITY_ATTRIBUTES lpSecurityAttrib
 BOOL RemoveDirectoryT(LPCWSTR lpPathName) noexcept;
 BOOL DeleteFileT(LPCWSTR lpFileName) noexcept;
 BOOL MoveFileT(LPCWSTR lpExistingFileName, LPCWSTR lpNewFileName) noexcept;
+// Moves over an existing file in one step, clearing a read-only, hidden or
+// system attribute of the target first.
+BOOL MoveFileReplaceT(LPCWSTR lpExistingFileName, LPCWSTR lpNewFileName) noexcept;
+BOOL GetFileAttributesExT(LPCWSTR lpFileName, WIN32_FILE_ATTRIBUTE_DATA* data) noexcept;
 BOOL SetFileAttributesT(LPCWSTR lpFileName, DWORD dwFileAttributes) noexcept;
 DWORD GetFileAttributesT(LPCWSTR lpFileName) noexcept;
 

@@ -304,6 +304,14 @@ bool  WriteShellCommand(pConnectSettings cs, const std::string& command, DWORD t
 // A marker for the start or end of a command's output: `base` and a random
 // part, so neither a file name nor anything the server prints can match it.
 std::string ShellMarker(const char* base);
+// A shell `echo` of `marker` written split by an empty string ("__WF""X_..."):
+// the shell prints the marker whole, while a terminal that echoes the command
+// never shows it whole, so the echo cannot pass for the command's end.
+std::string ShellEchoMarker(const std::string& marker);
+// Runs `command` on the persistent interactive shell, for a host that allows
+// no exec channel (forced shell transfer): its output lines and exit status.
+bool ShellRunPersistentCommand(pConnectSettings cs, const std::string& command,
+                               std::vector<std::string>& outLines, int* outExitCode);
 // Reads a shell command's output up to its end marker. `endLineOut`, when
 // given, receives the marker line itself: a command that appends its exit
 // status there has no other way to report it, since the line is not part of

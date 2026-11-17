@@ -340,6 +340,12 @@ std::string ShellMarker(const char* base)
     return std::string(base) + nonce;
 }
 
+std::string ShellEchoMarker(const std::string& marker)
+{
+    const size_t cut = (std::min)(marker.size(), size_t{4});
+    return "echo \"" + marker.substr(0, cut) + "\"\"" + marker.substr(cut) + "\"";
+}
+
 void CloseScpShell(pConnectSettings cs)
 {
     if (!cs || !cs->scpShellChannel)
@@ -379,14 +385,27 @@ bool ScpReadCommandOutput(pConnectSettings cs, const char* endMarker,
     // A listing line holds a name and, for a link, its target: two paths of
     // up to 4096 bytes each, so the line buffer leaves room for both.
     std::vector<char> line(65536);
-    const auto start = std::chrono::steady_clock::now();
+    // `timeoutMs` is how long the command may stay silent, not how long it
+    // may run: `ls -l` of a large folder prints nothing until it has sorted
+    // it, and a long listing keeps coming. Lines are read a second at a
+    // time so Esc and the channel closing are seen while it is quiet.
+    auto lastLine = std::chrono::steady_clock::now();
     bool gotBegin = !hasBegin;
     bool gotEnd = false;
 
-    while (ReadChannelLine(cs->scpShellChannel.get(),
-                           line.data(), line.size() - 1,
-                           cs->scpShellMsgBuf, cs->scpShellErrBuf, cs->sock))
-    {
+    for (;;) {
+        if (!ReadChannelLine(cs->scpShellChannel.get(),
+                             line.data(), line.size() - 1,
+                             cs->scpShellMsgBuf, cs->scpShellErrBuf, cs->sock, 1000, 1000)) {
+            if (cs->scpShellChannel->eof() || EscapePressed())
+                break;
+            const auto quiet = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - lastLine).count();
+            if (quiet > static_cast<long long>(timeoutMs))
+                break;
+            continue;
+        }
+        lastLine = std::chrono::steady_clock::now();
         std::string lineStr(line.data());
         StripEscapeSequences(lineStr);
         std::string_view trimmed = TrimLeft(lineStr);
@@ -429,11 +448,6 @@ bool ScpReadCommandOutput(pConnectSettings cs, const char* endMarker,
         }
 
         outLines.push_back(std::move(lineStr));
-
-        const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - start).count();
-        if (elapsed > timeoutMs)
-            break;
         if (EscapePressed())
             break;
     }
@@ -521,6 +535,38 @@ bool ReadChannelLine(ISshChannel* channel, char* line, size_t lineLen,
     }
 }
 
+// A host that allows no exec channel (forced shell transfer mode) runs the
+// command on the persistent shell instead: its output goes to `reply` or the
+// log as over an exec channel, and its exit status is returned (-1 when the
+// shell gave none).
+static int QuoteOnPersistentShell(pConnectSettings cs, const std::string& fullCmd,
+                                  char* reply, size_t replylen, bool showWide)
+{
+    std::vector<std::string> lines;
+    int exitCode = -1;
+    if (!ShellRunPersistentCommand(cs, fullCmd, lines, &exitCode))
+        return -1;
+    for (auto& line : lines) {
+        StripEscapeSequences(line.data());
+        line.resize(strlen(line.c_str()));
+        if (!reply) {
+            if (showWide) {
+                std::vector<wchar_t> wline(line.size() + 1);
+                CopyStringA2W(cs, line.c_str(), wline.data(), wline.size(), false);
+                ShowStatusW(wline.data());
+            } else {
+                ShowStatus(line.c_str());
+            }
+        } else {
+            if (reply[0])
+                strlcat(reply, "\r\n", replylen);
+            strlcat(reply, line.c_str(), replylen);
+        }
+    }
+    SFTP_LOG("SHELL", "Quote command on the persistent shell: rc=%d", exitCode);
+    return exitCode;
+}
+
 int SftpQuoteCommand2(pConnectSettings cs, const char* remotedir, const char* cmd,
                       char* reply, size_t replylen,
                       DWORD idleTimeoutMs, DWORD totalTimeoutMs)
@@ -560,10 +606,6 @@ int SftpQuoteCommand2(pConnectSettings cs, const char* remotedir, const char* cm
     ShowStatus(display.c_str());
     SFTP_LOG("SHELL", "Quote command: %zu bytes", strlen(cmd));
 
-    auto channel = ConnectChannel(cs->session.get(), cs->sock);
-    if (!channel)
-        return -1;
-
     // Build command: cd <dir> && <cmd> (if dir given)
     std::string fullCmd;
     if (remotedir) {
@@ -571,6 +613,13 @@ int SftpQuoteCommand2(pConnectSettings cs, const char* remotedir, const char* cm
         fullCmd += string_util::ShellQuoteSingle(dirname) + "' && ";
     }
     fullCmd += cmdname;
+
+    if (cs->shell_transfer_force)
+        return QuoteOnPersistentShell(cs, fullCmd, reply, replylen, false);
+
+    auto channel = ConnectChannel(cs->session.get(), cs->sock);
+    if (!channel)
+        return -1;
 
     if (!SendChannelCommand(cs->session.get(), channel.get(), fullCmd.c_str(), cs->sock)) {
         return -1;
@@ -660,16 +709,19 @@ int SftpQuoteCommand2W(pConnectSettings cs, LPCWSTR remotedir, LPCWSTR cmd,
     std::replace(display.begin(), display.end(), L'\\', L'/');
     ShowStatusW(display.c_str());
 
-    auto channel = ConnectChannel(cs->session.get(), cs->sock);
-    if (!channel)
-        return -1;
-
     std::string fullCmd;
     if (remotedir) {
         fullCmd = "cd '";
         fullCmd += string_util::ShellQuoteSingle(dirname) + "' && ";
     }
     fullCmd += cmdname;
+
+    if (cs->shell_transfer_force)
+        return QuoteOnPersistentShell(cs, fullCmd, reply, replylen, true);
+
+    auto channel = ConnectChannel(cs->session.get(), cs->sock);
+    if (!channel)
+        return -1;
 
     if (!SendChannelCommand(cs->session.get(), channel.get(), fullCmd.c_str(), cs->sock)) {
         return -1;

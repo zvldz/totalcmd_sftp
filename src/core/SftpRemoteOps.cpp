@@ -30,8 +30,11 @@ constexpr const char* kScpListBeginMarker = "__WFX_LIST_BEGIN__";
 constexpr const char* kScpListEndMarker = "__WFX_LIST_END__";
 constexpr uint32_t kScpDataMagic = 0x53435044u; // 'SCPD'
 constexpr int kScpWriteTimeoutMs = 15000;
-constexpr int kScpReadTimeoutMs = 30000;
-constexpr int kScpDeleteReadTimeoutMs = 15000;
+// How long a shell command may stay silent before it counts as stuck (Esc
+// ends the wait sooner): sorting a large folder, or deleting a large file on
+// a slow file system, prints nothing for a while.
+constexpr int kScpReadTimeoutMs = 120000;
+constexpr int kScpDeleteReadTimeoutMs = 120000;
 constexpr int kSftpProgressStartMs = 2000;
 constexpr int kSftpAbortGraceMs = 2000;
 constexpr int kSftpProgressDivMs = 200;
@@ -412,7 +415,7 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
             std::string command = "echo \"" + beginMarker + "\"; " + probe +
                                   "env TZ=UTC0 LC_ALL=C TIME_STYLE=locale BLOCK_SIZE=1 LS_BLOCK_SIZE=1 QUOTING_STYLE=escape ls -la " +
                                   quotedTarget + " | cat; test -d " + quotedTarget + " && test -r " + quotedTarget +
-                                  "; echo \"" + endMarker + "\":$?\n";
+                                  "; " + ShellEchoMarker(endMarker) + ":$?\n";
             SFTP_LOG("FIND", "SCP listing '%s'", listTarget.c_str());
 
             // A name the terminal would act on is not listed at all.
@@ -480,6 +483,13 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
                         continue;
                     extras[fd.cFileName] = std::move(extra);
                     entries.push_back(fd);
+                } else {
+                    // Said in the log, so a folder that lists short is not
+                    // taken as complete before a delete or a move.
+                    SFTP_LOG("FIND", "SCP listing line not understood, entry left out");
+                    std::vector<wchar_t> shown(line.size() + 1);
+                    CopyStringA2W(cs, line.c_str(), shown.data(), shown.size());
+                    ShowStatusW((L"Listing line not understood, left out: " + std::wstring(shown.data())).c_str());
                 }
             }
 
@@ -646,8 +656,10 @@ static int SftpFindNextEntryW(pConnectSettings cs, LPVOID davdataptr, LPWIN32_FI
     if (!dirhandle || scpd->sftpGeneration != cs->sftpGeneration)
         return SFTP_FAILED;
 
-    std::array<char, 512> name{};
-    std::array<char, 2048> longentry{};
+    // Room for any name a server sends (NTFS allows 255 UTF-16 units, up to
+    // 765 bytes of UTF-8) and its `ls -l` line.
+    std::vector<char> name(4096);
+    std::vector<char> longentry(8192);
     LIBSSH2_SFTP_ATTRIBUTES file{};
     SYSTICKS aborttime = -1;
 
@@ -667,9 +679,21 @@ static int SftpFindNextEntryW(pConnectSettings cs, LPVOID davdataptr, LPWIN32_FI
         IsSocketReadable(cs->sock);
     }
 
+    if (rc == LIBSSH2_ERROR_BUFFER_TOO_SMALL) {
+        // libssh2 cannot skip the entry, so the listing ends here; said
+        // aloud, so a delete or move of the folder is not taken as complete.
+        SFTP_LOG("SFTP", "readdir: entry longer than the buffer, listing cut");
+        LogProcI(PluginNumber, MSGTYPE_IMPORTANTERROR,
+                 "SFTP: a directory entry is too long; the listing ends before it");
+        return SFTP_FAILED;
+    }
     if (rc > 0) {
-        if (cs->detailedlog && longentry[0])
-            ShowStatus(longentry.data());
+        if (cs->detailedlog && longentry[0]) {
+            // In the session's encoding, as the names are.
+            std::vector<wchar_t> line(longentry.size());
+            CopyStringA2W(cs, longentry.data(), line.data(), line.size());
+            ShowStatusW(line.data());
+        }
 
         FindData->dwFileAttributes = 0;
         CopyStringA2W(cs, name.data(), FindData->cFileName, _countof(FindData->cFileName));
@@ -904,19 +928,16 @@ int SftpDeleteFileW(pConnectSettings cs, LPCWSTR RemoteName, bool isdir)
         if (!EnsureScpShell(cs))
             return SFTP_FAILED;
 
-        // `rm` says whether it worked through a line of its own. Hanging the
-        // status on the end marker cannot work: the reader stops at that marker
-        // and drops the line it arrived on, so the status was never read and
-        // every deletion reported success.
+        // `rm` says whether it worked through its exit status, appended to the
+        // end marker; the reader hands that line back.
         auto runDelete = [&](const std::string& target) -> bool {
             const std::string beginMarker = ShellMarker(kScpListBeginMarker);
             const std::string endMarker   = ShellMarker(kScpListEndMarker);
 
             // The command opens by echoing a marker of its own, exactly as the
-            // listing does. Without it the shell's echo of the command line —
-            // which carries the end marker and a literal "$?" — is taken for
-            // the result, and a deletion reads as successful whether the file
-            // went away or not.
+            // listing does, and sends the end marker split: the shell's echo
+            // of the command line, with a literal "$?", can never be taken for
+            // the result, so a deletion that failed does not read as done.
             //
             // A directory goes with `rmdir`, which refuses one that is not
             // empty, as SFTP's rmdir does. Total Commander removes the files
@@ -932,7 +953,7 @@ int SftpDeleteFileW(pConnectSettings cs, LPCWSTR RemoteName, bool isdir)
             cmd += string_util::ShellQuoteSingle(target) + "'";
             if (!isdir)
                 cmd += " < /dev/null";
-            cmd += "; echo \"" + endMarker + "\":$?\n";
+            cmd += "; " + ShellEchoMarker(endMarker) + ":$?\n";
 
             if (!WriteShellCommand(cs, cmd, kScpWriteTimeoutMs))
                 return false;
@@ -1060,7 +1081,44 @@ int SftpRenameMoveFileW(pConnectSettings cs, LPCWSTR OldName, LPCWSTR NewName, b
         }
     }
 
+    // The overwrite flags of a plain rename reach only SFTP v5+ servers;
+    // OpenSSH (v3) refuses an existing target. With Overwrite confirmed,
+    // posix-rename@openssh.com replaces it; a server without that
+    // extension gets the target file removed first (a folder is left to
+    // the rename, which refuses it).
     int rc = 0;
+    if (Overwrite) {
+        do {
+            rc = cs->sftpsession->posixRename(oldNameA.data(), newNameA.data());
+            if (rc == LIBSSH2_ERROR_EAGAIN)
+                IsSocketReadable(cs->sock);
+        } while (rc == LIBSSH2_ERROR_EAGAIN);
+        if (rc == 0)
+            return SFTP_OK;
+        if (rc != LIBSSH2_FX_OP_UNSUPPORTED) {
+            SFTP_LOG("SFTP", "posix-rename failed rc=%d", rc);
+            return SFTP_FAILED;
+        }
+        LIBSSH2_SFTP_ATTRIBUTES attr{};
+        int lrc = 0;
+        do {
+            lrc = cs->sftpsession->lstat(newNameA.data(), &attr);
+            if (lrc == LIBSSH2_ERROR_EAGAIN)
+                IsSocketReadable(cs->sock);
+        } while (lrc == LIBSSH2_ERROR_EAGAIN);
+        if (lrc >= 0 && (attr.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS) &&
+            !LIBSSH2_SFTP_S_ISDIR(attr.permissions)) {
+            do {
+                rc = cs->sftpsession->unlink(newNameA.data());
+                if (rc == LIBSSH2_ERROR_EAGAIN)
+                    IsSocketReadable(cs->sock);
+            } while (rc == LIBSSH2_ERROR_EAGAIN);
+            if (rc != 0) {
+                SFTP_LOG("SFTP", "rename: removing the target failed rc=%d", rc);
+                return SFTP_FAILED;
+            }
+        }
+    }
     do {
         rc = cs->sftpsession->rename(oldNameA.data(), newNameA.data());
         if (rc == LIBSSH2_ERROR_EAGAIN)
@@ -1073,8 +1131,20 @@ int SftpSetAttrW(pConnectSettings cs, LPCWSTR RemoteName, int NewAttr)
 {
     if (!cs || !RemoteName || !RemoteName[0])
         return SFTP_FAILED;
-    if (cs->scponly || IsPhpAgentTransport(cs))
-        return SFTP_OK;  // no SFTP channel available; silently skip
+    if (IsPhpAgentTransport(cs))
+        return SFTP_OK;  // the agent has no file modes
+    // SCP mode has only the shell: the write bits go through `chmod`, as
+    // the SFTP form below sets them.
+    if (cs->scponly) {
+        std::wstring pathW(RemoteName);
+        std::replace(pathW.begin(), pathW.end(), L'\\', L'/');
+        std::wstring cmd = (NewAttr & 0x01) ? L"chmod a-w '" : L"chmod u+w '";
+        cmd += string_util::ShellQuoteSingleW(pathW);
+        cmd += L"'";
+        const int qrc = SftpQuoteCommand2W(cs, nullptr, cmd.c_str(), nullptr, 0);
+        SFTP_LOG("ATTR", "shell chmod for read-only=%d rc=%d", (NewAttr & 0x01) ? 1 : 0, qrc);
+        return qrc == 0 ? SFTP_OK : SFTP_FAILED;
+    }
     if (!cs->sftpsession)
         return SFTP_FAILED;
 
@@ -1277,7 +1347,7 @@ bool SftpLinkFolderTargetW(pConnectSettings cs, LPWSTR RemoteName, size_t maxlen
         // the line after it starts with the home directory.
         const std::string beginMarker = ShellMarker(kScpListBeginMarker);
         const std::string endMarker   = ShellMarker(kScpListEndMarker);
-        const std::string cmd = "echo \"" + beginMarker + "\"; echo ~; echo \"" + endMarker + "\"\n";
+        const std::string cmd = "echo \"" + beginMarker + "\"; echo ~; " + ShellEchoMarker(endMarker) + "\n";
         if (!WriteShellCommand(cs, cmd, kScpWriteTimeoutMs))
             return false;
 

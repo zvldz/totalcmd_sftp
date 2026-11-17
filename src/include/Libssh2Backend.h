@@ -99,6 +99,7 @@ public:
     int realpath(const char* path, char* target, unsigned tlen) override;
     int setstat(const char* path, LIBSSH2_SFTP_ATTRIBUTES* attrs) override;
     int rename(const char* src, const char* dst) override;
+    int posixRename(const char* src, const char* dst) override;
     int unlink(const char* path) override;
     int mkdir(const char* path, long mode) override;
     int rmdir(const char* path) override;

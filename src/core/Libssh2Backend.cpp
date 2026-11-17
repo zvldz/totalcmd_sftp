@@ -313,6 +313,11 @@ int Libssh2SftpSession::rename(const char* src, const char* dst)
                                   LIBSSH2_SFTP_RENAME_NATIVE);
 }
 
+int Libssh2SftpSession::posixRename(const char* src, const char* dst)
+{
+    return libssh2_sftp_posix_rename_ex(sftp_, src, strlen(src), dst, strlen(dst));
+}
+
 int Libssh2SftpSession::unlink(const char* path)
 {
     return libssh2_sftp_unlink_ex(sftp_, path, (unsigned int)strlen(path));

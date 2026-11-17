@@ -390,7 +390,7 @@ int ShellScpDownloadFile(pConnectSettings cs,
 
     int64_t remoteSize = hintedFileSize;
     bool gotDataHeader = false;
-    text_conversion::LfToCrLf toCrLf;
+    text_conversion::DownloadText text(textMode);
     std::vector<char> dataBuf(SFTP_MAX_READ_SIZE * 2);
     std::vector<char> converted;
     // The stall timeout counts from the last data, not from the start.
@@ -445,24 +445,19 @@ int ShellScpDownloadFile(pConnectSettings cs,
                 std::min<int64_t>(remaining, static_cast<int64_t>(dataBuf.size())));
             int rc = static_cast<int>(scp.get()->read(dataBuf.data(), want));
             if (rc > 0) {
-                // A NUL in the first data is a binary file (UTF-16 text among
-                // them), which line-break conversion would corrupt.
-                if (textMode && remaining == remoteSize &&
-                    memchr(dataBuf.data(), 0, static_cast<size_t>(rc)))
-                    textMode = false;
                 remaining -= rc;
                 lastData = std::chrono::steady_clock::now();
-                // LF -> CRLF can double a chunk, so it goes to its own buffer.
-                const char* out = dataBuf.data();
-                size_t outLen = static_cast<size_t>(rc);
-                if (textMode) {
-                    converted.clear();
-                    outLen = toCrLf.Convert(dataBuf.data(), outLen, converted);
-                    out = converted.data();
-                }
+                // Decided and converted by `text` (binary at a NUL in the
+                // first bytes); LF -> CRLF can double a chunk, so it goes to
+                // its own buffer. The last bytes come out of Finish.
+                converted.clear();
+                text.Feed(dataBuf.data(), static_cast<size_t>(rc), converted);
+                if (remaining <= 0)
+                    text.Finish(converted);
                 DWORD written = 0;
-                if (!WriteFile(localfile, out, static_cast<DWORD>(outLen), &written, nullptr) ||
-                    written != static_cast<DWORD>(outLen)) {
+                if (!converted.empty() &&
+                    (!WriteFile(localfile, converted.data(), static_cast<DWORD>(converted.size()), &written, nullptr) ||
+                     written != static_cast<DWORD>(converted.size()))) {
                     return SFTP_WRITEFAILED;
                 }
                 *outSizeLoaded += rc;

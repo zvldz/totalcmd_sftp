@@ -184,3 +184,56 @@ TEST_CASE("property: download then upload restores text without CRLF pairs")
         CHECK_BYTES(ToLf(ToCrLf(in)), in);
     }
 }
+
+namespace {
+
+// Feeds `in` to DownloadText in the given chunks, then Finish.
+std::string Download(bool textMode, const std::vector<std::string>& chunks)
+{
+    text_conversion::DownloadText text(textMode);
+    std::vector<char> out;
+    for (const auto& c : chunks)
+        text.Feed(c.data(), c.size(), out);
+    text.Finish(out);
+    return {out.begin(), out.end()};
+}
+
+} // namespace
+
+TEST_CASE("DownloadText: a NUL anywhere in the first 64 KB makes the file binary")
+{
+    std::string in(text_conversion::DownloadText::kWindow - 10, 'a');
+    in += "\n";
+    in.push_back('\0');
+    in += "\nmore\n";
+    // In one piece, in 57-byte base64 lines, and in one-byte pieces: the
+    // same bytes come out unconverted.
+    std::vector<std::string> lines;
+    for (size_t p = 0; p < in.size(); p += 57)
+        lines.push_back(in.substr(p, 57));
+    CHECK_BYTES(Download(true, {in}), in);
+    CHECK_BYTES(Download(true, lines), in);
+}
+
+TEST_CASE("DownloadText: text is converted whatever the chunking")
+{
+    test::Rng rng(0xD0A7ull);
+    for (int i = 0; i < kIterations; ++i) {
+        std::string in = RandomText(rng, 64);
+        for (auto& c : in)
+            if (c == '\0') c = 'x';
+        CHECK_BYTES(Download(true, RandomChunks(in, rng)), ToCrLf(in));
+        CHECK_BYTES(Download(false, RandomChunks(in, rng)), in);
+    }
+}
+
+TEST_CASE("DownloadText: a NUL after the first 64 KB keeps text mode")
+{
+    std::string in(text_conversion::DownloadText::kWindow, 'a');
+    in += "\n";
+    in.push_back('\0');
+    std::string expected(text_conversion::DownloadText::kWindow, 'a');
+    expected += "\r\n";
+    expected.push_back('\0');
+    CHECK_BYTES(Download(true, {in.substr(0, 1000), in.substr(1000)}), expected);
+}

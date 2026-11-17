@@ -236,9 +236,18 @@ int DownloadLoop(pConnectSettings cs, Handle& remote, LocalFile& local,
 {
     const size_t blockSize = SFTP_MAX_READ_SIZE * SFTP_PREFETCH_FACTOR;
     std::vector<char> buffer(blockSize);
-    // LF -> CRLF can double a block, so converted text goes to its own buffer.
+    // What goes to disk is decided and converted by `text`, into its own
+    // buffer: LF -> CRLF can double a block.
     std::vector<char> converted;
-    text_conversion::LfToCrLf toCrLf;
+    text_conversion::DownloadText text(textMode);
+    const auto writeOut = [&]() {
+        DWORD written = 0;
+        const bool ok = converted.empty() ||
+            (WriteFile(local.get(), converted.data(), static_cast<DWORD>(converted.size()), &written, nullptr) &&
+             written == static_cast<DWORD>(converted.size()));
+        converted.clear();
+        return ok;
+    };
     int ret = SFTP_OK;
     auto lastProgress = std::chrono::steady_clock::now();
 
@@ -255,26 +264,9 @@ int DownloadLoop(pConnectSettings cs, Handle& remote, LocalFile& local,
 
         if (len > 0) {
             lastProgress = std::chrono::steady_clock::now();
-            DWORD written = 0;
-            if (textMode && loaded == 0) {
-                // Detect binary data
-                for (int i = 0; i < len; ++i) {
-                    if (buffer[i] == 0) {
-                        textMode = false;
-                        break;
-                    }
-                }
-            }
             loaded += len;
-            const char* out = buffer.data();
-            size_t outLen = static_cast<size_t>(len);
-            if (textMode) {
-                converted.clear();
-                outLen = toCrLf.Convert(buffer.data(), outLen, converted);
-                out = converted.data();
-            }
-            if (!WriteFile(local.get(), out, static_cast<DWORD>(outLen), &written, nullptr) ||
-                written != static_cast<DWORD>(outLen)) {
+            text.Feed(buffer.data(), static_cast<size_t>(len), converted);
+            if (!writeOut()) {
                 ret = SFTP_WRITEFAILED;
                 break;
             }
@@ -302,6 +294,10 @@ int DownloadLoop(pConnectSettings cs, Handle& remote, LocalFile& local,
             break;
         }
     }
+    text.Finish(converted);
+    if (!writeOut() && ret == SFTP_OK)
+        ret = SFTP_WRITEFAILED;
+    textMode = text.Text();
     return ret;
 }
 
@@ -373,10 +369,19 @@ int SftpDownloadFileW(pConnectSettings cs, LPCWSTR RemoteName, LPCWSTR LocalName
     // A shell path learns that the remote file cannot be read only once it
     // runs, after the local file is opened. One that would be overwritten is
     // therefore left alone until the download is complete: the data goes to
-    // a file beside it, which replaces it at the end.
+    // a file beside it, under a name no other file has, which replaces it at
+    // the end.
     const bool viaTemp = shellPath && alwaysOverwrite && !Resume &&
                          GetFileAttributesT(LocalName) != INVALID_FILE_ATTRIBUTES;
-    const std::wstring tempName = viaTemp ? std::wstring(LocalName) + L".sftp-part" : std::wstring();
+    std::wstring tempName;
+    if (viaTemp) {
+        for (unsigned n = 0; n < 100; ++n) {
+            tempName = std::format(L"{}.sftp-part-{:x}-{:x}", LocalName, GetCurrentProcessId(),
+                                   static_cast<unsigned>(GetTickCount64()) + n);
+            if (GetFileAttributesT(tempName.c_str()) == INVALID_FILE_ATTRIBUTES)
+                break;
+        }
+    }
     const LPCWSTR target = viaTemp ? tempName.c_str() : LocalName;
 
     // A file being overwritten is removed rather than truncated in place:
@@ -416,8 +421,11 @@ int SftpDownloadFileW(pConnectSettings cs, LPCWSTR RemoteName, LPCWSTR LocalName
                 DeleteFileT(tempName.c_str());
                 return rc;
             }
-            if (!DeleteFileT(LocalName) || !MoveFileT(tempName.c_str(), LocalName)) {
-                DeleteFileT(tempName.c_str());
+            // One step: the old copy stays until the new one takes its
+            // place. A replace that fails leaves both, the new one beside it.
+            if (!MoveFileReplaceT(tempName.c_str(), LocalName)) {
+                SFTP_LOG("XFER", "replacing the local file failed (error %lu); download kept beside it",
+                         GetLastError());
                 return SFTP_WRITEFAILED;
             }
             return rc;
@@ -525,10 +533,22 @@ int SftpUploadFileW(pConnectSettings cs, LPCWSTR LocalName, LPCWSTR RemoteName,
     if (remotePath.empty())
         return SFTP_WRITEFAILED;
 
+    // The local file's modification time, kept on the server when TC asks
+    // for attributes to be set.
+    long localMtime = 0;
+    if (setattr) {
+        FILETIME lft;
+        if (GetFileTime(local.get(), nullptr, nullptr, &lft))
+            localMtime = GetUnixTime(&lft);
+    }
+
     if (forceShellFallback) {
         int64_t shellUploaded = 0;
-        return ShellDdUploadFile(cs, remotePath, RemoteName,
-                                 local.get(), LocalName, filesize, Resume ? 1 : 0, textMode, &shellUploaded);
+        const int rc = ShellDdUploadFile(cs, remotePath, RemoteName,
+                                         local.get(), LocalName, filesize, Resume ? 1 : 0, textMode, &shellUploaded);
+        if (rc == SFTP_OK && localMtime && !ShellSetRemoteMtime(cs, remotePath, localMtime))
+            SFTP_LOG("SHELL", "upload: modification time not set");
+        return rc;
     }
 
     if (!ReconnectSFTPChannelIfNeeded(cs))
@@ -557,7 +577,8 @@ int SftpUploadFileW(pConnectSettings cs, LPCWSTR LocalName, LPCWSTR RemoteName,
         if (cs->scponly) {
             // Shell SCP upload
             return ShellScpUploadFile(cs, BuildShellScpArgument(remotePath), RemoteName,
-                                      local.get(), LocalName, uploadSize, textMode, &filesize);
+                                      local.get(), LocalName, uploadSize, textMode, &filesize,
+                                      localMtime);
         } else {
             // Native SCP upload
             FILETIME ft;
@@ -744,11 +765,9 @@ int SftpUploadFileW(pConnectSettings cs, LPCWSTR LocalName, LPCWSTR RemoteName,
     }
 
     if (ret == SFTP_OK && setattr) {
-        // Set timestamps/permissions
-        // Only for SFTP transfers (SCP already set timestamps at open)
-        // Guard: ensure sftpsession is available (might be null in SCP-only mode)
-        if ((!useScp || cs->scponly) && cs->sftpsession != nullptr) {
-            // For SFTP, use setstat; for SCP, timestamps were already set at open
+        // SFTP sets times and permissions on the closed file; SCP sent the
+        // time with the file, and the shell paths returned above.
+        if (!useScp && cs->sftpsession != nullptr) {
             FILETIME ft;
             if (GetFileTime(local.get(), nullptr, nullptr, &ft)) {
                 LIBSSH2_SFTP_ATTRIBUTES attr{};

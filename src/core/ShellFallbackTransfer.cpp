@@ -251,6 +251,12 @@ static bool ShellExecPersistentCollectLines(
         }, outExitCode);
 }
 
+bool ShellRunPersistentCommand(pConnectSettings cs, const std::string& command,
+                               std::vector<std::string>& outLines, int* outExitCode)
+{
+    return ShellExecPersistentCollectLines(cs, command, outLines, outExitCode);
+}
+
 // ---- helper: get remote file size via "wc -c" ----
 
 static int64_t ShellGetRemoteFileSize(pConnectSettings cs, const std::string& remotePath)
@@ -314,6 +320,52 @@ static int64_t ShellGetRemoteFileSize(pConnectSettings cs, const std::string& re
     return size;
 }
 
+// ---- helper: set the modification time via "touch" ----
+
+bool ShellSetRemoteMtime(pConnectSettings cs, const std::string& remotePath, long mtime)
+{
+    if (!cs || !cs->session || mtime <= 0)
+        return false;
+    // POSIX `touch -t`, read as UTC: GNU, BSD and BusyBox all take it.
+    const time_t t = static_cast<time_t>(mtime);
+    tm utc{};
+    if (gmtime_s(&utc, &t) != 0)
+        return false;
+    const std::string stamp = std::format("{:04}{:02}{:02}{:02}{:02}.{:02}", utc.tm_year + 1900,
+                                          utc.tm_mon + 1, utc.tm_mday, utc.tm_hour, utc.tm_min, utc.tm_sec);
+    const std::string cmd = "TZ=UTC0 touch -m -c -t " + stamp + " '" +
+                            string_util::ShellQuoteSingle(ShellNormalizeScpPath(remotePath)) +
+                            "' 2>/dev/null; echo $?";
+    const auto okFrom = [](const std::vector<std::string>& lines) {
+        for (const auto& l : lines) {
+            const char* p = l.c_str();
+            while (*p == ' ' || *p == '\t') p++;
+            if (*p >= '0' && *p <= '9')
+                return atoi(p) == 0;
+        }
+        return false;
+    };
+    std::vector<std::string> lines;
+    if (cs->shell_transfer_force || cs->shell_dd_b64only)
+        return ShellExecPersistentCollectLines(cs, cmd, lines) && okFrom(lines);
+
+    std::unique_ptr<ISshChannel> ch = OpenShellDdChannel(cs, "ShellSetRemoteMtime");
+    if (!ch)
+        return ShellExecPersistentCollectLines(cs, cmd, lines) && okFrom(lines);
+    if (!SendChannelCommand(cs->session.get(), ch.get(), cmd.c_str(), cs->sock)) {
+        DisconnectShell(ch.get());
+        return false;
+    }
+    std::string msgbuf, errbuf;
+    std::array<char, 256> line{};
+    while (ReadChannelLine(ch.get(), line.data(), line.size() - 1, msgbuf, errbuf, cs->sock)) {
+        StripEscapeSequences(line.data());
+        lines.emplace_back(line.data());
+    }
+    DisconnectShell(ch.get());
+    return okFrom(lines);
+}
+
 // ---- raw binary download: exec "cat file" / "tail -c +N file" ----
 
 static int ShellDdDownloadRaw(
@@ -355,29 +407,21 @@ static int ShellDdDownloadRaw(
     ch->sendEof();
 
     std::vector<char> buf(SHELL_DD_DOWNLOAD_BLOCK);
-    text_conversion::LfToCrLf toCrLf;
+    // Decided and converted by `text` (binary at a NUL in the first bytes).
+    text_conversion::DownloadText text(textMode);
     std::vector<char> converted;
     const SYSTICKS starttime = get_sys_ticks();
     SYSTICKS lastIoTime = get_sys_ticks();
 
-    bool firstChunk = true;
     while (true) {
         int rc = (int)ch->read(buf.data(), buf.size());
         if (rc > 0) {
-            // A NUL in the first data is a binary file (UTF-16 text among
-            // them), which line-break conversion would corrupt.
-            if (textMode && firstChunk && memchr(buf.data(), 0, static_cast<size_t>(rc)))
-                textMode = false;
-            firstChunk = false;
             // The count stays in server bytes, which the size checks use;
             // only what is written to disk is converted.
-            const char* out = buf.data();
-            size_t outLen = static_cast<size_t>(rc);
-            if (textMode) {
-                converted.clear();
-                outLen = toCrLf.Convert(buf.data(), outLen, converted);
-                out = converted.data();
-            }
+            converted.clear();
+            text.Feed(buf.data(), static_cast<size_t>(rc), converted);
+            const char* out = converted.data();
+            size_t outLen = converted.size();
             DWORD written = 0;
             if (!WriteFile(localfile, out, (DWORD)outLen, &written, nullptr) || written != (DWORD)outLen) {
                 DisconnectShell(ch.get());
@@ -407,6 +451,17 @@ static int ShellDdDownloadRaw(
             SHELL_DD_LOG("raw download read error rc=%d", rc);
             DisconnectShell(ch.get());
             return SFTP_READFAILED;
+        }
+    }
+    {
+        converted.clear();
+        text.Finish(converted);
+        DWORD written = 0;
+        if (!converted.empty() &&
+            (!WriteFile(localfile, converted.data(), static_cast<DWORD>(converted.size()), &written, nullptr) ||
+             written != static_cast<DWORD>(converted.size()))) {
+            DisconnectShell(ch.get());
+            return SFTP_WRITEFAILED;
         }
     }
 
@@ -464,7 +519,8 @@ static int ShellDdDownloadBase64(
     SHELL_DD_LOG("b64 DL payload: %s", payload.c_str());
 
     std::vector<uint8_t> decodeBuf(SHELL_DD_DOWNLOAD_BLOCK);
-    text_conversion::LfToCrLf toCrLf;
+    // Decided and converted by `text` (binary at a NUL in the first bytes).
+    text_conversion::DownloadText text(textMode);
     std::vector<char> converted;
     const SYSTICKS starttime = get_sys_ticks();
     int lineCount = 0;    
@@ -483,22 +539,14 @@ static int ShellDdDownloadBase64(
             size_t decoded = ShellB64Decode(std::string_view(p, lineLen), std::span<uint8_t>(decodeBuf.data(), decodeBuf.size()));
             if (decoded == 0)
                 return true;
-            // A NUL in the first data is a binary file (UTF-16 text among
-            // them), which line-break conversion would corrupt.
-            if (textMode && decodedTotal == resumeFrom && memchr(decodeBuf.data(), 0, decoded))
-                textMode = false;
-
             // The counts stay in server bytes, which the size checks use;
             // only what is written to disk is converted.
-            const char* out = reinterpret_cast<const char*>(decodeBuf.data());
-            size_t outLen = decoded;
-            if (textMode) {
-                converted.clear();
-                outLen = toCrLf.Convert(out, outLen, converted);
-                out = converted.data();
-            }
+            converted.clear();
+            text.Feed(reinterpret_cast<const char*>(decodeBuf.data()), decoded, converted);
+            const size_t outLen = converted.size();
             DWORD written = 0;
-            if (!WriteFile(localfile, out, (DWORD)outLen, &written, nullptr) || written != (DWORD)outLen) {
+            if (outLen && (!WriteFile(localfile, converted.data(), (DWORD)outLen, &written, nullptr) ||
+                           written != (DWORD)outLen)) {
                 SHELL_DD_LOG("b64 DL write failed decoded=%llu written=%lu",
                             (unsigned long long)decoded, (unsigned long)written);
                 streamRc = SFTP_WRITEFAILED;
@@ -525,6 +573,15 @@ static int ShellDdDownloadBase64(
             return streamRc;
         SHELL_DD_LOG("b64 DL: persistent shell command failed");
         return SFTP_READFAILED;
+    }
+    {
+        converted.clear();
+        text.Finish(converted);
+        DWORD written = 0;
+        if (!converted.empty() &&
+            (!WriteFile(localfile, converted.data(), static_cast<DWORD>(converted.size()), &written, nullptr) ||
+             written != static_cast<DWORD>(converted.size())))
+            return SFTP_WRITEFAILED;
     }
     SHELL_DD_LOG("b64 DL end: lines=%d decodedTotal=%lld out=%lld exit=%d",
                  lineCount, (long long)decodedTotal, (long long)*outSizeLoaded, exitCode);
@@ -862,6 +919,10 @@ int ShellDdDownloadFile(
         *outSizeLoaded = startedAt;
     };
 
+    // A raw failure is retried over base64 for this file. The session stays
+    // on base64 only once base64 has worked where raw did not: a file that
+    // cannot be read, or one still growing, says nothing about the channel.
+    bool rawFailed = false;
     if (!cs->shell_dd_b64only) {
         int rc = ShellDdDownloadRaw(cs, remotePath, remoteNameW,
                                     localfile, localNameW, hintedSize, resumeFrom, textMode, outSizeLoaded);
@@ -875,18 +936,18 @@ int ShellDdDownloadFile(
                 return SFTP_READFAILED;
             }
             if (hintedSize > 0 && *outSizeLoaded != hintedSize && resumeFrom == 0) {
-                SHELL_DD_LOG("raw DL size mismatch: got %lld expected %lld, switching to base64",
+                SHELL_DD_LOG("raw DL size mismatch: got %lld expected %lld, retrying over base64",
                              (long long)*outSizeLoaded, (long long)hintedSize);
-                cs->shell_dd_b64only = true;
+                rawFailed = true;
                 rewind();
                 // fall through
             } else {
                 return SFTP_OK;
             }
         } else if (rc != SFTP_ABORT) {
-            SHELL_DD_LOG("raw DL failed (rc=%d), switching to base64 from %lld",
+            SHELL_DD_LOG("raw DL failed (rc=%d), retrying over base64 from %lld",
                          rc, (long long)startedAt);
-            cs->shell_dd_b64only = true;
+            rawFailed = true;
             rewind();
             // fall through
         } else {
@@ -895,8 +956,13 @@ int ShellDdDownloadFile(
     }
 
     ShowStatusId(IDS_LOG_SHELL_BASE64, nullptr, true);
-    return ShellDdDownloadBase64(cs, remotePath, remoteNameW,
-                                  localfile, localNameW, hintedSize, resumeFrom, textMode, outSizeLoaded);
+    const int rc = ShellDdDownloadBase64(cs, remotePath, remoteNameW,
+                                         localfile, localNameW, hintedSize, resumeFrom, textMode, outSizeLoaded);
+    if (rawFailed && rc == SFTP_OK) {
+        SHELL_DD_LOG("base64 worked where raw did not: base64 for the rest of the session");
+        cs->shell_dd_b64only = true;
+    }
+    return rc;
 }
 
 int ShellDdUploadFile(
@@ -953,16 +1019,25 @@ int ShellDdUploadFile(
         resumeFrom = remoteSize;
     }
 
+    // As for downloads: a raw failure is retried over base64 for this file,
+    // and the session stays on base64 only once that has worked.
+    bool rawFailed = false;
     if (!cs->shell_dd_b64only) {
         int rc = ShellDdUploadRaw(cs, remotePath, remoteNameW,
                                   localfile, localNameW, fileSize, resumeFrom, textMode, outSizeLoaded);
         if (rc == SFTP_OK) {
-            // Verify remote size.
+            // Verify the remote size. A size that cannot be read is unknown,
+            // not wrong, and accepted as base64 accepts it: redoing the
+            // upload starts by truncating the file just written.
             int64_t remoteSize = ShellGetRemoteFileSize(cs, remotePath);
+            if (remoteSize < 0) {
+                SHELL_DD_LOG("raw UL: remote size unknown, upload accepted");
+                return SFTP_OK;
+            }
             if (expectedRemoteSize > 0 && remoteSize != expectedRemoteSize) {
-                SHELL_DD_LOG("raw UL size mismatch: remote=%lld expected=%lld, switching to base64",
+                SHELL_DD_LOG("raw UL size mismatch: remote=%lld expected=%lld, retrying over base64",
                              (long long)remoteSize, (long long)expectedRemoteSize);
-                cs->shell_dd_b64only = true;
+                rawFailed = true;
                 SetFilePointer(localfile, 0, nullptr, FILE_BEGIN);
                 *outSizeLoaded = 0;
                 resumeFrom = 0;
@@ -971,8 +1046,8 @@ int ShellDdUploadFile(
                 return SFTP_OK;
             }
         } else if (rc != SFTP_ABORT) {
-            SHELL_DD_LOG("raw UL failed (rc=%d), switching to base64", rc);
-            cs->shell_dd_b64only = true;
+            SHELL_DD_LOG("raw UL failed (rc=%d), retrying over base64", rc);
+            rawFailed = true;
             SetFilePointer(localfile, 0, nullptr, FILE_BEGIN);
             *outSizeLoaded = 0;
             resumeFrom = 0;
@@ -983,9 +1058,14 @@ int ShellDdUploadFile(
     }
 
     ShowStatusId(IDS_LOG_SHELL_BASE64, nullptr, true);
-    return ShellDdUploadBase64(cs, remotePath, remoteNameW,
-                               localfile, localNameW, fileSize, resumeFrom,
-                               textMode, expectedRemoteSize, outSizeLoaded);
+    const int rc = ShellDdUploadBase64(cs, remotePath, remoteNameW,
+                                       localfile, localNameW, fileSize, resumeFrom,
+                                       textMode, expectedRemoteSize, outSizeLoaded);
+    if (rawFailed && rc == SFTP_OK) {
+        SHELL_DD_LOG("base64 worked where raw did not: base64 for the rest of the session");
+        cs->shell_dd_b64only = true;
+    }
+    return rc;
 }
 
 // The file name from a path argument as BuildShellScpArgument quotes it:
@@ -1020,7 +1100,8 @@ int ShellScpUploadFile(
     LPCWSTR localNameW,
     int64_t fileSize,
     bool textMode,
-    int64_t* outSizeLoaded)
+    int64_t* outSizeLoaded,
+    long mtime)
 {
     if (!cs || !cs->session || !IsValidFileHandle(localfile) || !outSizeLoaded)
         return SFTP_FAILED;
@@ -1031,7 +1112,8 @@ int ShellScpUploadFile(
     if (!channel)
         return SFTP_FAILED;
 
-    std::string cmd = "scp -t ";
+    // With a time to keep, -p makes scp take the T line below.
+    std::string cmd = mtime ? "scp -pt " : "scp -t ";
     cmd += remotePathArg;
     SFTP_LOG("SCP", "upload: sending scp -t");
     if (!SendChannelCommandNoEof(cs->session.get(), channel.get(), cmd.c_str(), cs->sock)) {
@@ -1054,6 +1136,16 @@ int ShellScpUploadFile(
     if (baseName.find_first_of("\r\n") != std::string::npos) {
         DisconnectShell(channel.get());
         return SFTP_WRITEFAILED;
+    }
+    if (mtime) {
+        const std::string times = std::format("T{} 0 {} 0\n", mtime, mtime);
+        if (!ScpWriteAll(channel.get(), cs, times.data(), times.size(), SFTP_SCP_WRITE_IDLE_TIMEOUT_MS) ||
+            !ScpReadAck(channel.get(), cs, ackErr)) {
+            if (!ackErr.empty())
+                ShowStatus(ackErr.c_str());
+            DisconnectShell(channel.get());
+            return SFTP_WRITEFAILED;
+        }
     }
     std::array<char, 1024> header{};
     _snprintf_s(header.data(), header.size(), _TRUNCATE, "C%04o %lld %s\n", cs->filemod & 0777, (long long)fileSize, baseName.c_str());

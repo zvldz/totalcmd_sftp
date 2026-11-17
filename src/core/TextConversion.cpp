@@ -1,4 +1,5 @@
 #include "TextConversion.h"
+#include <algorithm>
 
 namespace text_conversion {
 
@@ -64,6 +65,44 @@ size_t CrLfToLf::FinishCount()
     const size_t held = pendingCr_ ? 1 : 0;
     pendingCr_ = false;
     return held;
+}
+
+size_t DownloadText::Release(std::vector<char>& out)
+{
+    deciding_ = false;
+    size_t n = 0;
+    if (text_) {
+        n = toCrLf_.Convert(held_.data(), held_.size(), out);
+    } else {
+        out.insert(out.end(), held_.begin(), held_.end());
+        n = held_.size();
+    }
+    held_.clear();
+    held_.shrink_to_fit();
+    return n;
+}
+
+size_t DownloadText::Feed(const char* data, size_t len, std::vector<char>& out)
+{
+    if (deciding_) {
+        held_.insert(held_.end(), data, data + len);
+        // Only the first kWindow bytes decide, however the chunks fall.
+        const auto windowEnd = held_.begin() + static_cast<std::ptrdiff_t>((std::min)(held_.size(), kWindow));
+        if (std::find(held_.begin(), windowEnd, '\0') != windowEnd)
+            text_ = false;
+        if (!text_ || held_.size() >= kWindow)
+            return Release(out);
+        return 0;
+    }
+    if (text_)
+        return toCrLf_.Convert(data, len, out);
+    out.insert(out.end(), data, data + len);
+    return len;
+}
+
+size_t DownloadText::Finish(std::vector<char>& out)
+{
+    return deciding_ ? Release(out) : 0;
 }
 
 } // namespace text_conversion

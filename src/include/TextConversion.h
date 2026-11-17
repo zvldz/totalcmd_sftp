@@ -46,4 +46,30 @@ private:
     bool pendingCr_ = false;
 };
 
+// A download in text mode: the first kWindow bytes are held until they show
+// whether the file is text — a NUL among them makes it binary (UTF-16 text
+// included), which line-break conversion would corrupt — and every transfer
+// path decides on the same bytes, however its data arrives. Then text goes
+// through LfToCrLf and binary data as it is.
+class DownloadText {
+public:
+    static constexpr size_t kWindow = 64 * 1024;
+
+    explicit DownloadText(bool textMode) noexcept : text_(textMode), deciding_(textMode) {}
+    // Appends to `out` what can be written now; returns the bytes appended.
+    size_t Feed(const char* data, size_t len, std::vector<char>& out);
+    // Releases what is still held. Call once, after the last chunk.
+    size_t Finish(std::vector<char>& out);
+    // Still text mode (false once a NUL was seen).
+    bool Text() const noexcept { return text_; }
+
+private:
+    size_t Release(std::vector<char>& out);
+
+    bool text_;
+    bool deciding_;
+    std::vector<char> held_;
+    LfToCrLf toCrLf_;
+};
+
 } // namespace text_conversion
