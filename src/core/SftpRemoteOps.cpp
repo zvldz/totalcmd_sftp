@@ -18,6 +18,7 @@
 #include "SftpInternal.h"
 #include "TerminalText.h"
 #include "RemoteNames.h"
+#include "ScpTransfer.h"
 #if SFTP_EXTRA
 #include "PhpAgentClient.h"
 #endif
@@ -1127,12 +1128,16 @@ int SftpSetAttrW(pConnectSettings cs, LPCWSTR RemoteName, int NewAttr)
 
 int SftpSetDateTimeW(pConnectSettings cs, LPCWSTR RemoteName, LPFILETIME LastWriteTime)
 {
-    if (!cs || !RemoteName || !LastWriteTime || cs->scponly || IsPhpAgentTransport(cs))
+    if (!cs || !RemoteName || !LastWriteTime || IsPhpAgentTransport(cs))
         return SFTP_FAILED;
 
     std::string nameA(wdirtypemax, '\0');
     if (!CopyRemotePathW2A(cs, RemoteName, nameA.data(), nameA.size()))
         return SFTP_FAILED;
+
+    // Without SFTP the time is set with `touch`, as after a shell upload.
+    if (cs->scponly)
+        return ShellSetRemoteMtime(cs, nameA.c_str(), GetUnixTime(LastWriteTime)) ? SFTP_OK : SFTP_FAILED;
 
     // SFTP sets both times at once; the access time is kept as the server
     // has it, and takes the new modification time only when it cannot be read.

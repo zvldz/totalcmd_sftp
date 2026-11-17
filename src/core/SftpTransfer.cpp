@@ -525,6 +525,15 @@ int SftpUploadFileW(pConnectSettings cs, LPCWSTR LocalName, LPCWSTR RemoteName,
     if (remotePath.empty())
         return SFTP_WRITEFAILED;
 
+    // Without SFTP every later command on the file (delete, rename) goes
+    // through the terminal, which refuses a name with a control character:
+    // such a file is not created, as the shell transfer does not create it.
+    if (cs->scponly && !ShellCommandIsSafe(remotePath)) {
+        SFTP_LOG("SCP", "upload refused: the name contains a control character");
+        ShowStatus("A name contains a control character; not sent to the shell");
+        return SFTP_WRITEFAILED;
+    }
+
     // The local file's modification time, kept on the server when TC asks
     // for attributes to be set.
     long localMtime = 0;

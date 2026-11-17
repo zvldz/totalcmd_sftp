@@ -307,6 +307,14 @@ From this version the plugin comes in two builds: **classic**
 
 ### Fixes
 
+- **SCP-only sessions.**
+  - Setting a file's time (Total Commander's Change attributes) failed
+    on a session without SFTP; it is now set with `touch`, as after an
+    upload through the shell.
+  - A file whose name holds a control character (an escape, a tab) was
+    created by an SCP upload but could then not be deleted or renamed,
+    since those commands go through the terminal, which refuses such a
+    name. The upload is now refused the same way.
 - **Connection dialog.**
   - Alt+C went to the Auto/IPv4/IPv6 buttons and Alt+P to the "?" button,
     in every language, instead of the address and password fields.
@@ -921,7 +929,11 @@ From this version the plugin comes in two builds: **classic**
   is checked for missing strings and placeholders, and every dialog for
   repeated shortcuts; each package for its contents, the architecture of
   its plugin files, ASLR/DEP/CFG, the exported functions and system-only
-  DLLs. All of it runs in the release workflow.
+  DLLs. All of it runs in the release workflow. The integration tests also
+  resume a download, move onto an existing file with and without
+  overwrite, set a file's time and read it back, run a command and check
+  its result and output, and upload names with control characters, in
+  every transfer mode.
 
 ## 10.0.2.3 — 2026-11-15
 

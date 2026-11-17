@@ -74,6 +74,7 @@ struct Plugin {
     int (WINAPI* GetFileW)(LPCWSTR, LPWSTR, int, RemoteInfoStruct*) = nullptr;
     int (WINAPI* RenMovFileW)(LPCWSTR, LPCWSTR, BOOL, BOOL, RemoteInfoStruct*) = nullptr;
     int (WINAPI* ExecuteFileW)(HWND, LPWSTR, LPCWSTR) = nullptr;
+    BOOL (WINAPI* SetTimeW)(LPCWSTR, LPFILETIME, LPFILETIME, LPFILETIME) = nullptr;
     BOOL (WINAPI* Disconnect)(LPCSTR) = nullptr;
     void (WINAPI* StatusInfoW)(LPCWSTR, int, int) = nullptr;
     void (WINAPI* SetCryptCallbackW)(tCryptProcW, int, int) = nullptr;
@@ -97,7 +98,7 @@ struct Plugin {
                Bind(FindFirstW, "FsFindFirstW") && Bind(FindNextW, "FsFindNextW") && Bind(FindClose, "FsFindClose") &&
                Bind(MkDirW, "FsMkDirW") && Bind(RemoveDirW, "FsRemoveDirW") && Bind(DeleteFileW, "FsDeleteFileW") &&
                Bind(PutFileW, "FsPutFileW") && Bind(GetFileW, "FsGetFileW") && Bind(RenMovFileW, "FsRenMovFileW") &&
-               Bind(ExecuteFileW, "FsExecuteFileW") && Bind(Disconnect, "FsDisconnect") &&
+               Bind(ExecuteFileW, "FsExecuteFileW") && Bind(SetTimeW, "FsSetTimeW") && Bind(Disconnect, "FsDisconnect") &&
                Bind(StatusInfoW, "FsStatusInfoW") && Bind(SetCryptCallbackW, "FsSetCryptCallbackW");
     }
 } g_plugin;
@@ -345,6 +346,7 @@ struct RemoteEntry {
     uint64_t size = 0;
     DWORD attributes = 0;
     DWORD unixMode = 0;
+    FILETIME mtime{};
 };
 
 std::map<std::wstring, RemoteEntry> ListDir(const std::wstring& tcPath, bool& ok)
@@ -365,6 +367,7 @@ std::map<std::wstring, RemoteEntry> ListDir(const std::wstring& tcPath, bool& ok
         e.size = (static_cast<uint64_t>(fd.nFileSizeHigh) << 32) | fd.nFileSizeLow;
         e.attributes = fd.dwFileAttributes;
         e.unixMode = (fd.dwFileAttributes & FS_ATTR_UNIXMODE) ? fd.dwReserved0 : 0;
+        e.mtime = fd.ftLastWriteTime;
         entries[name] = e;
     } while (g_plugin.FindNextW(h, &fd));
     g_plugin.FindClose(h);
@@ -806,7 +809,119 @@ int wmain(int argc, wchar_t** argv)
             const int get = g_plugin.GetFileW((dir + L"\\resume.bin").c_str(), target.data(), FS_COPYFLAGS_OVERWRITE, &ri);
             Check(rc == FS_FILE_OK && get == FS_FILE_OK && Sha256File(target) == Sha256File(local + L"resume.bin"),
                   "resumed upload completes a partial file (rc=" + std::to_string(rc) + ")");
+
+            // The other way: a partial local copy is continued from its end.
+            WriteFileBytes(target, full.substr(0, 900001));
+            const int resumed = g_plugin.GetFileW((dir + L"\\resume.bin").c_str(), target.data(), FS_COPYFLAGS_RESUME, &ri);
+            if (resumed == FS_FILE_NOTSUPPORTED)
+                Check(true, "resumed download not offered in this mode");
+            else
+                Check(resumed == FS_FILE_OK && Sha256File(target) == Sha256File(local + L"resume.bin"),
+                      "resumed download completes a partial local file (rc=" + std::to_string(resumed) + ")");
         }
+    }
+
+    {
+        // F6 onto an existing file: refused without overwrite, and with it the
+        // target holds the source and the source is gone.
+        WriteFileBytes(local + L"f6-src.bin", RandomBytes(40000, 5));
+        WriteFileBytes(local + L"f6-dst.bin", RandomBytes(30000, 6));
+        g_plugin.PutFileW((local + L"f6-src.bin").c_str(), (dir + L"\\f6-src.bin").c_str(), 0);
+        g_plugin.PutFileW((local + L"f6-dst.bin").c_str(), (dir + L"\\f6-dst.bin").c_str(), 0);
+        RemoteInfoStruct ri = InfoFor(dir, L"f6-src.bin");
+        const int refused = g_plugin.RenMovFileW((dir + L"\\f6-src.bin").c_str(), (dir + L"\\f6-dst.bin").c_str(), TRUE, FALSE, &ri);
+        // The PHP agent answers an existing target with HTTP 409, which the
+        // client reports as a write error with a message of its own (open in
+        // TODO).
+        const std::string asks = "a move onto an existing file asks first (rc=" + std::to_string(refused) + ")";
+        if (phpMode)
+            Known(refused == FS_FILE_EXISTS, asks);
+        else
+            Check(refused == FS_FILE_EXISTS, asks);
+        const int moved = g_plugin.RenMovFileW((dir + L"\\f6-src.bin").c_str(), (dir + L"\\f6-dst.bin").c_str(), TRUE, TRUE, &ri);
+        entries = ListDir(dir, ok);
+        std::wstring target = back + L"f6-dst.bin";
+        RemoteInfoStruct dri = InfoFor(dir, L"f6-dst.bin");
+        const int get = g_plugin.GetFileW((dir + L"\\f6-dst.bin").c_str(), target.data(), FS_COPYFLAGS_OVERWRITE, &dri);
+        Check(moved == FS_FILE_OK && !entries.count(L"f6-src.bin") && get == FS_FILE_OK &&
+              Sha256File(target) == Sha256File(local + L"f6-src.bin"),
+              "a move with overwrite replaces the target and removes the source (rc=" + std::to_string(moved) + ")");
+    }
+
+    {
+        // A time set on a remote file is what the listing shows. Whole minutes,
+        // a few days back: an `ls` listing shows no seconds, and no time at
+        // all for a date half a year old.
+        SYSTEMTIME st{};
+        GetSystemTime(&st);
+        FILETIME ft{};
+        SystemTimeToFileTime(&st, &ft);
+        ULARGE_INTEGER t{};
+        t.LowPart = ft.dwLowDateTime;
+        t.HighPart = ft.dwHighDateTime;
+        constexpr ULONGLONG kMinute = 60ULL * 10000000ULL;
+        t.QuadPart = (t.QuadPart - 3ULL * 24 * 60 * kMinute) / kMinute * kMinute;
+        ft.dwLowDateTime = t.LowPart;
+        ft.dwHighDateTime = t.HighPart;
+        const BOOL set = g_plugin.SetTimeW((dir + L"\\f6-dst.bin").c_str(), nullptr, nullptr, &ft);
+        entries = ListDir(dir, ok);
+        const auto it = entries.find(L"f6-dst.bin");
+        ULARGE_INTEGER got{};
+        if (it != entries.end()) {
+            got.LowPart = it->second.mtime.dwLowDateTime;
+            got.HighPart = it->second.mtime.dwHighDateTime;
+        }
+        const long long diffSeconds = (static_cast<long long>(got.QuadPart) - static_cast<long long>(t.QuadPart)) / 10000000LL;
+        const std::string listedBack = "a modification time set is listed back (set=" +
+              std::to_string(set) + ", listed " + std::to_string(diffSeconds) + " s off)";
+        // The PHP agent has no request that sets a time (open in TODO).
+        if (phpMode)
+            Known(set && got.QuadPart == t.QuadPart, listedBack);
+        else
+            Check(set && got.QuadPart == t.QuadPart, listedBack);
+    }
+
+    if (!phpMode) {
+        // A command's exit status is the verb's result; its output goes to
+        // the log.
+        std::wstring target = dir;
+        const size_t logBefore = g_logLines.size();
+        const int okRc = g_plugin.ExecuteFileW(nullptr, target.data(), L"quote echo it-quote-marker");
+        bool logged = false;
+        {
+            std::lock_guard<std::mutex> lock(g_logMutex);
+            for (size_t i = logBefore; i < g_logLines.size(); ++i)
+                logged = logged || g_logLines[i].find(L"it-quote-marker") != std::wstring::npos;
+        }
+        Check(okRc == FS_EXEC_OK && logged, "a command that succeeds is reported so, with its output in the log");
+        target = dir;
+        const int failRc = g_plugin.ExecuteFileW(nullptr, target.data(), L"quote false");
+        Check(failRc == FS_EXEC_ERROR, "a command that fails is reported as an error");
+    }
+
+    {
+        // Names with control characters reach the server as names, or not at
+        // all: never as part of a command, which would leave other files.
+        const auto before = ListDir(dir, ok);
+        const wchar_t* ctl[] = { L"ctl\x1B[31m.txt", L"ctl\tname.txt", L"ctl\x15.txt" };
+        WriteFileBytes(local + L"ctl.txt", "control\n");
+        std::vector<std::wstring> stored;
+        for (const wchar_t* n : ctl) {
+            if (g_plugin.PutFileW((local + L"ctl.txt").c_str(), (dir + L"\\" + n).c_str(), 0) == FS_FILE_OK)
+                stored.push_back(n);
+        }
+        const auto after = ListDir(dir, ok);
+        bool exact = ok;
+        for (const auto& e : after) {
+            if (before.count(e.first))
+                continue;
+            if (std::find(stored.begin(), stored.end(), e.first) == stored.end())
+                exact = false;
+        }
+        for (const auto& n : stored)
+            exact = exact && after.count(n) == 1;
+        Check(exact, "names with control characters are stored as they are or refused (" +
+                     std::to_string(stored.size()) + " stored)");
     }
 
     if (!phpMode) {
