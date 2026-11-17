@@ -182,7 +182,7 @@
 268=Asociere...
 269=Shell...
 270=LAN Pair
-271=Parolă asociere (opțional – gol = folosiți cheia de încredere salvată).
+271=Introduceți parola de asociere (aceeași pe ambele calculatoare).
 272=Receptor LAN Pair oprit.
 273=Pornirea receptorului a eșuat: {}
 274=Receptor LAN Pair pornit (port 45846). Faceți clic din nou pe Asociere... pentru a opri.
@@ -405,13 +405,7 @@
 12158=Rulează pe server după fiecare autentificare, cu excepția modului doar SCP. Ieșirea apare în fereastra jurnalului.
 12159=Așteaptă și afișează ieșirea
 12160=Pornește fără așteptare
-12161=LAN Pair: computerul "{}" ({}) cere acces la toate unitățile acestui computer.\n\nPermiteți? Răspundeți Da doar dacă asociați chiar acum aceste computere.
-12162=LAN Pair: celălalt computer nu a permis această conexiune.
-12163=LAN Pair: pe celălalt computer este setată o parolă. Introduceți aici aceeași parolă.
-12164=Atenție: http:// simplu – parola PHP Agent este trimisă necriptată la fiecare cerere. Folosiți https://.
 12165=Comanda serverului SFTP nu a pornit o sesiune SFTP. Verificați calea ei la „Mai mult...” în setările conexiunii sau goliți-o pentru a folosi subsistemul SFTP al serverului.
-12166=Celălalt computer nu îl recunoaște pe acesta. Le asociați din nou? Celălalt computer își va întreba utilizatorul.
-12167=LAN Pair: celălalt computer nu îl recunoaște pe acesta. Asociați-le din nou cu „Asociere...” în setările conexiunii.
 12168=Această sesiune folosește PHP Agent sau LAN Pair, care există doar în versiunea extra a pluginului (SFTPplug-...-extra.zip). Această versiune se conectează doar prin SSH.
 12169=Această sesiune este setată să treacă atât printr-un proxy, cât și printr-o gazdă intermediară. Pluginul ajunge direct la gazda intermediară, proxy-ul ar fi ocolit. Păstrați doar una dintre ele.
 12170=Sesiunea intermediară '{}' trece printr-un proxy. Gazda intermediară este accesată direct, acel proxy ar fi ocolit, așa că conexiunea este refuzată. Alegeți o sesiune intermediară fără proxy.
@@ -423,6 +417,7 @@
 12176=ProxyJump: negocierea SSH cu gazda intermediară a eșuat: {}
 12177=ProxyJump: autentificarea la gazda intermediară a eșuat.\nUtilizator: {}
 12178=ProxyJump: nu se poate deschide tunelul către {}\n{}
+12179=Agentul PHP de pe server este prea vechi pentru această versiune a pluginului: nu acceptă cereri semnate. Încărcați sftp.php livrat cu pluginul.
 12089=SFTP
 12104=(manual)
 12105= (lipsește)

@@ -487,32 +487,6 @@ static std::string MakeLanPeerId()
     return std::string(host); // hostname only — stable across TC restarts
 }
 
-// A peer with no trust key asks for access while this machine has no LAN
-// Pair password: the user decides. The question comes from a server thread,
-// not from Total Commander, so it stays on top; the default answer is No.
-bool AskNewLanPeer(const std::string& peerId, const std::string& ip)
-{
-    std::string text = LngStrU8(IDS_LAN_ASK_NEW_PEER,
-        "LAN Pair: computer \"{}\" ({}) asks for access to all drives of this computer.\n\n"
-        "Allow it? Answer Yes only if you are pairing with that computer right now.");
-    // The peer id comes from the network: shown shortened, and the search
-    // for the next placeholder starts after it.
-    const std::string shownId = peerId.substr(0, 64);
-    size_t pos = 0;
-    for (const std::string* arg : { &shownId, &ip }) {
-        pos = text.find("{}", pos);
-        if (pos == std::string::npos) break;
-        text.replace(pos, 2, *arg);
-        pos += arg->size();
-    }
-    const std::wstring textW = unicode_util::utf8_to_wstring(text);
-    const int rc = MessageBoxW(nullptr, textW.c_str(), L"LAN Pair",
-        MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2 | MB_TOPMOST | MB_SETFOREGROUND | MB_SYSTEMMODAL);
-    SFTP_LOG("LAN", "new peer \"%s\" from %s: %s", shownId.c_str(), ip.c_str(),
-             rc == IDYES ? "allowed" : "refused");
-    return rc == IDYES;
-}
-
 void StartGlobalLanServices(bool startServer)
 {
     if (startServer && (!g_lanFileServer || !g_lanFileServer->isRunning())) {
@@ -528,7 +502,6 @@ void StartGlobalLanServices(bool startServer)
                 !storedPw.empty()) {
                 g_lanFileServer->setPassword(storedPw);
             }
-            g_lanFileServer->setNewPeerApprover(AskNewLanPeer);
         }
     }
 
@@ -597,7 +570,7 @@ static void ReleaseLanSession(pConnectSettings cs)
 }
 
 // Connect a LAN Pair session: run discovery to find the peer's current IP,
-// then connect + authenticate with DPAPI trust key.
+// then connect and run the PAIR3 handshake (password, or the stored key).
 static int LanPairConnect(pConnectSettings cs)
 {
     // lan_pair_role: 0=mutual, 1=receiver (biorca), 2=donor (dawca)
@@ -698,20 +671,8 @@ static int LanPairConnect(pConnectSettings cs)
         &err);
 
     if (!session) {
-        std::string msg;
-        if (err.message.find("FAIL password-required") != std::string::npos) {
-            msg = LngStrU8(IDS_LAN_ERR_PASSWORD_REQUIRED,
-                "LAN Pair: the other computer has a password. Enter the same password here.");
-        } else if (err.message.find("FAIL denied") != std::string::npos) {
-            msg = LngStrU8(IDS_LAN_ERR_DENIED,
-                "LAN Pair: the other computer did not allow this connection.");
-        } else if (err.message.find("FAIL trust-unknown") != std::string::npos) {
-            msg = LngStrU8(IDS_LAN_ERR_TRUST_UNKNOWN,
-                "LAN Pair: the other computer does not recognise this one. Pair them again with Pair... in the connection settings.");
-        } else {
-            msg = LngStrU8(IDS_LAN_ERR_CONN_FAILED, "LAN Pair: connection failed");
-            if (!err.message.empty()) msg += " \xe2\x80\x94 " + err.message;
-        }
+        std::string msg = LngStrU8(IDS_LAN_ERR_CONN_FAILED, "LAN Pair: connection failed");
+        if (!err.message.empty()) msg += " \xe2\x80\x94 " + err.message;
         if (cs->feedback) cs->feedback->ShowError(msg.c_str());
         return fail();
     }
@@ -746,11 +707,15 @@ int SftpConnect(pConnectSettings ConnectSettings)
     }
     if (IsPhpAgentTransport(ConnectSettings)) {
         ShowStatusId(IDS_LOG_PHP_AGENT_MODE, nullptr, true);
-        if (PhpAgentProbe(ConnectSettings) != SFTP_OK) {
+        std::string probeError;
+        if (PhpAgentProbe(ConnectSettings, probeError) != SFTP_OK) {
             if (ConnectSettings->feedback) {
-                std::array<char, 256> msgbuf{};
-                const int n = LoadStr(msgbuf, IDS_PHP_PROBE_FAILED);
-                ConnectSettings->feedback->ShowError(n > 0 ? msgbuf.data() : "PHP Agent probe failed. Check URL and key.");
+                if (probeError.empty()) {
+                    std::array<char, 256> msgbuf{};
+                    const int n = LoadStr(msgbuf, IDS_PHP_PROBE_FAILED);
+                    probeError = n > 0 ? msgbuf.data() : "PHP Agent probe failed. Check URL and key.";
+                }
+                ConnectSettings->feedback->ShowError(probeError);
             }
             return SFTP_FAILED;
         }

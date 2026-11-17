@@ -182,7 +182,7 @@
 268=Paaren...
 269=Shell...
 270=LAN Pair
-271=Pairing-Passwort (optional – leer lassen, um gespeicherten Trust-Key zu verwenden).
+271=Geben Sie das Pairing-Passwort ein (auf beiden Computern dasselbe).
 272=LAN Pair Empfanger gestoppt.
 273=Empfanger-Start fehlgeschlagen: {}
 274=LAN Pair Empfanger gestartet (Port 45846). Klicken Sie erneut auf Paaren... zum Stoppen.
@@ -406,13 +406,7 @@
 12158=Läuft nach jeder Anmeldung auf dem Server, außer im Nur-SCP-Modus. Die Ausgabe erscheint im Protokollfenster.
 12159=Warten und Ausgabe anzeigen
 12160=Ohne Warten starten
-12161=LAN Pair: Computer "{}" ({}) fordert Zugriff auf alle Laufwerke dieses Computers.\n\nZulassen? Antworten Sie nur mit Ja, wenn Sie gerade selbst diese Computer koppeln.
-12162=LAN Pair: Der andere Computer hat diese Verbindung nicht zugelassen.
-12163=LAN Pair: Auf dem anderen Computer ist ein Passwort gesetzt. Geben Sie hier dasselbe Passwort ein.
-12164=Warnung: einfaches http:// – das PHP-Agent-Passwort wird bei jeder Anfrage unverschlüsselt gesendet. Verwenden Sie https://.
 12165=Der SFTP-Serverbefehl hat keine SFTP-Sitzung gestartet. Prüfen Sie seinen Pfad unter „Mehr...“ in den Verbindungseinstellungen oder leeren Sie ihn, um das SFTP-Subsystem des Servers zu verwenden.
-12166=Der andere Computer erkennt diesen nicht. Neu koppeln? Der andere Computer fragt seinen Benutzer.
-12167=LAN Pair: Der andere Computer erkennt diesen nicht. Koppeln Sie sie neu mit „Paaren...“ in den Verbindungseinstellungen.
 12168=Diese Sitzung verwendet PHP Agent oder LAN Pair, die nur die Extra-Version des Plugins enthält (SFTPplug-...-extra.zip). Diese Version verbindet nur über SSH.
 12169=Diese Sitzung ist auf einen Proxy und einen Jump-Host zugleich eingestellt. Das Plugin erreicht einen Jump-Host direkt, der Proxy würde übergangen. Behalten Sie eines von beiden.
 12170=Die Jump-Sitzung '{}' geht über einen Proxy. Ein Jump-Host wird direkt erreicht, der Proxy würde übergangen, daher wird die Verbindung abgelehnt. Wählen Sie eine Jump-Sitzung ohne Proxy.
@@ -424,6 +418,7 @@
 12176=ProxyJump: SSH-Handshake mit dem Jump-Host fehlgeschlagen: {}
 12177=ProxyJump: Anmeldung am Jump-Host fehlgeschlagen.\nBenutzer: {}
 12178=ProxyJump: Tunnel zu {} kann nicht geöffnet werden\n{}
+12179=Der PHP-Agent auf dem Server ist für diese Plugin-Version zu alt: Er nimmt keine signierten Anfragen an. Laden Sie die mit dem Plugin gelieferte sftp.php hoch.
 12089=SFTP
 12104=(manuell)
 12105= (fehlt)

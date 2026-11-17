@@ -8,7 +8,7 @@
 <ul>
   <li>SSH connections (SFTP, SCP, Shell fallback, Jump Host) are always encrypted by the SSH protocol.</li>
   <li>Use HTTPS for all PHP Agent / PHP Shell traffic. Avoid plain HTTP on any network you do not fully control.</li>
-  <li>LAN Pair uses authenticated TCP sessions (PAIR1 protocol) within the local network.</li>
+  <li>LAN Pair sessions are authenticated with SPAKE2 and encrypted with AES-256-GCM (PAIR3 protocol) within the local network.</li>
 </ul>
 
 <h2>Password and credential storage</h2>
@@ -42,16 +42,15 @@ icacls "C:\Program Files\Total Commander\wcx_ftp.ini" /grant "${env:USERNAME}:F"
   <li>Accepting a new fingerprint should always be a deliberate decision.</li>
 </ul>
 
-<h2>LAN Pair trust model and cryptography</h2>
+<h2>LAN Pair cryptography</h2>
 <ul>
-  <li>Authentication uses PBKDF2-HMAC-SHA256 with <b>120,000 iterations</b> to derive a session key from the pairing password.</li>
-  <li>Both sides exchange HMAC-SHA256 challenge-response proofs over TCP. Neither the password nor the derived key is transmitted in plain form.</li>
-  <li>A peer without a trust key gets one only if it proves the pairing password or, when no password is set, after the user of the machine being connected to answers Yes to a question naming the peer and its IP (default No). The plugin stores the key encrypted via Windows DPAPI in user scope, keyed per peer-pair: other Windows accounts on the machine cannot read it.</li>
-  <li>The LAN Pair ports are opened only when LAN Pair is used (a LAN Pair session or <b>Pair...</b>) and closed with the last LAN Pair session (a Donor serves until Total Commander exits). The TCP ports are bound exclusively. The TrustedInstaller token is taken only after a peer is authenticated.</li>
-  <li>A new trust key is accepted only in answer to the plugin's own request, and a peer that no longer recognises this machine is paired anew only when the user says so: any machine on the network can answer discovery under the peer's name.</li>
-  <li>Subsequent connections use the stored DPAPI trust key — no password prompt.</li>
+  <li>The pairing password, the same on both computers, becomes a pair key through PBKDF2-HMAC-SHA256 with <b>120,000 iterations</b>, salted with the two computers' ids.</li>
+  <li>The computers prove the key to each other with <b>SPAKE2</b> (RFC 9382, P-256). Neither the password nor the key is transmitted, and a recorded exchange gives nothing to guess the password against offline; an attacker who joins in gets one guess per connection, each costing a second.</li>
+  <li>Everything after the handshake is encrypted and authenticated with <b>AES-256-GCM</b>, with a separate key per direction and numbered frames: an altered, replayed or reordered frame ends the connection.</li>
+  <li>Pairing requires the password. After a successful handshake the key is stored encrypted with Windows DPAPI for your Windows user account, per peer pair, and used for later sessions: other Windows accounts on the machine cannot read it.</li>
+  <li>The LAN Pair ports are opened only when LAN Pair is used (a LAN Pair session or <b>Pair...</b>) and closed with the last LAN Pair session (a Donor serves until Total Commander exits). The TCP ports are bound exclusively. The TrustedInstaller token is taken only after the handshake.</li>
   <li>Session timeout is enforced between operations; active transfers are never killed mid-stream.</li>
-  <li>All LAN Pair cryptography uses Windows BCrypt only — no third-party DLLs.</li>
+  <li>The cryptography is OpenSSL (statically linked) and Windows BCrypt — no third-party DLLs.</li>
 </ul>
 
 <h2>Plugin error isolation</h2>

@@ -205,6 +205,7 @@
     <ClCompile Include="..\src\core\ConnectionAuth.cpp" />
     <ClCompile Include="..\src\core\LanPair.cpp" Condition="'$(SftpExtra)'=='1'" />
     <ClCompile Include="..\src\core\LanPairSession.cpp" Condition="'$(SftpExtra)'=='1'" />
+    <ClCompile Include="..\src\core\LanPairProtocol.cpp" Condition="'$(SftpExtra)'=='1'" />
     <ClCompile Include="..\src\core\TrustedInstallerToken.cpp" Condition="'$(SftpExtra)'=='1'" />
   </ItemGroup>
   <!-- Header Files -->
@@ -264,6 +265,7 @@
     <ClInclude Include="..\src\include\ConnectionAuth.h" />
     <ClInclude Include="..\src\include\LanPair.h" />
     <ClInclude Include="..\src\include\LanPairSession.h" />
+    <ClInclude Include="..\src\include\LanPairProtocol.h" />
     <ClInclude Include="..\src\include\TrustedInstallerToken.h" />
     <ClInclude Include="..\src\include\libssh2\libssh2.h" />
     <ClInclude Include="..\src\include\libssh2\libssh2_sftp.h" />

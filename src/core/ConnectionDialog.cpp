@@ -11,7 +11,6 @@
 // Declared in SftpConnection.cpp
 extern void LanFileServerSetTrustedInstaller(bool enabled);
 extern bool LanFileServerIsRunning();
-extern bool AskNewLanPeer(const std::string& peerId, const std::string& ip);
 #endif
 #include <new>
 #include <unordered_map>
@@ -895,7 +894,17 @@ static void HandleLanPairAction(HWND hWnd, ConnectDialogContext* dlgCtx, pConnec
 
     std::array<wchar_t, MAX_PATH> passW{};
     GetDlgItemTextW(hWnd, IDC_PASSWORD, passW.data(), static_cast<int>(passW.size() - 1));
-    // Empty password is allowed in TOFU mode (trust-on-first-use).
+    // Pairing proves that both computers were given the same password; with
+    // none, whoever answered first would be trusted with this computer's files.
+    if (!passW[0]) {
+        WindowsUserFeedback tempFeedback(hWnd);
+        const std::wstring msgW = LoadResStringW(IDS_LAN_ERR_PASSWORD);
+        const std::wstring titleW = LoadResStringW(IDS_LAN_TITLE);
+        tempFeedback.ShowError(msgW.empty() ? "Enter the pairing password (the same on both computers)." : WideToUtf8(msgW),
+                               titleW.empty() ? "LAN Pair" : WideToUtf8(titleW));
+        SetFocus(GetDlgItem(hWnd, IDC_PASSWORD));
+        return;
+    }
 
     const int roleIdx = (int)SendDlgItemMessage(hWnd, IDC_SYSTEM, CB_GETCURSEL, 0, 0);
     int role = LanRoleComboToValue(roleIdx);
@@ -927,7 +936,6 @@ static void HandleLanPairAction(HWND hWnd, ConnectDialogContext* dlgCtx, pConnec
 
         lanpair::PairServerConfig cfg{};
         cfg.port = 45846;
-        cfg.approveNewPeer = AskNewLanPeer;
         cfg.peerId = dlgCtx->lanPeerId;
         cfg.displayName = WideToUtf8(dlgCtx->lanDisplayName);
         cfg.role = lanpair::PairRole::Receiver;
@@ -1077,26 +1085,7 @@ static void HandleLanPairAction(HWND hWnd, ConnectDialogContext* dlgCtx, pConnec
 
     lanpair::PairSessionInfo info{};
     lanpair::PairError err{};
-    bool ok = client.connectAndAuthenticate(cfg, &info, &err);
-    // The peer does not accept the key this machine holds for it. Pairing
-    // anew drops that key and asks the peer for a new one; its user has to
-    // agree there. Done only on the user's word, never on the peer's: any
-    // machine on the network can claim to be the peer and refuse the key.
-    if (!ok && cfg.password.empty() &&
-        (err.message.find("FAIL trust-unknown") != std::string::npos ||
-         err.message.find("FAIL bad-trust") != std::string::npos)) {
-        const std::wstring askW = LoadResStringW(IDS_LAN_ASK_REPAIR);
-        const std::wstring titleW = LoadResStringW(IDS_LAN_TITLE);
-        if (MessageBoxW(hWnd, askW.empty()
-                ? L"The other computer does not recognise this one. Pair them anew? The other computer will ask its user to allow it."
-                : askW.c_str(),
-                titleW.empty() ? L"LAN Pair" : titleW.c_str(),
-                MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2) == IDYES) {
-            lanpair::DpapiSecretStore::forgetClientTrust(peerId, cfg.peerId);
-            err = {};
-            ok = client.connectAndAuthenticate(cfg, &info, &err);
-        }
-    }
+    const bool ok = client.connectAndAuthenticate(cfg, &info, &err);
     if (!ok) {
         WindowsUserFeedback tempFeedback(hWnd);
         std::wstring msgTemplW = LoadResStringW(IDS_LAN_ERR_PAIR_FAILED);

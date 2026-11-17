@@ -5,7 +5,8 @@ Builds and runs the unit tests for x64 and x86.
 
 .DESCRIPTION
 The tests compile the plugin's own sources for the modules they cover
-(PPK converter, text conversion, terminal filter, LAN Pair key) against the
+(PPK converter, text conversion, terminal filter, LAN Pair key, handshake
+and session) against the
 OpenSSL that build-deps.ps1 produced, so run that once first. Each test
 binary goes to tests\out\<arch>.
 
@@ -33,9 +34,14 @@ $UnitSources = @(
     'src\core\AuthSecrets.cpp',
     'src\core\Utf8Escape.cpp',
     'src\core\IniFile.cpp',
-    'src\core\KittyDecrypt.cpp'
+    'src\core\KittyDecrypt.cpp',
+    'src\core\LanPairProtocol.cpp',
+    'src\core\LanPair.cpp',
+    'src\core\LanPairSession.cpp',
+    'src\core\TrustedInstallerToken.cpp',
+    'src\core\DllExceptionBarrier.cpp'
 )
-$SystemLibs = 'ws2_32.lib crypt32.lib advapi32.lib user32.lib bcrypt.lib'
+$SystemLibs = 'ws2_32.lib crypt32.lib advapi32.lib user32.lib bcrypt.lib iphlpapi.lib shell32.lib ole32.lib dbghelp.lib'
 
 $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
 if (-not (Test-Path $vswhere)) { throw 'vswhere.exe not found. Install Visual Studio 2022 or later.' }
@@ -80,7 +86,7 @@ foreach ($a in $archs) {
         continue
     }
 
-    $testArgs = if ($Filter) { @($Filter) } else { @() }
+    [string[]]$testArgs = if ($Filter) { $Filter } else { @() } # an array: a string would splat letter by letter
     & $exe @testArgs | ForEach-Object { Write-Host "    $_" }
     if ($LASTEXITCODE -ne 0) { $failures += $a }
 }

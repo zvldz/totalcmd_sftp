@@ -182,7 +182,7 @@
 268=Emparejar...
 269=Shell...
 270=LAN Pair
-271=Contrasena de pairado (opcional – dejar vacia para usar clave de confianza).
+271=Introduzca la contraseña de emparejamiento (la misma en ambos equipos).
 272=Receptor LAN Pair detenido.
 273=Error al iniciar receptor: {}
 274=Receptor LAN Pair iniciado (puerto 45846). Pulsa Emparejar... otra vez para detener.
@@ -406,13 +406,7 @@
 12158=Se ejecuta en el servidor tras cada inicio de sesión, salvo en modo solo SCP. Su salida va a la ventana de registro.
 12159=Esperar y mostrar su salida
 12160=Iniciarlo sin esperar
-12161=LAN Pair: el equipo "{}" ({}) solicita acceso a todas las unidades de este equipo.\n\n¿Permitirlo? Responda Sí solo si está emparejando ahora mismo esos equipos.
-12162=LAN Pair: el otro equipo no permitió esta conexión.
-12163=LAN Pair: el otro equipo tiene una contraseña. Introduzca aquí la misma contraseña.
-12164=Advertencia: http:// sin cifrar: la contraseña del PHP Agent se envía sin cifrar en cada solicitud. Use https://.
 12165=El comando del servidor SFTP no inició una sesión SFTP. Compruebe su ruta en «Más...» en la configuración de la conexión, o déjelo vacío para usar el subsistema SFTP del servidor.
-12166=El otro equipo no reconoce a este. ¿Emparejarlos de nuevo? El otro equipo preguntará a su usuario.
-12167=LAN Pair: el otro equipo no reconoce a este. Emparéjelos de nuevo con «Emparejar...» en la configuración de la conexión.
 12168=Esta sesión usa PHP Agent o LAN Pair, que solo tiene la versión extra del plugin (SFTPplug-...-extra.zip). Esta versión solo se conecta por SSH.
 12169=Esta sesión está configurada para pasar a la vez por un proxy y por un host de salto. El plugin llega al host de salto directamente, el proxy se omitiría. Deje solo uno de los dos.
 12170=La sesión de salto '{}' pasa por un proxy. Al host de salto se llega directamente, ese proxy se omitiría, así que se rechaza la conexión. Elija una sesión de salto sin proxy.
@@ -424,6 +418,7 @@
 12176=ProxyJump: falló el saludo SSH con el host intermediario: {}
 12177=ProxyJump: falló la autenticación en el host intermediario.\nUsuario: {}
 12178=ProxyJump: no se puede abrir el túnel a {}\n{}
+12179=El agente PHP del servidor es demasiado antiguo para esta versión del complemento: no acepta solicitudes firmadas. Suba el sftp.php incluido con el complemento.
 12089=SFTP
 12104=(manual)
 12105= (no encontrada)

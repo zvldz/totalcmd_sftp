@@ -8,13 +8,10 @@
 #
 # The PSK comes from the environment, which the agent prefers over the hash
 # fields in the file; use the same value as the session password in TC.
-# Shell commands are off in the agent by default; the bench turns them on
-# so PHP Shell mode can be tested.
 
 x-agent: &agent
   environment:
     TC_SFTP_AGENT_PSK: "test-psk-change-me"
-    TC_SFTP_AGENT_ALLOW_SHELL: "1"
   # The data folder is a bind mount; on a Linux host it belongs to the user
   # who created it, so Apache's user is given the folder itself to write in.
   # Docker Desktop's Windows mounts refuse chown and need none, so a refusal

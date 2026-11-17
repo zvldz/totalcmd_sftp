@@ -76,9 +76,6 @@ struct PairServerConfig {
     PairRole role = PairRole::Receiver;
     std::string password;
     std::chrono::milliseconds authTimeout{8000};
-    // Without a password: asked whether a peer without a trust key (peer id,
-    // IP) may pair. Without an approver such peers are refused.
-    std::function<bool(const std::string&, const std::string&)> approveNewPeer;
 };
 
 struct PairClientConfig {
@@ -148,31 +145,6 @@ bool loadSecret(const std::string& key,
 bool deleteSecret(const std::string& key,
                   PairError* err = nullptr);
 
-// Drops the key this machine (clientPeerId) holds for a server peer, so the
-// next pairing asks that peer for a new one.
-bool forgetClientTrust(const std::string& serverPeerId,
-                       const std::string& clientPeerId);
-
 } // namespace DpapiSecretStore
-
-// Planned command channel — type tags used in LAN2 wire protocol
-enum class PairCommandType : uint8_t {
-    Handshake = 1,
-    ListRoots = 2,
-    ListDirectory = 3,
-    StartSend = 4,
-    StartReceive = 5,
-    DataChunk = 6,
-    Ack = 7,
-    Error = 8,
-};
-
-struct PairFrameHeader {
-    uint32_t magic = 0x4B564350; // "KVCP"
-    uint16_t version = 1;
-    PairCommandType type = PairCommandType::Handshake;
-    uint8_t reserved = 0;
-    uint32_t payloadSize = 0;
-};
 
 } // namespace lanpair

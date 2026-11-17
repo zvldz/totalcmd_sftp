@@ -182,7 +182,7 @@
 268=Pair...
 269=Shell...
 270=LAN Pair
-271=Mot de passe de pairage (optionnel – laisser vide pour utiliser la clé de confiance).
+271=Saisissez le mot de passe de pairage (le même sur les deux ordinateurs).
 272=Receveur LAN Pair arrete.
 273=Echec du demarrage du receveur: {}
 274=Receveur LAN Pair demarre (port 45846). Cliquez encore Pair... pour arreter.
@@ -406,13 +406,7 @@
 12158=S'exécute sur le serveur après chaque connexion, sauf en mode SCP seul. Sa sortie va dans la fenêtre du journal.
 12159=Attendre et afficher sa sortie
 12160=La lancer sans attendre
-12161=LAN Pair : l'ordinateur "{}" ({}) demande l'accès à tous les lecteurs de cet ordinateur.\n\nAutoriser ? Répondez Oui uniquement si vous associez vous-même ces ordinateurs en ce moment.
-12162=LAN Pair : l'autre ordinateur n'a pas autorisé cette connexion.
-12163=LAN Pair : un mot de passe est défini sur l'autre ordinateur. Saisissez ici le même mot de passe.
-12164=Attention : http:// simple – le mot de passe du PHP Agent est envoyé en clair à chaque requête. Utilisez https://.
 12165=La commande du serveur SFTP n'a pas démarré de session SFTP. Vérifiez son chemin sous « Plus... » dans les paramètres de connexion, ou videz-la pour utiliser le sous-système SFTP du serveur.
-12166=L'autre ordinateur ne reconnaît pas celui-ci. Les associer à nouveau ? L'autre ordinateur demandera l'accord de son utilisateur.
-12167=LAN Pair : l'autre ordinateur ne reconnaît pas celui-ci. Associez-les à nouveau avec « Pair... » dans les paramètres de connexion.
 12168=Cette session utilise PHP Agent ou LAN Pair, présents uniquement dans la version extra du plugin (SFTPplug-...-extra.zip). Cette version se connecte uniquement en SSH.
 12169=Cette session est réglée pour passer à la fois par un proxy et par un hôte de rebond. Le plugin joint l'hôte de rebond directement, le proxy serait contourné. Gardez l'un des deux.
 12170=La session de rebond '{}' passe par un proxy. L'hôte de rebond est joint directement, ce proxy serait contourné, la connexion est donc refusée. Choisissez une session de rebond sans proxy.
@@ -424,6 +418,7 @@
 12176=ProxyJump : échec de la négociation SSH avec l'hôte intermédiaire : {}
 12177=ProxyJump : échec de l'authentification sur l'hôte intermédiaire.\nUtilisateur : {}
 12178=ProxyJump : impossible d'ouvrir le tunnel vers {}\n{}
+12179=L'agent PHP du serveur est trop ancien pour cette version du plugin : il n'accepte pas les requêtes signées. Envoyez le sftp.php fourni avec le plugin.
 12089=SFTP
 12104=(manuel)
 12105= (introuvable)

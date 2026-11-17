@@ -182,7 +182,7 @@
 268=Koppelen...
 269=Shell...
 270=LAN Pair
-271=Koppelwachtwoord (optioneel – leeg = gebruik opgeslagen vertrouwenssleutel).
+271=Voer het koppelwachtwoord in (op beide computers hetzelfde).
 272=LAN Pair-ontvanger gestopt.
 273=Starten van ontvanger mislukt: {}
 274=LAN Pair-ontvanger gestart (poort 45846). Klik nogmaals op Koppelen... om te stoppen.
@@ -405,13 +405,7 @@
 12158=Wordt na elke aanmelding op de server uitgevoerd, behalve in de modus alleen SCP. De uitvoer verschijnt in het logvenster.
 12159=Wachten en uitvoer tonen
 12160=Starten zonder wachten
-12161=LAN Pair: computer "{}" ({}) vraagt toegang tot alle stations van deze computer.\n\nToestaan? Antwoord alleen Ja als u deze computers nu zelf koppelt.
-12162=LAN Pair: de andere computer heeft deze verbinding niet toegestaan.
-12163=LAN Pair: op de andere computer is een wachtwoord ingesteld. Voer hier hetzelfde wachtwoord in.
-12164=Waarschuwing: gewone http:// – het PHP Agent-wachtwoord wordt bij elk verzoek onversleuteld verzonden. Gebruik https://.
 12165=De SFTP-serveropdracht heeft geen SFTP-sessie gestart. Controleer het pad onder "Meer..." in de verbindingsinstellingen, of maak het leeg om het SFTP-subsysteem van de server te gebruiken.
-12166=De andere computer herkent deze niet. Opnieuw koppelen? De andere computer vraagt het zijn gebruiker.
-12167=LAN Pair: de andere computer herkent deze niet. Koppel ze opnieuw met "Koppelen..." in de verbindingsinstellingen.
 12168=Deze sessie gebruikt PHP Agent of LAN Pair, die alleen de extra-versie van de plug-in heeft (SFTPplug-...-extra.zip). Deze versie maakt alleen verbinding via SSH.
 12169=Deze sessie is ingesteld om zowel via een proxy als via een jump-host te gaan. De plugin bereikt een jump-host direct, de proxy zou worden overgeslagen. Houd een van beide.
 12170=De jump-sessie '{}' gaat via een proxy. Een jump-host wordt direct bereikt, die proxy zou worden overgeslagen, dus de verbinding wordt geweigerd. Kies een jump-sessie zonder proxy.
@@ -423,6 +417,7 @@
 12176=ProxyJump: SSH-handshake met de tussenliggende host mislukt: {}
 12177=ProxyJump: aanmelden bij de tussenliggende host mislukt.\nGebruiker: {}
 12178=ProxyJump: kan geen tunnel openen naar {}\n{}
+12179=De PHP-agent op de server is te oud voor deze pluginversie: hij accepteert geen ondertekende verzoeken. Upload de sftp.php die bij de plugin hoort.
 12089=SFTP
 12104=(handmatig)
 12105= (ontbreekt)

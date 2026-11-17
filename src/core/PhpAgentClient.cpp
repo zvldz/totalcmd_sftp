@@ -2,8 +2,12 @@
 #include "PhpAgentClient.h"
 #include "res/resource.h"
 #include <winhttp.h>
+#include <openssl/evp.h>
+#include <openssl/rand.h>
 #include <array>
+#include <ctime>
 #include <string>
+#include <string_view>
 #include <vector>
 #include <memory>
 #include <algorithm>
@@ -80,7 +84,7 @@ struct AutoFileHandle {
 
 // The agent speaks UTF-8: paths go out and names come back in it.
 
-static std::string NormalizePhpRemotePath(pConnectSettings cs, LPCWSTR pathW)
+static std::string NormalizePhpRemotePath(LPCWSTR pathW)
 {
     std::string p = unicode_util::wstring_to_utf8(pathW ? pathW : L".");
     if (p.empty())
@@ -169,6 +173,198 @@ static std::wstring BuildObjectPath(const std::wstring& baseObject, const std::w
     out += (baseObject.find(L'?') == std::wstring::npos) ? L'?' : L'&';
     out += query;
     return out;
+}
+
+// ---------------------------------------------------------------------------
+// Request signing, TCSFTP-HMAC-V2 (the agent side is require_auth in
+// sftp.php). The PSK never travels: every request carries an HMAC-SHA256
+// over method, operation, the whole query, the SHA-256 of its body, a
+// timestamp and a nonce the agent accepts once.
+// ---------------------------------------------------------------------------
+constexpr char kAuthScheme[] = "TCSFTP-HMAC-V2";
+constexpr char kEmptyBodySha256[] = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+
+static std::string HexLower(const unsigned char* data, size_t len)
+{
+    static constexpr char kHex[] = "0123456789abcdef";
+    std::string out;
+    out.reserve(len * 2);
+    for (size_t i = 0; i < len; ++i) {
+        out += kHex[data[i] >> 4];
+        out += kHex[data[i] & 0x0F];
+    }
+    return out;
+}
+
+static std::string Sha256Hex(const void* data, size_t len)
+{
+    unsigned char md[EVP_MAX_MD_SIZE];
+    size_t mdLen = 0;
+    if (!EVP_Q_digest(nullptr, "SHA256", nullptr, data, len, md, &mdLen))
+        return {};
+    return HexLower(md, mdLen);
+}
+
+// SHA-256 fed piece by piece, for bodies streamed from disk.
+class Sha256Stream {
+public:
+    Sha256Stream() : ctx_(EVP_MD_CTX_new()) { ok_ = ctx_ && EVP_DigestInit_ex2(ctx_, EVP_sha256(), nullptr); }
+    ~Sha256Stream() { EVP_MD_CTX_free(ctx_); }
+    Sha256Stream(const Sha256Stream&) = delete;
+    Sha256Stream& operator=(const Sha256Stream&) = delete;
+
+    void Update(const void* data, size_t len) { ok_ = ok_ && EVP_DigestUpdate(ctx_, data, len); }
+    std::string FinalHex()
+    {
+        unsigned char md[EVP_MAX_MD_SIZE];
+        unsigned int mdLen = 0;
+        if (!ok_ || !EVP_DigestFinal_ex(ctx_, md, &mdLen))
+            return {};
+        return HexLower(md, mdLen);
+    }
+
+private:
+    EVP_MD_CTX* ctx_;
+    bool ok_ = false;
+};
+
+// SHA-256 of `length` bytes of the file from `offset`; the file pointer is
+// left where it was found to be needed next: at `offset`.
+static std::string Sha256FileRange(HANDLE file, int64_t offset, int64_t length)
+{
+    LARGE_INTEGER li{};
+    li.QuadPart = offset;
+    if (!SetFilePointerEx(file, li, nullptr, FILE_BEGIN))
+        return {};
+    Sha256Stream hash;
+    std::vector<uint8_t> buf(65536);
+    for (int64_t left = length; left > 0;) {
+        DWORD got = 0;
+        const DWORD want = static_cast<DWORD>((std::min)(left, static_cast<int64_t>(buf.size())));
+        if (!ReadFile(file, buf.data(), want, &got, nullptr) || got == 0)
+            return {};
+        hash.Update(buf.data(), got);
+        left -= got;
+    }
+    if (!SetFilePointerEx(file, li, nullptr, FILE_BEGIN))
+        return {};
+    return hash.FinalHex();
+}
+
+static std::string HmacSha256Hex(const std::string& key, const std::string& message)
+{
+    unsigned char mac[EVP_MAX_MD_SIZE];
+    size_t macLen = 0;
+    if (!EVP_Q_mac(nullptr, "HMAC", nullptr, "SHA256", nullptr, key.data(), key.size(),
+                   reinterpret_cast<const unsigned char*>(message.data()), message.size(),
+                   mac, sizeof(mac), &macLen))
+        return {};
+    return HexLower(mac, macLen);
+}
+
+// The query the way sftp.php signs it (canonical_query): every parameter
+// percent-decoded, sorted by name and then by value, encoded again per
+// RFC 3986 - so the bytes on the wire need not match, only their meaning.
+static std::string CanonicalQuery(std::string_view query)
+{
+    const auto decode = [](std::string_view s) {
+        const auto hexValue = [](char c) {
+            return c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : c >= 'A' && c <= 'F' ? c - 'A' + 10 : -1;
+        };
+        std::string out;
+        for (size_t i = 0; i < s.size(); ++i) {
+            if (s[i] == '%' && i + 2 < s.size() && hexValue(s[i + 1]) >= 0 && hexValue(s[i + 2]) >= 0) {
+                out += static_cast<char>(hexValue(s[i + 1]) * 16 + hexValue(s[i + 2]));
+                i += 2;
+            } else {
+                out += s[i];
+            }
+        }
+        return out;
+    };
+    const auto encode = [](const std::string& s) {
+        static constexpr char kHex[] = "0123456789ABCDEF";
+        std::string out;
+        for (unsigned char c : s) {
+            if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ||
+                c == '-' || c == '.' || c == '_' || c == '~') {
+                out += static_cast<char>(c);
+            } else {
+                out += '%';
+                out += kHex[c >> 4];
+                out += kHex[c & 0x0F];
+            }
+        }
+        return out;
+    };
+
+    std::vector<std::pair<std::string, std::string>> pairs;
+    while (!query.empty()) {
+        const size_t amp = query.find('&');
+        const std::string_view part = query.substr(0, amp);
+        query = amp == std::string_view::npos ? std::string_view() : query.substr(amp + 1);
+        if (part.empty())
+            continue;
+        const size_t eq = part.find('=');
+        pairs.emplace_back(decode(part.substr(0, eq)),
+                           eq == std::string_view::npos ? std::string() : decode(part.substr(eq + 1)));
+    }
+    std::sort(pairs.begin(), pairs.end());
+    std::string out;
+    for (const auto& [name, value] : pairs) {
+        if (!out.empty())
+            out += '&';
+        out += encode(name);
+        out += '=';
+        out += encode(value);
+    }
+    return out;
+}
+
+static int ProbeAgent(pConnectSettings cs, std::string* outBody, std::string* outError);
+
+// The headers that authenticate one request: its operation, time, nonce,
+// body hash and signature. False when the agent's scheme is unknown or not
+// the one this plugin speaks; no request then goes out at all.
+static bool AuthHeaders(pConnectSettings cs, const wchar_t* method, const wchar_t* op,
+                        const std::wstring& object, const std::string& bodySha256, std::wstring& outHeaders)
+{
+    if (!cs->php_auth_known && ProbeAgent(cs, nullptr, nullptr) != SFTP_OK)
+        return false;
+
+    const size_t q = object.find(L'?');
+    const std::string query = q == std::wstring::npos ? std::string() : unicode_util::wstring_to_utf8(object.substr(q + 1));
+    const std::string ts = std::to_string(static_cast<long long>(std::time(nullptr)) + cs->php_clock_offset);
+    unsigned char random[16];
+    if (RAND_bytes(random, sizeof(random)) != 1)
+        return false;
+    const std::string nonce = HexLower(random, sizeof(random));
+
+    std::string key;
+    {
+        // Built in place, so the PSK is not left behind in a temporary.
+        std::string material = cs->php_auth_salt;
+        material += ':';
+        material += cs->password;
+        key = Sha256Hex(material.data(), material.size());
+        SecureZeroMemory(material.data(), material.size());
+    }
+    const std::string base = std::string(kAuthScheme) + '\n' + unicode_util::wstring_to_utf8(method) + '\n' +
+                             unicode_util::wstring_to_utf8(op) + '\n' + CanonicalQuery(query) + '\n' +
+                             bodySha256 + '\n' + ts + '\n' + nonce;
+    const std::string signature = HmacSha256Hex(key, base);
+    SecureZeroMemory(key.data(), key.size());
+    if (signature.empty() || bodySha256.empty())
+        return false;
+
+    outHeaders = L"X-SFTP-OP: ";
+    outHeaders += op;
+    outHeaders += L"\r\nX-SFTP-TS: " + unicode_util::utf8_to_wstring(ts);
+    outHeaders += L"\r\nX-SFTP-NONCE: " + unicode_util::utf8_to_wstring(nonce);
+    outHeaders += L"\r\nX-SFTP-CONTENT-SHA256: " + unicode_util::utf8_to_wstring(bodySha256);
+    outHeaders += L"\r\nX-SFTP-SIGNATURE-V2: " + unicode_util::utf8_to_wstring(signature);
+    outHeaders += L"\r\n";
+    return true;
 }
 
 static std::string Base64DecodeString(const std::string& b64)
@@ -303,6 +499,23 @@ static int ReadAllResponse(HINTERNET request, std::string& outBody)
     return SFTP_OK;
 }
 
+// The response's Date header as Unix time, or 0 when it has none.
+static int64_t ResponseUnixTime(HINTERNET request)
+{
+    SYSTEMTIME st{};
+    DWORD size = sizeof(st);
+    if (!WinHttpQueryHeaders(request, WINHTTP_QUERY_DATE | WINHTTP_QUERY_FLAG_SYSTEMTIME,
+                             WINHTTP_HEADER_NAME_BY_INDEX, &st, &size, WINHTTP_NO_HEADER_INDEX))
+        return 0;
+    FILETIME ft{};
+    if (!SystemTimeToFileTime(&st, &ft))
+        return 0;
+    const int64_t ticks = (static_cast<int64_t>(ft.dwHighDateTime) << 32) | ft.dwLowDateTime;
+    return (ticks - 116444736000000000LL) / 10000000LL; // 100 ns since 1601 -> s since 1970
+}
+
+// PROBE goes out unsigned - it is what tells the client how to sign;
+// every other operation is signed.
 static int SendSimpleRequest(
     pConnectSettings cs,
     const wchar_t* method,
@@ -311,7 +524,8 @@ static int SendSimpleRequest(
     const char* body,
     DWORD bodyLen,
     DWORD* outStatus,
-    std::string* outBody)
+    std::string* outBody,
+    int64_t* outServerTime = nullptr)
 {
     PHP_LOG("HTTP %ls op=%ls query_len=%u", method ? method : L"", op ? op : L"", (unsigned)query.size());
     AgentUrl url;
@@ -330,23 +544,19 @@ static int SendSimpleRequest(
         return SFTP_FAILED;
 
     std::wstring object = BuildObjectPath(url.object, query);
+    std::wstring headers = L"X-SFTP-OP: PROBE\r\n";
+    if (wcscmp(op, L"PROBE") != 0) {
+        const std::string bodySha = body && bodyLen ? Sha256Hex(body, bodyLen) : std::string(kEmptyBodySha256);
+        if (!AuthHeaders(cs, method, op, object, bodySha, headers))
+            return SFTP_FAILED;
+    }
     h.request = WinHttpOpenRequest(h.connect, method, object.c_str(), nullptr, WINHTTP_NO_REFERER,
                                    WINHTTP_DEFAULT_ACCEPT_TYPES, url.secure ? WINHTTP_FLAG_SECURE : 0);
     if (!h.request)
         return SFTP_FAILED;
 
-    std::wstring headers = L"X-SFTP-OP: ";
-    headers += op;
-    headers += L"\r\nX-SFTP-AUTH: ";
-    headers += unicode_util::utf8_to_wstring(cs->password);
-    headers += L"\r\n";
-    // A body here is form fields; PHP reads them into $_POST only with
-    // this content type.
-    if (body && bodyLen)
-        headers += L"Content-Type: application/x-www-form-urlencoded\r\n";
-
     BOOL ok = WinHttpSendRequest(h.request, headers.c_str(), (DWORD)-1L,
-                                 (LPVOID)body, bodyLen, bodyLen, 0);
+                                 const_cast<char*>(body), bodyLen, bodyLen, 0);
     if (!ok)
         return SFTP_FAILED;
     if (!WinHttpReceiveResponse(h.request, nullptr))
@@ -355,6 +565,8 @@ static int SendSimpleRequest(
     DWORD status = 0;
     if (!QueryStatus(h.request, &status))
         return SFTP_FAILED;
+    if (outServerTime)
+        *outServerTime = ResponseUnixTime(h.request);
     PHP_LOG("HTTP status=%lu op=%ls", (unsigned long)status, op ? op : L"");
     if (outStatus)
         *outStatus = status;
@@ -369,6 +581,17 @@ static int SendSimpleRequest(
 static bool IsHttpSuccess(DWORD code) noexcept
 {
     return code >= 200 && code < 300;
+}
+
+// A failed transfer is reported by Total Commander - or offered for skipping
+// within a batch - so it goes to the log only: a dialog of its own would
+// repeat for every file of a batch, "Skip all" or not.
+static void LogPhpAgentTransferError(DWORD code, const char* op)
+{
+    const std::string text = (code == 401 || code == 403)
+        ? PhpFmtStr(IDS_PHP_ERR_WRONG_CREDS_HTTP, "Wrong credentials for PHP Agent (HTTP {}).", {std::to_string(static_cast<unsigned long>(code))})
+        : PhpFmtStr(IDS_PHP_ERR_REQUEST_FAILED, "PHP Agent request failed for {} (HTTP {}).", {op ? op : "operation", std::to_string(static_cast<unsigned long>(code))});
+    ShowStatus(text.c_str());
 }
 
 static void ReportPhpAgentHttpError(pConnectSettings cs, DWORD code, const char* op)
@@ -489,9 +712,9 @@ static int StreamDownloadToFile(
     if (!h.request)
         return SFTP_FAILED;
 
-    std::wstring headers = L"X-SFTP-OP: GET\r\nX-SFTP-AUTH: ";
-    headers += unicode_util::utf8_to_wstring(cs->password);
-    headers += L"\r\n";
+    std::wstring headers;
+    if (!AuthHeaders(cs, L"GET", L"GET", object, kEmptyBodySha256, headers))
+        return SFTP_FAILED;
     if (!WinHttpSendRequest(h.request, headers.c_str(), (DWORD)-1L, WINHTTP_NO_REQUEST_DATA, 0, 0, 0))
         return SFTP_FAILED;
     if (!WinHttpReceiveResponse(h.request, nullptr))
@@ -499,7 +722,7 @@ static int StreamDownloadToFile(
 
     DWORD code = 0;
     if (!QueryStatus(h.request, &code) || !IsHttpSuccess(code)) {
-        ReportPhpAgentHttpError(cs, code, "GET");
+        LogPhpAgentTransferError(code, "GET");
         return SFTP_READFAILED;
     }
 
@@ -554,9 +777,10 @@ static int StreamUploadFromFile(
     LPCWSTR localName,
     LPCWSTR remoteName)
 {
-    LARGE_INTEGER li{};
-    li.QuadPart = startOffset;
-    if (!SetFilePointerEx(hLocal, li, nullptr, FILE_BEGIN))
+    // The chunk is read twice: once for the hash its signature covers, then
+    // to send it. Sha256FileRange leaves the file at startOffset.
+    const std::string bodySha = Sha256FileRange(hLocal, startOffset, chunkLength);
+    if (bodySha.empty())
         return SFTP_READFAILED;
 
     AgentUrl url;
@@ -578,9 +802,10 @@ static int StreamUploadFromFile(
     if (!h.request)
         return SFTP_FAILED;
 
-    std::wstring headers = L"X-SFTP-OP: PUT\r\nX-SFTP-AUTH: ";
-    headers += unicode_util::utf8_to_wstring(cs->password);
-    headers += L"\r\nContent-Type: application/octet-stream\r\n";
+    std::wstring headers;
+    if (!AuthHeaders(cs, method ? method : L"POST", L"PUT", object, bodySha, headers))
+        return SFTP_FAILED;
+    headers += L"Content-Type: application/octet-stream\r\n";
 
     const DWORD bodyLen = (DWORD)chunkLength;
     if (!WinHttpSendRequest(h.request, headers.c_str(), (DWORD)-1L, WINHTTP_NO_REQUEST_DATA, 0, bodyLen, 0))
@@ -618,33 +843,60 @@ static int StreamUploadFromFile(
     DWORD code = 0;
     if (!QueryStatus(h.request, &code) || !IsHttpSuccess(code)) {
         if (reportHttpError)
-            ReportPhpAgentHttpError(cs, code, method ? (wcscmp(method, L"PUT") == 0 ? "PUT" : "POST") : "POST");
+            LogPhpAgentTransferError(code, method ? (wcscmp(method, L"PUT") == 0 ? "PUT" : "POST") : "POST");
         return SFTP_WRITEFAILED;
     }
     return SFTP_OK;
 }
 
-} // namespace
-
-int PhpAgentProbe(pConnectSettings cs)
+// The agent's public PROBE: whether it speaks TCSFTP-HMAC-V2, its salt, and
+// its clock, so that requests carry a time it accepts even when this
+// computer's clock is off. An agent that does not sign is not used - the
+// PSK is never sent instead.
+static int ProbeAgent(pConnectSettings cs, std::string* outBody, std::string* outError)
 {
-    PHP_LOG("Probe start url='%s'", (cs && !cs->server.empty()) ? cs->server.c_str() : "");
-    // The password goes with every request; over plain HTTP to another
-    // machine anyone on the path can read it. Said in TC's log on every
-    // connect, the connection itself is not refused.
-    AgentUrl probeUrl;
-    if (ParseAgentUrl(cs, &probeUrl) && !probeUrl.secure &&
-        probeUrl.host != L"localhost" && probeUrl.host != L"127.0.0.1" && probeUrl.host != L"::1" &&
-        probeUrl.host != L"[::1]") {
-        PHP_LOG("Probe: plain HTTP to a remote host, the password is sent unencrypted");
-        ShowStatusId(IDS_PHP_HTTP_WARNING, nullptr, true);
-    }
+    if (!cs)
+        return SFTP_FAILED;
     DWORD code = 0;
     std::string body;
-    int rc = SendSimpleRequest(cs, L"GET", L"PROBE", L"op=PROBE", nullptr, 0, &code, &body);
+    int64_t serverTime = 0;
+    const int rc = SendSimpleRequest(cs, L"GET", L"PROBE", L"op=PROBE", nullptr, 0, &code, &body, &serverTime);
     if (rc != SFTP_OK)
         return rc;
-    if (cs) {
+    if (!IsHttpSuccess(code))
+        return SFTP_FAILED;
+
+    std::string scheme;
+    if (!ExtractJsonStringField(body, "scheme", &scheme) || scheme != kAuthScheme) {
+        PHP_LOG("Agent does not speak %s (scheme '%s')", kAuthScheme, scheme.c_str());
+        if (outError)
+            *outError = PhpLngStr(IDS_PHP_ERR_AGENT_OUTDATED,
+                                  "The PHP Agent on the server is too old for this plugin version: it does not "
+                                  "accept signed requests. Upload the sftp.php that comes with the plugin.");
+        return SFTP_FAILED;
+    }
+    std::string salt;
+    ExtractJsonStringField(body, "salt", &salt); // no salt at all is a valid configuration
+    cs->php_auth_salt = std::move(salt);
+    cs->php_clock_offset = serverTime > 0 ? serverTime - static_cast<int64_t>(std::time(nullptr)) : 0;
+    cs->php_auth_known = true;
+    PHP_LOG("Agent signs with %s, clock offset %lld s", kAuthScheme, static_cast<long long>(cs->php_clock_offset));
+    if (outBody)
+        *outBody = std::move(body);
+    return SFTP_OK;
+}
+
+} // namespace
+
+int PhpAgentProbe(pConnectSettings cs, std::string& outErrorText)
+{
+    outErrorText.clear();
+    PHP_LOG("Probe start url='%s'", (cs && !cs->server.empty()) ? cs->server.c_str() : "");
+    std::string body;
+    const int rc = ProbeAgent(cs, &body, &outErrorText);
+    if (rc != SFTP_OK)
+        return rc;
+    {
         cs->php_recommended_chunk_mib = 0;
         int recBytes = 0;
         if (ExtractJsonIntField(body, "recommended_chunk_size", &recBytes) && recBytes > 0) {
@@ -656,13 +908,22 @@ int PhpAgentProbe(pConnectSettings cs)
             PHP_LOG("Probe recommended chunk parsed=%d MiB", recMiB);
         }
     }
-    PHP_LOG("Probe done status=%lu body_len=%u", (unsigned long)code, (unsigned)body.size());
-    return IsHttpSuccess(code) ? SFTP_OK : SFTP_FAILED;
+    PHP_LOG("Probe done body_len=%u", (unsigned)body.size());
+    return SFTP_OK;
 }
 
 int PhpAgentValidateAuth(pConnectSettings cs, std::string& outErrorText)
 {
     outErrorText.clear();
+    // An agent too old to verify signatures is reported as such, not as a
+    // wrong password.
+    if (cs && !cs->php_auth_known) {
+        std::string probeError;
+        if (ProbeAgent(cs, nullptr, &probeError) != SFTP_OK && !probeError.empty()) {
+            outErrorText = probeError;
+            return SFTP_FAILED;
+        }
+    }
     DWORD code = 0;
     std::string body;
     const int rc = SendSimpleRequest(cs, L"GET", L"LIST", L"op=LIST&path=.&format=plain", nullptr, 0, &code, &body);
@@ -698,7 +959,7 @@ int PhpAgentValidateAuth(pConnectSettings cs, std::string& outErrorText)
 int PhpAgentListDirectoryW(pConnectSettings cs, LPCWSTR remoteDir, std::vector<WIN32_FIND_DATAW>& outEntries)
 {
     outEntries.clear();
-    std::string pathUtf8 = NormalizePhpRemotePath(cs, remoteDir ? remoteDir : L".");
+    std::string pathUtf8 = NormalizePhpRemotePath(remoteDir ? remoteDir : L".");
     DWORD code = 0;
     std::string body;
     auto doList = [&](const std::string& p) -> int {
@@ -761,7 +1022,7 @@ int PhpAgentDownloadFileW(pConnectSettings cs,
         }
     }
 
-    std::string pathUtf8 = NormalizePhpRemotePath(cs, remoteNameW);
+    std::string pathUtf8 = NormalizePhpRemotePath(remoteNameW);
     PHP_LOG("GET normalized path='%s'", pathUtf8.c_str());
     std::wstring query = BuildQueryPathOnly(L"GET", pathUtf8);
     if (offset > 0) {
@@ -797,7 +1058,7 @@ int PhpAgentUploadFileW(pConnectSettings cs,
         return SFTP_READFAILED;
     int64_t localSize = li.QuadPart;
 
-    std::string pathUtf8 = NormalizePhpRemotePath(cs, remoteNameW);
+    std::string pathUtf8 = NormalizePhpRemotePath(remoteNameW);
     // Resume may be invoked against an already-visible "*.part" entry.
     // Canonicalize to the final target name to avoid creating "*.part.part".
     if (resume && pathUtf8.size() > 5 && _stricmp(pathUtf8.c_str() + pathUtf8.size() - 5, ".part") == 0) {
@@ -830,15 +1091,17 @@ int PhpAgentUploadFileW(pConnectSettings cs,
         }
     }
 
-    if (offset == localSize) {
-        // Upload data already present in .part, finalize only.
+    if (localSize > 0 && offset == localSize) {
+        // A resumed upload whose .part already holds everything: finalize
+        // only. An empty file is not this case - it still has to create
+        // its .part, which the loop below does.
         DWORD code = 0;
         std::wstring finOnly = BuildQueryPathOnly(L"FINALIZE", pathUtf8);
         int rc = SendSimpleRequest(cs, L"POST", L"FINALIZE", finOnly, nullptr, 0, &code, nullptr);
         if (rc != SFTP_OK)
             return rc;
         if (!IsHttpSuccess(code)) {
-            ReportPhpAgentHttpError(cs, code, "FINALIZE");
+            LogPhpAgentTransferError(code, "FINALIZE");
             return SFTP_WRITEFAILED;
         }
         if (localSize > 0)
@@ -891,7 +1154,7 @@ int PhpAgentUploadFileW(pConnectSettings cs,
     if (rc != SFTP_OK)
         return rc;
     if (!IsHttpSuccess(code)) {
-        ReportPhpAgentHttpError(cs, code, "FINALIZE");
+        LogPhpAgentTransferError(code, "FINALIZE");
         return SFTP_WRITEFAILED;
     }
     if (localSize > 0)
@@ -901,7 +1164,7 @@ int PhpAgentUploadFileW(pConnectSettings cs,
 
 int PhpAgentCreateDirectoryW(pConnectSettings cs, LPCWSTR remoteDirW)
 {
-    std::string pathUtf8 = NormalizePhpRemotePath(cs, remoteDirW);
+    std::string pathUtf8 = NormalizePhpRemotePath(remoteDirW);
     DWORD code = 0;
     std::wstring q = BuildQueryPathOnly(L"MKDIR", pathUtf8);
     int rc = SendSimpleRequest(cs, L"POST", L"MKDIR", q, nullptr, 0, &code, nullptr);
@@ -916,8 +1179,8 @@ int PhpAgentCreateDirectoryW(pConnectSettings cs, LPCWSTR remoteDirW)
 
 int PhpAgentRenameMoveFileW(pConnectSettings cs, LPCWSTR oldNameW, LPCWSTR newNameW, bool overwrite)
 {
-    std::string oldUtf8 = NormalizePhpRemotePath(cs, oldNameW);
-    std::string newUtf8 = NormalizePhpRemotePath(cs, newNameW);
+    std::string oldUtf8 = NormalizePhpRemotePath(oldNameW);
+    std::string newUtf8 = NormalizePhpRemotePath(newNameW);
     std::wstring q = L"op=RENAME&from=" + UrlEncodeUtf8(oldUtf8) + L"&to=" + UrlEncodeUtf8(newUtf8);
     q += overwrite ? L"&overwrite=1" : L"&overwrite=0";
     DWORD code = 0;
@@ -933,7 +1196,7 @@ int PhpAgentRenameMoveFileW(pConnectSettings cs, LPCWSTR oldNameW, LPCWSTR newNa
 
 int PhpAgentDeleteFileW(pConnectSettings cs, LPCWSTR remoteNameW, bool isdir)
 {
-    std::string pathUtf8 = NormalizePhpRemotePath(cs, remoteNameW);
+    std::string pathUtf8 = NormalizePhpRemotePath(remoteNameW);
     std::wstring q = BuildQueryPathOnly(isdir ? L"RMDIR" : L"DELETE", pathUtf8);
     DWORD code = 0;
     int rc = SendSimpleRequest(cs, L"POST", isdir ? L"RMDIR" : L"DELETE", q, nullptr, 0, &code, nullptr);
@@ -950,7 +1213,7 @@ int PhpAgentDeleteFileW(pConnectSettings cs, LPCWSTR remoteNameW, bool isdir)
 // else, a failed request included, leaves the question open.
 bool PhpAgentPathMayExist(pConnectSettings cs, LPCWSTR remoteNameW)
 {
-    const std::string pathUtf8 = NormalizePhpRemotePath(cs, remoteNameW);
+    const std::string pathUtf8 = NormalizePhpRemotePath(remoteNameW);
     const std::wstring q = BuildQueryPathOnly(L"STAT", pathUtf8);
     DWORD code = 0;
     const int rc = SendSimpleRequest(cs, L"GET", L"STAT", q, nullptr, 0, &code, nullptr);
@@ -1091,7 +1354,7 @@ int PhpAgentDownloadDirAsTar(pConnectSettings cs, LPCWSTR remoteDirW, LPCWSTR lo
     h.connect = WinHttpConnect(h.session, url.host.c_str(), url.port, 0);
     if (!h.connect) return SFTP_FAILED;
 
-    const std::string pathUtf8 = NormalizePhpRemotePath(cs, remoteDirW);
+    const std::string pathUtf8 = NormalizePhpRemotePath(remoteDirW);
     const std::wstring query   = L"op=TAR_STREAM&path=" + UrlEncodeUtf8(pathUtf8);
     const std::wstring object  = BuildObjectPath(url.object, query);
     h.request = WinHttpOpenRequest(h.connect, L"GET", object.c_str(), nullptr,
@@ -1099,9 +1362,9 @@ int PhpAgentDownloadDirAsTar(pConnectSettings cs, LPCWSTR remoteDirW, LPCWSTR lo
                                    url.secure ? WINHTTP_FLAG_SECURE : 0);
     if (!h.request) return SFTP_FAILED;
 
-    std::wstring headers = L"X-SFTP-OP: TAR_STREAM\r\nX-SFTP-AUTH: ";
-    headers += unicode_util::utf8_to_wstring(cs->password);
-    headers += L"\r\n";
+    std::wstring headers;
+    if (!AuthHeaders(cs, L"GET", L"TAR_STREAM", object, kEmptyBodySha256, headers))
+        return SFTP_FAILED;
     if (!WinHttpSendRequest(h.request, headers.c_str(), (DWORD)-1L,
                             WINHTTP_NO_REQUEST_DATA, 0, 0, 0))
         return SFTP_FAILED;
@@ -1237,8 +1500,8 @@ int PhpAgentDownloadDirAsTar(pConnectSettings cs, LPCWSTR remoteDirW, LPCWSTR lo
             size_t want = (size_t)(remaining < 65536 ? remaining : 65536);
             const uint8_t* p = reader.peek(want);
             if (!p) return SFTP_READFAILED;
-            DWORD wr = 0;
-            if (!WriteFile(localFile.get(), p, (DWORD)want, &wr, nullptr) || wr != want)
+            DWORD written = 0;
+            if (!WriteFile(localFile.get(), p, static_cast<DWORD>(want), &written, nullptr) || written != want)
                 return SFTP_WRITEFAILED;
             reader.advance(want);
             bytesRead += (int64_t)want;
@@ -1424,7 +1687,7 @@ bool TarDownloadSessionQueue(pConnectSettings cs, LPCWSTR localPath, LPCWSTR rem
         return false;
 
     TarDownloadEntry e;
-    e.remotePath = NormalizePhpRemotePath(cs, remotePath);
+    e.remotePath = NormalizePhpRemotePath(remotePath);
     if (e.remotePath.empty() || e.remotePath == ".") return false;
     e.localPath = localPath;
     s_tarDlSession.entries.push_back(std::move(e));
@@ -1484,9 +1747,10 @@ int PhpAgentDownloadFilesAsTar(pConnectSettings cs, const std::vector<TarDownloa
                                    url.secure ? WINHTTP_FLAG_SECURE : 0);
     if (!h.request) { PHP_LOG("TAR_PACK WinHttpOpenRequest failed gle=%lu", GetLastError()); return SFTP_FAILED; }
 
-    std::wstring headers = L"Content-Type: text/plain\r\nX-SFTP-OP: TAR_PACK\r\nX-SFTP-AUTH: ";
-    headers += unicode_util::utf8_to_wstring(cs->password);
-    headers += L"\r\n";
+    std::wstring headers;
+    if (!AuthHeaders(cs, L"POST", L"TAR_PACK", object, Sha256Hex(postBody.data(), postBody.size()), headers))
+        return SFTP_FAILED;
+    headers += L"Content-Type: text/plain\r\n";
     if (!WinHttpSendRequest(h.request, headers.c_str(), (DWORD)-1L,
                             WINHTTP_NO_REQUEST_DATA, 0, (DWORD)postBody.size(), 0)) {
         PHP_LOG("TAR_PACK WinHttpSendRequest failed gle=%lu", GetLastError());
@@ -1606,8 +1870,8 @@ int PhpAgentDownloadFilesAsTar(pConnectSettings cs, const std::vector<TarDownloa
             size_t want = (size_t)(remaining < 65536 ? remaining : 65536);
             const uint8_t* p = reader.peek(want);
             if (!p) return SFTP_READFAILED;
-            DWORD wr = 0;
-            if (!WriteFile(localFile.get(), p, (DWORD)want, &wr, nullptr) || wr != want)
+            DWORD written = 0;
+            if (!WriteFile(localFile.get(), p, static_cast<DWORD>(want), &written, nullptr) || written != want)
                 return SFTP_WRITEFAILED;
             reader.advance(want);
             remaining -= (int64_t)want;
@@ -1644,6 +1908,82 @@ int PhpAgentUploadDirAsTar(pConnectSettings cs, LPCWSTR remoteDirW,
     ShowStatusId(IDS_LOG_TAR_UPLOAD, (" " + std::to_string(entries.size())).c_str(), true);
     PHP_LOG("TAR_EXTRACT upload start entries=%u size=%lld", (unsigned)entries.size(), (long long)totalTarSize);
 
+    // The archive is produced twice, by the one function below: first for
+    // the SHA-256 its signature covers, then to send. A file that changes in
+    // between makes the two differ, and the agent then refuses the upload
+    // before extracting anything.
+    static const std::array<uint8_t, 512> s_zeroBlock{};
+    const int totalFiles = static_cast<int>(entries.size());
+    const auto emitTar = [&](const auto& sink, int progressFrom, int progressSpan) -> int {
+        const auto writeBlock = [&](const std::array<uint8_t, 512>& blk) { return sink(blk.data(), blk.size()); };
+        int filesDone = 0;
+        for (const auto& e : entries) {
+            if (UpdatePercentBar(cs, progressFrom + filesDone * progressSpan / (std::max)(1, totalFiles),
+                                 e.localPath.c_str(), remoteDirW))
+                return SFTP_ABORT;
+
+            // GNU LongLink for a name longer than the header holds
+            if (e.tarName.size() > 99) {
+                const std::string lnameData = e.tarName + '\0';
+                const int64_t pad = (static_cast<int64_t>(lnameData.size()) + 511) / 512 * 512 -
+                                    static_cast<int64_t>(lnameData.size());
+                if (!writeBlock(BuildTarUploadHeader("././@LongLink", static_cast<int64_t>(lnameData.size()), 0, 'L')) ||
+                    !sink(lnameData.data(), lnameData.size()) ||
+                    (pad > 0 && !sink(s_zeroBlock.data(), static_cast<size_t>(pad))))
+                    return SFTP_WRITEFAILED;
+            }
+
+            // Entry header (dir names must end with '/')
+            std::string entryName = e.tarName.substr(0, 99);
+            if (e.isDir && !entryName.empty() && entryName.back() != '/')
+                entryName += '/';
+            if (!writeBlock(BuildTarUploadHeader(entryName, e.fileSize, e.mtime, e.isDir ? '5' : '0')))
+                return SFTP_WRITEFAILED;
+
+            if (!e.isDir && e.fileSize > 0) {
+                const int64_t paddedSize = ((e.fileSize + 511) / 512) * 512;
+                AutoFileHandle lf(CreateFileW(e.localPath.c_str(), GENERIC_READ,
+                                              FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
+                                              FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, nullptr));
+                std::vector<uint8_t> buf(65536);
+                if (lf.get() == INVALID_HANDLE_VALUE) {
+                    // Zeros in place of an unreadable file keep the archive's length.
+                    std::fill(buf.begin(), buf.end(), uint8_t{0});
+                    for (int64_t left = paddedSize; left > 0;) {
+                        const size_t n = static_cast<size_t>((std::min)(left, static_cast<int64_t>(buf.size())));
+                        if (!sink(buf.data(), n))
+                            return SFTP_WRITEFAILED;
+                        left -= static_cast<int64_t>(n);
+                    }
+                } else {
+                    for (int64_t left = e.fileSize; left > 0;) {
+                        const DWORD want = static_cast<DWORD>((std::min)(left, static_cast<int64_t>(buf.size())));
+                        DWORD got = 0;
+                        if (!ReadFile(lf.get(), buf.data(), want, &got, nullptr) || got == 0)
+                            return SFTP_READFAILED;
+                        if (!sink(buf.data(), got))
+                            return SFTP_WRITEFAILED;
+                        left -= got;
+                    }
+                    const int64_t pad = paddedSize - e.fileSize;
+                    if (pad > 0 && !sink(s_zeroBlock.data(), static_cast<size_t>(pad)))
+                        return SFTP_WRITEFAILED;
+                }
+            }
+            ++filesDone;
+        }
+        // End of archive: two zero blocks
+        return writeBlock(s_zeroBlock) && writeBlock(s_zeroBlock) ? SFTP_OK : SFTP_WRITEFAILED;
+    };
+
+    Sha256Stream tarHash;
+    int rc = emitTar([&](const void* data, size_t len) { tarHash.Update(data, len); return true; }, 0, 50);
+    if (rc != SFTP_OK)
+        return rc;
+    const std::string tarSha = tarHash.FinalHex();
+    if (tarSha.empty())
+        return SFTP_FAILED;
+
     // --- Setup WinHTTP ---
     AgentUrl url;
     if (!ParseAgentUrl(cs, &url))
@@ -1657,7 +1997,7 @@ int PhpAgentUploadDirAsTar(pConnectSettings cs, LPCWSTR remoteDirW,
     h.connect = WinHttpConnect(h.session, url.host.c_str(), url.port, 0);
     if (!h.connect) return SFTP_FAILED;
 
-    const std::string pathUtf8 = NormalizePhpRemotePath(cs, remoteDirW);
+    const std::string pathUtf8 = NormalizePhpRemotePath(remoteDirW);
     const std::wstring query   = L"op=TAR_EXTRACT&path=" + UrlEncodeUtf8(pathUtf8);
     const std::wstring object  = BuildObjectPath(url.object, query);
     h.request = WinHttpOpenRequest(h.connect, L"POST", object.c_str(), nullptr,
@@ -1665,95 +2005,22 @@ int PhpAgentUploadDirAsTar(pConnectSettings cs, LPCWSTR remoteDirW,
                                    url.secure ? WINHTTP_FLAG_SECURE : 0);
     if (!h.request) return SFTP_FAILED;
 
-    std::wstring headers = L"X-SFTP-OP: TAR_EXTRACT\r\nX-SFTP-AUTH: ";
-    headers += unicode_util::utf8_to_wstring(cs->password);
-    headers += L"\r\nContent-Type: application/x-tar\r\n";
+    std::wstring headers;
+    if (!AuthHeaders(cs, L"POST", L"TAR_EXTRACT", object, tarSha, headers))
+        return SFTP_FAILED;
+    headers += L"Content-Type: application/x-tar\r\n";
     headers += L"Content-Length: " + std::to_wstring(totalTarSize) + L"\r\n";
 
     if (!WinHttpSendRequest(h.request, headers.c_str(), (DWORD)-1L,
                             WINHTTP_NO_REQUEST_DATA, 0, WINHTTP_IGNORE_REQUEST_TOTAL_LENGTH, 0))
         return SFTP_FAILED;
 
-    // Helper lambda: write raw bytes to WinHTTP
-    auto writeRaw = [&](const void* data, DWORD len) -> bool {
-        DWORD wr = 0;
-        return WinHttpWriteData(h.request, data, len, &wr) && wr == len;
-    };
-    auto writeBlock = [&](const std::array<uint8_t, 512>& blk) -> bool {
-        return writeRaw(blk.data(), 512);
-    };
-
-    static const std::array<uint8_t, 512> s_zeroBlock{};
-
-    // --- Pass 2: stream TAR blocks ---
-    const int totalFiles = (int)entries.size();
-    int filesDone = 0;
-
-    for (const auto& e : entries) {
-        if (UpdatePercentBar(cs, (filesDone * 100) / std::max<int>(1, totalFiles),
-                             e.localPath.c_str(), remoteDirW))
-            return SFTP_ABORT;
-
-        // GNU LongLink if needed
-        if (e.tarName.size() > 99) {
-            std::string lnameData = e.tarName + '\0';
-            int64_t lnamePadded   = ((int64_t)lnameData.size() + 511) / 512 * 512;
-            auto lhdr = BuildTarUploadHeader("././@LongLink", (int64_t)lnameData.size(), 0, 'L');
-            if (!writeBlock(lhdr)) return SFTP_WRITEFAILED;
-            if (!writeRaw(lnameData.c_str(), (DWORD)lnameData.size())) return SFTP_WRITEFAILED;
-            int64_t pad = lnamePadded - (int64_t)lnameData.size();
-            if (pad > 0) {
-                if (!writeRaw(s_zeroBlock.data(), (DWORD)pad)) return SFTP_WRITEFAILED;
-            }
-        }
-
-        // Entry header (dir names must end with '/')
-        std::string entryName = e.tarName.substr(0, 99);
-        if (e.isDir && !entryName.empty() && entryName.back() != '/')
-            entryName += '/';
-        auto hdrBlk = BuildTarUploadHeader(entryName, e.fileSize, e.mtime, e.isDir ? '5' : '0');
-        if (!writeBlock(hdrBlk)) return SFTP_WRITEFAILED;
-
-        // File data
-        if (!e.isDir && e.fileSize > 0) {
-            AutoFileHandle lf(CreateFileW(e.localPath.c_str(), GENERIC_READ,
-                                          FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
-                                          OPEN_EXISTING,
-                                          FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN,
-                                          nullptr));
-            const int64_t paddedSize = ((e.fileSize + 511) / 512) * 512;
-            if (lf.get() == INVALID_HANDLE_VALUE) {
-                // Write zeros in place of unreadable file to preserve Content-Length
-                std::vector<uint8_t> zeros((size_t)std::min<int64_t>(paddedSize, 65536), 0);
-                int64_t rem = paddedSize;
-                while (rem > 0) {
-                    DWORD chunk = (DWORD)std::min<int64_t>(rem, (int64_t)zeros.size());
-                    if (!writeRaw(zeros.data(), chunk)) return SFTP_WRITEFAILED;
-                    rem -= chunk;
-                }
-            } else {
-                std::vector<uint8_t> buf(65536);
-                int64_t remaining = e.fileSize;
-                while (remaining > 0) {
-                    DWORD toRead = (DWORD)std::min<int64_t>(remaining, (int64_t)buf.size());
-                    DWORD rd = 0;
-                    if (!ReadFile(lf.get(), buf.data(), toRead, &rd, nullptr) || rd == 0)
-                        return SFTP_READFAILED;
-                    if (!writeRaw(buf.data(), rd)) return SFTP_WRITEFAILED;
-                    remaining -= rd;
-                }
-                int64_t pad = paddedSize - e.fileSize;
-                if (pad > 0) {
-                    if (!writeRaw(s_zeroBlock.data(), (DWORD)pad)) return SFTP_WRITEFAILED;
-                }
-            }
-        }
-        ++filesDone;
-    }
-
-    // End-of-archive: two zero blocks
-    if (!writeBlock(s_zeroBlock) || !writeBlock(s_zeroBlock))
-        return SFTP_WRITEFAILED;
+    rc = emitTar([&](const void* data, size_t len) {
+        DWORD written = 0;
+        return WinHttpWriteData(h.request, data, static_cast<DWORD>(len), &written) && written == len;
+    }, 50, 50);
+    if (rc != SFTP_OK)
+        return rc;
 
     // Receive response
     if (!WinHttpReceiveResponse(h.request, nullptr))
@@ -1765,7 +2032,7 @@ int PhpAgentUploadDirAsTar(pConnectSettings cs, LPCWSTR remoteDirW,
     }
 
     UpdatePercentBar(cs, 100, nullptr, remoteDirW);
-    PHP_LOG("TAR_EXTRACT upload done files=%d", filesDone);
+    PHP_LOG("TAR_EXTRACT upload done files=%d", totalFiles);
     return SFTP_OK;
 }
 
@@ -1781,22 +2048,17 @@ int PhpShellExecuteCommand(pConnectSettings cs,
     if (!cs || !command || !command[0])
         return SFTP_FAILED;
 
-    // The command and the directory go in the request body, not the URL,
-    // so they do not end up in web server and proxy access logs.
-    std::wstring form = L"cwd=";
+    std::wstring query = L"op=SHELL_EXEC&cwd=";
     if (inCwdAbs && !inCwdAbs->empty())
-        form += UrlEncodeUtf8(*inCwdAbs);
+        query += UrlEncodeUtf8(*inCwdAbs);
     else
-        form += L".";
-    form += L"&cmd=";
-    form += UrlEncodeUtf8(command);
-    // UrlEncodeUtf8 leaves only ASCII, so the narrowing copy is exact.
-    const std::string formBody(form.begin(), form.end());
+        query += L".";
+    query += L"&cmd=";
+    query += UrlEncodeUtf8(command);
 
     DWORD code = 0;
     std::string body;
-    int rc = SendSimpleRequest(cs, L"POST", L"SHELL_EXEC", L"op=SHELL_EXEC",
-                               formBody.data(), static_cast<DWORD>(formBody.size()), &code, &body);
+    int rc = SendSimpleRequest(cs, L"POST", L"SHELL_EXEC", query, nullptr, 0, &code, &body);
     if (rc != SFTP_OK)
         return rc;
     if (!IsHttpSuccess(code)) {

@@ -23,8 +23,8 @@ Everything a run creates on the server lives in one directory under
 .PARAMETER Modes
 sftp, scp, scponly, shell, text, text-scp, text-scponly, nosub, nosub-bad,
 postcmd, key-utf8, key-cp1251, classic-gate, secrets, pass-store, jump-key,
-jump-pass, jump-ref, socks5, socks5-auth, http-proxy, hostkey, netfail
-(default: all).
+jump-pass, jump-ref, socks5, socks5-auth, http-proxy, hostkey, netfail,
+php, php74 (default: all).
   text*      text mode (CRLF <-> LF) over SFTP, SCP and SCP-only
   nosub      SFTP through sftpservercommand; the server is restarted
              mid-run and the session has to reconnect through the command
@@ -48,6 +48,9 @@ jump-pass, jump-ref, socks5, socks5-auth, http-proxy, hostkey, netfail
   netfail    no server: a proxy that drops the connection, a proxy name too
              long for its buffer, a server that never answers the handshake;
              each fails, and in time
+  php, php74 the extra build (bin\SFTPplug-extra.zip) against the PHP Agent
+             bench in tools\php-agent-test, PHP 8.3 and PHP 7.4, started here;
+             the files go to the agent's root
 
 .EXAMPLE
 .\tests\run-integration-tests.ps1
@@ -55,7 +58,7 @@ jump-pass, jump-ref, socks5, socks5-auth, http-proxy, hostkey, netfail
 #>
 param(
     [ValidateSet('x64', 'x86', 'both')] [string]$Arch = 'both',
-    [string[]]$Modes = @('sftp', 'scp', 'scponly', 'shell', 'text', 'text-scp', 'text-scponly', 'nosub', 'nosub-bad', 'postcmd', 'key-utf8', 'key-cp1251', 'classic-gate', 'secrets', 'pass-store', 'jump-key', 'jump-pass', 'jump-ref', 'socks5', 'socks5-auth', 'http-proxy', 'hostkey', 'netfail'),
+    [string[]]$Modes = @('sftp', 'scp', 'scponly', 'shell', 'text', 'text-scp', 'text-scponly', 'nosub', 'nosub-bad', 'postcmd', 'key-utf8', 'key-cp1251', 'classic-gate', 'secrets', 'pass-store', 'jump-key', 'jump-pass', 'jump-ref', 'socks5', 'socks5-auth', 'http-proxy', 'hostkey', 'netfail', 'php', 'php74'),
     [string]$RemoteBase = '/tmp',
     [switch]$VerboseLog
 )
@@ -69,7 +72,7 @@ $KeyFileUtf8 = Join-Path $Bench 'keys\id_ed25519_utf8'
 $KeyFileCp1251 = Join-Path $Bench 'keys\id_ed25519_cp1251'
 
 $Modes = @($Modes | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
-$knownModes = 'sftp', 'scp', 'scponly', 'shell', 'text', 'text-scp', 'text-scponly', 'nosub', 'nosub-bad', 'postcmd', 'key-utf8', 'key-cp1251', 'classic-gate', 'secrets', 'pass-store', 'jump-key', 'jump-pass', 'jump-ref', 'socks5', 'socks5-auth', 'http-proxy', 'hostkey', 'netfail'
+$knownModes = 'sftp', 'scp', 'scponly', 'shell', 'text', 'text-scp', 'text-scponly', 'nosub', 'nosub-bad', 'postcmd', 'key-utf8', 'key-cp1251', 'classic-gate', 'secrets', 'pass-store', 'jump-key', 'jump-pass', 'jump-ref', 'socks5', 'socks5-auth', 'http-proxy', 'hostkey', 'netfail', 'php', 'php74'
 foreach ($m in $Modes) { if ($m -notin $knownModes) { throw "Unknown mode '$m'. Known: $($knownModes -join ', ')" } }
 
 # ---------------------------------------------------------------------------
@@ -91,6 +94,11 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Starting tools\ssh-test failed.' }
 } finally {
     Pop-Location
+}
+$PhpBench = Join-Path $Root 'tools\php-agent-test'
+if (@($Modes | Where-Object { $_ -like 'php*' }).Count) {
+    docker compose -f (Join-Path $PhpBench 'docker-compose.yml') up -d 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Starting tools\php-agent-test failed.' }
 }
 
 # ---------------------------------------------------------------------------
@@ -150,6 +158,11 @@ $overrides = @{
                        server = 'ssh:22'; proxynr = '3' }
     hostkey       = @{ server = '127.0.0.1:2224' }
     netfail       = @{}
+    # PHP Agent: the password is the bench's TC_SFTP_AGENT_PSK.
+    php           = @{ server = 'http://127.0.0.1:8083/sftp.php'; transfermode = '1'; privkeyfile = ''
+                       password = 'plain:test-psk-change-me' }
+    php74         = @{ server = 'http://127.0.0.1:8074/sftp.php'; transfermode = '1'; privkeyfile = ''
+                       password = 'plain:test-psk-change-me' }
 }
 # Passwords kept in Total Commander's password manager, per mode.
 $stores = @{
@@ -253,9 +266,16 @@ try {
     if (-not (Test-Path $zip)) { throw "$zip not found. Run .\build.ps1 first." }
     $pluginDir = Join-Path $iniDir 'plugin'
     Expand-Archive -LiteralPath $zip -DestinationPath $pluginDir -Force
+    # The PHP Agent modes need the extra build.
+    $pluginDirExtra = Join-Path $iniDir 'plugin-extra'
+    if (@($Modes | Where-Object { $_ -like 'php*' }).Count) {
+        $zipExtra = Join-Path $Root 'bin\SFTPplug-extra.zip'
+        if (-not (Test-Path $zipExtra)) { throw "$zipExtra not found. Run .\build.ps1 first." }
+        Expand-Archive -LiteralPath $zipExtra -DestinationPath $pluginDirExtra -Force
+    }
 
     foreach ($a in $archs) {
-        $plugin = Join-Path $pluginDir $(if ($a -eq 'x64') { 'SFTPplug.wfx64' } else { 'SFTPplug.wfx' })
+        $wfx = if ($a -eq 'x64') { 'SFTPplug.wfx64' } else { 'SFTPplug.wfx' }
 
         $out = Join-Path $PSScriptRoot "out\integration-$a"
         if (Test-Path $out) { Remove-Item $out -Recurse -Force }
@@ -276,7 +296,9 @@ try {
         foreach ($mode in $Modes) {
             Write-Host "=== $a / $mode ===" -ForegroundColor Cyan
             $env:SFTP_IT_STORE = if ($stores.ContainsKey($mode)) { $stores[$mode] } else { '' }
-            & $exe $plugin $iniDir "it-$mode" $RemoteBase $mode
+            $isPhp = $mode -like 'php*'
+            $plugin = Join-Path $(if ($isPhp) { $pluginDirExtra } else { $pluginDir }) $wfx
+            & $exe $plugin $iniDir "it-$mode" $(if ($isPhp) { '/' } else { $RemoteBase }) $mode
             if ($LASTEXITCODE -ne 0) { $failures += "$a/$mode" }
         }
     }

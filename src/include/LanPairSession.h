@@ -1,6 +1,5 @@
 #pragma once
 #include "LanPair.h"
-#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -12,8 +11,9 @@
 // and a background file server that accepts such sessions.
 // ============================================================
 
-// Derive trust keys from shared password and store in DPAPI.
-// Call when saving a LAN Pair profile on both machines.
+// Derives the pair key from the shared password and stores it in DPAPI, for
+// this computer as client and as server. Called when a LAN Pair profile is
+// saved; the peer must be given the same password.
 bool PrepareLanPairTrustKeys(const std::string& localPeerId,
                               const std::string& remotePeerId,
                               const std::string& password) noexcept;
@@ -34,7 +34,8 @@ public:
     LanPairSession(const LanPairSession&) = delete;
     LanPairSession& operator=(const LanPairSession&) = delete;
 
-    // Factory.  password empty → use DPAPI-stored trust key.
+    // Connects and runs the PAIR3 handshake. An empty password uses the key
+    // stored in DPAPI by an earlier session or by PrepareLanPairTrustKeys.
     static std::unique_ptr<LanPairSession> connect(
         const std::string& targetIp,
         uint16_t           targetPort,
@@ -94,7 +95,7 @@ private:
 
 // ============================================================
 // LanFileServer
-// Background TCP server: accepts PAIR1 + LAN2 clients and
+// Background TCP server: accepts PAIR3 + LAN2 clients and
 // serves file-system commands in per-connection threads.
 // ============================================================
 
@@ -106,22 +107,23 @@ public:
     LanFileServer(const LanFileServer&) = delete;
     LanFileServer& operator=(const LanFileServer&) = delete;
 
-    bool start(uint16_t        port = 45846,
-               lanpair::PairError* err  = nullptr) noexcept;
+    // `bindAddress` is an IPv4 address; the default listens on every
+    // interface. `peerId` overrides the host name the server introduces
+    // itself with (tests run both ends on one computer).
+    bool start(uint16_t            port        = 45846,
+               lanpair::PairError* err         = nullptr,
+               const char*         bindAddress = nullptr,
+               const std::string&  peerId      = {}) noexcept;
 
     void stop()       noexcept;
     bool isRunning()  const noexcept;
 
-    // Set the shared password used to verify first-time connections from new peers.
-    // Call after start(); may be called at any time from any thread.
+    // The shared password, used for peers this computer holds no stored key
+    // for. May be called at any time from any thread.
     void setPassword(const std::string& password) noexcept;
 
     // Enable or disable TrustedInstaller impersonation for incoming file operations.
     void setTrustedInstaller(bool enabled) noexcept;
-
-    // Asks the user whether a peer without a trust key (peer id, IP) may pair
-    // without a password. Without an approver such peers are refused.
-    void setNewPeerApprover(std::function<bool(const std::string&, const std::string&)> approver) noexcept;
 
 private:
     struct Impl;

@@ -595,13 +595,7 @@
 #define IDS_MORE_SENDCMD_HINT           12158
 #define IDS_MORE_SENDCMD_WAIT           12159
 #define IDS_MORE_SENDCMD_NOWAIT         12160
-#define IDS_LAN_ASK_NEW_PEER            12161
-#define IDS_LAN_ERR_DENIED              12162
-#define IDS_LAN_ERR_PASSWORD_REQUIRED   12163
-#define IDS_PHP_HTTP_WARNING            12164
 #define IDS_ERR_SFTP_SERVER_CMD         12165  // SFTP server command failed: point at More...
-#define IDS_LAN_ASK_REPAIR              12166
-#define IDS_LAN_ERR_TRUST_UNKNOWN       12167
 #define IDS_ERR_NEEDS_EXTRA             12168  // classic build: PHP / LAN session refused
 #define IDS_JUMP_WITH_PROXY             12169  // refusal: proxy together with a jump host
 #define IDS_JUMP_REF_PROXIED            12170  // refusal: jump session goes through a proxy
@@ -613,6 +607,7 @@
 #define IDS_ERR_JUMP_HANDSHAKE          12176  // jump host SSH handshake failed ({} = reason)
 #define IDS_ERR_JUMP_AUTH               12177  // jump host login failed ({} = user)
 #define IDS_ERR_JUMP_TUNNEL             12178  // tunnel through jump host refused ({} = target, {} = reason)
+#define IDS_PHP_ERR_AGENT_OUTDATED      12179  // PHP agent does not sign requests: upload the new sftp.php
 
 // Next default values for new objects
 //

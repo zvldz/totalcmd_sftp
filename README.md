@@ -38,7 +38,7 @@ Complete C-to-C++ rewrite of the original SFTP plugin by Christian Ghisler. Core
 | **Jump Host (ProxyJump)** | Bastion-routed SSH via `direct-tcpip` tunneling. No external `ssh.exe` required. |
 | **PHP Agent (HTTP)** | Standalone HTTP transfer mode backed by a single `sftp.php` file. Supports hosts with no SSH account or blocked subsystem. Directory uploads and batch file downloads transferred as a single TAR stream (opt-in via `php_tar` checkbox). TAR transfers replace thousands of individual HTTP requests with one POST/GET. |
 | **PHP Shell (HTTP)** | Pseudo-terminal over HTTP via `SHELL_EXEC` in `sftp.php`. Persistent command history (Up/Down arrows, 128-entry ring buffer) stored in `%APPDATA%\GHISLER\shell_history.txt`. Maintains working-directory context across requests. |
-| **LAN Pair** | Direct Windows-to-Windows pairing mode. Custom PAIR1 authentication protocol, LAN2 file-transfer command protocol, UDP broadcast peer discovery. |
+| **LAN Pair** | Direct Windows-to-Windows pairing mode. PAIR3 handshake (SPAKE2, AES-256-GCM), LAN2 file-transfer command protocol, UDP broadcast peer discovery. |
 
 ### Authentication Methods
 
@@ -56,8 +56,8 @@ Complete C-to-C++ rewrite of the original SFTP plugin by Christian Ghisler. Core
 - TC Master Password integration via `CryptProc` API with `!` sentinel (default for new passwords).
 - Windows DPAPI (`CryptProtectData`) for password storage at the Windows account level.
 - `SecureZeroMemory` on decrypted password buffers after use, and on a connection's passwords and passphrases (session, proxy, jump host) when it is freed.
-- PBKDF2-HMAC-SHA256 (120,000 iterations) and HMAC-SHA-256 challenge-response in LAN Pair auth.
-- DPAPI-protected LAN Pair trust keys stored persistently per peer pair.
+- LAN Pair: pair key by PBKDF2-HMAC-SHA256 (120,000 iterations), SPAKE2 P-256 handshake (RFC 9382), AES-256-GCM with per-direction keys and frame numbers.
+- DPAPI-protected LAN Pair pair keys (user scope), stored per peer pair once the peer has proved the same key.
 - `DllExceptionBarrier` — C++ exception firewall at every exported entry point; prevents any exception from crossing the ABI boundary into Total Commander (which would cause an immediate host crash).
 - Legacy XOR passwords: read-only backward compatibility, never written for new profiles.
 
@@ -267,26 +267,61 @@ A background thread broadcasts peer announcements and collects incoming ones.
 
 `PeerAnnouncement` fields: `peerId`, `hostName`, `displayName`, `ip`, `tcpPort`, `role` (`Donor` / `Receiver` / `Dual`), `lastSeen`.
 
-### PAIR1 Authentication Protocol
+### PAIR3 Handshake and Encrypted Channel
 
-Challenge-response over the TCP socket established after discovery. Wire exchange:
+Both computers are given the same pairing password. Each turns it into the
+pair key, `PBKDF2-HMAC-SHA256(password, salt, 120 000 iterations, 32 bytes)`
+with the salt derived from the two peer ids, and neither ever sends it:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Receiver (client)
+    participant S as Donor (LAN Pair server)
+    Note over C,S: UDP 45845: both announce themselves every 2 s, the client learns the server's address
+    Note over C,S: each side holds the pair key: from the password, or from DPAPI after an earlier session
+    C->>S: TCP 45846 · PAIR3 HELLO clientId role
+    S->>C: PAIR3 SHARE serverId name role pB
+    Note over C: pA = x·G + w·M<br/>K = x·(pB − w·N), keys from the transcript
+    C->>S: PAIR3 CONFIRM pA cA
+    Note over S: cA checked in constant time<br/>wrong: 1 s delay, PAIR3 FAIL bad-auth
+    S->>C: PAIR3 OK cB
+    Note over C,S: cB checked · the proven pair key is stored with DPAPI on both sides
+    rect rgba(46, 160, 67, 0.15)
+    Note over C,S: AES-256-GCM from here on · own key and IV prefix per direction · numbered frames
+    C->>S: LAN2 HELLO
+    S->>C: LAN2 READY
+    C->>S: ROOTS · LIST · GET · PUT · MKDIR · DEL · REN
+    S->>C: OK + listing lines or file bytes
+    end
+```
+
+On the wire, before the encryption starts:
 
 ```
-Client → Server:  PAIR1 HELLO <peerId> <role> <clientNonceHex>
-Server → Client:  PAIR1 CHALLENGE <serverNonceHex> <saltHex> <serverPeerId> <displayName> <role> <port>
-Client → Server:  PAIR1 AUTH <proofHex>
-Server → Client:  PAIR1 OK <serverProofHex>
-             or:  PAIR1 OKTRUST <serverProofHex> <issuedTrustHex>
+Client → Server:  PAIR3 HELLO   <clientId> <role>
+Server → Client:  PAIR3 SHARE   <serverId> <displayName> <role> <pB>
+Client → Server:  PAIR3 CONFIRM <pA> <cA>
+Server → Client:  PAIR3 OK      <cB>            or  PAIR3 FAIL <reason>
 ```
 
-Key derivation for auth proof:
+`pA`, `pB`, `cA` and `cB` are SPAKE2 (RFC 9382, suite
+SPAKE2-P256-SHA256-HKDF-HMAC; the client is A, the server B), with the pair
+key, through HKDF and reduced modulo the group order, as the password scalar.
+Someone who records the exchange learns nothing to test passwords against
+offline; someone who joins it gets one guess per connection, and a wrong
+proof costs a second. The implementation is checked against the RFC's test
+vector.
 
-```
-key    = PBKDF2-HMAC-SHA256(password, salt, 120 000 iterations, 32 bytes)
-proof  = HMAC-SHA256(key, clientNonce ‖ serverNonce ‖ "client")
-```
+From then on every byte goes in AES-256-GCM frames: a 4-byte length (in the
+additional data), the ciphertext, a 16-byte tag. Each direction has its own key
+and IV prefix from `HKDF(Ke, salt = Hash(TT))`, and the IV carries a frame
+counter, so a frame that is altered, replayed, dropped or reordered ends the
+connection. A plugin older than 10.3.1 gets `PAIR1 FAIL upgrade-required` - both
+computers need 10.3.
 
-Both client and server verify each other's proof. On first successful connection with password, the server issues a trust token (`OKTRUST`). On subsequent connections, the stored DPAPI trust key is used instead of the password — TOFU (Trust On First Use) model.
+Pairing requires the password. After a successful handshake each side stores
+the pair key, and later sessions may leave the password empty.
 
 ### LAN Pair Roles
 
@@ -307,13 +342,13 @@ When the **Trusted Installer** checkbox (`lanparti=1`) is enabled:
 
 Impersonation is per-connection (server) or per-transfer (client) and is always reverted after use. Requires `SeDebugPrivilege` (elevated TC). The TrustedInstaller service is started automatically if not already running.
 
-### DPAPI Trust Key Storage
+### DPAPI Pair Key Storage
 
-Trust keys are held in DPAPI-protected storage, keyed by `"lanpair_trust_srv_<serverPeerId>__<clientPeerId>"`. Trust is per peer-pair, per Windows user account. Trust keys are saved with `CRYPTPROTECT_LOCAL_MACHINE` flag for compatibility with TrustedInstaller context. If an old key cannot be decrypted (e.g. after enabling TI), it is deleted automatically and re-pairing is triggered.
+Pair keys are held as DPAPI blobs in `%APPDATA%\GHISLER\sftpplug.secrets`, named `lanpair_trust_srv_<serverPeerId>__<clientPeerId>` and `lanpair_trust_cli_...`, one per peer pair and direction. They are saved for the Windows user account: other accounts on the machine cannot read them. The handshake runs as the user, so the TrustedInstaller context never needs them. A key is stored only after the peer has proved it holds the same one; a blob that no longer decrypts is deleted, and the next connection made with the password stores the key again.
 
 ### LAN2 Command Protocol
 
-After PAIR1, the authenticated TCP socket runs the LAN2 line-based command protocol for file operations:
+After the handshake the same connection, encrypted with AES-256-GCM, runs the LAN2 command protocol for file operations:
 
 ```
 Frame header: magic=0x4B564350 ("KVCP"), version=1, PairCommandType, reserved, payloadSize
@@ -336,6 +371,38 @@ Session timeout configurable via `setTimeoutMin(int minutes)`. When a non-zero t
 Single-file `sftp.php` deployed on the web server. The plugin communicates via WinHTTP (`winhttp.lib`), sending chunked `multipart/form-data` for uploads and receiving raw bytes for downloads.
 
 Operations supported: `PROBE`, `LIST`, `GET`, `PUT`, `MKDIR`, `REMOVE`, `RENAME`, `CHMOD`, `STAT`, `TAR_STREAM`, `TAR_EXTRACT`, `TAR_PACK`, `SHELL_EXEC`.
+
+#### Signed requests (TCSFTP-HMAC-V2)
+
+The password never leaves the computer. `PROBE`, the only unsigned request,
+gives the salt and the server's clock; every other request carries an
+HMAC-SHA256 signature over its method, operation, every parameter, the hash
+of its body, the time and a single-use nonce. A body is staged and checked
+against its signed hash before the agent uses any of it.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant P as Plugin
+    participant A as sftp.php
+    P->>A: GET ?op=PROBE (unsigned)
+    A-->>P: agent version · auth scheme · salt · Date header
+    Note over P: key = SHA-256(salt + ":" + password)<br/>clock offset taken from Date
+    rect rgba(31, 111, 235, 0.12)
+    Note over P,A: every other request
+    P->>A: method · op · parameters · body<br/>X-SFTP-TS · X-SFTP-NONCE · X-SFTP-CONTENT-SHA256<br/>X-SFTP-SIGNATURE-V2 = HMAC-SHA256(key, canonical request)
+    Note over A: time inside the window?<br/>nonce not seen before?<br/>signature matches?<br/>staged body matches its hash?
+    alt every check passes
+        A-->>P: the result: listing, file bytes, status
+    else any check fails
+        A-->>P: 401 · AUTH_REQUIRED · BAD_SIGNATURE · NONCE_REPLAY · TIMESTAMP_EXPIRED · BAD_CONTENT_HASH
+    end
+    end
+```
+
+The agent keeps only the salted hash (`AGENT_PSK_SALT`, `AGENT_PSK_SHA256`)
+or reads the password from the `TC_SFTP_AGENT_PSK` environment variable;
+either way it derives the same key.
 
 #### TAR Streaming — Upload (TAR_EXTRACT) and Batch Download (TAR_PACK)
 
@@ -462,10 +529,10 @@ Select the saved session in Total Commander and connect.
 | Location | Stored | Password exposed? |
 |----------|--------|-------------------|
 | `sftpplug.ini` (your PC) | Password encrypted with Windows DPAPI | No |
-| `sftp.php` (server) | `AGENT_PSK_SALT` + SHA-256(salt + password) | No — one-way hash |
-| Network | Password in the `X-SFTP-AUTH` header of every request | Over HTTPS no (TLS); over plain HTTP **yes** |
+| `sftp.php` (server) | `AGENT_PSK_SALT` + SHA-256(salt + password) | No — one-way hash, but it is the signing key: keep the file private |
+| Network | A signature per request (TCSFTP-HMAC-V2: HMAC-SHA256 over method, operation, every parameter, body hash, time and single-use nonce) | No — the password never travels |
 
-Reading `sftp.php` on the server gives only the hash, which does not log in; a long random password keeps it from being guessed offline. HTTPS is required beyond local testing.
+Reading `sftp.php` on the server gives the hash, which signs requests but does not reveal the password; a long random password keeps it from being guessed offline. Requests cannot be altered or replayed even over plain HTTP, but the files themselves can be read there: HTTPS is required beyond local testing.
 
 PHP Shell runs commands as the web server user, outside `AGENT_ROOT` too. Set `AGENT_ALLOW_SHELL = false` in `sftp.php` when the shell is not needed.
 
@@ -683,7 +750,7 @@ To add a new language: create `language\XYZ.lng` (UTF-8) following the existing 
 - **15-language localization** — added CS/HU/NL/PT-BR/RO/SK/UK/JA/ZH-CN; all auto-detected from TC `wincmd.ini` `LanguageIni` setting
 - **Language override** — `Language=` key in `[Configuration]` of `sftpplug.ini`; supports all 15 built-in languages by name/ISO code, plus custom `.lng` stems for unsupported languages; `sftpplug.tpl` template shipped with the plugin
 - **LAN Pair strict roles** — Donor/Receiver/Auto with unidirectional enforcement; Donor starts file server and refuses outgoing connections; Receiver connects as client without starting a local server
-- **LAN Pair TrustedInstaller** — per-connection TI impersonation on the Donor server; per-transfer TI impersonation on the Receiver client; `CRYPTPROTECT_LOCAL_MACHINE` for DPAPI trust keys; auto-delete stale keys + auto-retry on first connect failure
+- **LAN Pair TrustedInstaller** — per-connection TI impersonation on the Donor server; per-transfer TI impersonation on the Receiver client; DPAPI pair keys in user scope; stale keys deleted automatically
 - **Session delete fix** — single-character session names (e.g. `1`, `2`) can now be deleted via F8/Del
 - **KiTTY password decoding** — the obfuscation KiTTY applies to stored session passwords is reversed in-process; no external binary, no CAB resource, no antivirus exclusions involved. Decoded value is immediately re-protected with DPAPI
 - **PHP Agent TAR upload** — opt-in `php_tar` checkbox; directory F5 copy streams a single POSIX ustar TAR POST to `op=TAR_EXTRACT`; PHP extracts on-the-fly; GNU LongLink for long paths; two-pass Content-Length; works in foreground (`PUT_MULTI`) and background thread (`PUT_MULTI_THREAD`) modes; plain `.tar` file uploads unaffected

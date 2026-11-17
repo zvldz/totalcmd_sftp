@@ -182,7 +182,7 @@
 268=Párosítás...
 269=Shell...
 270=LAN Pair
-271=Párosítási jelszó (nem kötelező – üresen hagyva a mentett megbízható kulcsot használja).
+271=Adja meg a párosítási jelszót (mindkét számítógépen ugyanazt).
 272=A LAN Pair fogadó leállt.
 273=A fogadó indítása sikertelen: {}
 274=A LAN Pair fogadó elindult (45846-os port). Kattintson újra a Párosítás... gombra a leállításhoz.
@@ -405,13 +405,7 @@
 12158=Minden bejelentkezés után lefut a kiszolgálón, kivéve csak SCP módban. A kimenete a naplóablakba kerül.
 12159=Várakozás és a kimenet megjelenítése
 12160=Indítás várakozás nélkül
-12161=LAN Pair: a(z) "{}" ({}) számítógép hozzáférést kér a számítógép összes meghajtójához.\n\nEngedélyezi? Csak akkor válaszoljon Igennel, ha éppen most Ön párosítja ezeket a számítógépeket.
-12162=LAN Pair: a másik számítógép nem engedélyezte ezt a kapcsolatot.
-12163=LAN Pair: a másik számítógépen jelszó van beállítva. Adja meg itt ugyanazt a jelszót.
-12164=Figyelem: egyszerű http:// – a PHP Agent jelszava minden kérésnél titkosítatlanul megy át. Használjon https://-t.
 12165=Az SFTP-kiszolgáló parancsa nem indított SFTP-munkamenetet. Ellenőrizze az elérési útját a kapcsolat beállításaiban a(z) „Továbbiak...” alatt, vagy törölje, hogy a kiszolgáló SFTP-alrendszere legyen használva.
-12166=A másik számítógép nem ismeri fel ezt. Újra párosítja őket? A másik számítógép megkérdezi a felhasználóját.
-12167=LAN Pair: a másik számítógép nem ismeri fel ezt. Párosítsa újra őket a kapcsolat beállításaiban a(z) „Párosítás...” gombbal.
 12168=Ez a munkamenet PHP Agentet vagy LAN Pairt használ, amelyek csak a bővítmény extra változatában vannak meg (SFTPplug-...-extra.zip). Ez a változat csak SSH-n keresztül kapcsolódik.
 12169=Ez a munkamenet egyszerre proxyn és átjáró gépen át van beállítva. A bővítmény közvetlenül éri el az átjáró gépet, a proxy kimaradna. Csak az egyiket tartsa meg.
 12170=A(z) '{}' átjáró munkamenet proxyn keresztül megy. Az átjáró gépet közvetlenül éri el, az a proxy kimaradna, ezért a kapcsolat el lett utasítva. Válasszon proxy nélküli átjáró munkamenetet.
@@ -423,6 +417,7 @@
 12176=ProxyJump: az SSH-kézfogás a közvetítő gazdagéppel sikertelen: {}
 12177=ProxyJump: a hitelesítés a közvetítő gazdagépen sikertelen.\nFelhasználó: {}
 12178=ProxyJump: nem nyitható alagút ide: {}\n{}
+12179=A szerveren lévő PHP-ügynök túl régi ehhez a bővítményverzióhoz: nem fogad el aláírt kéréseket. Töltse fel a bővítménnyel kapott sftp.php fájlt.
 12089=SFTP
 12104=(kézi)
 12105= (hiányzik)

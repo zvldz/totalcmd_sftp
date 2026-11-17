@@ -175,14 +175,32 @@ From this version the plugin comes in two builds: **classic**
   rewritten. The extra build says so in the connection dialog's title,
   the help page title and the file description; `sftp.php` and the PHP
   Agent / LAN Pair help pages ship only with it.
-- **LAN Pair no longer lets an unknown computer in.** Any machine on the
-  same network could connect to LAN Pair's file server, ask for a new
-  trust key and get it, with no password and no question, and then read,
-  write and delete files on every drive. Now a computer without a key is
-  let in only if it knows the pairing password or, when no password is
-  set, after the user answers Yes to a question naming it and its IP
-  (default No). The same applies to the receiver started by Pair...
-  Reported in [wesmar/sftp#8](https://github.com/wesmar/sftp/issues/8).
+- **LAN Pair and PHP Agent follow wesmar's implementation.** Both are
+  taken from [wesmar/sftp](https://github.com/wesmar/sftp) 10.3.1.0 as
+  they are, in place of this plugin's own fixes for
+  [wesmar/sftp#8](https://github.com/wesmar/sftp/issues/8) and
+  [#9](https://github.com/wesmar/sftp/issues/9), so the two plugins work
+  together: a computer with this one pairs with a computer running his,
+  and both talk to the same `sftp.php`. Changes to these parts keep that
+  compatibility. *From wesmar/sftp 10.3.1.0.*
+- **LAN Pair is encrypted and needs the pairing password.** Any machine
+  on the same network could ask LAN Pair's file server for a new trust key
+  and get it, then read, write and delete files on every drive. Now the
+  two computers prove to each other that they hold the same password
+  without sending it (SPAKE2, RFC 9382), and everything after that travels
+  in AES-256-GCM. A key is stored only once the peer has proved the same
+  one; pairing without a password is no longer possible. The
+  TrustedInstaller token is taken only after the handshake. Both
+  computers need this version (or wesmar's 10.3.1 or later); an older one
+  is told to upgrade. *From wesmar/sftp 10.3.1.0, wesmar/sftp#8.*
+- **PHP Agent requests are signed, the password no longer travels.** It
+  went with every request in a header, readable over plain HTTP. Now every
+  request is signed with HMAC-SHA256 over its operation, parameters, body,
+  time and a single-use nonce, and the agent checks a body before using
+  it. Upload the new `sftp.php` (agent 1.1.0): an older agent is refused
+  with a message saying so. As in wesmar's agent, shell commands stay on
+  by default (`AGENT_ALLOW_SHELL = false` turns them off) and go in the
+  URL. *From wesmar/sftp 10.3.1.0, wesmar/sftp#9.*
 - **LAN Pair ports are open only while LAN Pair is used.** The file server
   and discovery started as soon as the plugin loaded, for everyone, even
   without a single LAN Pair session, and ran until Total Commander exited.
@@ -192,21 +210,10 @@ From this version the plugin comes in two builds: **classic**
   Commander exits. The TCP ports are bound exclusively, so no other
   program can take them over; discovery's UDP port is still shared.
   *wesmar/sftp#8.*
-- **LAN Pair no longer swaps its key for one from an impostor.** Any
-  machine on the network can answer discovery under the peer's name. When
-  it said it did not know this machine, the plugin deleted its real key on
-  its own, asked for a new one and took the impostor's; a server could
-  also replace the key in its answer. Now a new key is accepted only in
-  answer to the plugin's own request for one, and pairing anew is done
-  only when the user says so: Pair... asks first, and the other computer
-  asks its user too.
-- **LAN Pair's TrustedInstaller token only after authentication.** With
-  the Trusted Installer option on, the server took the token before
-  checking the peer. *wesmar/sftp#8.*
-- **LAN Pair trust keys readable only by your Windows account.** They were
+- **LAN Pair keys readable only by your Windows account.** They were
   encrypted with machine-wide DPAPI, so any other account on the computer
-  could decrypt them. Keys stored earlier keep working. Reported in
-  [wesmar/sftp#9](https://github.com/wesmar/sftp/issues/9).
+  could decrypt them. Keys stored earlier, and keys stored by wesmar's
+  plugin, keep working. *wesmar/sftp#9.*
 - **A crafted FileZilla file can no longer crash Total Commander.** The
   importer read nested XML elements with no depth limit, so a file nested
   deep enough overflowed the stack. Files nested deeper than 64 levels are
@@ -227,18 +234,6 @@ From this version the plugin comes in two builds: **classic**
   under Alt+Enter. A new password the server makes an imported session
   set is not written back either. Passwords already in the cache file are
   removed from it. *wesmar/sftp#9.*
-- **PHP Agent: shell commands off by default.** A freshly deployed
-  `sftp.php` (agent 1.0.3) refuses `SHELL_EXEC`, so its password gives
-  file access only. PHP Shell needs `AGENT_ALLOW_SHELL = true` in the file
-  or `TC_SFTP_AGENT_ALLOW_SHELL=1` in the web server's environment.
-  *wesmar/sftp#9.*
-- **PHP Shell commands no longer in the URL.** The command and the
-  directory are sent in the request body, so they stay out of web server
-  and proxy access logs. *wesmar/sftp#9.*
-- **Warning for PHP Agent over plain HTTP.** Connecting to an `http://`
-  agent on another machine writes a warning to the log: the password still
-  goes with every request in a header, unencrypted over HTTP. The
-  connection is not refused; use `https://`. *wesmar/sftp#9.*
 - **Stack buffer checks are on.** The plugin is built with `/GS`, so a
   stack buffer overrun ends the process instead of running whatever
   overwrote the return address. Control Flow Guard and CET were already on.
@@ -283,6 +278,13 @@ From this version the plugin comes in two builds: **classic**
 
 ### Fixes
 
+- **PHP Agent: a 0-byte file uploads again.** An empty file was sent
+  straight to the final step without its `.part`, and the upload failed.
+  *From wesmar/sftp 10.3.1.0.*
+- **PHP Agent: a failed transfer is reported once.** Each failed file of a
+  batch opened a dialog of its own, on top of Total Commander's, even
+  after "Skip all". It now goes to the log, and Total Commander reports
+  it. *From wesmar/sftp 10.3.1.0.*
 - **Copying a session file into the plugin no longer opens the dialog
   for a new session.** A folder of sessions named with a trailing
   backslash, as Total Commander names the target of a copy, was not
@@ -632,6 +634,11 @@ From this version the plugin comes in two builds: **classic**
   section names, refused line breaks, quoted values, long values and long
   section lists, a stray non-UTF-8 byte), the KiTTY password check, and the
   keyboard shortcuts of every dialog in every language.
+- **PHP Agent and LAN Pair under test.** The integration tests run the
+  extra build against the PHP Agent bench in Docker (PHP 8.3 and 7.4):
+  uploads including an empty file, downloads, resume, rename, folders. The
+  LAN Pair handshake (RFC 9382 test vector) and encrypted session are
+  covered by unit tests. *Tests from wesmar/sftp 10.3.1.0.*
 - **Dialogs sharp on every monitor and sized to their text.** The plugin's
   windows (connection, proxy, jump host, properties, download error, LAN
   Pair search) are per-monitor DPI aware: on a second screen with another

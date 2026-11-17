@@ -182,7 +182,7 @@
 268=Paruj...
 269=Shell...
 270=LAN Pair
-271=Hasło parowania (opcjonalne – puste = użyj zapisanego klucza zaufania).
+271=Wpisz hasło parowania (takie samo na obu komputerach).
 272=Biorca LAN Pair zatrzymany.
 273=Start biorcy nie powiódł się: {}
 274=Biorca LAN Pair uruchomiony (port 45846). Kliknij ponownie Paruj..., aby zatrzymać.
@@ -394,13 +394,7 @@
 12158=Uruchamiane na serwerze po każdym zalogowaniu, z wyjątkiem trybu tylko SCP. Wynik trafia do okna dziennika.
 12159=Czekaj i pokaż wynik
 12160=Uruchom bez czekania
-12161=LAN Pair: komputer "{}" ({}) prosi o dostęp do wszystkich dysków tego komputera.\n\nZezwolić? Odpowiedz Tak tylko wtedy, gdy właśnie sam parujesz te komputery.
-12162=LAN Pair: drugi komputer nie zezwolił na to połączenie.
-12163=LAN Pair: na drugim komputerze ustawiono hasło. Wpisz tutaj to samo hasło.
-12164=Uwaga: zwykły http:// – hasło PHP Agent jest wysyłane bez szyfrowania w każdym żądaniu. Użyj https://.
 12165=Polecenie serwera SFTP nie uruchomiło sesji SFTP. Sprawdź jego ścieżkę w „Więcej...” w ustawieniach połączenia lub wyczyść je, aby użyć podsystemu SFTP serwera.
-12166=Drugi komputer nie rozpoznaje tego. Sparować je ponownie? Drugi komputer zapyta swojego użytkownika.
-12167=LAN Pair: drugi komputer nie rozpoznaje tego. Sparuj je ponownie przyciskiem „Paruj...” w ustawieniach połączenia.
 12168=Ta sesja używa PHP Agent lub LAN Pair, które ma tylko wersja extra wtyczki (SFTPplug-...-extra.zip). Ta wersja łączy się tylko przez SSH.
 12169=Ta sesja jest ustawiona jednocześnie na proxy i na host pośredni. Wtyczka łączy się z hostem pośrednim bezpośrednio, proxy zostałoby pominięte. Zostaw jedno z nich.
 12170=Sesja pośrednia '{}' przechodzi przez proxy. Z hostem pośrednim wtyczka łączy się bezpośrednio, to proxy zostałoby pominięte, więc połączenie odrzucono. Wybierz sesję pośrednią bez proxy.
@@ -412,6 +406,7 @@
 12176=ProxyJump: uzgadnianie SSH z hostem pośrednim nie powiodło się: {}
 12177=ProxyJump: uwierzytelnianie na hoście pośrednim nie powiodło się.\nUżytkownik: {}
 12178=ProxyJump: nie można otworzyć tunelu do {}\n{}
+12179=Agent PHP na serwerze jest za stary dla tej wersji wtyczki: nie przyjmuje podpisanych żądań. Wgraj sftp.php dołączony do wtyczki.
 12089=SFTP
 12090=Szukam peera LAN Pair w sieci lokalnej...
 12091={} s
