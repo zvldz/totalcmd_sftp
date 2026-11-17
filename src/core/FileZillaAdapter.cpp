@@ -17,6 +17,10 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <memory>
+#include <mutex>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace sftp {
 
@@ -404,6 +408,13 @@ void CollectSites(const XmlNode& node, const std::string& prefix, SiteList& out)
     }
 }
 
+std::string LowerAscii(std::string s)
+{
+    for (auto& c : s)
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return s;
+}
+
 // Every SFTP site in the tree with the name it is listed under. FileZilla
 // lets two sites in one folder share a name, or differ only in case, which
 // the panel cannot tell apart; the later one gets " (2)", " (3)" and so on,
@@ -412,46 +423,16 @@ SiteList ListSites(const XmlNode& servers)
 {
     SiteList sites;
     CollectSites(servers, "", sites);
-    std::vector<std::string> taken;
-    const auto isTaken = [&taken](const std::string& name) {
-        for (const auto& t : taken) {
-            if (_stricmp(t.c_str(), name.c_str()) == 0)
-                return true;
-        }
-        return false;
-    };
+    std::unordered_set<std::string> taken;
+    taken.reserve(sites.size() * 2);
     for (auto& site : sites) {
         std::string name = site.first;
-        for (int n = 2; isTaken(name); ++n)
+        for (int n = 2; taken.count(LowerAscii(name)); ++n)
             name = site.first + " (" + std::to_string(n) + ")";
-        taken.push_back(name);
+        taken.insert(LowerAscii(name));
         site.first = std::move(name);
     }
     return sites;
-}
-
-void CollectSessions(const XmlNode& servers,
-                     const std::string& sourceOrigin,
-                     EnumerationResult& r)
-{
-    for (auto& site : ListSites(servers)) {
-        ExternalSessionEntry e;
-        e.displayName  = std::move(site.first);
-        e.sourceOrigin = sourceOrigin;
-        r.sessions.push_back(std::move(e));
-    }
-}
-
-// Locate a specific <Server> node by the name it is listed under. Returns
-// nullptr when the name no longer matches — the sitemanager.xml may have
-// been edited between enumeration and the LoadSettings call.
-const XmlNode* FindServerByPath(const XmlNode& servers, const std::string& path)
-{
-    for (const auto& site : ListSites(servers)) {
-        if (site.first == path)
-            return site.second;
-    }
-    return nullptr;
 }
 
 // Load `<Servers>` root from an XML file path. Returns false if the
@@ -467,10 +448,56 @@ bool LoadServersRoot(const std::wstring& xmlPath, XmlNode& outServers)
     if (!reader.ParseDocument(doc)) return false;
 
     // Root should be <FileZilla3>, containing exactly one <Servers>.
-    const XmlNode* servers = FindChild(doc, "Servers");
-    if (!servers) return false;
-    outServers = *servers;   // copy (small)
-    return true;
+    for (auto& child : doc.children) {
+        if (_stricmp(child.name.c_str(), "Servers") == 0) {
+            outServers = std::move(child);
+            return true;
+        }
+    }
+    return false;
+}
+
+// One parsed sitemanager.xml: its sites under their listed names. A scan
+// asks for every site of the file in turn, so the file is parsed once and
+// kept while its size and time stay the same.
+struct ParsedSites {
+    XmlNode servers;
+    SiteList sites;   // points into `servers`
+    std::unordered_map<std::string, const XmlNode*> byName;
+};
+
+std::shared_ptr<const ParsedSites> LoadParsedSites(const std::wstring& xmlPath)
+{
+    WIN32_FILE_ATTRIBUTE_DATA fad{};
+    if (!GetFileAttributesExW(xmlPath.c_str(), GetFileExInfoStandard, &fad) ||
+        (fad.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+        return nullptr;
+
+    static std::mutex cacheMutex;
+    static std::wstring cachedPath;
+    static WIN32_FILE_ATTRIBUTE_DATA cachedStamp{};
+    static std::shared_ptr<const ParsedSites> cached;
+    {
+        std::lock_guard<std::mutex> lock(cacheMutex);
+        if (cached && _wcsicmp(cachedPath.c_str(), xmlPath.c_str()) == 0 &&
+            cachedStamp.nFileSizeHigh == fad.nFileSizeHigh && cachedStamp.nFileSizeLow == fad.nFileSizeLow &&
+            CompareFileTime(&cachedStamp.ftLastWriteTime, &fad.ftLastWriteTime) == 0)
+            return cached;
+    }
+
+    auto parsed = std::make_shared<ParsedSites>();
+    if (!LoadServersRoot(xmlPath, parsed->servers))
+        return nullptr;
+    parsed->sites = ListSites(parsed->servers);
+    parsed->byName.reserve(parsed->sites.size());
+    for (const auto& site : parsed->sites)
+        parsed->byName.emplace(site.first, site.second);
+
+    std::lock_guard<std::mutex> lock(cacheMutex);
+    cachedPath = xmlPath;
+    cachedStamp = fad;
+    cached = parsed;
+    return parsed;
 }
 
 // Enumerate a specific XML file into `r`. Used by both the standard
@@ -486,13 +513,17 @@ EnumerationResult EnumerateFile(const std::wstring& xmlPath,
         return r;
     }
 
-    XmlNode servers;
-    if (!LoadServersRoot(xmlPath, servers)) {
+    const auto parsed = LoadParsedSites(xmlPath);
+    if (!parsed) {
         r.status = EnumerationStatus::Unreachable;
         return r;
     }
-
-    CollectSessions(servers, sourceOrigin, r);
+    for (const auto& site : parsed->sites) {
+        ExternalSessionEntry e;
+        e.displayName  = site.first;
+        e.sourceOrigin = sourceOrigin;
+        r.sessions.push_back(std::move(e));
+    }
 
     r.status = r.sessions.empty()
         ? EnumerationStatus::OkEmpty
@@ -632,10 +663,12 @@ bool FileZillaAdapter::LoadSettings(const ExternalSessionEntry& entry,
     }
     if (xmlPath.empty()) return false;
 
-    XmlNode servers;
-    if (!LoadServersRoot(xmlPath, servers)) return false;
-
-    const XmlNode* srv = FindServerByPath(servers, entry.displayName);
+    // The name it is listed under; none when the file was edited since the
+    // listing and the name no longer matches.
+    const auto parsed = LoadParsedSites(xmlPath);
+    if (!parsed) return false;
+    const auto found = parsed->byName.find(entry.displayName);
+    const XmlNode* srv = found == parsed->byName.end() ? nullptr : found->second;
     if (!srv) {
         SFTP_LOG("FILEZILLA", "LoadSettings: server not found for path='%s'",
                  entry.displayName.c_str());
@@ -702,7 +735,9 @@ bool FileZillaAdapter::LoadSettings(const ExternalSessionEntry& entry,
             if (_stricmp(a.first.c_str(), "encoding") == 0) { encAttr = a.second; break; }
         }
         const std::string b64 = TrimAscii(passNode->text);
-        if (!b64.empty() && _stricmp(encAttr.c_str(), "base64") == 0) {
+        if (!b64.empty() && _stricmp(encAttr.c_str(), "base64") == 0 && entry.passwordPresenceOnly) {
+            out->password = "*";   // a scan notes the password, not decodes it
+        } else if (!b64.empty() && _stricmp(encAttr.c_str(), "base64") == 0) {
             std::vector<char> decoded(b64.size());
             const int n = MimeDecode(b64.c_str(), b64.size(),
                                        decoded.data(), decoded.size());

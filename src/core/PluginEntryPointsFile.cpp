@@ -789,6 +789,8 @@ static void ApplyEnumerationToCache(sftp::IExternalSessionSource* adapter,
             writes.reserve(result.sessions.size());
             for (size_t i = 0; i < result.sessions.size(); ++i) {
                 sftp::SessionDependency dependency;
+                // The cache keeps only the mark that a password exists.
+                result.sessions[i].passwordPresenceOnly = true;
                 if (!adapter->LoadSettings(result.sessions[i], &settingsStore[i], &dependency))
                     continue;
                 AdapterStringsToInternal(settingsStore[i], dependency);
@@ -837,10 +839,7 @@ std::string LoadImportedPassword(const std::string& sourceId, const std::string&
     auto* adapter = sftp::GetImportSourceRegistry().Find(sourceId.c_str());
     if (!adapter)
         return {};
-    std::array<char, 1024> channel{};
-    IniGetString(cacheSection.c_str(), "_source", "", channel.data(),
-                 static_cast<DWORD>(channel.size()), cachePath.c_str());
-    const std::string channelTag = channel.data();
+    const std::string channelTag = IniGetValue(cacheSection.c_str(), "_source", cachePath.c_str());
     if (channelTag.empty())
         return {};
 

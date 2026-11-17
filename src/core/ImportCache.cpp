@@ -59,13 +59,11 @@ bool ParseSectionName(const std::string& section,
     return true;
 }
 
+// Read whole: a custom source path in UTF-8 can be long (a few hundred CJK
+// characters), and cut short it would hash to a section that does not exist.
 std::string ReadSourceTag(const std::string& section, const std::string& iniPath)
 {
-    std::array<char, 512> buf{};
-    IniGetString(section.c_str(), "_source", "",
-                  buf.data(), static_cast<DWORD>(buf.size()),
-                  iniPath.c_str());
-    return buf.data();
+    return IniGetValue(section.c_str(), "_source", iniPath.c_str());
 }
 
 // The dependency is stored under keys prefixed with `_`, the same shape the

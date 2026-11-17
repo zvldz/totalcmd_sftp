@@ -280,22 +280,28 @@ EnumerationResult EnumerateSessionsDir(const std::string& dir,
     return r;
 }
 
-// Password import: read KiTTY's obfuscated `Password` blob, decode with our
-// built-in KittyDecrypt, re-wrap with the plugin's own EncryptString so the
-// resulting cache row stores the same DPAPI-shaped string sftpplug.ini uses.
-// Silent no-op when nothing is stored — KiTTY leaves `Password` absent for
-// sessions the user did not opt to save.
-void ImportKittyPassword(const std::string& filePath,
+// Password import: KiTTY's obfuscated `Password` blob from the contents the
+// rest of the session was read from, decoded with our built-in KittyDecrypt
+// and re-wrapped with the plugin's own EncryptString, as sftpplug.ini keeps
+// passwords. Silent no-op when nothing is stored — KiTTY leaves `Password`
+// absent for sessions the user did not opt to save. With `presenceOnly` the
+// blob is only noted, not decoded.
+void ImportKittyPassword(const std::string& content,
                           const std::string& host,
-                          pConnectSettings out)
+                          pConnectSettings out,
+                          bool presenceOnly)
 {
     std::string encPass;
     sftp::ScopedWipe wipeEnc(encPass);
-    if (!ReadKittyString(filePath, "Password", encPass) || encPass.empty())
+    if (!KittyString(content, "Password", encPass) || encPass.empty())
         return;
+    if (presenceOnly) {
+        out->password = "*";
+        return;
+    }
 
     std::string term;
-    if (!ReadKittyString(filePath, "TerminalType", term) || term.empty())
+    if (!KittyString(content, "TerminalType", term) || term.empty())
         term = "xterm";
 
     std::string plain;
@@ -462,7 +468,7 @@ bool KittyAdapter::LoadSettings(const ExternalSessionEntry& entry,
 
     // Password decoder derives its key from the raw HostName field, not
     // the composed `host:port` string — pass `host` here, never `out->server`.
-    ImportKittyPassword(filePath, host, out);
+    ImportKittyPassword(content, host, out, entry.passwordPresenceOnly);
 
     SFTP_LOG("KITTY",
              "LoadSettings ok: display='%s' server='%s' user='%s' priv='%s' pass=%s",

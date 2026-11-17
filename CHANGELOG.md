@@ -307,6 +307,21 @@ From this version the plugin comes in two builds: **classic**
 
 ### Fixes
 
+- **[Imports] scans.**
+  - A large FileZilla site list or PuTTY `.reg` export froze Total
+    Commander when its folder was opened after a change: the file was
+    read and parsed again for every session, and FileZilla's handling of
+    duplicate names compared every site with every other each time. The
+    file is now parsed once per change. A `.reg` export over 16 MB is
+    refused.
+  - A scan decrypted every saved KiTTY and FileZilla password only to note
+    that the session has one. It only notes it now; the password is read
+    when that session is connected.
+  - A KiTTY session's password was read from the file in separate reads,
+    so host and password could come from different versions of it.
+  - A custom import path of a few hundred non-Latin characters was cut on
+    reading back, and the session then opened the connection dialog
+    instead of being checked.
 - **Encodings and local paths.**
   - Some code pages "Other..." accepts (UTF-8 as 65001, UTF-7, the
     ISO-2022 and ISCII families, GB18030, symbol) failed every file

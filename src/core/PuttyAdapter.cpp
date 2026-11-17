@@ -15,6 +15,8 @@
 #include <string_view>
 #include <unordered_map>
 #include <vector>
+#include <memory>
+#include <mutex>
 
 namespace sftp {
 
@@ -36,8 +38,8 @@ bool ReadRegFileAsUtf8(const std::string& path, std::string& outUtf8)
 
     LARGE_INTEGER sz{};
     GetFileSizeEx(h, &sz);
-    if (sz.QuadPart <= 0 || sz.QuadPart > 100 * 1024 * 1024) {
-        // Reject empty and > 100 MB — Regedit exports of a single PuTTY
+    if (sz.QuadPart <= 0 || sz.QuadPart > 16 * 1024 * 1024) {
+        // Reject empty and > 16 MB — Regedit exports of a single PuTTY
         // Sessions branch are typically tens of KB; anything larger is
         // either a mistake or someone trying to feed us a full
         // NTUSER.DAT-sized dump.
@@ -253,6 +255,39 @@ std::string FindRegFileSession(const RegFileParsed& parsed, const std::string& u
     return {};
 }
 
+// A `.reg` export parsed once and kept while its size and time stay the
+// same: a scan asks for every session of the file in turn.
+std::shared_ptr<const RegFileParsed> LoadParsedRegFile(const std::string& path)
+{
+    WIN32_FILE_ATTRIBUTE_DATA fad{};
+    if (!GetFileAttributesExW(Utf8PathToWide(path).c_str(), GetFileExInfoStandard, &fad))
+        return nullptr;
+
+    static std::mutex cacheMutex;
+    static std::string cachedPath;
+    static WIN32_FILE_ATTRIBUTE_DATA cachedStamp{};
+    static std::shared_ptr<const RegFileParsed> cached;
+    {
+        std::lock_guard<std::mutex> lock(cacheMutex);
+        if (cached && _stricmp(cachedPath.c_str(), path.c_str()) == 0 &&
+            cachedStamp.nFileSizeHigh == fad.nFileSizeHigh && cachedStamp.nFileSizeLow == fad.nFileSizeLow &&
+            CompareFileTime(&cachedStamp.ftLastWriteTime, &fad.ftLastWriteTime) == 0)
+            return cached;
+    }
+
+    std::string text;
+    if (!ReadRegFileAsUtf8(path, text))
+        return nullptr;
+    auto parsed = std::make_shared<RegFileParsed>();
+    ParseRegFile(text, *parsed);
+
+    std::lock_guard<std::mutex> lock(cacheMutex);
+    cachedPath = path;
+    cachedStamp = fad;
+    cached = parsed;
+    return parsed;
+}
+
 bool ReadJumpSession(const std::string& sourceOrigin,
                      const std::string& name,
                      JumpSessionFields& f)
@@ -268,11 +303,10 @@ bool ReadJumpSession(const std::string& sourceOrigin,
         ReadRegDword(key, "ProxyMethod", f.proxyMethod);
         RegCloseKey(key);
     } else {
-        std::string text;
-        if (!ReadRegFileAsUtf8(sourceOrigin, text))
+        const auto cachedParse = LoadParsedRegFile(sourceOrigin);
+        if (!cachedParse)
             return false;
-        RegFileParsed parsed;
-        ParseRegFile(text, parsed);
+        const RegFileParsed& parsed = *cachedParse;
         const std::string subKeyName = FindRegFileSession(parsed, name);
         if (subKeyName.empty())
             return false;
@@ -363,18 +397,15 @@ EnumerationResult PuttyAdapter::EnumerateCustomPath(const std::string& path)
 {
     EnumerationResult r;
 
-    std::string text;
-    if (!ReadRegFileAsUtf8(path, text)) {
+    const auto cachedParse = LoadParsedRegFile(path);
+    if (!cachedParse) {
         // File missing or unreadable — treat as Unreachable so the
         // channel's cached entries survive per the standard prune rules.
         r.status = EnumerationStatus::Unreachable;
         return r;
     }
 
-    RegFileParsed parsed;
-    ParseRegFile(text, parsed);
-
-    for (const auto& sessKeyName : parsed.sessions) {
+    for (const auto& sessKeyName : cachedParse->sessions) {
         // Same skip as EnumerateStandard — PuTTY's "Default Settings"
         // template row is never a real session.
         if (_stricmp(sessKeyName.c_str(), "Default%20Settings") == 0)
@@ -441,15 +472,12 @@ bool PuttyAdapter::LoadSettings(const ExternalSessionEntry& entry,
         RegCloseKey(key);
     } else {
         // Custom channel: entry.sourceOrigin is the literal path to a
-        // `putty.reg` export file. Re-parse the whole file (small,
-        // rarely called — user F5-refresh + first enter per session),
-        // then pull the fields for this specific session from the
-        // parsed map.
-        std::string text;
-        if (!ReadRegFileAsUtf8(entry.sourceOrigin, text))
+        // `putty.reg` export file, parsed once per change of the file;
+        // the fields of this session come from the parsed map.
+        const auto cachedParse = LoadParsedRegFile(entry.sourceOrigin);
+        if (!cachedParse)
             return false;
-        RegFileParsed parsed;
-        ParseRegFile(text, parsed);
+        const RegFileParsed& parsed = *cachedParse;
 
         const std::string subKeyName = FindRegFileSession(parsed, entry.displayName);
         if (subKeyName.empty()) return false;

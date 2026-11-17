@@ -19,6 +19,10 @@ enum class Proxy : int;   // SftpClient.h
 struct ExternalSessionEntry {
     std::string displayName;
     std::string sourceOrigin;
+    // Set for a scan, which records only whether the source keeps a
+    // password: LoadSettings then marks one (a non-empty, meaningless
+    // `password`) without decoding it. Connecting reads the real one.
+    bool passwordPresenceOnly = false;
 };
 
 // What the source says about reaching the host, beyond the fields we copy.
