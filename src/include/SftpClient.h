@@ -324,7 +324,6 @@ bool SftpLinkFolderTargetW(pConnectSettings ConnectSettings, LPWSTR RemoteName, 
 int  SftpQuoteCommand2(pConnectSettings ConnectSettings, LPCSTR remotedir, LPCSTR cmd, LPSTR reply, size_t replylen,
                        DWORD idleTimeoutMs = 10000, DWORD totalTimeoutMs = 45000);
 int  SftpQuoteCommand2W(pConnectSettings ConnectSettings, LPCWSTR remotedir, LPCWSTR cmd, LPSTR reply, size_t replylen);
-bool SftpQuoteCommand(pConnectSettings ConnectSettings, LPCSTR remotedir, LPCSTR cmd);
 void SftpShowPropertiesW(pConnectSettings ConnectSettings, LPCWSTR remotename);
 void SftpSetTransferModeW(LPCWSTR mode);
 bool SftpDetermineTransferModeW(LPCWSTR RemoteName);

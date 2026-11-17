@@ -14,51 +14,6 @@
 #include "TextConversion.h"
 #include "WildcardMatch.h"
 
-namespace {
-constexpr int SFTP_PROGRESS_ABORT_POLL_MS = 5000;
-
-// RAII wrapper for SSH channel with explicit timeout-driven close. Provides
-// EAGAIN-poll cleanup with cancellation support; destructor of bare
-// Libssh2Channel only does a bounded tight-loop free without yielding.
-class ScopedChannel {
-public:
-    explicit ScopedChannel(ISshChannel* channel, pConnectSettings cs) noexcept
-        : channel_(channel), cs_(cs) {}
-
-    ~ScopedChannel() {
-        if (channel_)
-            Close();
-    }
-
-    ScopedChannel(const ScopedChannel&) = delete;
-    ScopedChannel& operator=(const ScopedChannel&) = delete;
-
-    ScopedChannel(ScopedChannel&& other) noexcept
-        : channel_(std::exchange(other.channel_, nullptr)),
-          cs_(other.cs_) {}
-
-    ISshChannel* get() const noexcept { return channel_; }
-    ISshChannel* release() noexcept { return std::exchange(channel_, nullptr); }
-
-private:
-    void Close() noexcept {
-        if (!channel_ || !cs_)
-            return;
-
-        WaitForOperation([this] { return channel_->sendEof(); }, 1000, cs_);
-        WaitForOperation([this] { return channel_->waitEof(); }, 1000, cs_);
-        WaitForOperation([this] { return channel_->channelClose(); }, 1000, cs_);
-        // Explicit drained channelFree() — see class header comment.
-        WaitForOperation([this] { return channel_->channelFree(); }, 2000, cs_);
-        delete channel_;
-    }
-
-    ISshChannel* channel_;
-    pConnectSettings cs_;
-};
-
-} // anonymous namespace
-
 int GetPercent(int64_t offset, int64_t filesize)
 {
     if (filesize <= 0)
@@ -137,34 +92,4 @@ bool MeasureTextUpload(HANDLE file, int64_t& convertedSize)
     convertedSize += static_cast<int64_t>(counter.FinishCount());
     SetFilePointerEx(file, zero, nullptr, FILE_BEGIN);
     return isText;
-}
-
-int CloseRemote(pConnectSettings cs, ISftpHandle* remotefilesftp,
-                ISshChannel* remotefilescp, bool timeout, int percent)
-{
-    if (remotefilesftp) {
-        // SFTP handle close
-        const SYSTICKS start = get_sys_ticks();
-        while (LIBSSH2_ERROR_EAGAIN == remotefilesftp->close()) {
-            if (timeout && UpdatePercentBar(cs, percent))
-                return SFTP_ABORT;
-            if (get_ticks_between(start) > SFTP_PROGRESS_ABORT_POLL_MS)
-                break;
-            IsSocketReadable(cs->sock);
-        }
-    } else if (remotefilescp) {
-        // SCP channel – use ScopedChannel for RAII
-        ScopedChannel closer(remotefilescp, cs);
-        // Channel will be closed in destructor
-    }
-    return SFTP_OK;
-}
-
-int CheckInputOrTimeout(pConnectSettings ConnectSettings, bool timeout, SYSTICKS starttime, int percent)
-{
-    if (UpdatePercentBar(ConnectSettings, percent))
-        return SFTP_ABORT;
-    if (timeout && get_ticks_between(starttime) > SFTP_PROGRESS_ABORT_POLL_MS)
-        return SFTP_FAILED;
-    return SFTP_OK;
 }

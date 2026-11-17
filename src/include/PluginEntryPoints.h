@@ -34,7 +34,6 @@ bool IsMainThread() noexcept
     return GetCurrentThreadId() == mainthreadid;
 }
 
-void LogMsg(LPCSTR fmt, ...) noexcept;
 void ShowStatus(LPCSTR status) noexcept;
 void ShowStatusW(LPCWSTR status) noexcept;
 bool UpdatePercentBar(pConnectSettings ConnectSettings, int percent, LPCWSTR source = nullptr, LPCWSTR target = nullptr) noexcept;

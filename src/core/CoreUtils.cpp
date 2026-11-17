@@ -1,5 +1,4 @@
-// CoreUtils.cpp - Modern C++ implementation
-// Compatible with Visual Studio 2026 (v145 toolset) and C++20
+// CoreUtils.cpp - string, path, time, base64 and address helpers.
 
 #include "global.h"
 #include "CoreUtils.h"
@@ -44,21 +43,10 @@ namespace string_util {
 }
 
 // ============================================================================
-// Legacy String Functions (for backward compatibility)
+// C string and path helpers
 // ============================================================================
 
 extern "C" {
-
-LPSTR strcatbackslash(LPSTR thedir)
-{
-    if (!thedir || !thedir[0])
-        return thedir;
-    std::string s(thedir);
-    if (s.back() != '\\')
-        s += '\\';
-    strncpy_s(thedir, MAX_PATH, s.c_str(), _TRUNCATE);
-    return thedir;
-}
 
 LPSTR strlcatforwardslash(LPSTR thedir, size_t maxlen)
 {
@@ -113,20 +101,6 @@ LPSTR strlcpy(LPSTR p, LPCSTR p2, size_t maxlen)
             ++i;
         }
         p[i] = '\0';
-    }
-    return p;
-}
-
-LPWSTR wcslcpy2(LPWSTR p, LPCWSTR p2, size_t maxlen)
-{
-    if (p && p2 && maxlen > 0) {
-        size_t i = 0;
-        const size_t limit = maxlen - 1;
-        while (i < limit && p2[i]) {
-            p[i] = p2[i];
-            ++i;
-        }
-        p[i] = L'\0';
     }
     return p;
 }
@@ -199,12 +173,6 @@ LPWSTR ReplaceSlashByBackslashW(LPWSTR thedir)
 // Time Functions - Modern Implementation using std::chrono
 // ============================================================================
 
-namespace {
-
-// Anonymous namespace for internal utility functions
-
-} // anonymous namespace
-
 SYSTICKS get_sys_ticks() noexcept
 {
     // Native GetTickCount64 is available on Windows Vista and later.
@@ -212,7 +180,6 @@ SYSTICKS get_sys_ticks() noexcept
     return static_cast<SYSTICKS>(GetTickCount64());
 }
 
-// Legacy compatibility functions
 extern "C" {
 
 void SetInt64ToFileTime(FILETIME* ft, int64_t tm) noexcept {
@@ -257,38 +224,6 @@ bool ConvSysTimeToFileTime(const LPSYSTEMTIME st, LPFILETIME ft)
     return false;
 }
 
-#include <charconv>
-
-bool ConvertIsoDateToDateTime(LPCSTR pdatetimefield, LPFILETIME ft)
-{
-    if (!pdatetimefield || !ft) return false;
-    
-    std::string_view sv(pdatetimefield);
-    if (sv.length() < 14) return false;
-
-    SYSTEMTIME st{};
-    auto parse_num = [](std::string_view s, WORD& out) -> bool {
-        int val = 0;
-        auto [ptr, ec] = std::from_chars(s.data(), s.data() + s.size(), val);
-        if (ec == std::errc{}) {
-            out = static_cast<WORD>(val);
-            return true;
-        }
-        return false;
-    };
-
-    if (!parse_num(sv.substr(0, 4), st.wYear) ||
-        !parse_num(sv.substr(4, 2), st.wMonth) ||
-        !parse_num(sv.substr(6, 2), st.wDay) ||
-        !parse_num(sv.substr(8, 2), st.wHour) ||
-        !parse_num(sv.substr(10, 2), st.wMinute) ||
-        !parse_num(sv.substr(12, 2), st.wSecond)) {
-        return false;
-    }
-    
-    return ConvSysTimeToFileTime(&st, ft);
-}
-
 bool UnixTimeToLocalTime(const time_t* mtime, LPFILETIME ft)
 {
     if (!mtime || !ft) return false;
@@ -305,27 +240,6 @@ bool UnixTimeToLocalTime(const time_t* mtime, LPFILETIME ft)
     st.wSecond = static_cast<WORD>(fttm.tm_sec);
     
     return ConvSysTimeToFileTime(&st, ft);
-}
-
-bool CreateIsoDateString(LPFILETIME ft, LPSTR buf)
-{
-    if (!ft || !buf) return false;
-    
-    FILETIME ft2{};
-    buf[0] = '\0';
-    
-    if (!FileTimeToLocalFileTime(ft, &ft2)) {
-        return false;
-    }
-    
-    SYSTEMTIME dt{};
-    if (!FileTimeToSystemTime(&ft2, &dt)) {
-        return false;
-    }
-    
-    int rc = sprintf_s(buf, 32, "%04u%02u%02u%02u%02u", 
-                       dt.wYear, dt.wMonth, dt.wDay, dt.wHour, dt.wMinute);
-    return (rc > 0);
 }
 
 } // extern "C"
@@ -398,12 +312,6 @@ int MimeEncodeData(LPCVOID indata, size_t inlen, LPSTR outstr, size_t maxlen)
     }
     
     return static_cast<int>(strlen(outstr));
-}
-
-int MimeEncode(LPCSTR inputstr, LPSTR outputstr, size_t maxlen)
-{
-    if (!inputstr) return 0;
-    return MimeEncodeData(inputstr, strlen(inputstr), outputstr, maxlen);
 }
 
 int MimeDecode(LPCSTR indata, size_t inlen, LPVOID outdata, size_t maxlen)

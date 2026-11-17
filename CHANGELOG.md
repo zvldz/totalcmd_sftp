@@ -396,6 +396,15 @@ From this version the plugin comes in two builds: **classic**
     their old place anyway. They now stay where they were, and the error
     is reported.
   - A rename that changes only the case of a name did nothing.
+- **The help matches the plugin.** The pages on shell commands, shell
+  transfers and resuming described commands and steps the plugin does not
+  use (a `dd` method, `base64 -w 0`, 3-byte alignment, a question from
+  Total Commander on a size mismatch); authentication, sessions, security,
+  proxy, import and settings pages and the README are corrected on method
+  order, password storage, proxy with a jump host, imported passwords and
+  the debug log. The password field's help showed the two-password form
+  the wrong way round: it is `"LoginPassword","KeyPassword"`, as the plugin
+  reads it.
 - **Dialogs and messages.**
   - A password too long to be kept is no longer cut without a word: the
     password fields take at most 259 characters, and one that still needs
@@ -616,6 +625,13 @@ From this version the plugin comes in two builds: **classic**
 
 ### Changes
 
+- **Unused code removed, more tests.** About 500 lines of functions,
+  constants and branches nothing called anymore are gone, and comments that
+  told the code's history now say what it does. New tests: a text file
+  copied between two sessions, the INI reader and writer (brackets in
+  section names, refused line breaks, quoted values, long values and long
+  section lists, a stray non-UTF-8 byte), the KiTTY password check, and the
+  keyboard shortcuts of every dialog in every language.
 - **Dialogs sharp on every monitor and sized to their text.** The plugin's
   windows (connection, proxy, jump host, properties, download error, LAN
   Pair search) are per-monitor DPI aware: on a second screen with another

@@ -26,190 +26,161 @@
 
 <h2>Transfer Methods</h2>
 
+<p>With <b>Use shell transfer (for blocked hosts)</b> enabled, every transfer goes through base64 over the hidden interactive shell (Method 2). On an SCP-only session without that option, files go through <code>scp</code> (see SCP Shell Mode below), and a resumed transfer uses the raw stream (Method 1), switching to base64 when the raw stream fails.</p>
+
 <h3>Method 1: Raw cat Stream</h3>
-<p>Direct streaming for simple cases:</p>
+<p>Direct streaming over a separate exec channel:</p>
 
 <h4>Download</h4>
 <pre>
-cat /remote/path/file.txt
+cat '/remote/path/file.txt' 2>/dev/null
+tail -c +3001 '/remote/path/file.txt' 2>/dev/null   # resume after 3000 bytes
 </pre>
 <ul>
   <li>Outputs file content to stdout</li>
   <li>Plugin captures and writes to local file</li>
   <li>Fast, no encoding overhead</li>
+  <li>A size mismatch on a fresh download switches to base64; on a resumed one it is a failure</li>
 </ul>
 
 <h4>Upload</h4>
 <pre>
-cat > /remote/path/file.txt
+cat > '/remote/path/file.txt'
+cat >> '/remote/path/file.txt'   # resume
 </pre>
 <ul>
   <li>Plugin sends file content to stdin</li>
-  <li>Shell redirects to target file</li>
-  <li>Simple but effective</li>
+  <li>Shell redirects to target file; a non-zero exit status is a write error</li>
+  <li>The remote size is checked afterwards with <code>wc -c &lt; 'file'</code>; a mismatch switches to base64</li>
 </ul>
 
-<h3>Method 2: dd with Block Size</h3>
-<p>Controlled block transfer:</p>
-
-<h4>Download with Offset</h4>
-<pre>
-dd if=/remote/path/file.txt bs=16384 skip=10
-</pre>
-<ul>
-  <li><code>if=</code> Input file path</li>
-  <li><code>bs=</code> Block size (16384 bytes)</li>
-  <li><code>skip=</code> Blocks to skip (for resume)</li>
-  <li>Precise control over read position</li>
-</ul>
-
-<h4>Upload with Append</h4>
-<pre>
-dd of=/remote/path/file.txt bs=16384 seek=10 conv=notrunc
-</pre>
-<ul>
-  <li><code>of=</code> Output file path</li>
-  <li><code>seek=</code> Blocks to seek (for resume)</li>
-  <li><code>conv=notrunc</code> Don't truncate existing file</li>
-  <li>Good for large file resume</li>
-</ul>
-
-<h3>Method 3: Base64 Encoding</h3>
+<h3>Method 2: Base64 Encoding</h3>
 <p>Most robust fallback for restrictive environments:</p>
 
 <h4>Download with Base64</h4>
 <pre>
-base64 -w 0 /remote/path/file.txt
+test -r '/remote/path/file.txt' &amp;&amp; base64 '/remote/path/file.txt' 2>/dev/null | fold -w 76
+tail -c +3001 '/remote/path/file.txt' 2>/dev/null | base64 | fold -w 76   # resume
 </pre>
 <ul>
   <li>Encodes binary to ASCII</li>
-  <li><code>-w 0</code> No line wrapping (single line)</li>
-  <li>Plugin decodes base64 locally</li>
+  <li><code>fold -w 76</code> keeps lines short (macOS <code>base64</code> writes one line for the whole file)</li>
+  <li>Plugin decodes base64 locally, line by line</li>
   <li>Handles any file type safely</li>
 </ul>
 
 <h4>Upload with Base64</h4>
 <pre>
-base64 -d > /remote/path/file.txt
+printf '%s' '&lt;base64 chunk&gt;' | base64 -d > '/remote/path/file.txt'
+printf '%s' '&lt;base64 chunk&gt;' | base64 -d >> '/remote/path/file.txt'
 </pre>
 <ul>
-  <li>Plugin encodes file to base64</li>
-  <li>Shell decodes and writes to file</li>
-  <li><code>-d</code> Decode mode</li>
+  <li>Plugin encodes file to base64, one command per chunk</li>
+  <li>The first chunk creates the file (<code>&gt;</code>), the rest append (<code>&gt;&gt;</code>)</li>
+  <li>Chunks are 1024 bytes; for larger files the plugin first checks with a six-byte test whether the shell decodes base64 spread over several lines, and then sends 48 KB per command</li>
+  <li>Every chunk must answer exit status 0, and the final remote size is checked</li>
   <li>Works through any text-only channel</li>
 </ul>
 
-<h2>Resume Strategies</h2>
-
-<h3>Base64 Resume Alignment</h3>
-<p>Base64 encoding has special handling for resume:</p>
+<h2>Resume</h2>
+<p>Resume is byte-exact. Each base64 chunk is encoded and decoded on its own, padding included, so a transfer can continue at any byte without alignment and without sending bytes twice.</p>
 <ul>
-  <li>Base64 encodes 3 bytes → 4 characters</li>
-  <li>Resume must align to 3-byte boundaries</li>
-  <li>Plugin calculates correct skip position</li>
-  <li>Ensures decoded output is byte-perfect</li>
+  <li>Download: <code>tail -c +N</code> starts right after the bytes already on disk</li>
+  <li>Upload: the remote size from <code>wc -c</code> is the offset; an unknown size, or one larger than the local file, refuses the resume</li>
+  <li>A text-mode transfer is never resumed; it starts over</li>
 </ul>
 
-<h3>Resume Example</h3>
-<pre>
-# File is 10000 bytes, already have 3000
-# 3000 bytes = 1000 blocks of 3 bytes
-# Base64: 1000 * 4 = 4000 characters to skip
-
-base64 -w 0 file.txt | tail -c +4001 | base64 -d >> partial.file
-</pre>
-
 <h2>Directory Operations</h2>
+<p>File operations on an SCP-only session run as shell commands. Names are single-quoted, with each quote inside written as <code>'\''</code>.</p>
 
 <h3>List Directory</h3>
 <pre>
-ls -la /remote/path/
+env TZ=UTC0 LC_ALL=C TIME_STYLE=locale BLOCK_SIZE=1 LS_BLOCK_SIZE=1 QUOTING_STYLE=escape ls -la '/remote/path' | cat
 </pre>
 <ul>
-  <li>Detailed listing with permissions</li>
-  <li>Plugin parses output for file info</li>
-  <li>Handles spaces in filenames</li>
+  <li>Detailed listing with permissions; plugin parses output for file info</li>
+  <li>Fixed locale, UTC times and byte sizes, whatever the user's environment sets</li>
+  <li>With GNU <code>ls</code>, <code>QUOTING_STYLE=escape</code> escapes spaces, newlines and other unusual bytes, so each line is one entry; whether <code>ls</code> supports this is checked once, with the first listing</li>
 </ul>
 
 <h3>Create Directory</h3>
 <pre>
-mkdir -p /remote/path/newdir
+mkdir -m 755 '/remote/path/newdir'
 </pre>
 <ul>
-  <li><code>-p</code> Create parent directories</li>
-  <li>Recursive creation</li>
-  <li>No error if exists</li>
+  <li><code>-m</code> The session's mode for new folders (default 755)</li>
+  <li>Fails if the folder already exists</li>
 </ul>
 
 <h3>Remove File</h3>
 <pre>
-rm -f /remote/path/file.txt
+rm '/remote/path/file.txt' &lt; /dev/null
 </pre>
 <ul>
-  <li><code>-f</code> Force, no prompt</li>
-  <li>Silent success</li>
+  <li>A name that does not exist is reported as a failure</li>
+  <li>Input from <code>/dev/null</code>, so <code>rm</code> does not wait for an answer on a write-protected file</li>
 </ul>
 
 <h3>Remove Directory</h3>
 <pre>
-rm -rf /remote/path/olddir
+rmdir '/remote/path/olddir'
 </pre>
 <ul>
-  <li><code>-r</code> Recursive</li>
-  <li><code>-f</code> Force</li>
-  <li>Use with caution</li>
+  <li>Removes only an empty folder; Total Commander deletes the contents first</li>
+  <li>Whatever could not be deleted keeps the folder in place</li>
 </ul>
 
-<h3>Rename/Move</h3>
+<h3>Rename/Move, Copy</h3>
 <pre>
-mv /remote/path/old.txt /remote/path/new.txt
+test -e '/remote/path/new.txt' || test -L '/remote/path/new.txt'
+mv '/remote/path/old.txt' '/remote/path/new.txt'
+cp '/remote/path/old.txt' '/remote/path/new.txt'
 </pre>
 <ul>
-  <li>Works across same filesystem</li>
-  <li>Atomic on same partition</li>
+  <li>The <code>test</code> probe runs first unless overwriting was confirmed; an existing name goes back to Total Commander as "file exists"</li>
+  <li>Only exit status 0 counts as success</li>
 </ul>
+
+<h3>Change Attributes</h3>
+<pre>
+chmod 644 '/remote/path/file.txt'
+</pre>
 
 <h3>Get File Info</h3>
 <pre>
-stat /remote/path/file.txt
+stat '/remote/path/file.txt'
 </pre>
 <ul>
-  <li>Shows size, permissions, timestamps</li>
-  <li>Plugin parses for metadata</li>
+  <li>Shown in the file properties</li>
 </ul>
 
-<h2>Shell Detection</h2>
+<h2>Shell Session</h2>
 
-<h3>Available Commands</h3>
-<p>Plugin tests for command availability:</p>
+<h3>Shell Start</h3>
+<ul>
+  <li>The hidden shell runs on a terminal opened with echo turned off</li>
+  <li>The plugin then sends <code>exec /bin/sh</code> (the commands are written for a POSIX shell; a csh, tcsh or fish login shell reads them differently) and <code>stty -echo</code></li>
+  <li>A restricted shell that refuses <code>exec</code> keeps running, and the commands work as far as it understands them</li>
+</ul>
+
+<h3>Command Markers</h3>
 <pre>
-which cat
-which dd
-which base64
-which ls
-which mkdir
-which rm
-which mv
-which stat
+echo "__WFX_DD_BEGIN__&lt;random&gt;"; &lt;command&gt;; echo "__WFX_DD_""END__&lt;random&gt;":$?
 </pre>
-
-<h3>Fallback Order</h3>
-<ol>
-  <li>Try SFTP native operations</li>
-  <li>Try SCP commands</li>
-  <li>Try shell cat/dd</li>
-  <li>Try base64 encoding</li>
-  <li>Last resort: chunked base64</li>
-</ol>
+<ul>
+  <li>Each command is wrapped in begin and end markers with a random part, so its output is told from the terminal echo</li>
+  <li>The end marker is split by an empty string, so a terminal that still echoes never shows it whole</li>
+  <li>The exit status after the end marker decides success</li>
+</ul>
 
 <h2>SCP Shell Mode</h2>
 
-<h3>SCP with Shell Fallback</h3>
-<p>Some hosts need shell for SCP operations:</p>
+<h3>SCP over an exec channel</h3>
+<p>On an SCP-only session without shell transfer, files go through the <code>scp</code> program on the server:</p>
 
 <h4>SCP Send</h4>
 <pre>
-scp -t /remote/path/file.txt
+scp -t '/remote/path/file.txt'
 </pre>
 <ul>
   <li><code>-t</code> Target mode (receive file)</li>
@@ -219,7 +190,7 @@ scp -t /remote/path/file.txt
 
 <h4>SCP Receive</h4>
 <pre>
-scp -f /remote/path/file.txt
+scp -f '/remote/path/file.txt'
 </pre>
 <ul>
   <li><code>-f</code> From mode (send file)</li>
@@ -230,7 +201,6 @@ scp -f /remote/path/file.txt
 <h3>SCP Shell Protocol</h3>
 <pre>
 # Plugin sends:
-T1234567890 0 1234567890 0  (timestamps)
 C0644 1234 file.txt  (file mode, size, name)
 [...file content...]
 \0  (null terminator)
@@ -243,11 +213,10 @@ C0644 1234 file.txt  (file mode, size, name)
 
 <h2>Error Handling</h2>
 
-<h3>Command Not Found</h3>
+<h3>Command Fails</h3>
 <ul>
-  <li>Plugin tries alternative commands</li>
-  <li>Example: no base64 → try uuencode</li>
-  <li>Last resort: report error</li>
+  <li>A non-zero exit status (missing <code>base64</code>, read-only destination, full disk) is reported as an error</li>
+  <li>A failed raw transfer switches to base64</li>
 </ul>
 
 <h3>Permission Denied</h3>
@@ -259,17 +228,14 @@ C0644 1234 file.txt  (file mode, size, name)
 
 <h3>Command Timeout</h3>
 <ul>
-  <li>Default timeout: 20 seconds</li>
-  <li>Large files may need more time</li>
-  <li>Plugin sends keepalive during transfer</li>
+  <li>A base64 download waits up to 90 seconds for each next line</li>
+  <li>The wait counts from the last line received, so large files are not cut off</li>
 </ul>
 
 <h3>Partial Transfer</h3>
 <ul>
   <li>Connection interrupted mid-transfer</li>
-  <li>Plugin detects incomplete file</li>
-  <li>Resume from last good position</li>
-  <li>Base64 resume aligned to boundaries</li>
+  <li>Resume continues at the exact byte where the transfer stopped</li>
 </ul>
 
 <h2>Performance Considerations</h2>
@@ -278,41 +244,29 @@ C0644 1234 file.txt  (file mode, size, name)
 <ul>
   <li>Base64 increases size by ~33%</li>
   <li>Encoding/decoding CPU cost</li>
-  <li>Use only when necessary</li>
+  <li>One shell round-trip per upload chunk</li>
   <li>Still faster than no transfer at all</li>
-</ul>
-
-<h3>Block Size Tuning</h3>
-<ul>
-  <li>Default: 16384 bytes (16 KB)</li>
-  <li>Larger blocks: more efficient</li>
-  <li>Smaller blocks: better for slow links</li>
-  <li>Auto-tuned based on connection</li>
-</ul>
-
-<h3>Latency Impact</h3>
-<ul>
-  <li>Shell commands round-trip latency</li>
-  <li>Pipelining where possible</li>
-  <li>Batch small operations</li>
 </ul>
 
 <h2>Security Notes</h2>
 
 <h3>Command Injection Protection</h3>
 <ul>
-  <li>Filenames properly escaped</li>
-  <li>Shell metacharacters quoted</li>
-  <li>Path traversal prevented</li>
+  <li>Every name is single-quoted; a quote inside is written as <code>'\''</code></li>
+  <li>A command for the interactive shell that would contain a control character (for example a newline or escape in a file name) is not sent; the plugin reports that the name contains a control character</li>
+  <li>Commands run with the user's own permissions</li>
 </ul>
 
 <h3>Shell Quoting</h3>
 <pre>
 # Filename with spaces:
-cat "/remote/path/my file.txt"
+cat '/remote/path/my file.txt'
 
 # Filename with special chars:
 cat '/remote/path/file$var.txt'
+
+# Filename with a quote:
+cat '/remote/path/it'\''s.txt'
 </pre>
 
 <div class="warn">
@@ -320,7 +274,7 @@ cat '/remote/path/file$var.txt'
 </div>
 
 <div class="note">
-  <b>Tip:</b> If shell transfer works but is slow, try enabling compression in SSH settings or use base64 for binary files only.
+  <b>Tip:</b> If shell transfer works but is slow, try enabling compression in SSH settings.
 </div>
 
 <p><a href="index.html">Back to index</a></p>

@@ -412,7 +412,7 @@ int SftpAuthPageantOn(const SshAuthTarget& target, LPCSTR progressbuf, int progr
     if (!agent || agent->connect() != 0) {
         if (agent) {
             agent->disconnect();
-            // agent->free() removed: ~Libssh2Agent() calls libssh2_agent_free()
+            // ~Libssh2Agent() calls libssh2_agent_free()
             agent.reset();
         }
         // Attempt to launch Pageant.

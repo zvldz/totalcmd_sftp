@@ -509,8 +509,8 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
             // `ls` reports trouble it ran into while still printing whatever it
             // could read, so a non-zero status is only fatal when it left us
             // with nothing: otherwise the panel would lose a directory it can
-            // in fact show. An empty result with a complaint is the case that
-            // used to look like an empty directory.
+            // in fact show. An empty result with a complaint is reported as
+            // an error, not shown as an empty directory.
             if (listStatus != 0 && entries.empty()) {
                 if (!cs->scpShellErrBuf.empty()) {
                     std::string err = cs->scpShellErrBuf;

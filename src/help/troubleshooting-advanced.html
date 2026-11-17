@@ -377,11 +377,11 @@ curl --socks5 proxy:1080 https://example.com
 
 <h3>Enable Detailed Logging</h3>
 <ol>
-  <li>Check "Detailed log" in plugin settings</li>
-  <li>Check "Show entire directory listings in log"</li>
+  <li>Check "Log full directory listings (debug)" in the session settings</li>
   <li>Reproduce the issue</li>
   <li>Review Total Commander log window</li>
 </ol>
+<p>Test (rc/beta) builds also write a debug log to <code>%TEMP%\sftpplug.log</code>. Stable releases write no such file.</p>
 
 <h3>Log Analysis</h3>
 <h4>Connection Log</h4>
@@ -446,7 +446,7 @@ XFER: Complete
 <h3>Debug Logging Performance</h3>
 <p><b>Symptom:</b> Slow file transfers in Release build.</p>
 <p><b>Cause:</b> Debug logging was enabled by default, writing to sftpplug.log on every operation.</p>
-<p><b>Fix:</b> Debug logging now disabled in Release builds (LOG_ENABLED=0 in global.h). No action needed.</p>
+<p><b>Fix:</b> Stable releases are built with debug logging off (LOG_ENABLED 0 in global.h; the release workflow refuses a stable tag otherwise). Test (rc/beta) builds keep it and write <code>%TEMP%\sftpplug.log</code>. No action needed.</p>
 
 <h2>Getting Help</h2>
 

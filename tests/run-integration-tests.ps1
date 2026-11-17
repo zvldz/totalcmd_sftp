@@ -174,6 +174,12 @@ foreach ($mode in $Modes) {
     foreach ($key in $overrides[$mode].Keys) { [void]$ini.AppendLine("$key=$($overrides[$mode][$key])") }
     [void]$ini.AppendLine()
 }
+# The second session a text-mode file is copied to: same server and folder,
+# Unix line ends as well.
+[void]$ini.AppendLine("[it-copy-target]")
+foreach ($key in $base.Keys) { [void]$ini.AppendLine("$key=$($base[$key])") }
+[void]$ini.AppendLine("unixlinebreaks=1")
+[void]$ini.AppendLine()
 # Sessions and proxy records the modes above refer to. Proxy types: 2 HTTP,
 # 4 SOCKS5.
 [void]$ini.Append(@"

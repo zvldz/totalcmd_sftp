@@ -25,7 +25,7 @@
     <ul>
       <li>SSH password authentication</li>
       <li>PHP Agent shared secret, sent with every request (use HTTPS)</li>
-      <li>Stored encrypted via Windows DPAPI when "Save password" is used</li>
+      <li>Kept in Total Commander's password manager when "Protect password with password manager" is ticked (default), otherwise encrypted via Windows DPAPI in <code>sftpplug.ini</code>; leave it empty to be asked on connect</li>
     </ul>
   </li>
 </ul>
@@ -69,9 +69,9 @@
   <li><b>Compress data with ZLIB:</b> Enable SSH compression (may help on slow links)</li>
   <li><b>Use shell transfer (for blocked hosts):</b> 
     <ul>
-      <li>Enables cat/dd/base64 pipeline fallback</li>
+      <li>Available with SCP only (no SFTP); every transfer then goes through base64 over the hidden shell</li>
       <li>Use when SCP/SFTP are blocked by server policy</li>
-      <li>Supports resume with base64 alignment (3-byte boundaries)</li>
+      <li>Supports byte-exact resume</li>
     </ul>
   </li>
 </ul>
@@ -182,7 +182,7 @@
 <h2>Session Storage</h2>
 <ul>
   <li>Sessions stored in <code>sftpplug.ini</code> in Total Commander directory</li>
-  <li>Passwords encrypted with Windows DPAPI (user-specific)</li>
+  <li>Passwords kept in Total Commander's password manager (<code>password=!</code>) or encrypted with Windows DPAPI (user-specific)</li>
   <li>Sessions from SecureCRT, PuTTY, WinSCP, FileZilla and KiTTY appear in the <code>[Imports]</code> folder in the plugin root</li>
   <li>Cached session lists live next to <code>sftpplug.ini</code>, so imported entries are available right after Total Commander starts</li>
   <li>Custom locations added through <code>[Add custom location...]</code> are stored per source in <code>sftpplug.ini</code></li>

@@ -18,7 +18,7 @@
 constexpr size_t WDRTYPEMAX = 1024;
 
 // ============================================================================
-// String Conversion Functions (C interface for legacy compatibility)
+// String Conversion Functions (C interface)
 // ============================================================================
 
 extern "C" {
@@ -64,7 +64,6 @@ void copyfinddataaw(LPWIN32_FIND_DATAW lpFindFileDataW, LPWIN32_FIND_DATA lpFind
 // Callback proxy functions
 int ProgressProcT(int PluginNr, LPCWSTR SourceName, LPCWSTR TargetName, int PercentDone) noexcept;
 void LogProcT(int PluginNr, int MsgType, LPCWSTR LogString) noexcept;
-bool RequestProcT(int PluginNr, int RequestType, LPCWSTR CustomTitle, LPCWSTR CustomText, LPWSTR ReturnedText, size_t maxlen) noexcept;
 
 // The callbacks for internal strings (see kInternalCodepage): wide callback
 // when available, ANSI in the system codepage otherwise. Same arguments and
@@ -80,7 +79,6 @@ BOOL SetDlgItemTextI(HWND hDlg, int nIDDlgItem, LPCSTR lpString) noexcept;
 UINT GetDlgItemTextI(HWND hDlg, int nIDDlgItem, LPSTR lpString, int cchMax) noexcept;
 
 // File operations with Unicode support
-BOOL CopyFileT(LPCWSTR lpExistingFileName, LPCWSTR lpNewFileName, BOOL bFailIfExists) noexcept;
 BOOL CreateDirectoryT(LPCWSTR lpPathName, LPSECURITY_ATTRIBUTES lpSecurityAttributes) noexcept;
 BOOL RemoveDirectoryT(LPCWSTR lpPathName) noexcept;
 BOOL DeleteFileT(LPCWSTR lpFileName) noexcept;
@@ -96,13 +94,6 @@ HANDLE CreateFileT(
     DWORD dwCreationDisposition,
     DWORD dwFlagsAndAttributes, 
     HANDLE hTemplateFile) noexcept;
-
-UINT ExtractIconExT(
-    LPCWSTR lpszFile, 
-    int nIconIndex, 
-    HICON* phiconLarge, 
-    HICON* phiconSmall, 
-    UINT nIcons) noexcept;
 
 HANDLE FindFirstFileT(LPCWSTR lpFileName, LPWIN32_FIND_DATAW lpFindFileData) noexcept;
 BOOL FindNextFileT(HANDLE hFindFile, LPWIN32_FIND_DATAW lpFindFileData) noexcept;
@@ -186,12 +177,6 @@ private:
 
 namespace unicode_util {
 
-// Safe wide string copy - returns std::wstring, no buffer size needed
-[[nodiscard]] std::wstring safe_wcsncpy(std::wstring_view src, size_t max_len = std::wstring_view::npos);
-
-// Safe wide string concat - returns std::wstring
-[[nodiscard]] std::wstring safe_wcscat(std::wstring_view str1, std::wstring_view str2);
-
 // Wide to ANSI with automatic memory management
 [[nodiscard]] std::string wide_to_narrow(std::wstring_view w, int codepage = CP_ACP);
 
@@ -203,9 +188,6 @@ namespace unicode_util {
 
 // UTF-16 to UTF-8 conversion (returns std::string)
 [[nodiscard]] std::string wstring_to_utf8(std::wstring_view wstr);
-
-// Helper for WIN32_FIND_DATA conversion - returns wide version
-[[nodiscard]] WIN32_FIND_DATAW convert_find_data_to_wide(const WIN32_FIND_DATAA& findA);
 
 // Internal strings (kInternalCodepage, CoreUtils.h) to and from wide text.
 [[nodiscard]] inline std::wstring internal_to_wide(std::string_view s)
@@ -249,13 +231,13 @@ inline LPSTR wilcopy(LPSTR outname, LPCWSTR inname, size_t maxlen) noexcept
     return walcopyCP(unicode_util::kInternalCodepage, outname, inname, maxlen);
 }
 
-// Legacy global alias kept for older plugin code paths.
+// Global alias for unicode_util::usys().
 [[nodiscard]] inline bool usys() noexcept {
     return unicode_util::usys();
 }
 
 // ============================================================================
-// Legacy Compatibility Macros
+// Filename copy macros
 // ============================================================================
 
 #define wafilenamecopy(outname, inname)  walcopy(outname, inname, _countof(outname) - 1)

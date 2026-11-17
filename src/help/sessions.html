@@ -171,7 +171,7 @@ proxy happens to hold that number here would be no better.</p>
 <ol>
   <li>Open imported session with <code>Alt+Enter</code></li>
   <li>Verify transfer mode matches server capabilities</li>
-  <li>Check proxy settings if applicable — proxy definitions are not imported</li>
+  <li>Check proxy settings if applicable — an HTTP or SOCKS proxy from the source comes along with <code>F5</code>, without its password</li>
   <li>Verify key file paths are valid</li>
   <li>Test connection</li>
   <li>Adjust SCP/Shell options for restrictive hosts</li>
@@ -213,8 +213,9 @@ aws-eu-west-web         - Cloud provider + region
 
 <h3>Password not remembered</h3>
 <ul>
-  <li>Ensure "Save password" was selected</li>
-  <li>DPAPI requires same Windows user</li>
+  <li>Ensure the password was entered in the session's properties before saving</li>
+  <li>With "Protect password with password manager", Total Commander's master password must be entered when asked</li>
+  <li>Without it, DPAPI requires the same Windows user</li>
   <li>Re-enter password and save again</li>
 </ul>
 
@@ -227,7 +228,7 @@ aws-eu-west-web         - Cloud provider + region
 </ul>
 
 <div class="note">
-  <b>Tip:</b> Export your <code>sftpplug.ini</code> periodically for backup. Sessions are portable between machines (passwords require same Windows user).
+  <b>Tip:</b> Export your <code>sftpplug.ini</code> periodically for backup. Passwords in it are not portable: DPAPI ones need the same Windows user, and password-manager ones stay in Total Commander. To move a session with its passwords, copy it out with <code>F5</code> (see above).
 </div>
 
 <p><a href="index.html">Back to index</a></p>

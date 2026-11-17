@@ -16,8 +16,6 @@ std::string ToRemotePathA(pConnectSettings cs, LPCWSTR pathW);
 // does not, and an unquoted name carrying a space, a semicolon or a backtick
 // would be read by the remote shell as syntax instead of as a file name.
 std::string BuildShellScpArgument(const std::string& path);
-int CheckInputOrTimeout(pConnectSettings ConnectSettings, bool timeout, SYSTICKS starttime, int percent);
-int CloseRemote(pConnectSettings ConnectSettings, ISftpHandle* remotefilesftp, ISshChannel* remotefilescp, bool timeout, int percent);
 bool SftpDetermineTransferModeW(LPCWSTR RemoteName);
 
 // Exact size of a local file after CRLF -> LF conversion, measured with the

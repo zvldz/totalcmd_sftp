@@ -5,12 +5,9 @@
 #include <windows.h>
 #include "Libssh2Backend.h"
 
-// Modern static linking: include headers from libssh2/ subdirectory in PHP deps.
+// libssh2 is linked statically; headers come from the libssh2/ subdirectory.
 #include <libssh2/libssh2.h>
 #include <libssh2/libssh2_sftp.h>
-
-// In dynamic mode (if ever needed), this would be handled elsewhere.
-// For now, we are YOLO All-in-one.
 
 // ===========================================================================
 // Libssh2SftpHandle
@@ -57,9 +54,8 @@ Libssh2SftpHandle::~Libssh2SftpHandle()
             return;
         }
     }
-    // Best-effort give-up: libssh2 still owns the handle structure; on session
-    // free it will be released. Server-side may briefly hold the file but that
-    // matches the prior (buggy) behaviour, so this is no regression.
+    // Give up: libssh2 still owns the handle structure and releases it when
+    // the SFTP session is freed. Until then the server may keep the file open.
     handle_ = nullptr;
 }
 

@@ -1,5 +1,4 @@
 // SFTP transport/session implementation.
-// Maintainer: Marek Wesolowski (wesmar)
 #include "global.h"
 #include <windows.h>
 #include <ws2tcpip.h>
@@ -79,10 +78,7 @@ static std::unique_ptr<lanpair::DiscoveryService> g_lanDiscovery;
 // Connection progress step percentages
 // ---------------------------------------------------------------------------
 static constexpr int PROG_SOCKET_CONNECT  = 20;
-static constexpr int PROG_SESSION_INIT    = 30;
-static constexpr int PROG_SESSION_STARTUP = 40;
 static constexpr int PROG_AUTH_START      = 60;
-static constexpr int PROG_AUTH_DONE       = 70;
 static constexpr int PROG_SFTP_INIT       = 80;
 static constexpr int PROG_DONE            = 90;
 
@@ -94,9 +90,6 @@ std::mutex g_transferModeMutex;
 thread_local char global_detectcrlf = 0;
 
 const bool SSH_ScpNo2GBLimit = true;
-const bool SSH_ScpNeedBlockingMode = false;   // Need to use blocking mode for SCP?
-const bool SSH_ScpNeedQuote = false;          // Need to use double quotes "" around names with spaces for SCP?
-const bool SSH_ScpCanSendKeepAlive = false;   // Declared in SftpInternal.h; keepalive not needed for SCP
 
 void EncryptString(LPCTSTR pszPlain, LPTSTR pszEncrypted, UINT cchEncrypted);
 
@@ -212,23 +205,6 @@ void CopyStringA2W(pConnectSettings ConnectSettings, LPCSTR instr, LPWSTR outstr
     awlcopyCP(ConnectSettings->codepage, outstr, instr, outmax - 1);
 }
 
-extern "C"
-LPVOID myalloc(size_t count, LPVOID * abstract)
-{
-    return malloc(count);
-}
-
-extern "C"
-LPVOID myrealloc(LPVOID ptr, size_t count, LPVOID * abstract)
-{
-    return realloc(ptr, count);
-}
-
-extern "C"
-void myfree(LPVOID ptr, LPVOID * abstract)
-{
-    free(ptr);
-}
 bool ProgressLoop(LPCSTR progresstext, int start, int end, int * loopval, SYSTICKS * lasttime)
 {
     SYSTICKS time = get_sys_ticks();
@@ -855,11 +831,9 @@ int SftpConnect(pConnectSettings ConnectSettings)
         // 2. direct-tcpip channel to target
         // 3. Target SSH session runs over channel (via SEND/RECV callbacks)
         // -----------------------------------------------------------------
-        // Force-create the SSH backend before ConnectViaJumpHost. The direct
-        // path lazily creates it inside InitializeSshSession() which runs
-        // AFTER the jump host stage, so on a cold start (first connection of
-        // the session is via ProxyJump) g_sshBackend is still null and the
-        // jump session creation dereferences nullptr.
+        // The jump session is created from g_sshBackend, so the backend has
+        // to exist before ConnectViaJumpHost, not only before
+        // InitializeSshSession() which runs after the jump host stage.
         EnsureSshBackend();
 
         JumpHostSettings jump = jumpCfg.endpoint;
@@ -899,7 +873,7 @@ int SftpConnect(pConnectSettings ConnectSettings)
 
     } else {
         // -----------------------------------------------------------------
-        // Direct / proxy path (existing behaviour, unchanged)
+        // Direct / proxy path
         // -----------------------------------------------------------------
         int socketErr = EstablishSocketConnection(ConnectSettings, connecttoserver.data(), connecttoport, progress, loop, lasttime);
         if (socketErr != 0) {
@@ -971,7 +945,7 @@ void SftpGetServerBasePathW(LPCWSTR DisplayName, LPWSTR RelativePath, size_t max
         return;
     }
     ReplaceBackslashBySlash(server.data());
-    // Remove trailing sftp://
+    // Remove leading sftp://
     if (_strnicmp(server.data(), "sftp://", 7) == 0)
         memmove(server.data(), server.data() + 7, strlen(server.data()) - 6);
     ReplaceBackslashBySlash(server.data());

@@ -38,7 +38,7 @@
   <h3>Transfer Methods</h3>
   <ul>
     <li><a href="shell-fallback.html">Shell Fallback Overview</a> - When SFTP/SCP fail</li>
-    <li><a href="shell-commands.html">Shell Command Reference</a> - cat, dd, base64 details</li>
+    <li><a href="shell-commands.html">Shell Command Reference</a> - cat, base64 details</li>
     <li><a href="php-agent.html">PHP Agent (HTTP)</a> - File operations over HTTP</li>
     <li><a href="php-agent-operations.html">PHP Agent Operations</a> - Complete API reference</li>
     <li><a href="php-shell.html">PHP Shell Console</a> - HTTP pseudo-terminal</li>
@@ -83,8 +83,8 @@
   <h3>Shell Fallback</h3>
   <ul>
     <li>Works when SFTP/SCP are blocked by server policy</li>
-    <li>Multiple methods: raw cat, dd blocks, base64 encoding</li>
-    <li>Automatic resume with proper alignment</li>
+    <li>Multiple methods: raw cat, base64 encoding</li>
+    <li>Byte-exact resume</li>
     <li>Command escaping for special characters</li>
     <li>Compatible with minimal shell environments</li>
   </ul>
@@ -123,7 +123,7 @@
   <h3>Session Management &amp; Import</h3>
   <ul>
     <li>Unlimited saved sessions</li>
-    <li>Encrypted password storage (Windows DPAPI)</li>
+    <li>Encrypted password storage (Total Commander's password manager or Windows DPAPI)</li>
     <li>Sessions from SecureCRT, PuTTY, WinSCP, FileZilla and KiTTY listed in the <code>[Imports]</code> folder</li>
     <li>Connect straight from the imports folder, or copy sessions into your own list with <code>F5</code></li>
     <li>KiTTY and FileZilla passwords carried over when the source has one saved</li>
@@ -170,7 +170,7 @@
   </ul>
 
   <div class="ok">
-    <b>Practical tip:</b> If the host blocks SFTP/SCP, this plugin can still transfer files via shell command pipeline (<code>cat/dd/base64</code>) where typical tools often fail.
+    <b>Practical tip:</b> If the host blocks SFTP/SCP, this plugin can still transfer files via shell command pipeline (<code>cat/base64</code>) where typical tools often fail.
   </div>
 
   <h2>About This Plugin</h2>

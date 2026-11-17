@@ -104,9 +104,10 @@ public:
     virtual EnumerationResult EnumerateCustomPath(const std::string& path) = 0;
 
     // Fills tConnectSettings for a specific session previously reported by
-    // one of the Enumerate* calls. Password fields intentionally left
-    // untouched — the plugin surfaces the standard interactive prompt on
-    // first connect. Returns true on success.
+    // one of the Enumerate* calls. An adapter that can recover a saved
+    // password (KiTTY, FileZilla) puts it into out->password, encrypted with
+    // EncryptString (DPAPI); otherwise the password is left empty and the
+    // plugin asks for it on connect. Returns true on success.
     virtual bool LoadSettings(const ExternalSessionEntry& entry,
                               tConnectSettings* out,
                               SessionDependency* dependency) = 0;

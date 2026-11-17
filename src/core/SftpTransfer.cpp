@@ -31,14 +31,10 @@ namespace {
 
 // TU-local derivations from shared constants (defined in ScpTransferInternal.h)
 constexpr size_t SFTP_PREFETCH_FACTOR = 64;
-constexpr int SFTP_ABORT_GRACE_MS = 2000;
-constexpr int SFTP_PROGRESS_ABORT_POLL_MS = 5000;
-constexpr int SFTP_PROGRESS_TIMEOUT_MS = 10000;
 constexpr int SFTP_SCP_CHANNEL_OPEN_TIMEOUT_MS = 20000;
-constexpr int64_t SFTP_SPEED_STATS_MIN_BYTES = 300LL * 1000LL * 1000LL;
 
-// Helper: Open SFTP file with retry loop and timeout
-// Extracted to avoid duplication between download and upload paths
+// Opens a remote SFTP file, retrying on EAGAIN until the timeout or Escape.
+// Shared by the download and upload paths.
 std::unique_ptr<ISftpHandle> OpenSftpFileWithRetry(
     pConnectSettings cs,
     const char* path,
@@ -117,7 +113,6 @@ public:
     RemoteSftpFile& operator=(const RemoteSftpFile&) = delete;
 
     ISftpHandle* get() const { return handle_.get(); }
-    std::unique_ptr<ISftpHandle> release() { return std::move(handle_); }
 
     int Close() {
         if (!handle_) return 0;
@@ -146,7 +141,6 @@ public:
     RemoteScpChannel& operator=(const RemoteScpChannel&) = delete;
 
     ISshChannel* get() const { return channel_.get(); }
-    std::unique_ptr<ISshChannel> release() { return std::move(channel_); }
 
     int Close() {
         if (!channel_ || !cs_) return 0;

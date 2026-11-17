@@ -31,7 +31,9 @@ $UnitSources = @(
     'src\core\WildcardMatch.cpp',
     'src\core\PasswordCrypto.cpp',
     'src\core\AuthSecrets.cpp',
-    'src\core\Utf8Escape.cpp'
+    'src\core\Utf8Escape.cpp',
+    'src\core\IniFile.cpp',
+    'src\core\KittyDecrypt.cpp'
 )
 $SystemLibs = 'ws2_32.lib crypt32.lib advapi32.lib user32.lib bcrypt.lib'
 

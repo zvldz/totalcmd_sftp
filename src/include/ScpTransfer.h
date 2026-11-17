@@ -5,7 +5,6 @@
 #include <memory>
 #include "SftpClient.h"
 
-bool ContainsNonAscii(LPCWSTR text) noexcept;
 bool PrepareScpTransferSession(pConnectSettings cs);
 std::string BuildScpPathArgument(const std::string& path);
 bool OpenScpDownloadChannel(

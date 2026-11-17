@@ -23,7 +23,7 @@ namespace sftp {
 //         <Port>22</Port>
 //         <Protocol>1</Protocol>        (1 = SFTP; others skipped)
 //         <User>root</User>
-//         <Logontype>4</Logontype>      (4 = key file)
+//         <Logontype>5</Logontype>      (5 = key file)
 //         <Keyfile>C:\keys\id_rsa</Keyfile>
 //         <EncodingType>Auto</EncodingType>
 //         <CustomEncoding>UTF-8</CustomEncoding>

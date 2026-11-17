@@ -20,7 +20,6 @@ int  CreateProxyRecordDialog(LPCSTR iniFileName);
 bool DeleteProxy(int proxynrtodelete, LPCSTR ServerToSkip, LPCSTR iniFileName,
                  LPSTR AppendToList, size_t maxlen);
 bool LoadServerSettings(LPCSTR DisplayName, pConnectSettings ConnectResults, LPCSTR iniFileName);
-void EnableControlsPageant(HWND hWnd, bool enable);
 void UpdateKeyControlsForPrivateKey(HWND hWnd);
 void UpdateScpOnlyDependentControls(HWND hWnd);
 bool UpdateLocalPhpAgentScriptWithPassword(LPCSTR plainPassword);

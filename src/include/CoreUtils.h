@@ -135,15 +135,13 @@ std::wstring ShellQuoteSingleW(const std::wstring& s);
 } // namespace string_util
 
 // ============================================================================
-// Legacy Compatibility Functions (to be phased out)
+// C string and path helpers
 // ============================================================================
 
 extern "C" {
 
 LPSTR  strlcpy(LPSTR p, LPCSTR p2, size_t maxlen);
 LPSTR  strlcat(LPSTR p, LPCSTR p2, size_t maxlen);
-LPWSTR wcslcpy2(LPWSTR p, LPCWSTR p2, size_t maxlen);
-LPSTR  strcatbackslash(LPSTR thedir);
 LPSTR  strlcatforwardslash(LPSTR thedir, size_t maxlen);
 LPSTR  strlcatbackslash(LPSTR thedir, size_t maxlen);
 LPWSTR wcslcatbackslash(LPWSTR thedir, size_t maxlen);
@@ -153,17 +151,14 @@ LPWSTR ReplaceBackslashBySlashW(LPWSTR thedir);
 LPSTR  ReplaceSlashByBackslash(LPSTR thedir);
 LPWSTR ReplaceSlashByBackslashW(LPWSTR thedir);
 
-// Legacy time functions (implemented in CoreUtils.cpp)
+// Time functions (implemented in CoreUtils.cpp)
 void SetInt64ToFileTime(FILETIME* ft, int64_t tm) noexcept;
 timeval gettimeval(size_t milliseconds) noexcept;
 bool ConvSysTimeToFileTime(const LPSYSTEMTIME st, LPFILETIME ft);
-bool ConvertIsoDateToDateTime(LPCSTR pdatetimefield, LPFILETIME ft);
-bool CreateIsoDateString(LPFILETIME ft, LPSTR buf);
 bool UnixTimeToLocalTime(const time_t* mtime, LPFILETIME ft);
 
 // BASE64 functions
 int MimeEncodeData(LPCVOID indata, size_t inlen, LPSTR outstr, size_t maxlen);
-int MimeEncode(LPCSTR inputstr, LPSTR outputstr, size_t maxlen);
 int MimeDecode(LPCSTR inputstr, size_t inlen, LPVOID outdata, size_t maxlen);
 
 // String formatting
@@ -308,10 +303,10 @@ inline void SetInt64ToFileTime(FILETIME* ft, int64_t tm) noexcept {
 
 } // namespace time_util
 
-// Legacy type alias for compatibility
+// Tick count as returned by get_sys_ticks()
 using SYSTICKS = time_util::SysTicks;
 
-// Legacy global helpers expected by existing plugin sources.
+// Global tick helpers (GetTickCount64).
 SYSTICKS get_sys_ticks() noexcept;
 
 inline int get_ticks_between(SYSTICKS prev, SYSTICKS now) noexcept {

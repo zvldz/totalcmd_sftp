@@ -52,7 +52,7 @@
 
 <p>Click <b>Save</b> (or press F2 if available). At this point the plugin:</p>
 <ul>
-  <li>Encrypts the password with Windows DPAPI and stores it in <code>sftpplug.ini</code></li>
+  <li>Stores the password in Total Commander's password manager ("Protect password with password manager", the default), or encrypted with Windows DPAPI in <code>sftpplug.ini</code></li>
   <li>Opens its local copy of <code>sftp.php</code> and writes two fields into it: <code>AGENT_PSK_SALT</code> (random) and <code>AGENT_PSK_SHA256</code> (SHA-256 hash of salt + your password)</li>
 </ul>
 
@@ -95,7 +95,7 @@
 
 <table border="1" cellpadding="5" cellspacing="0">
   <tr><th>Location</th><th>What is stored</th><th>Is the password exposed?</th></tr>
-  <tr><td><code>sftpplug.ini</code> (on your PC)</td><td>Password encrypted with Windows DPAPI (user-account bound)</td><td>No — DPAPI ciphertext only</td></tr>
+  <tr><td><code>sftpplug.ini</code> (on your PC)</td><td><code>password=!</code> (kept in Total Commander's password manager), or the password encrypted with Windows DPAPI (user-account bound)</td><td>No — master-password store or DPAPI ciphertext only</td></tr>
   <tr><td><code>sftp.php</code> (on server)</td><td><code>AGENT_PSK_SALT</code> (random) + <code>AGENT_PSK_SHA256</code> = SHA-256(salt + password)</td><td>No — one-way hash only</td></tr>
   <tr><td>Network traffic</td><td>Password in the <code>X-SFTP-AUTH</code> header of every request</td><td>Over HTTPS — no, TLS encrypts it. Over HTTP — <b>yes</b>, readable and reusable by anyone on the path</td></tr>
 </table>

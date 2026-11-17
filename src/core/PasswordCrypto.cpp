@@ -35,24 +35,11 @@ public:
         return CryptProtectData(&in, L"SFTP Password", nullptr, nullptr, nullptr, CRYPTPROTECT_UI_FORBIDDEN, &blob_) != FALSE;
     }
 
-    // Decrypt - returns decrypted string, caller doesn't own memory
-    std::optional<std::string> decrypt() const {
-        DATA_BLOB in = blob_;
-        DATA_BLOB out{};
-        if (!CryptUnprotectData(&in, nullptr, nullptr, nullptr, nullptr, CRYPTPROTECT_UI_FORBIDDEN, &out))
-            return std::nullopt;
-        std::string result(reinterpret_cast<char*>(out.pbData), out.cbData);
-        SecureZeroMemory(out.pbData, out.cbData);
-        LocalFree(out.pbData);
-        return result;
-    }
-
 private:
     DATA_BLOB blob_{};
 };
 
 // Base64 encoding/decoding using Windows CryptoAPI.
-// Free functions in anonymous namespace — no class needed, no instance state.
 namespace {
 
 std::optional<std::string> Base64Encode(const std::vector<BYTE>& data) {

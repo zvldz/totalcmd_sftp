@@ -885,6 +885,21 @@ int wmain(int argc, wchar_t** argv)
         const int get = g_plugin.GetFileW((dir + L"\\text.txt").c_str(), target.data(), FS_COPYFLAGS_OVERWRITE, &ri);
         Check(get == FS_FILE_OK && Sha256File(target) == Sha256File(local + L"text.txt"),
               "text download restores CRLF line ends");
+
+        // Copied to another session (same server and folder, also with Unix
+        // line ends) the file arrives byte for byte: the copy goes through a
+        // local temporary file, and converting only one of its two legs
+        // would add a CR to every line.
+        if (mode == L"text") {
+            const std::wstring copyTarget = L"\\it-copy-target" + remoteBase + L"\\" + runName + L"\\copied.txt";
+            RemoteInfoStruct cri = InfoFor(dir, L"text.txt");
+            const int copied = g_plugin.RenMovFileW((dir + L"\\text.txt").c_str(), copyTarget.c_str(), FALSE, FALSE, &cri);
+            entries = ListDir(dir, ok);
+            const auto c = entries.find(L"copied.txt");
+            Check(copied == FS_FILE_OK && c != entries.end() && c->second.size == lf.size(),
+                  "a text file copied to another session keeps its bytes");
+            g_plugin.Disconnect("\\it-copy-target");
+        }
         g_plugin.ExecuteFileW(nullptr, modeTarget.data(), L"mode I");
     }
 

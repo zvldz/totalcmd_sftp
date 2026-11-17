@@ -83,7 +83,7 @@
 </table>
 
 <div class="note">
-  <b>OpenSSH config.</b> Every concrete <code>Host</code> name is a session; patterns such as <code>Host 10.*</code> or <code>Host *</code> are not listed but their values apply to the hosts they match, the first value found winning, exactly as <code>ssh myserver</code> resolves them. Read: <code>HostName</code>, <code>Port</code>, <code>User</code> (your Windows user name when absent, as <code>ssh</code> does), the first <code>IdentityFile</code>, <code>ProxyJump</code> with one hop, and <code>Include</code>. <code>Match</code> blocks are skipped. A <code>ProxyCommand</code> or a chain of jump hosts is refused. The config stays the place the settings live: <code>Enter</code> connects with what it says, and an edit to the config or to any file it includes shows the next time you open <code>[OpenSSH]</code>.
+  <b>OpenSSH config.</b> Every concrete <code>Host</code> name is a session; patterns such as <code>Host 10.*</code> or <code>Host *</code> are not listed but their values apply to the hosts they match, the first value found winning, exactly as <code>ssh myserver</code> resolves them. Read: <code>HostName</code>, <code>Port</code>, <code>User</code> (your Windows user name when absent, as <code>ssh</code> does), the first <code>IdentityFile</code>, <code>ProxyJump</code> with one hop, and <code>Include</code>. <code>Match all</code> and <code>Match host</code> / <code>originalhost</code> blocks apply like <code>Host</code>; other <code>Match</code> conditions cannot be evaluated here, so their blocks are skipped, and a session that a <code>ProxyJump</code> or <code>ProxyCommand</code> in such a block may apply to is refused. A <code>ProxyCommand</code> or a chain of jump hosts is refused. The config stays the place the settings live: <code>Enter</code> connects with what it says, and an edit to the config or to any file it includes shows the next time you open <code>[OpenSSH]</code>.
 </div>
 
 <div class="note">
@@ -119,6 +119,8 @@
   <tr><td>Jump host / tunnel</td><td>yes</td><td>yes</td><td>yes</td><td>&mdash;</td><td>refused</td><td>yes</td></tr>
 </table>
 
+<p>The SSH agent setting comes from <i>Attempt authentication using Pageant</i> (<code>TryAgent</code>) in PuTTY, KiTTY and WinSCP, which is on unless turned off there. Agent forwarding (<code>AgentFwd</code>) is not taken over.</p>
+
 <p>Folder structure is preserved: a WinSCP session in a folder, a FileZilla site inside a <code>&lt;Folder&gt;</code>, or a SecureCRT session in a subdirectory all show up as nested folders in the panel.</p>
 
 <h2>Passwords</h2>
@@ -133,7 +135,7 @@
   <li><b>OpenSSH</b> — nothing to import; the config holds no passwords.</li>
 </ul>
 
-<p>An imported password is not stored by the plugin. It is read from the source program's file at the moment you connect, for that one session only, and kept in memory for the connection. The plugin's scan cache only notes that the source has a password. When you copy the session into your own list with <code>F5</code> and Total Commander's password manager is in use (a master password is set), the password is saved there, behind the master password; <code>sftpplug.ini</code> then holds only <code>password=!</code>, the mark that sends the plugin to the password manager. Without the password manager the password does not come along: it is asked for on every connection until you save it in the session's properties (<code>Alt+Enter</code>).</p>
+<p>An imported password is not stored by the plugin. It is read from the source program's file at the moment you connect, for that one session only, and kept in memory for the connection. The plugin's scan cache only notes that the source has a password. When you copy the session into your own list with <code>F5</code>, the password is saved in Total Commander's password manager, behind the master password: Total Commander asks for the master password, or offers to create one when there is none. <code>sftpplug.ini</code> then holds only <code>password=!</code>, the mark that sends the plugin to the password manager. When the password manager is not available or does not take the password, it does not come along: it is asked for on every connection until you save it in the session's properties (<code>Alt+Enter</code>).</p>
 
 <h2>Key files</h2>
 

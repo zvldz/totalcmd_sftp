@@ -6,8 +6,7 @@ typedef LPVOID  SERVERID;
 typedef LPVOID  SERVERHANDLE;
 
 // Lifecycle
-void InitMultiServer() noexcept;
-void ShutdownMultiServer() noexcept;   // DeleteCriticalSection + FreeServerList
+void ShutdownMultiServer() noexcept;   // FreeServerList
 void FreeServerList() noexcept;
 
 // Ini access — Unicode (W) variants accept a pre-computed wide path so that
@@ -18,7 +17,6 @@ bool DeleteServerFromIniW(LPCSTR servername, LPCWSTR inifilename) noexcept;
 int  CopyMoveServerInIniW(LPCSTR oldservername, LPCSTR newservername, bool Move, bool OverWrite, LPCWSTR inifilename) noexcept;
 
 int  LoadServersFromIni(LPCSTR inifilename, LPCSTR quickconnectname) noexcept;
-bool DeleteServerFromIni(LPCSTR servername, LPCSTR inifilename) noexcept;
 int  CopyMoveServerInIni(LPCSTR oldservername, LPCSTR newservername, bool Move, bool OverWrite, LPCSTR inifilename) noexcept;
 
 // Server id lookup / registration
@@ -78,7 +76,6 @@ PathResolution ResolvePathKindW(LPCWSTR path) noexcept;
 // constructing the *target* name for create/rename operations where the
 // resolver can't yet find the session in the registry (because it doesn't
 // exist there until after this call commits).
-std::string PathToDisplayName(LPCSTR path) noexcept;
 std::string PathToDisplayNameW(LPCWSTR path) noexcept;
 
 // Whether `name` (an internal string, folders joined by '/') can be given to a

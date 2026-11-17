@@ -105,9 +105,9 @@ void ShowCommandOutput(std::string_view text)
         ShowStatus(std::string(text).c_str());
 }
 
-// Runs the profile's post-login command: in a shell whose output is shown
-// until it ends (modes 0 and 1; mode 0 also closes the shell), or as an exec
-// request that is not waited for (mode 2).
+// Runs the profile's post-login command as an exec request on its own
+// channel. Modes 0 and 1 show its output until it ends (mode 0 then also
+// closes the channel); mode 2 does not wait for it.
 void SendUserCommand(pConnectSettings ConnectSettings, LPCSTR progressText, int progress, int* ploop, SYSTICKS* plasttime)
 {
     auto channel = ConnectChannel(ConnectSettings->session.get(), ConnectSettings->sock);
@@ -166,8 +166,8 @@ void RunPostAuthAutoDetect(pConnectSettings ConnectSettings)
 
     // Shell-only sessions skip the other probes, but not this one: every
     // file name they send goes through the shell in this encoding, and
-    // leaving it undecided meant the Windows codepage, unreadable on the
-    // server.
+    // leaving it undecided would mean the Windows codepage, unreadable on
+    // the server.
     if (ConnectSettings->utf8names == AUTODETECT_PENDING) {
         ShowStatusId(IDS_LOG_DETECT_UTF8, nullptr, true);
         ConnectSettings->codepage = 0;

@@ -20,7 +20,6 @@ extern char    s_f7newconnection[32];
 extern std::array<WCHAR, 32> s_f7newconnectionW;
 extern std::array<WCHAR, 32> s_quickconnectW;
 extern std::atomic<bool> disablereading;
-extern bool    freportconnect;
 // True while TC is running a multi-step transfer through our plugin
 // (RENMOV_MULTI: bulk copy/move). FsMkDir checks this to tell apart
 // "user pressed F7 to create a new session" from "TC is auto-creating a
@@ -123,10 +122,8 @@ inline constexpr const char*    kAddCustomEntry     = "[Add custom location...]"
 inline constexpr const char*    kManageCustomFolder = "[Manage custom locations]";
 
 // Path classifier for the [Imports] magic folder tree. Each variant tells
-// callers unambiguously what part of the tree `path` addresses; the boolean
-// combinations that used to be re-derived from (outSourceId.empty(),
-// outSubPath.empty()) at every call site now correspond to a single enum
-// value each.
+// callers unambiguously what part of the tree `path` addresses, one enum
+// value per combination of (outSourceId.empty(), outSubPath.empty()).
 enum class ImportsPathKind {
     NotImports,     // path is not under \[Imports]
     Umbrella,       // path is \[Imports] itself (no source segment)

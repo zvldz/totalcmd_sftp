@@ -2,7 +2,7 @@
 
 **Version 10.0.2.x** — Modern C++20 SFTP/SCP/PHP/LAN plugin for Total Commander x64 and x86.
 
-Complete C-to-C++ rewrite of the original SFTP plugin by Christian Ghisler. Core transport, authentication, and session modules were re-engineered from scratch with a compatibility-first execution model, interface-driven backend abstraction, and hardened security primitives. The plugin selects the optimal transfer path at runtime — native SFTP, native SCP, shell chunk transfer via `cat`/`dd`/`base64`, PHP Agent over HTTP, or direct LAN Pair — depending on server constraints and deployment topology.
+Complete C-to-C++ rewrite of the original SFTP plugin by Christian Ghisler. Core transport, authentication, and session modules were re-engineered from scratch with a compatibility-first execution model, interface-driven backend abstraction, and hardened security primitives. The plugin selects the optimal transfer path at runtime — native SFTP, native SCP, shell chunk transfer via `cat`/`base64`, PHP Agent over HTTP, or direct LAN Pair — depending on server constraints and deployment topology.
 
 ---
 
@@ -34,7 +34,7 @@ Complete C-to-C++ rewrite of the original SFTP plugin by Christian Ghisler. Core
 |----------|-------------|
 | **SFTP** | Primary transport. Full subsystem support, streaming transfers, resume on interrupted downloads and uploads. |
 | **SCP (native)** | Faster than SFTP on many servers. Includes >2 GB file detection via 64-bit server check. |
-| **Shell Fallback** | `cat` / `dd` / `base64` chunk pipeline for servers blocking SFTP subsystem and `scp`. Operates over a hidden interactive SSH channel. |
+| **Shell Fallback** | `cat` / `base64` chunk pipeline for servers blocking SFTP subsystem and `scp`. Operates over a hidden interactive SSH channel. |
 | **Jump Host (ProxyJump)** | Bastion-routed SSH via `direct-tcpip` tunneling. No external `ssh.exe` required. |
 | **PHP Agent (HTTP)** | Standalone HTTP transfer mode backed by a single `sftp.php` file. Supports hosts with no SSH account or blocked subsystem. Directory uploads and batch file downloads transferred as a single TAR stream (opt-in via `php_tar` checkbox). TAR transfers replace thousands of individual HTTP requests with one POST/GET. |
 | **PHP Shell (HTTP)** | Pseudo-terminal over HTTP via `SHELL_EXEC` in `sftp.php`. Persistent command history (Up/Down arrows, 128-entry ring buffer) stored in `%APPDATA%\GHISLER\shell_history.txt`. Maintains working-directory context across requests. |
@@ -49,13 +49,13 @@ Complete C-to-C++ rewrite of the original SFTP plugin by Christian Ghisler. Core
 | **PEM / OpenSSH** | Traditional private key formats, passed directly to libssh2. |
 | **PPK v2 / v3 (native)** | Built-in PuTTY key file parser. No external tools. OpenSSL: Argon2d/i/id, AES-256-CBC, HMAC. |
 | **Pageant** | SSH Agent integration. Auto-launch from `pageant.lnk` in the plugin directory. |
-| **Fallback chain** | Automatic progression: Pageant → key file → keyboard-interactive → password. |
+| **Fallback chain** | Automatic progression: Pageant → key file → keyboard-interactive → password. Password goes before keyboard-interactive when the server's method list (asked only when no password or key is stored) offers it and a password is known. A one-time-code prompt (`PASSCODE`, OTP, token) is never answered with the stored password. |
 
 ### Security Primitives
 
+- TC Master Password integration via `CryptProc` API with `!` sentinel (default for new passwords).
 - Windows DPAPI (`CryptProtectData`) for password storage at the Windows account level.
-- TC Master Password integration via `CryptProc` API with `!` sentinel.
-- `SecureZeroMemory` on all sensitive buffers after use.
+- `SecureZeroMemory` on decrypted password buffers after use, and on a connection's passwords and passphrases (session, proxy, jump host) when it is freed.
 - PBKDF2-HMAC-SHA256 (120,000 iterations) and HMAC-SHA-256 challenge-response in LAN Pair auth.
 - DPAPI-protected LAN Pair trust keys stored persistently per peer pair.
 - `DllExceptionBarrier` — C++ exception firewall at every exported entry point; prevents any exception from crossing the ABI boundary into Total Commander (which would cause an immediate host crash).
@@ -85,7 +85,7 @@ Complete C-to-C++ rewrite of the original SFTP plugin by Christian Ghisler. Core
 
 ### SFTP (Primary)
 
-Full SFTP subsystem support via libssh2. Streaming reads and writes with configurable chunk sizes. Transfer resume implemented correctly: uses `LIBSSH2_SFTP_ATTR_SIZE` flag in `fstat` to determine the actual remote file size before seeking — fixing a regression where resumes always restarted from offset 0.
+Full SFTP subsystem support via libssh2. Streaming reads and writes with configurable chunk sizes. Resume: a download continues from the size of the local partial file; an upload reads the remote size with `fstat` (`LIBSSH2_SFTP_ATTR_SIZE`) and continues from there, and is refused when the size is not reported or is larger than the local file. A text-mode transfer is never resumed; it starts over.
 
 ### SCP (Native)
 
@@ -101,15 +101,17 @@ Handles the SCP wire protocol without the SFTP subsystem. Faster than SFTP on ma
 
 Requires libssh2 ≥ 1.7.0 for 64-bit size field support.
 
-### Shell Fallback (DD / Base64)
+### Shell Fallback (cat / Base64)
 
-For servers where the SFTP subsystem is blocked and `scp` is unavailable. Uses a hidden interactive SSH shell channel.
+For servers where the SFTP subsystem is blocked and `scp` is unavailable. Uses a hidden interactive SSH shell channel: a PTY opened with echo off, then `exec /bin/sh` and `stty -echo`. Every command is wrapped in begin/end markers with a random part, and its exit status decides success.
 
-**Upload:** Split data into 1024-byte chunks → base64-encode → send via `printf '%s' | base64 -d` → server appends decoded bytes.
+**Upload:** Split data into 1024-byte chunks → base64-encode → send via `printf '%s' '<chunk>' | base64 -d >> 'file'` (the first chunk uses `>`). For larger files, when a six-byte test shows the shell decodes multi-line base64, 48 KB per command. The final remote size is checked with `wc -c`.
 
-**Download:** Fast path via `cat`. Fallback to `base64 -w 0` when binary pipe is unreliable. Incremental decode (streaming, no full-file buffering).
+**Download:** `base64 'file' | fold -w 76` (macOS `base64` writes a single line otherwise). Incremental decode (streaming, no full-file buffering).
 
-Chunk size kept below 1024 bytes (1368 base64 characters) to stay within shell line-length limits on restricted hosts.
+**Resume:** byte-exact — `tail -c +N` for downloads, append from the remote `wc -c` size for uploads (refused when that size is unknown or larger than the local file). Each chunk is encoded on its own, so no 3-byte alignment is needed. On an SCP-only session without forced shell transfer, a resume uses raw `cat` / `tail -c +N` / `cat >>` over an exec channel and switches to base64 when the raw stream fails.
+
+Names are single-quoted (`ShellQuoteSingle`); a command for the interactive shell that would contain a control character is not sent. Listings use `ls -la` with `LC_ALL=C`, `TZ=UTC0` and, for GNU `ls`, `QUOTING_STYLE=escape`.
 
 The base64 encoder is built in, with no external dependency.
 
@@ -117,7 +119,7 @@ The base64 encoder is built in, with no external dependency.
 
 Connects and authenticates to the bastion host, then opens a `direct-tcpip` channel to the final target. The full auth sequence (including PPK, Pageant, keyboard-interactive) runs on the jump host before the tunnel is established. No external `ssh.exe` binary involved.
 
-**Pick existing session as jump host.** Next to the "Jump..." button on the F7 connection dialog there is a session-picker dropdown. Selecting an already-saved session uses its connection parameters (host, port, user, password, keys, agent) as the jump host — no need to retype them. The reference is stored as `jumpsessionref=<name>` in `sftpplug.ini` and resolved at connect time, so editing the referenced session propagates to every session that points at it (OpenSSH `ProxyJump` style). The "Jump..." button is disabled while a reference is active; pick `(none)` to switch back to manual configuration. Self-reference (picking the session being edited) is blocked at the UI level; chained or cyclic jump configurations are refused at connect time with a clear error.
+**Pick existing session as jump host.** Next to the "Jump..." button on the F7 connection dialog there is a session-picker dropdown. Selecting an already-saved session uses its connection parameters (host, port, user, password, keys, agent) as the jump host — no need to retype them. The reference is stored as `jumpsessionref=<name>` in `sftpplug.ini` and resolved at connect time, so editing the referenced session propagates to every session that points at it (OpenSSH `ProxyJump` style). The "Jump..." button is disabled while a reference is active; pick `(none)` to switch back to manual configuration. Self-reference (picking the session being edited) is blocked at the UI level; chained or cyclic jump configurations are refused at connect time with a clear error. The jump host is reached directly, so a session with both a proxy and a jump host, or a jump reference to a session that goes through a proxy, is refused rather than connected past the proxy.
 
 ### Remote Checksums
 
@@ -177,8 +179,10 @@ Connects via named pipe to the running Pageant agent. If Pageant is not running 
 |------|-----------|-------------|
 | TC Master Password | `password=!` | Delegated to TC `CryptProc` API |
 | DPAPI | `password=dpapi:<base64>` | `CryptProtectData`, user-account scope |
-| Explicit plaintext | `password=plain:<text>` | Opt-in only |
+| Explicit plaintext | `password=plain:<text>` | Never written to `sftpplug.ini`; read when typed in by hand. Session files copied out of the plugin carry passwords this way |
 | Legacy XOR | `<decimal triplets>` | Read-only; written in 2000s versions |
+
+The jump host's password (`jumppassword`) and a proxy's password (`proxypassword`) are stored the same ways; in TC's password manager they are kept as `<session>$$jump` and `proxy$$pass` / `proxyN$$pass`. A session file dropped onto the plugin puts its passwords into the password manager (TC asks for the master password or offers to create one); a `!` in a foreign file brings no password.
 
 ### DPAPI Implementation
 
@@ -225,6 +229,7 @@ Sessions from other programs appear in an `[Imports]` folder in the plugin root,
 | WinSCP | `HKCU\Software\Martin Prikryl\WinSCP 2\Sessions` | A portable `WinSCP.ini` |
 | FileZilla | `%APPDATA%\FileZilla\sitemanager.xml` | Any `sitemanager.xml` |
 | KiTTY | `%APPDATA%`, `%LOCALAPPDATA%`, `%USERPROFILE%` under `KiTTY\Sessions\`, or the path behind the `.kitty` file association | The `Sessions\` folder or the install root |
+| OpenSSH | `%USERPROFILE%\.ssh\config` | Any OpenSSH client config file |
 
 **Behaviour:**
 - `Enter` connects using the settings read from the source; nothing is written to the plugin's own configuration
@@ -232,13 +237,14 @@ Sessions from other programs appear in an `[Imports]` folder in the plugin root,
 - `[Refresh]` re-reads one source; `[Add custom location...]` and `[Manage custom locations]` handle portable installs
 - Only sessions the plugin can serve are listed — non-SSH protocols, WinSCP workspaces and `Default Settings` templates are filtered out
 - Folder hierarchies from the source are preserved as nested panel folders
-- Passwords: imported for KiTTY and for FileZilla sites using base64 storage; PuTTY keeps none on disk; WinSCP and SecureCRT are left for the interactive prompt. Imported values are re-protected with DPAPI
+- Passwords: imported for KiTTY and for FileZilla sites using base64 storage; PuTTY keeps none on disk; WinSCP and SecureCRT are left for the interactive prompt. An imported password is read from the source at connect time and kept in memory only — the import cache stores just a "has password" mark; `F5` into the own list puts it into TC's password manager
+- SSH agent comes from `TryAgent` (PuTTY, KiTTY, WinSCP; on unless turned off there), not from `AgentFwd`
 - Key files carry over with environment variables resolved; `.ppk` v2/v3/ed25519 are converted natively
-- Proxy, firewall and tunnel definitions are **not** carried over yet
+- An HTTP/SOCKS proxy comes along on `F5`; a jump host or tunnel becomes the session's jump host. A session whose proxy or jump route the plugin cannot reproduce (a proxy command, a chained jump, an OpenSSH `ProxyJump`/`ProxyCommand` inside a `Match` block it cannot evaluate) is refused rather than connected directly. OpenSSH `Match all` / `Match host` blocks apply like `Host`
 
 ### Host Key Verification
 
-MD5 fingerprint stored in INI per server. First connection prompts acceptance. Changed key raises an explicit warning dialog. Both behaviors use the `IUserFeedback` interface so they work correctly in background transfer mode.
+SHA256 fingerprint (`SHA256:…`, as OpenSSH prints it) stored in INI per server; a stored MD5 still matches and is rewritten as SHA256. First connection prompts acceptance. Changed key raises an explicit warning dialog. Both behaviors use the `IUserFeedback` interface so they work correctly in background transfer mode.
 
 ---
 
@@ -473,9 +479,9 @@ All operations are available over SFTP, SCP, and PHP Agent modes (where applicab
 |-----------|------|-----------|-----------|
 | Directory listing | Native SFTP readdir | `ls -la` + `__WFX_LIST_BEGIN__` / `__WFX_LIST_END__` markers | Agent `LIST` command |
 | Download | Native, with resume | Shell / `cat` | Agent `GET` |
-| Upload | Native, with resume | Shell / `dd` / base64 | Agent `PUT` |
+| Upload | Native, with resume | Shell / `cat` / base64 | Agent `PUT` |
 | Rename / Move | SFTP `rename` | Remote `mv` | Agent `RENAME` |
-| Delete file/tree | SFTP `unlink` / recursive | Remote `rm -rf` | Agent `REMOVE` |
+| Delete file/tree | SFTP `unlink` / recursive | Remote `rm` / `rmdir` | Agent `REMOVE` |
 | Create directory | SFTP `mkdir` | Remote `mkdir` | Agent `MKDIR` |
 | Chmod | SFTP `setstat` | Remote `chmod` | Agent `CHMOD` |
 | Set attributes (`FsSetAttrW`) | SFTP lstat → RMW write bits → setstat | — | — |
@@ -492,42 +498,30 @@ Symlinks are parsed from `ls -la` long-entry format and followed recursively. Sp
 
 ## Build System
 
-`build.ps1` (project root) compiles the plugin using MSBuild with the MSVC v145 toolset. Both x64 and x86 targets are built by default and packaged together in a single ZIP.
-
-**Default (all languages in one binary, x64 + x86):**
+`build.ps1` (project root) compiles the plugin using MSBuild with the MSVC v145 toolset (Release). Run `build-deps.ps1` once first (see below). Both x64 and x86 targets and both variants (classic and extra) are built by default; each variant is packaged with both architectures in one ZIP.
 
 ```powershell
-.\build.ps1
+.\build-deps.ps1   # once: OpenSSL + libssh2
+.\build.ps1        # classic + extra, x64 + x86
 ```
 
-**Single-language builds (smaller binary):**
-
-```powershell
-.\build.ps1 -en   # English
-.\build.ps1 -pl   # Polish
-.\build.ps1 -de   # German
-.\build.ps1 -fr   # French
-.\build.ps1 -es   # Spanish
-```
-
-Single-language mode strips unused RC language blocks before compile and restores them afterward. Both x64 and x86 are still built.
+Switches: `-classiconly` (classic only), `-x64only`, `-nohelp` (skip the help page), `-nozip`, `-nodeploy`, `-deployextra` (deploy the extra build instead of classic).
 
 **Output after a successful build:**
-- `bin\SFTPplug.zip` — only file remaining in `bin\`; auto-deployed to TC plugin directory
-- ZIP contains both `SFTPplug.wfx64` (x64) and `SFTPplug.wfx` (x86)
-- ZIP file timestamp is set to `2030-01-01 00:00:00` (dependency-free release marker)
-- Intermediate files (`build\bin\`, `build\.intermediates\`) are fully removed
+- `bin\SFTPplug.zip` (classic) and `bin\SFTPplug-extra.zip` (extra) — each with `SFTPplug.wfx64` (x64) and `SFTPplug.wfx` (x86); the classic one is deployed to the TC plugin directory unless `-nodeploy`
+- `bin\SFTPplug-pdb.zip` — the PDBs of every variant and platform, not shipped to users, for resolving crash-report addresses of that exact build
+- Intermediate files (`build\bin\`, `build\.intermediates\`) are removed
 
 **Release configuration:**
 - Standard: `stdcpp20` (C++20), `stdc17` (C17)
 - Optimization: `MaxSpeed`
 - Runtime library: `MultiThreaded` (`/MT`, static CRT — no VC++ Redistributable required)
 - Whole program optimization: enabled
-- `NDEBUG` defined → `SFTP_DEBUG_ENABLED=0`, `SFTP_DEBUG_TO_FILE=0`
 
-**Debug configuration:**
-- `SFTP_DEBUG_ENABLED=1` → `OutputDebugString` output
-- `SFTP_DEBUG_TO_FILE=0` by default; set to 1 manually for file logging to `%TEMP%\sftpplug.log`
+**Debug log:**
+- Controlled by `LOG_ENABLED` in `src\include\global.h` (and `LOG_TO_FILE`), not by the build configuration
+- When on: `OutputDebugString` output plus the file `%TEMP%\sftpplug.log`; quote commands, the SFTP server command and SCP commands are not written to it
+- Test (rc/beta) builds keep it on; a stable release is built with `LOG_ENABLED 0`, and the release workflow refuses a stable tag otherwise
 
 **Rebuilding dependency libraries (`build-deps.ps1`):**
 

@@ -33,9 +33,6 @@ inline bool IsLanPairTransport(const pConnectSettings cs) noexcept
 // SCP compile-time feature flags (defined in SftpConnection.cpp)
 // ---------------------------------------------------------------------------
 extern const bool SSH_ScpNo2GBLimit;
-extern const bool SSH_ScpCanSendKeepAlive;
-extern const bool SSH_ScpNeedBlockingMode;
-extern const bool SSH_ScpNeedQuote;
 
 // ---------------------------------------------------------------------------
 // Auth method flags (used in SftpConnection.cpp and SftpAuth.cpp)
@@ -306,11 +303,3 @@ bool  ReadChannelLine(ISshChannel* channel,
                       DWORD totalTimeoutMs = 45000);
 
 int  SftpQuoteCommand2W(pConnectSettings ConnectSettings, LPCWSTR remotedir, LPCWSTR cmd, LPSTR reply, size_t replylen);
-
-// ---------------------------------------------------------------------------
-// Transfer helpers defined in SftpTransfer.cpp, used by SftpRemoteOps.cpp
-// ---------------------------------------------------------------------------
-int CloseRemote(pConnectSettings ConnectSettings,
-                ISftpHandle* remotefilesftp,
-                ISshChannel* remotefilescp,
-                bool timeout, int percent);

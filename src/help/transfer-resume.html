@@ -4,7 +4,10 @@
 <body>
 <h1>Transfer Resume</h1>
 
-<p>The plugin supports resuming interrupted transfers in SFTP mode and partially in Shell Fallback mode. Resume behavior differs depending on the active transfer method.</p>
+<p>The plugin supports resuming interrupted transfers in SFTP mode and in Shell Fallback mode. Resume behavior differs depending on the active transfer method.</p>
+
+<h2>Text mode</h2>
+<p>When a file is transferred in text mode (line-break conversion), the byte offsets on both sides differ, so the file is never continued: a resume becomes a full transfer from the start.</p>
 
 <h2>SFTP (primary mode) — full resume support</h2>
 <p>SFTP resume works for both downloads and uploads.</p>
@@ -13,7 +16,7 @@
 <ol>
   <li>Total Commander detects that a partial local file already exists at the destination.</li>
   <li>TC passes a resume flag to the plugin.</li>
-  <li>The plugin queries the remote file size via SFTP <code>fstat</code> (with the <code>ATTR_SIZE</code> flag set — required for correct size retrieval).</li>
+  <li>The plugin takes the size of the local partial file. A local file already as large as the remote one is not continued (equal size counts as done).</li>
   <li>The remote file handle is seeked to the end of the already-downloaded portion.</li>
   <li>Transfer continues from that offset.</li>
 </ol>
@@ -21,49 +24,53 @@
 <h3>Upload resume</h3>
 <ol>
   <li>TC detects a partial remote file.</li>
-  <li>The plugin opens the remote file for append and seeks to its current end.</li>
+  <li>The plugin opens the remote file without truncation and queries its size via SFTP <code>fstat</code>.</li>
   <li>Upload continues from the local file offset matching the remote file size.</li>
 </ol>
 
 <div class="note">
-  <b>Note:</b> Resume requires that the remote file has not been modified or truncated since the interrupted transfer. If the remote file size does not match the expected partial size, TC will prompt you to overwrite or skip.
+  <b>Note:</b> Resume requires that the remote file is the beginning of the local one. If the server does not report the remote size, or the remote file is larger than the local file, the upload is refused with a write error instead of overwriting the remote file.
 </div>
 
 <h2>SCP (native) — no mid-transfer resume</h2>
-<p>The SCP protocol does not support seeking into a remote file. If an SCP transfer is interrupted:</p>
+<p>The SCP protocol does not support seeking into a remote file. When you resume a transfer on a session that uses SCP for data:</p>
 <ul>
-  <li>The transfer must restart from the beginning.</li>
-  <li>TC will prompt you to overwrite the partial destination file.</li>
-  <li>If you need resume support for large files on a server that only supports SCP, consider switching to <b>Shell Fallback (base64)</b> or requesting SFTP subsystem access from the server administrator.</li>
+  <li>With SFTP available, that file is transferred over SFTP instead, with SFTP resume.</li>
+  <li>On an SCP-only session, the resume goes through <b>Shell Fallback</b> (see below).</li>
+  <li>An interrupted SCP transfer that is not resumed restarts from the beginning.</li>
 </ul>
 
-<h2>Shell Fallback (base64) — chunked resume</h2>
-<p>Shell fallback transfers data in base64-encoded 1024-byte chunks. Resume is possible at chunk boundaries.</p>
+<h2>Shell Fallback — byte-exact resume</h2>
+<p>Shell fallback continues a file at the exact byte where it stopped.</p>
 <ul>
-  <li>Base64 encoding works in groups of 3 bytes → 4 characters. Chunks are kept at multiples of 3 bytes (≤ 1024 bytes) so that resume always lands on a valid base64 boundary.</li>
-  <li>On resume, the plugin calculates the nearest safe boundary below the partial file size and restarts from there.</li>
-  <li>A small overlap (up to 3 bytes) may be re-transferred, which is harmless.</li>
+  <li>Download: the remote side reads from the offset with <code>tail -c +N</code> (raw, or piped through <code>base64</code>), and the data is appended to the local partial file.</li>
+  <li>Upload: the plugin reads the remote size with <code>wc -c</code> and appends from that offset. Each base64 chunk is encoded and decoded on its own, so no alignment is needed and no bytes are sent twice.</li>
+  <li>An upload resume is refused when the remote size cannot be read or the remote file is larger than the local one.</li>
+  <li>A resumed raw download that ends with the wrong size is reported as a failure.</li>
 </ul>
 
 <div class="note">
   <b>Performance note:</b> Shell fallback is significantly slower than SFTP or SCP due to base64 encoding overhead and shell command round-trips. Use it only when SFTP and SCP are both unavailable on the server.
 </div>
 
-<h2>PHP Agent — no resume</h2>
-<p>PHP Agent single-file transfers (GET/PUT operations) do not support partial resume. If interrupted, the transfer must restart from the beginning — this is a limitation of the HTTP chunked transfer model used by the agent.</p>
-<p>PHP Agent <b>TAR stream</b> transfers (directory download via <code>TAR_STREAM</code>, batch upload via <code>TAR_EXTRACT</code>) also do not support resume. The entire TAR stream must complete in one HTTP request. If a TAR transfer is interrupted, re-copy the whole directory.</p>
+<h2>PHP Agent — single-file resume</h2>
+<ul>
+  <li>Download: the plugin asks the agent for the file from the size of the local partial file on (<code>GET</code> with an offset) and appends to it.</li>
+  <li>Upload: data goes to <code>&lt;file&gt;.part</code> on the server and is renamed into place when complete. On resume, the plugin continues an existing <code>.part</code> from its size; a <code>.part</code> larger than the local file is ignored and the upload starts over. Without a resume request, a leftover <code>.part</code> is never continued.</li>
+</ul>
+<p>PHP Agent <b>TAR stream</b> transfers (directory download via <code>TAR_STREAM</code>, batch upload via <code>TAR_EXTRACT</code>) do not support resume. The entire TAR stream must complete in one HTTP request. If a TAR transfer is interrupted, re-copy the whole directory.</p>
 
-<h2>LAN Pair — full resume support</h2>
-<p>LAN Pair file transfers support resume at the session protocol level. If the session times out or the connection drops mid-transfer, you can reconnect and resume using TC's standard resume prompt.</p>
+<h2>LAN Pair — download resume</h2>
+<p>LAN Pair downloads support resume: the peer sends the file from the size of the local partial file on. If the session times out or the connection drops mid-transfer, you can reconnect and resume using TC's standard resume prompt. Uploads always send the whole file.</p>
 
 <h2>Summary</h2>
 <table border="1" cellpadding="5" cellspacing="0">
   <tr><th>Mode</th><th>Download resume</th><th>Upload resume</th><th>Notes</th></tr>
   <tr><td>SFTP</td><td>Yes</td><td>Yes</td><td>Full seek support via libssh2</td></tr>
-  <tr><td>SCP (native)</td><td>No</td><td>No</td><td>Protocol limitation</td></tr>
-  <tr><td>Shell Fallback</td><td>Partial</td><td>Partial</td><td>Chunk-boundary resume only</td></tr>
-  <tr><td>PHP Agent</td><td>No</td><td>No</td><td>HTTP transfer model limitation</td></tr>
-  <tr><td>LAN Pair</td><td>Yes</td><td>Yes</td><td>Session-level resume</td></tr>
+  <tr><td>SCP (native)</td><td>No</td><td>No</td><td>Resume goes over SFTP, or Shell Fallback on SCP-only sessions</td></tr>
+  <tr><td>Shell Fallback</td><td>Yes</td><td>Yes</td><td>Byte-exact; upload refused if remote size unknown or larger</td></tr>
+  <tr><td>PHP Agent</td><td>Yes</td><td>Yes</td><td>Upload continues the <code>.part</code> file; no resume for TAR streams</td></tr>
+  <tr><td>LAN Pair</td><td>Yes</td><td>No</td><td>Download continues from the local size</td></tr>
 </table>
 
 <p><a href="index.html">Back to index</a></p>

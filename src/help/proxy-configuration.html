@@ -63,9 +63,6 @@ takes a number no session is using.</p>
   <li>Example: <code>socks5://user:pass@proxy:1080</code></li>
 </ul>
 
-<h3>System Default Proxy</h3>
-<p>Uses Windows system proxy settings from Internet Options.</p>
-
 <h2>Proxy Configuration Fields</h2>
 
 <ul>
@@ -97,7 +94,7 @@ takes a number no session is using.</p>
 <ol>
   <li>Enter username in <b>Username</b> field</li>
   <li>Enter password in <b>Password</b> field</li>
-  <li>Password is stored encrypted via DPAPI</li>
+  <li>Password is kept in Total Commander's password manager when "Protect password with password manager" is ticked, otherwise encrypted via DPAPI</li>
   <li>For SOCKS5, authentication is negotiated during connection</li>
 </ol>
 
@@ -108,6 +105,9 @@ takes a number no session is using.</p>
   <li>Proxy + public key authentication</li>
   <li>Proxy + Pageant (SSH agent)</li>
 </ul>
+
+<h2>Proxy and Jump Host</h2>
+<p>A jump host is reached straight from this machine, never through a proxy. A session with both a proxy and a jump host is therefore refused, and so is a session whose jump host refers to another session that goes through a proxy: connecting would skip the proxy without a word. See <a href="jump-host.html">Jump Host</a>.</p>
 
 <h2>Troubleshooting</h2>
 

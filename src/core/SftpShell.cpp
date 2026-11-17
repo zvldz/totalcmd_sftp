@@ -32,42 +32,6 @@ constexpr DWORD kShellEagainGraceIdleMs   = 1000;
 constexpr DWORD kShellEagainGraceTotalMs  = 5000;
 constexpr DWORD kQuoteProgressStartMs     = 2000;
 
-// RAII wrapper for ISshChannel with automatic disconnect
-class ScopedChannel {
-public:
-    explicit ScopedChannel(ISshChannel* ch, pConnectSettings cs) : channel_(ch), cs_(cs) {}
-    ~ScopedChannel() { if (channel_) Disconnect(); }
-
-    ScopedChannel(const ScopedChannel&) = delete;
-    ScopedChannel& operator=(const ScopedChannel&) = delete;
-
-    ScopedChannel(ScopedChannel&& other) noexcept
-        : channel_(std::exchange(other.channel_, nullptr)), cs_(other.cs_) {}
-
-    ISshChannel* get() const noexcept { return channel_; }
-    ISshChannel* release() noexcept { return std::exchange(channel_, nullptr); }
-
-private:
-    void Disconnect() noexcept
-    {
-        if (!cs_ || !channel_)
-            return;
-
-        WaitForOperation([this] { return channel_->flush(); }, kShellFlushTimeoutMs / 2, cs_);
-        WaitForOperation([this] { return channel_->sendEof(); }, kShellEofTimeoutMs / 3, cs_);
-        WaitForOperation([this] { return channel_->waitEof(); }, kShellEofTimeoutMs / 3, cs_);
-        WaitForOperation([this] { return channel_->channelClose(); }, kShellCloseTimeoutMs / 3, cs_);
-        // Explicit drained channelFree() preferred over destructor's bounded
-        // tight-loop because shells on restrictive servers may need socket
-        // yielding between EAGAIN retries.
-        WaitForOperation([this] { return channel_->channelFree(); }, kShellFreeTimeoutMs / 5, cs_);
-        delete channel_;
-    }
-
-    ISshChannel* channel_;
-    pConnectSettings cs_;
-};
-
 // Trim leading whitespace and control characters
 std::string_view TrimLeft(std::string_view sv) noexcept
 {
@@ -777,9 +741,4 @@ int SftpQuoteCommand2W(pConnectSettings cs, LPCWSTR remotedir, LPCWSTR cmd,
     }
 
     return rc >= 0 ? rc : 1;
-}
-
-bool SftpQuoteCommand(pConnectSettings cs, const char* remotedir, const char* cmd)
-{
-    return SftpQuoteCommand2(cs, remotedir, cmd, nullptr, 0) >= 0;
 }

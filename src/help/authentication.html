@@ -11,7 +11,7 @@
 <h3>Password Authentication</h3>
 <ul>
   <li>Standard username/password login</li>
-  <li>Password stored encrypted via Windows DPAPI (user-account scope)</li>
+  <li>Password kept in Total Commander's password manager (master password), or encrypted via Windows DPAPI (user-account scope) in the INI</li>
   <li>Most widely supported method</li>
 </ul>
 
@@ -37,7 +37,8 @@
   <li>Used by many hosting providers and corporate SSH servers</li>
   <li>Common scenarios: standard password prompt, OTP / TOTP code, SMS verification code, security question</li>
   <li>The plugin handles <b>multiple prompts in sequence</b> automatically — each prompt is shown to you in turn</li>
-  <li>If the server sends a single prompt that looks like a password prompt and you have a password saved in the session, the saved password is used automatically (no dialog shown)</li>
+  <li>If the server sends a prompt that looks like a password prompt and you have a password saved in the session, the saved password is used automatically (no dialog shown), once per attempt</li>
+  <li>A prompt for a one-time code (containing "passcode", "OTP", "one-time", "token", "verification", "code:" and similar) is never answered with the saved password, and what you type there is not remembered as the password</li>
   <li>If the server sends prompts the plugin cannot satisfy automatically, a dialog appears for each</li>
 </ul>
 
@@ -52,7 +53,8 @@
   <li>Keyboard-interactive</li>
   <li>Password</li>
 </ol>
-<p>Each method is tried only if advertised by the server. The chain stops at the first success.</p>
+<p>Pageant and the key file are tried only when public-key authentication is possible; a key that Pageant does not hold is still tried from its file. Keyboard-interactive and password follow when no key succeeded or none is configured.</p>
+<p>When no password and no key file are stored, the plugin first asks the server which methods it accepts, and tries only those. If that list offers password authentication and a password is known, password is tried before keyboard-interactive, so the password does not use up attempts on OTP prompts; keyboard-interactive is then tried after a failed password. The chain stops at the first success.</p>
 
 <h2>Key File Formats</h2>
 

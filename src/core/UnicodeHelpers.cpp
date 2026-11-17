@@ -1,5 +1,5 @@
-// UnicodeHelpers.cpp - Modern C++ implementation
-// Compatible with Visual Studio 2026 (v145 toolset) and C++20
+// UnicodeHelpers.cpp - ANSI/UTF-8/UTF-16 conversion, TC callback wrappers,
+// file operations with long path support.
 
 #include "UnicodeHelpers.h"
 #include "shellapi.h"
@@ -407,37 +407,9 @@ UINT GetDlgItemTextI(HWND hDlg, int nIDDlgItem, LPSTR lpString, int cchMax) noex
     }
 }
 
-bool RequestProcT(int PluginNr, int RequestType, LPCWSTR CustomTitle, LPCWSTR CustomText,
-                  LPWSTR ReturnedText, size_t maxlen) noexcept
-{
-    if (RequestProcW) {
-        const BOOL retval = RequestProcW(PluginNr, RequestType, CustomTitle, CustomText, 
-                                         ReturnedText, static_cast<int>(maxlen));
-        return retval ? true : false;
-    }
-    return false;
-}
-
 // ============================================================================
 // File Operations with Long Path Support
 // ============================================================================
-
-BOOL CopyFileT(LPCWSTR lpExistingFileName, LPCWSTR lpNewFileName, BOOL bFailIfExists) noexcept
-{
-    if (!lpExistingFileName || !lpNewFileName) return FALSE;
-    
-    std::array<WCHAR, wdirtypemax> wbuf1{};
-    if (!MakeExtraLongNameW(wbuf1.data(), lpExistingFileName, wbuf1.size() - 1)) {
-        return FALSE;
-    }
-    
-    std::array<WCHAR, wdirtypemax> wbuf2{};
-    if (!MakeExtraLongNameW(wbuf2.data(), lpNewFileName, wbuf2.size() - 1)) {
-        return FALSE;
-    }
-    
-    return CopyFileW(wbuf1.data(), wbuf2.data(), bFailIfExists);
-}
 
 BOOL CreateDirectoryT(LPCWSTR lpPathName, LPSECURITY_ATTRIBUTES lpSecurityAttributes) noexcept
 {
@@ -536,17 +508,6 @@ HANDLE CreateFileT(
                        dwCreationDisposition, dwFlagsAndAttributes, hTemplateFile);
 }
 
-UINT ExtractIconExT(
-    LPCWSTR lpszFile, 
-    int nIconIndex, 
-    HICON* phiconLarge, 
-    HICON* phiconSmall, 
-    UINT nIcons) noexcept
-{
-    // Unfortunately this function cannot handle names longer than 259 characters
-    return ExtractIconExW(lpszFile, nIconIndex, phiconLarge, phiconSmall, nIcons);
-}
-
 HANDLE FindFirstFileT(LPCWSTR lpFileName, LPWIN32_FIND_DATAW lpFindFileData) noexcept
 {
     if (!lpFileName || !lpFindFileData) return INVALID_HANDLE_VALUE;
@@ -571,26 +532,6 @@ BOOL FindNextFileT(HANDLE hFindFile, LPWIN32_FIND_DATAW lpFindFileData) noexcept
 // ============================================================================
 
 namespace unicode_util {
-
-std::wstring safe_wcsncpy(std::wstring_view src, size_t max_len)
-{
-    if (src.empty()) {
-        return {};
-    }
-    if (max_len == std::wstring_view::npos || src.size() <= max_len) {
-        return std::wstring(src);
-    }
-    return std::wstring(src.substr(0, max_len));
-}
-
-std::wstring safe_wcscat(std::wstring_view str1, std::wstring_view str2)
-{
-    std::wstring result;
-    result.reserve(str1.size() + str2.size());
-    result.append(str1);
-    result.append(str2);
-    return result;
-}
 
 std::string wide_to_narrow(std::wstring_view w, int codepage)
 {
@@ -628,28 +569,6 @@ std::wstring utf8_to_wstring(std::string_view utf8)
 std::string wstring_to_utf8(std::wstring_view wstr)
 {
     return wide_to_narrow(wstr, CP_UTF8);
-}
-
-WIN32_FIND_DATAW convert_find_data_to_wide(const WIN32_FIND_DATAA& findA)
-{
-    WIN32_FIND_DATAW result{};
-    result.dwFileAttributes = findA.dwFileAttributes;
-    result.ftCreationTime = findA.ftCreationTime;
-    result.ftLastAccessTime = findA.ftLastAccessTime;
-    result.ftLastWriteTime = findA.ftLastWriteTime;
-    result.nFileSizeHigh = findA.nFileSizeHigh;
-    result.nFileSizeLow = findA.nFileSizeLow;
-    result.dwReserved0 = findA.dwReserved0;
-    result.dwReserved1 = findA.dwReserved1;
-    
-    // Convert filenames using narrow_to_wide helper
-    const auto wideName = narrow_to_wide(findA.cFileName, CP_ACP);
-    const auto wideAltName = narrow_to_wide(findA.cAlternateFileName, CP_ACP);
-    
-    wcslcpy(result.cFileName, wideName.c_str(), _countof(result.cFileName));
-    wcslcpy(result.cAlternateFileName, wideAltName.c_str(), _countof(result.cAlternateFileName));
-    
-    return result;
 }
 
 } // namespace unicode_util

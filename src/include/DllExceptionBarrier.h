@@ -12,18 +12,20 @@
 //   3. Logs everything through SFTP_LOG
 //   4. Shows a MessageBoxW to the user (once per incident)
 //
-// IMPORTANT: symbols resolve only when the PDB sits next to sftpplug.wfx.
-// In both Debug and Release the project already sets GenerateDebugInformation=true
-// and ProgramDataBaseFileName so PDBs are always emitted.
+// IMPORTANT: symbols resolve only when the matching PDB sits next to
+// sftpplug.wfx / sftpplug.wfx64. The build always emits it (Debug and
+// Release set GenerateDebugInformation and ProgramDataBaseFileName), but the
+// plugin package does not contain it: it is a separate -pdb.zip release
+// asset. Without it frames show as module and address only.
 //
 // Note on /GR- : project builds with RuntimeTypeInfo=false, so typeid is
 // forbidden. Exception identification uses std::exception hierarchy only.
 //
-// Note on stack trace scope: with /EHsc the C++ stack is unwound before
-// catch(...) executes, so CaptureStackBackTrace shows the catch-site chain
-// (which Fs* was active, the barrier, dll_invoke) — not the throw site.
-// That is still the most actionable info: it identifies exactly which
-// exported operation failed.
+// Note on stack trace scope: the trace is taken inside catch(...), after the
+// destructors between the throw and the catch have run. It always holds the
+// catch-site chain (which Fs* was active, the barrier, dll_invoke), which
+// identifies the exported operation that failed; frames of the throw site
+// may or may not appear above it.
 //
 // Usage — every exported Fs* function:
 //

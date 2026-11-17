@@ -1,6 +1,4 @@
-// sertransplg.cpp : Defines the entry point for the DLL application.
 // Total Commander SFTP filesystem plugin entry points.
-// Maintainer: Marek Wesolowski (wesmar)
 
 #include <winsock2.h>
 #include <windows.h>
@@ -47,7 +45,7 @@ HWND hWndMain = nullptr;
 #define defininame  "sftpplug.ini"
 #define defininamew L"sftpplug.ini"
 #define templatefile "sftpplug.tpl"
-char    inifilename[MAX_PATH]  = defininame;   // ANSI path (legacy / read-only)
+char    inifilename[MAX_PATH]  = defininame;   // ANSI path (read-only)
 wchar_t inifilenameW[MAX_PATH] = defininamew;  // Unicode path (preferred for all ini calls)
 char g_wincmdIniPath[MAX_PATH] = {};    // path to wincmd.ini, used for live language detection
 char pluginname[] = "SFTP";
@@ -60,7 +58,6 @@ std::array<WCHAR, 32> s_quickconnectW{};
 
 std::atomic<bool> disablereading{false};   // disable reading of subdirs to delete whole drives
 std::atomic<bool> g_inMultiOpTransfer{false};  // see header for purpose
-bool freportconnect = true;    // report connect to caller only on first connect
 bool CryptCheckPass = false;   // check 'store password encrypted' by default
 
 int PluginNumber = 0;
@@ -384,22 +381,6 @@ static bool MessageLoop(pConnectSettings ConnectSettings) noexcept
     return aborted;
 }
 
-void LogMsg(LPCSTR fmt, ...) noexcept
-{
-    std::array<char, 512> buf{};
-    va_list argptr;
-    va_start(argptr, fmt);
-    int len = _vsnprintf(buf.data(), buf.size() - 2, fmt, argptr);
-    va_end(argptr);
-    if (len < 0) {
-        strcpy_s(buf.data(), buf.size(), "<INCORRECT-INPUT-DATA> ");
-        strcat_s(buf.data(), buf.size(), fmt);
-    } else {
-        buf[static_cast<size_t>(len)] = 0;
-    }
-    LogProcI(PluginNumber, MSGTYPE_DETAILS, buf.data());
-}
-
 // Thread-local "current session" for ShowStatus prefix. Set via
 // SessionContextGuard at Fs*-entry points; nullptr otherwise.
 namespace {
@@ -606,7 +587,6 @@ static int _FsInit(int PluginNr)
 
     // LAN Pair's file server and discovery are not started here: they come
     // up only when a LAN Pair session is opened (LanPairConnect).
-    InitMultiServer();
     return 0;
 }
 
@@ -736,14 +716,9 @@ BOOL DisconnectSessionPath(const std::string& root)
         }
 
         // Thread-agnostic close: TC can post FsDisconnect from a
-        // background thread (observed empirically when the click fires
-        // while the panel is at plugin root `\`). The old code path
-        // called GetServerIdFromName with GetCurrentThreadId(), and for
-        // a background thread FindEntry with is_background=true+matching
-        // tid returned null even though the main-thread entry existed —
-        // the session leaked, its SSH channel stayed open, and the next
-        // Enter reused the stale connection (visible to the user as
-        // "instant reconnect without a key exchange").
+        // background thread (e.g. when the click fires while the panel is
+        // at plugin root `\`). A lookup by GetCurrentThreadId() would find
+        // no row for that thread and leave the main-thread session open.
         //
         // DisconnectServerByName closes the underlying SSH session once
         // and drops every registry row referencing this name regardless

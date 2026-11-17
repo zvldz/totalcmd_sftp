@@ -2,7 +2,7 @@
 <html>
 <head><meta charset="utf-8"><title>Shell Fallback</title><link rel="stylesheet" href="assets/style.css"></head>
 <body>
-<h1>Shell Fallback (cat/dd/base64)</h1>
+<h1>Shell Fallback (cat/base64)</h1>
 
 <p>This plugin includes shell-based transfer strategies for servers where SFTP/SCP are restricted or unreliable.</p>
 
@@ -16,9 +16,8 @@
 <h2>Implemented paths</h2>
 <ul>
   <li><b>Raw shell transfer:</b> <code>cat</code> stream paths for direct data movement</li>
-  <li><b>dd block transfer:</b> Controlled block-size transfers with offset support</li>
   <li><b>Base64 chunk transfer:</b> Robust fallback for restrictive environments</li>
-  <li><b>Resume alignment:</b> Base64 resume aligns to 3-byte boundaries to keep integrity</li>
+  <li><b>Byte-exact resume:</b> Transfers continue at the exact byte where they stopped (<code>tail -c +N</code>, append)</li>
   <li><b>SCP shell mode:</b> SCP protocol over shell channel</li>
 </ul>
 
@@ -26,9 +25,9 @@
 <p>The plugin uses standard Unix commands:</p>
 <ul>
   <li><code>cat</code> - Raw file streaming</li>
-  <li><code>dd</code> - Block-level copy with offset</li>
+  <li><code>tail -c</code> - Reading from an offset on resume</li>
   <li><code>base64</code> - Encoding for text-only channels</li>
-  <li><code>ls</code>, <code>mkdir</code>, <code>rm</code>, <code>mv</code> - File operations</li>
+  <li><code>ls</code>, <code>mkdir</code>, <code>rm</code>, <code>rmdir</code>, <code>mv</code>, <code>cp</code>, <code>chmod</code> - File operations</li>
   <li><code>stat</code> - File metadata</li>
 </ul>
 
@@ -45,37 +44,29 @@
 
 <h3>Method 1: Raw cat</h3>
 <pre>
-Download: cat /remote/file.txt
-Upload:   cat > /remote/file.txt
+Download: cat '/remote/file.txt'          (resume: tail -c +N '/remote/file.txt')
+Upload:   cat > '/remote/file.txt'        (resume: cat >> '/remote/file.txt')
 </pre>
-<p>Fast, no encoding overhead. Best for simple cases.</p>
+<p>Fast, no encoding overhead. Used for resumed transfers on SCP-only sessions; a failure or a size mismatch switches to base64.</p>
 
-<h3>Method 2: dd with blocks</h3>
+<h3>Method 2: Base64 encoding</h3>
 <pre>
-Download: dd if=/remote/file.txt bs=16384 skip=N
-Upload:   dd of=/remote/file.txt bs=16384 seek=N conv=notrunc
+Download: base64 '/remote/file.txt' | fold -w 76
+Upload:   printf '%s' '&lt;chunk&gt;' | base64 -d >> '/remote/file.txt'
 </pre>
-<p>Precise offset control for resume operations.</p>
-
-<h3>Method 3: Base64 encoding</h3>
-<pre>
-Download: base64 -w 0 /remote/file.txt
-Upload:   base64 -d > /remote/file.txt
-</pre>
-<p>Most robust - works through any text-only channel. 33% size overhead.</p>
+<p>Most robust - works through any text-only channel. 33% size overhead. With <code>Use shell transfer</code> enabled, every transfer uses this method over the hidden shell.</p>
 
 <h2>Performance considerations</h2>
 <ul>
   <li><b>Raw cat:</b> Fastest, no overhead</li>
-  <li><b>dd:</b> Moderate overhead, good for resume</li>
   <li><b>Base64:</b> 33% size increase, encoding/decoding CPU cost</li>
-  <li>Plugin auto-selects best method based on server capabilities</li>
+  <li>The raw path falls back to base64 automatically when it fails</li>
 </ul>
 
 <h2>Security notes</h2>
 <ul>
-  <li>Filenames properly shell-escaped</li>
-  <li>Path traversal prevented</li>
+  <li>Filenames single-quoted for the shell</li>
+  <li>A name with a control character is not sent to the interactive shell</li>
   <li>Commands executed within user's permission scope</li>
 </ul>
 

@@ -1,4 +1,4 @@
-// Connection dialog/UI extracted from SftpConnection.cpp
+// Connection dialog, jump host and proxy dialogs, dialog-driven connect.
 #include "global.h"
 #include <windows.h>
 #include <commctrl.h>
@@ -94,9 +94,8 @@ static void BrowseJumpKeyFile(HWND hWnd, int editCtrl)
 
 // Enable/disable jump host controls based on the checkbox state.
 // A referenced session owns these settings, so the fields show its values and
-// refuse edits: typing into them used to look like it worked and was then
-// discarded at connect time, which is what made an agent problem here hard to
-// pin down. Without a reference the dialog is the only place they exist, so
+// refuse edits: connect takes them from the referenced session, never from
+// here. Without a reference the dialog is the only place they exist, so
 // everything is editable.
 static void LimitPasswordEdit(HWND hWnd, int id);
 static bool PasswordFitsOrWarn(HWND hWnd, int id);
@@ -191,8 +190,7 @@ static INT_PTR CALLBACK JumpHostDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
             CheckDlgButton(hWnd, IDC_JUMP_USEAGENT, cs->jump_useagent ? BST_CHECKED : BST_UNCHECKED);
         }
 
-        // The row the removed duplicate checkbox used to occupy now carries
-        // the reason the fields are locked.
+        // The row below the fields carries the reason they are locked.
         if (fromSession && !refResolved) {
             SetDlgItemTextW(hWnd, IDC_JUMP_FROM_SESSION,
                             unicode_util::utf8_to_wstring(shown.error).c_str());
@@ -361,15 +359,6 @@ struct ConnectDialogContext {
     bool lanPairingActive = false;
 };
 
-// Forward declaration so GetConnectDialogContext can return context via the class.
-class ConnectionDialog;
-
-namespace {
-constexpr int TC_DIALOG_STATIC_ID = -1;
-}
-
-static ConnectDialogContext* GetConnectDialogContext(HWND hWnd);
-
 // ============================================================================
 // ConnectionDialog class definition
 // ============================================================================
@@ -511,16 +500,6 @@ static void SavePasswordSetting(HWND hWnd, const char* section, const char* key,
 static BOOL IniWriteString(const char* section, const char* key, const std::string& value, const char* fileName)
 {
     return ::IniWriteString(section, key, value.c_str(), fileName);
-}
-
-static BOOL IniWriteString(const std::string& section, const char* key, const char* value, const std::string& fileName)
-{
-    return ::IniWriteString(section.c_str(), key, value, fileName.c_str());
-}
-
-static BOOL IniWriteString(const std::string& section, const char* key, const std::string& value, const std::string& fileName)
-{
-    return ::IniWriteString(section.c_str(), key, value.c_str(), fileName.c_str());
 }
 
 static std::string WideToUtf8(const std::wstring& w)
@@ -1142,7 +1121,7 @@ static void HandleLanPairAction(HWND hWnd, ConnectDialogContext* dlgCtx, pConnec
 #endif // SFTP_EXTRA
 
 // ============================================================================
-// WM_COMMAND handlers - refactored to separate functions
+// WM_COMMAND handlers
 // ============================================================================
 
 static void OnBrowseKeyFileCommand(HWND hWnd, bool isPublicKey)
@@ -1429,12 +1408,6 @@ static ProxyDialogContext* GetProxyDialogContext(HWND hWnd)
     return reinterpret_cast<ProxyDialogContext*>(GetWindowLongPtr(hWnd, DWLP_USER));
 }
 
-static ConnectDialogContext* GetConnectDialogContext(HWND hWnd)
-{
-    const auto* dlg = reinterpret_cast<const ConnectionDialog*>(GetWindowLongPtr(hWnd, DWLP_USER));
-    return dlg ? dlg->GetContext() : nullptr;
-}
-
 static tConnectSettings g_proxyDialogDummyData{};
 static std::mutex g_connectDialogMutex;
 
@@ -1506,10 +1479,7 @@ static void UpdateCertSectionState(HWND hWnd)
     EnableWindow(GetDlgItem(hWnd, IDC_LOADPUBKEY), pubKeyNeeded ? TRUE : FALSE);
 }
 
-// Keep thin public wrappers for the header declaration (no external callers remain,
-// but they preserve ABI if needed in the future).
-void EnableControlsPageant(HWND hWnd, bool enable) { EnableCertSection(hWnd, enable); }
-void UpdateKeyControlsForPrivateKey(HWND hWnd)      { UpdateCertSectionState(hWnd); }
+void UpdateKeyControlsForPrivateKey(HWND hWnd) { UpdateCertSectionState(hWnd); }
 
 static void UpdateModeDependentControls(HWND hWnd)
 {
@@ -2152,7 +2122,7 @@ static void ShowHelpDialog(HWND hWnd, UINT bodyStringId)
 }
 
 // ============================================================================
-// WM_COMMAND handlers - additional refactored functions
+// WM_COMMAND handlers (continued)
 // ============================================================================
 
 
@@ -2320,7 +2290,7 @@ static bool OnJumpButtonCommand(HWND hWnd, pConnectSettings dlgConnectResults,
 }
 
 // ============================================================================
-// SR: 09.07.2005 — ConnectDlgProc now delegates to ConnectionDialog class
+// ConnectDlgProc delegates to the ConnectionDialog class
 // ============================================================================
 
 INT_PTR WINAPI ConnectDlgProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lParam)
@@ -2394,7 +2364,7 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
 
     LocalizeDlgControls(m_hWnd, kConnectionDialogCaption, kConnectionDialogStrings);
 
-    // Append version to dialog title: "Połącz z serwerem SFTP v1.0.0.x"
+    // Append the version to the dialog title: "Connect to SFTP server v1.0.0.x"
     {
         const std::wstring ver = GetPluginVersionW();
         if (!ver.empty()) {
@@ -2596,7 +2566,6 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
         SetWindowPos(m_hWnd, 0, NewPosX, NewPosY, 0, 0, SWP_NOZORDER | SWP_NOSIZE);
     }
 
-    // SR: 11.07.2005
     serverfieldchangedbyuser = false;
     return 1;
 }
@@ -3309,7 +3278,7 @@ pConnectSettings SftpConnectToServer(LPCSTR DisplayName, LPCSTR inifilename,
                                      const RuntimeSecrets* inherited)
 {
     tConnectSettings ConnectSettings{};
-    ConnectSettings.sock = INVALID_SOCKET; // Zabezpieczenie przed zamykaniem gniazda 0 przez PHP Agent
+    ConnectSettings.sock = INVALID_SOCKET; // a session without a socket (PHP Agent) must not close socket 0
     ConnectSettings.feedback = std::make_unique<WindowsUserFeedback>();
     ConnectSettings.dialogforconnection = true;
     ConnectSettings.saveonlyprofile = false;
@@ -3321,8 +3290,8 @@ pConnectSettings SftpConnectToServer(LPCSTR DisplayName, LPCSTR inifilename,
         }
         // LanPair mode: skip traditional SFTP/SCP connection flow
         if (ConnectSettings.transfermode == static_cast<int>(sftp::TransferMode::smb_lan)) {
-            // LanPair will handle connection via separate pairing mechanism
-            // For now, allow the flow to continue but mark for LanPair handling
+            // LanPair connects through its own pairing mechanism; the flow
+            // continues with no password to save.
             ConnectSettings.passSaveMode = sftp::PassSaveMode::empty;
         }
         // Where a password the server makes us change is saved follows how
@@ -3388,7 +3357,7 @@ pConnectSettings SftpConnectToServer(LPCSTR DisplayName, LPCSTR inifilename,
             std::array<char, MAX_PATH> serverBuf{};
             strlcpy(serverBuf.data(), ConnectSettings.server, serverBuf.size() - 1);
             ReplaceBackslashBySlash(serverBuf.data());
-            // Remove trailing sftp://
+            // Remove leading sftp://
             if (_strnicmp(serverBuf.data(), "sftp://", 7) == 0)
                 memmove(serverBuf.data(), serverBuf.data() + 7, strlen(serverBuf.data()) - 6);
             char* p = strchr(serverBuf.data(), '/');
@@ -3396,7 +3365,6 @@ pConnectSettings SftpConnectToServer(LPCSTR DisplayName, LPCSTR inifilename,
             if (p) {
                 iwlcopy(ConnectSettings.lastactivepath, p, countof(ConnectSettings.lastactivepath)-1);
                 p[0] = 0;
-                // Remove trailing slash, including the root edge case.
             }
             // look for address and port
             p = strchr(serverBuf.data(), ':');
@@ -3443,7 +3411,7 @@ pConnectSettings SftpConnectToServer(LPCSTR DisplayName, LPCSTR inifilename,
                 std::replace(connbuf.begin(), connbuf.end(), '/', '\\');
             LogProcI(PluginNumber, MSGTYPE_CONNECT, connbuf.c_str());
 
-            // Move the connected settings to the heap ? unique_ptrs transfer ownership.
+            // Move the connected settings to the heap: unique_ptrs transfer ownership.
             // Critical: SftpConnect() called createSession() with the LOCAL
             // ConnectSettings address as the libssh2 session's `abstract`
             // pointer. Our transport_send/recv_cb dereference (*abstract) to
@@ -3452,9 +3420,9 @@ pConnectSettings SftpConnectToServer(LPCSTR DisplayName, LPCSTR inifilename,
             // the heap-allocated copy or the next callback invocation reads
             // dangling stack memory and crashes (NULL deref via the
             // transport_stream unique_ptr that the stale memory now contains).
-            // Direct connections do not install custom send/recv callbacks
-            // and so survived this bug for years; ProxyJump installs them and
-            // hits the dangling pointer on the first SFTP listing call.
+            // Direct connections do not install custom send/recv callbacks;
+            // ProxyJump does, and would hit the dangling pointer on the first
+            // SFTP listing call.
             try {
                 auto* heap_cs = new tConnectSettings(std::move(ConnectSettings));
                 if (heap_cs->session)

@@ -294,11 +294,9 @@ bool RefuseIfDependencyBlocks(const std::string& cacheSection)
 //
 // Connections are per thread: the registry is keyed by name *and* thread id, so
 // a session listed in one panel is a different connection from the one a
-// transfer thread would use. Listing has always handled that by connecting on
-// demand; transfers did not, and returned a read error before touching the
-// network — which is what copying between two plugin panels ran into, since the
-// copy runs in one panel's thread while the other panel's session lives in its
-// own.
+// transfer thread would use. Like listing, a transfer connects on demand: a
+// copy between two plugin panels runs in one panel's thread while the other
+// panel's session lives in its own.
 static pConnectSettings ResolveTransferSession(LPCWSTR RemoteName,
                                                LPWSTR relativeOut, size_t maxlen)
 {
@@ -768,13 +766,6 @@ static int MaterialiseVirtualSession(const std::string& sourceId,
     return FS_FILE_OK;
 }
 
-// Modal folder-picker for [Add custom location...]. Wrapped narrow because
-// the plugin's INI paths are ANSI throughout — the WFX API is ANSI at the
-// icon layer too. Returns false on Cancel or on a folder that cannot be
-// converted to a filesystem path (e.g. namespace-only selections).
-// The picker itself lives in ImportIoUtil so every future adapter's custom-
-// path enrollment reuses the same modern shell dialog.
-
 // Adapters work in UTF-8; what they fill in becomes internal strings here,
 // before it reaches the cache. The password is an encoded blob already.
 static void AdapterStringsToInternal(tConnectSettings& s, sftp::SessionDependency& dep)
@@ -1108,10 +1099,9 @@ int WINAPI FsExecuteFileW(HWND MainWin, LPWSTR RemoteName, LPCWSTR Verb)
                     // to the alias path. The SSH connect happens inside
                     // that FsFindFirstW, which TC treats as an in-flight
                     // navigation and decorates with its native progress UI
-                    // — the same UI real sessions get on Enter. Doing the
-                    // connect here (as this code used to) hides the
-                    // handshake from TC's UI accounting and makes the
-                    // panel look frozen on slow first-connects.
+                    // — the same UI real sessions get on Enter. Connecting
+                    // here would hide the handshake from TC's UI accounting
+                    // and make the panel look frozen on slow first-connects.
                     const std::string cacheSection =
                         sftp::GetImportCache().SectionNameForConnect(sourceId, subPath);
                     const std::string& cachePath =
@@ -1634,7 +1624,7 @@ int WINAPI FsRenMovFileW(LPCWSTR OldName, LPCWSTR NewName, BOOL Move, BOOL OverW
         // --- 1. Session rename / move ---
         // Covers all of: flat-flat rename, flat→folder move, folder→flat move,
         // and cross-folder move. The new DisplayName comes from the path
-        // itself (PathToDisplayName), since the destination session can't
+        // itself (PathToDisplayNameW), since the destination session can't
         // exist in the registry yet (otherwise we'd be overwriting).
         // A name the INI would not keep as it is, or one inside another
         // session, is refused with a word rather than written.
@@ -1763,7 +1753,7 @@ int WINAPI FsRenMovFileW(LPCWSTR OldName, LPCWSTR NewName, BOOL Move, BOOL OverW
 
         // Two different sessions: no server-side rename can join them, and
         // Total Commander does not step in either — answering NOTSUPPORTED
-        // just ends the copy with an error, which is what this used to do. So
+        // would just end the copy with an error. So
         // the plugin carries the file itself, down from one session and up to
         // the other. It goes through a local temporary file rather than
         // straight from socket to socket: the data has to pass through this
@@ -2744,8 +2734,6 @@ BOOL WINAPI FsRemoveDir(LPCSTR RemoteName)
     });
 }
 
-// ANSI attribute API used by TC in this plugin ABI.
-
 BOOL WINAPI FsSetAttrW(LPCWSTR RemoteName, int NewAttr)
 {
     sftp::DllExceptionBarrier _barrier;
@@ -2765,6 +2753,7 @@ BOOL WINAPI FsSetAttrW(LPCWSTR RemoteName, int NewAttr)
     });
 }
 
+// ANSI attribute API used by TC in this plugin ABI.
 BOOL WINAPI FsSetAttr(LPCSTR RemoteName, int NewAttr)
 {
     sftp::DllExceptionBarrier _barrier;

@@ -666,8 +666,8 @@ bool FileZillaAdapter::LoadSettings(const ExternalSessionEntry& entry,
     const std::string user = ChildText(*srv, "User");
     if (!user.empty()) out->user = user;
 
-    // <Keyfile> holds the private-key path for LogonType 4 (Key file).
-    // Absent for any other LogonType.
+    // <Keyfile> holds the private-key path when <Logontype> is 5 (Key file)
+    // and is absent otherwise; it is read whatever the logon type.
     std::string keyFile = ExpandEnv(ChildText(*srv, "Keyfile"));
     AssignImportedKeyFile(keyFile, out->privkeyfile, out->pubkeyfile);
 

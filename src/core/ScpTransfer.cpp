@@ -36,7 +36,6 @@ static std::string LngStrA(UINT id, const char* fallback)
 // are defined in ScpTransferInternal.h
 constexpr int SFTP_SCP_CHANNEL_OPEN_TIMEOUT_MS = 20000;
 constexpr int64_t SFTP_SPEED_STATS_MIN_BYTES = 300LL * 1000LL * 1000LL;
-constexpr int RECV_BLOCK_SIZE = 32768;
 
 // RAII for SCP channel with automatic cleanup
 class ScpChannel {
@@ -231,16 +230,6 @@ bool ScpReadAck(ISshChannel* channel, pConnectSettings cs, std::string& err)
     return false;
 }
 
-bool ContainsNonAscii(LPCWSTR text) noexcept
-{
-    if (!text) return false;
-    for (const WCHAR* p = text; *p; ++p) {
-        if (*p > 127)
-            return true;
-    }
-    return false;
-}
-
 bool PrepareScpTransferSession(pConnectSettings cs)
 {
     if (!cs) return false;
@@ -253,19 +242,15 @@ bool PrepareScpTransferSession(pConnectSettings cs)
 
 std::string BuildScpPathArgument(const std::string& path)
 {
-    // The path reaches `scp` as it is. Making it relative would tie every
-    // transfer to wherever the login left the shell, which is the same reason
-    // listing could not leave the home directory.
+    // The path reaches `scp` as it is, unquoted and not made relative: a
+    // relative path would depend on the directory the login left the shell in.
     if (path.empty()) return {};
-    if (SSH_ScpNeedQuote && path.find(' ') != std::string::npos)
-        return "\"" + path + "\"";
     return path;
 }
 
 // Whether an scp download was refused because the file is not there. Asked
 // over SFTP, which "SCP for data" keeps open beside scp; without it there is
-// no telling, and the answer is no. `filename` is the scp argument, which
-// carries quotes when the path holds a space.
+// no telling, and the answer is no. `filename` is the scp argument.
 enum class ScpSource { unknown, missing, present };
 
 static ScpSource ScpSourceState(pConnectSettings cs, const char* filename)

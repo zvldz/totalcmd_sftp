@@ -275,9 +275,8 @@ void EmitDedupBuckets(DedupBuckets&                     buckets,
 
 // Fill a WIN32_FIND_DATAW from one PluginFolderEntry. Pseudo entries advertise
 // the help-file body length so TC's viewer sizes correctly; folder entries
-// carry FILE_ATTRIBUTE_DIRECTORY; saved sessions keep the legacy IFLNK
-// rendering so F8 (delete) and Enter (open) behave the same as before
-// folders existed.
+// carry FILE_ATTRIBUTE_DIRECTORY; saved sessions are shown as IFLNK entries,
+// which is what F8 (delete) and Enter (open) on a session rely on.
 static void FillFindDataFromPluginEntry(WIN32_FIND_DATAW& fd, const PluginFolderEntry& e)
 {
     fd = {};
@@ -483,9 +482,8 @@ static HANDLE BuildActiveSessionsListing(WIN32_FIND_DATAW* FindData)
     // displayName they carry inside `[Imports]`. This keeps the F8-in-Active
     // Sessions round-trip correct — IsActiveSessionsPath must be able to
     // split the entry off the parent, which forbids `/`, `[`, or `\` inside
-    // the entry name. A future polish task can render a pretty label using
-    // a non-splitting substitute character; for now the alias is what the
-    // user sees.
+    // the entry name. The alias is what the user sees.
+    // TODO: render a readable label using a non-splitting substitute character.
     std::array<char, wdirtypemax> nameBuf{};
     SERVERHANDLE hdl = FindFirstServer(nameBuf.data(), nameBuf.size() - 1);
     while (hdl) {
@@ -998,10 +996,10 @@ HANDLE WINAPI FsFindFirstW(LPCWSTR Path, LPWIN32_FIND_DATAW FindData)
             // VirtualSessionRegistry before returning FS_EXEC_SYMLINK; we
             // do the actual SSH connect here so TC's navigation-flow
             // progress UI applies just like it does for real sessions.
-            // The bonus: an FsFindFirstW(\__vimp_...) invoked without
-            // any prior FsExecuteFileW (TC bookmark, hand-typed path)
-            // fails cleanly with PATH_NOT_FOUND instead of the old
-            // SftpConnect-with-empty-settings dialog.
+            // An FsFindFirstW(\__vimp_...) invoked without any prior
+            // FsExecuteFileW (TC bookmark, hand-typed path) fails cleanly
+            // with PATH_NOT_FOUND rather than opening a connect dialog with
+            // empty settings.
             if (sftp::IsVirtualSessionAlias(displayName.data())) {
                 auto info = sftp::LookupVirtualSession(displayName.data());
                 if (!info) {
@@ -1142,7 +1140,6 @@ HANDLE WINAPI FsFindFirstW(LPCWSTR Path, LPWIN32_FIND_DATAW FindData)
             return CreateLastFindHandle(ok ? sftpdataptr : nullptr, serverid, false);
         }
         if (!ok) {
-            if (!wasconnected) freportconnect = false;
             // newConnGuard destructor fires: SetServerIdForName(name, nullptr) → close + delete
             SetLastError(ERROR_PATH_NOT_FOUND);
             return INVALID_HANDLE_VALUE;

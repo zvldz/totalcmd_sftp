@@ -68,9 +68,8 @@ static size_t ShellB64Decode(std::string_view in, std::span<uint8_t> out)
     return static_cast<size_t>(MimeDecode(in.data(), in.size(), out.data(), out.size()));
 }
 
-// The shell commands address a file by the path they were given. Making it
-// relative would send every transfer looking inside the login directory, which
-// is where the listing used to be stuck as well.
+// The shell commands address a file by the path they were given. A relative
+// path would be looked up inside the login directory.
 static std::string ShellNormalizeScpPath(const std::string& path)
 {
     return path.empty() ? "." : path;
@@ -423,7 +422,8 @@ static int ShellDdDownloadRaw(
     return SFTP_OK;
 }
 
-// ---- base64 download: exec "base64 -w 0 file" ----
+// ---- base64 download: "base64 file | fold -w 76", lines of 76 characters ----
+// A resumed download reads from "tail -c +N file" instead.
 
 static int ShellDdDownloadBase64(
     pConnectSettings cs,
@@ -843,7 +843,7 @@ int ShellDdDownloadFile(
         cs->shell_dd_b64only = true;
         SHELL_DD_LOG("DL forced mode: using persistent shell base64 path");
     } else if (cs->scpShellChannel) {
-        // Legacy non-forced mode may use exec channels for raw transfer.
+        // Non-forced mode may use exec channels for raw transfer.
         // Release persistent shell first on hosts with single-channel limits.
         SHELL_DD_LOG("DL closing persistent scpShellChannel before fallback transfer");
         CloseScpShell(cs);
@@ -930,7 +930,7 @@ int ShellDdUploadFile(
         cs->shell_dd_b64only = true;
         SHELL_DD_LOG("UL forced mode: using persistent shell base64 path");
     } else if (cs->scpShellChannel) {
-        // Legacy non-forced mode may use exec channels for raw transfer.
+        // Non-forced mode may use exec channels for raw transfer.
         // Release persistent shell first on hosts with single-channel limits.
         SHELL_DD_LOG("UL closing persistent scpShellChannel before fallback transfer");
         CloseScpShell(cs);

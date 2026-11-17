@@ -26,6 +26,11 @@ $vsDevCmd = Join-Path $vsPath 'Common7\Tools\VsDevCmd.bat'
 
 $archs = if ($Arch -eq 'both') { @('x64', 'x86') } else { @($Arch) }
 $failures = @()
+
+# Keyboard shortcuts do not depend on the architecture: checked once.
+Write-Host '=== UI mnemonics ===' -ForegroundColor Cyan
+& (Join-Path $PSScriptRoot 'check-mnemonics.ps1')
+if (-not $?) { $failures += 'mnemonics' }
 foreach ($a in $archs) {
     $out = Join-Path $PSScriptRoot "out\ui-$a"
     if (Test-Path $out) { Remove-Item $out -Recurse -Force }

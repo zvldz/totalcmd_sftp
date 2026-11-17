@@ -21,6 +21,7 @@
 </table>
 <ul>
   <li>The jump host's password is stored the same ways, under its own key <code>jumppassword</code>; in the password manager it is kept as <code>&lt;session&gt;$$jump</code>.</li>
+  <li>A proxy's password is stored the same ways, under <code>proxypassword</code> in the proxy's section; in the password manager it is kept as <code>proxy$$pass</code> (first proxy) or <code>proxyN$$pass</code>.</li>
   <li>A password that comes into the plugin from elsewhere — a session file dropped onto it, a session copied from <code>[Imports]</code> — goes into the password manager or is not kept. A <code>!</code> in a session file is ignored.</li>
   <li>The PHP Agent PSK is stored as a salted SHA-256 hash inside <code>sftp.php</code> — the raw secret is not written to disk on the server.</li>
   <li>A PuTTY <code>.ppk</code> key is converted for the SSH library in memory only; the decrypted key is never written to disk.</li>
@@ -69,9 +70,16 @@ icacls "C:\Program Files\Total Commander\wcx_ftp.ini" /grant "${env:USERNAME}:F"
   <li>Argon2 (PPK v3 key derivation) comes from the OpenSSL statically compiled into the plugin — no separate DLL is involved. The Argon2 settings a key file asks for are capped, so a crafted file cannot demand unbounded memory or time.</li>
 </ul>
 
+<h2>Debug log</h2>
+<ul>
+  <li>Stable releases write no debug log.</li>
+  <li>Test (rc/beta) builds write a debug log to <code>%TEMP%\sftpplug.log</code>, in the Windows user's own temporary folder.</li>
+  <li>Quote commands, the SFTP server command and SCP commands are not written to the log. Remove host names, user names and paths before sharing it.</li>
+</ul>
+
 <h2>Operational recommendations</h2>
 <ul>
-  <li>Use DPAPI password storage (default) rather than plain-text for all sessions.</li>
+  <li>Keep "Protect password with password manager" (default) ticked, or use DPAPI storage — never plain text — for all sessions.</li>
   <li>Restrict access to the TC directory containing <code>sftpplug.ini</code> — it holds encrypted credentials.</li>
   <li>Restrict URL exposure for PHP Agent deployments; use HTTPS with a valid certificate.</li>
   <li>Rotate SSH keys and PHP Agent passwords periodically.</li>

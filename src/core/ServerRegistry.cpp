@@ -27,10 +27,6 @@ static std::mutex g_registryMutex;
 static std::vector<std::unique_ptr<SERVERENTRY>> g_servers;
 extern DWORD mainthreadid;
 
-void InitMultiServer() noexcept
-{
-}
-
 void ShutdownMultiServer() noexcept
 {
     FreeServerList();
@@ -331,15 +327,6 @@ int LoadServersFromIni(LPCSTR inifilename, LPCSTR quickconnectname) noexcept
     return LoadServersFromIniW(wpath.data(), quickconnectname);
 }
 
-bool DeleteServerFromIni(LPCSTR servername, LPCSTR inifilename) noexcept
-{
-    if (!servername || !servername[0] || !inifilename || !inifilename[0])
-        return false;
-    std::array<wchar_t, MAX_PATH> wpath{};
-    AnsiToWide(inifilename, wpath.data(), static_cast<int>(wpath.size()));
-    return DeleteServerFromIniW(servername, wpath.data());
-}
-
 int CopyMoveServerInIni(LPCSTR oldservername, LPCSTR newservername,
                         bool Move, bool OverWrite, LPCSTR inifilename) noexcept
 {
@@ -381,16 +368,15 @@ void GetDisplayNameFromPath(LPCSTR Path, LPSTR DisplayName, size_t maxlen) noexc
         return;
     }
     // Folder-aware: ask the resolver for the longest matching session prefix.
-    // For flat (slash-free) session names this is the same first-segment
-    // string the legacy code produced, so no regression.
+    // For flat (slash-free) session names this is the first path segment.
     const PathResolution r = ResolvePathKind(Path);
     if (!r.displayName.empty()) {
         strlcpy(DisplayName, r.displayName.c_str(), maxlen);
         return;
     }
     // Fallback: path doesn't match any known session or folder yet (e.g. a
-    // brand-new quick-connect name about to be saved). Use the legacy
-    // first-segment extraction so downstream code gets a usable name.
+    // brand-new quick-connect name about to be saved). Use the first path
+    // segment so downstream code gets a usable name.
     LPCSTR p = Path;
     while (*p == '\\' || *p == '/')
         p++;
@@ -545,13 +531,6 @@ PathResolution ResolvePathKindW(LPCWSTR path) noexcept
     if (narrow.empty())
         return {};
     return ResolvePathKind(narrow.c_str());
-}
-
-std::string PathToDisplayName(LPCSTR path) noexcept
-{
-    if (!path)
-        return {};
-    return NormaliseTcPath(path);
 }
 
 std::string PathToDisplayNameW(LPCWSTR path) noexcept

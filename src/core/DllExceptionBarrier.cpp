@@ -83,15 +83,16 @@ void EnsureSymbols() noexcept
     if (!g_sym_initialized.load(std::memory_order_relaxed)) {
         // SYMOPT_UNDNAME    — demangle C++ names
         // SYMOPT_LOAD_LINES — load source file / line number info from PDB
-        // (SYMOPT_DEFERRED_LOADS dropped — we want PDB matched eagerly so
+        // SYMOPT_DEFERRED_LOADS is not set: the PDB is matched eagerly so
         // CaptureStackBackTrace + SymFromAddr resolves frames inside libssh2
-        // and OpenSSL static-lib code, whose PDBs are baked into sftpplug.pdb.)
+        // and OpenSSL static-lib code, whose symbols are in sftpplug.pdb.
         ::SymSetOptions(SYMOPT_UNDNAME | SYMOPT_LOAD_LINES);
 
         // Build a symbol search path that explicitly includes the plugin's
-        // own directory: TC drops sftpplug.pdb next to sftpplug.wfx64 there,
-        // and the default DbgHelp search path (EXE dir + _NT_SYMBOL_PATH)
-        // does NOT cover that location.
+        // own directory: a sftpplug.pdb put next to the plugin (from the
+        // separate -pdb.zip release asset) is found there, and the default
+        // DbgHelp search path (EXE dir + _NT_SYMBOL_PATH) does NOT cover that
+        // location.
         const std::string moduleDir = GetModuleDir();
         const char* searchPath = moduleDir.empty() ? nullptr : moduleDir.c_str();
 
@@ -416,9 +417,9 @@ void InstallCrashHandler() noexcept
     g_prev_terminate = std::set_terminate(OnTerminate);
     _set_purecall_handler(OnPureCall);
 
-    // 4. POSIX signals (CRT layer). On Windows MSVC these fire for abort(),
-    //    /GS buffer-overrun checks (signal-style fallback), and a few CRT
-    //    fatal paths. They DO bypass UEF.
+    // 4. POSIX signals (CRT layer). On Windows MSVC these fire for abort()
+    //    and a few CRT fatal paths, which bypass UEF. A /GS buffer-overrun
+    //    check ends in __fastfail and reaches none of these handlers.
     std::signal(SIGABRT, OnSignal);
     std::signal(SIGSEGV, OnSignal);
     std::signal(SIGFPE,  OnSignal);
