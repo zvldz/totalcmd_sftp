@@ -7,7 +7,7 @@
 #   docker compose down                    stop and remove them
 #
 # ssh        port 2222, the usual "sftp" subsystem; also the jump host,
-#            reaching its own sshd as 127.0.0.1:22
+#            reaching its own sshd as 127.0.0.1:22; on IPv6 as [::1]:2225
 # ssh-nosub  port 2223, no subsystem: SFTP only through
 #            sftpservercommand=/usr/lib/openssh/sftp-server
 # ssh-hk     port 2224, whose host key a test replaces mid-run
@@ -28,6 +28,7 @@ services:
     <<: *ssh
     ports:
       - "127.0.0.1:2222:22"
+      - "[::1]:2225:22"
 
   ssh-nosub:
     <<: *ssh

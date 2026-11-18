@@ -326,9 +326,13 @@ From this version the plugin comes in two builds: **classic**
     the next method: the password method after keyboard-interactive, or
     keyboard-interactive after the password method (jump host too). One
     typo no longer costs two failed logins.
+- **An HTTP proxy's refusal says why.** The error for a connection the
+  HTTP proxy refused now carries the proxy's status line, such as
+  `HTTP/1.1 407` for a wrong password.
 - **Debug log: logins in more detail.** The test build's log lists the
-  keyboard-interactive prompts (their text, never the answers) and each
-  step of a jump host's login with its result.
+  keyboard-interactive prompts (their text, never the answers), each step
+  of a jump host's login with its result, and the proxy used with each
+  answer it gave.
 - **SCP-only sessions.**
   - Setting a file's time (Total Commander's Change attributes) failed
     on a session without SFTP; it is now set with `touch`, as after an
@@ -955,9 +959,10 @@ From this version the plugin comes in two builds: **classic**
   resume a download, move onto an existing file with and without
   overwrite, set a file's time and read it back, run a command and check
   its result and output, and upload names with control characters, in
-  every transfer mode. They also connect through SOCKS4, SOCKS4A and an
-  HTTP proxy with a user and password, and check that a SOCKS5 proxy
-  refusing the password ends the connect with an error.
+  every transfer mode. They also connect over IPv6, through SOCKS4,
+  SOCKS4A and an HTTP proxy with a user and password, and check that a
+  SOCKS5 or HTTP
+  proxy refusing the password ends the connect with an error.
 
 ## 10.0.2.3 — 2026-11-15
 

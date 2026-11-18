@@ -63,10 +63,12 @@ int SftpConnectProxyHttp(pConnectSettings ConnectSettings, LPCSTR progressbuf, i
                                                   ConnectSettings->proxyuser, ConnectSettings->proxyserver);
             LoadStr(label, IDS_PROXY_PASSWORD);
             std::array<char, 256> entered{};
-            if (RequestProcI(PluginNumber, RT_Password, title.c_str(), label.data(),
-                             entered.data(), static_cast<int>(entered.size() - 1)))
+            const bool answered = RequestProcI(PluginNumber, RT_Password, title.c_str(), label.data(),
+                                               entered.data(), static_cast<int>(entered.size() - 1)) != 0;
+            if (answered)
                 password = entered.data();
             SecureZeroMemory(entered.data(), entered.size());
+            SFTP_LOG("PROXY", "HTTP proxy password asked: answered=%d", answered ? 1 : 0);
         }
         // Sized up front: a string that grows reallocates and leaves the
         // credentials behind in the freed buffer, where no wipe reaches.
@@ -90,8 +92,11 @@ int SftpConnectProxyHttp(pConnectSettings ConnectSettings, LPCSTR progressbuf, i
     // "HTTP/1.x 2xx ...", header lines, then an empty line.
     std::array<char, 16> buf{};
     bool headerEnd = false;
-    if (myrecv(ConnectSettings->sock, buf.data(), 12, 0, progressbuf, progress, ploop, plasttime) == 12 &&
-        buf[9] == '2') {
+    const int got = myrecv(ConnectSettings->sock, buf.data(), 12, 0, progressbuf, progress, ploop, plasttime);
+    // The status line's start: "HTTP/1.1 407" says what the proxy thought.
+    SFTP_LOG("PROXY", "HTTP proxy answered (%d bytes): '%.12s'", got, got > 0 ? buf.data() : "");
+    const std::string status = got == 12 ? std::string(buf.data(), 12) : std::string();
+    if (got == 12 && buf[9] == '2') {
         bool lastCr = false;
         bool lastCrLf = false;
         while (myrecv(ConnectSettings->sock, buf.data(), 1, 0, progressbuf, progress, ploop, plasttime) == 1) {
@@ -112,7 +117,10 @@ int SftpConnectProxyHttp(pConnectSettings ConnectSettings, LPCSTR progressbuf, i
         }
     }
     if (!headerEnd) {
-        ShowErrorId(IDS_VIA_PROXY_CONNECT);
+        // The proxy's status, "HTTP/1.1 407" for a refused password, tells
+        // more than the plain error.
+        const std::string suffix = status.empty() ? std::string() : "\n" + status;
+        ShowErrorId(IDS_VIA_PROXY_CONNECT, suffix.empty() ? nullptr : suffix.c_str());
         return -1;
     }
     return SFTP_OK;
@@ -147,6 +155,8 @@ int SftpConnectProxySocks4(pConnectSettings ConnectSettings, LPCSTR progressbuf,
 
     mysend(ConnectSettings->sock, buf.data(), static_cast<int>(length), 0, progressbuf, progress, ploop, plasttime);
     const int got = myrecv(ConnectSettings->sock, buf.data(), 8, 0, progressbuf, progress, ploop, plasttime);
+    SFTP_LOG("PROXY", "SOCKS4%s answered (%d bytes): code=0x%02X", numeric ? "" : "A", got,
+             got >= 2 ? Byte(buf[1]) : 0);
     if (got != 8 || buf[0] != 0 || Byte(buf[1]) != SOCKS4_GRANTED) {
         ShowErrorId(IDS_VIA_PROXY_CONNECT);
         return -1;
@@ -169,6 +179,7 @@ int SftpConnectProxySocks5(pConnectSettings ConnectSettings, int connecttoport, 
     mysend(ConnectSettings->sock, buf.data(), user.empty() ? 3 : 4, 0, progressbuf, progress, ploop, plasttime);
     int got = myrecv(ConnectSettings->sock, buf.data(), 2, 0, progressbuf, progress, ploop, plasttime);
     const uint8_t method = Byte(buf[1]);
+    SFTP_LOG("PROXY", "SOCKS5 greeting answered (%d bytes): method=0x%02X", got, got == 2 ? method : 0);
     const bool offered = method == SOCKS5_AUTH_NONE || (method == SOCKS5_AUTH_USERPASS && !user.empty());
     if (got != 2 || Byte(buf[0]) != SOCKS5_VERSION || !offered) {
         ShowErrorId(IDS_VIA_PROXY_CONNECT);
@@ -191,6 +202,7 @@ int SftpConnectProxySocks5(pConnectSettings ConnectSettings, int connecttoport, 
         mysend(ConnectSettings->sock, buf.data(), length, 0, progressbuf, progress, ploop, plasttime);
         SecureZeroMemory(buf.data(), buf.size());
         got = myrecv(ConnectSettings->sock, buf.data(), 2, 0, progressbuf, progress, ploop, plasttime);
+        SFTP_LOG("PROXY", "SOCKS5 user/password answered (%d bytes): status=0x%02X", got, got == 2 ? Byte(buf[1]) : 0);
         if (got != 2 || buf[1] != 0) {
             LoadStr(buf, IDS_SOCKS5PROXYERR);
             ShowError(buf.data());
@@ -241,6 +253,7 @@ int SftpConnectProxySocks5(pConnectSettings ConnectSettings, int connecttoport, 
 
     mysend(ConnectSettings->sock, buf.data(), static_cast<int>(length), 0, progressbuf, progress, ploop, plasttime);
     got = myrecv(ConnectSettings->sock, buf.data(), 4, 0, progressbuf, progress, ploop, plasttime);
+    SFTP_LOG("PROXY", "SOCKS5 connect answered (%d bytes): reply=0x%02X", got, got >= 2 ? Byte(buf[1]) : 0);
     if (got != 4 || Byte(buf[0]) != SOCKS5_VERSION || buf[1] != 0) {
         const int reply = got >= 2 ? Byte(buf[1]) : -1;
         switch (reply) {

@@ -14,6 +14,7 @@ By default the servers are the Docker bench in tools\ssh-test, started here
   127.0.0.1:2222  OpenSSH with the "sftp" subsystem; also the jump host
   127.0.0.1:2223  the same without it, reached through sftpservercommand
   127.0.0.1:2224  the same, given a new host key by the hostkey mode
+  [::1]:2225      the first, over IPv6
   127.0.0.1:1080  SOCKS5 proxy, 1081 the same with a user and password,
                   1082 SOCKS4 and SOCKS4A, 8888 an HTTP CONNECT proxy, 8889
                   the same with a user and password, all in front of the first
@@ -25,7 +26,7 @@ Everything a run creates on the server lives in one directory under
 sftp, scp, scponly, shell, text, text-scp, text-scponly, nosub, nosub-bad,
 postcmd, key-utf8, key-cp1251, classic-gate, secrets, pass-store, jump-key,
 jump-pass, jump-ref, socks5, socks5-auth, socks4, socks4a, http-proxy,
-http-auth, hostkey, netfail, php, php74 (default: all).
+http-auth, ipv6, hostkey, netfail, php, php74 (default: all).
   text*      text mode (CRLF <-> LF) over SFTP, SCP and SCP-only
   nosub      SFTP through sftpservercommand; the server is restarted
              mid-run and the session has to reconnect through the command
@@ -47,10 +48,12 @@ http-auth, hostkey, netfail, php, php74 (default: all).
              user, its password in the password manager; socks4 names the
              server by its address, socks4a by its name, which the proxy
              resolves
+  ipv6       the server named by an IPv6 address, [::1]:2225
   hostkey    the server's host key changes mid-run: the reconnect has to ask
   netfail    no server: a proxy that drops the connection, a proxy name too
              long for its buffer, a server that never answers the handshake,
-             a SOCKS5 proxy given a wrong password; each fails, and in time
+             a SOCKS5 and an HTTP proxy given a wrong password; each fails,
+             and in time
   php, php74 the extra build (bin\SFTPplug-extra.zip) against the PHP Agent
              bench in tools\php-agent-test, PHP 8.3 and PHP 7.4, started here;
              the files go to the agent's root
@@ -61,7 +64,7 @@ http-auth, hostkey, netfail, php, php74 (default: all).
 #>
 param(
     [ValidateSet('x64', 'x86', 'both')] [string]$Arch = 'both',
-    [string[]]$Modes = @('sftp', 'scp', 'scponly', 'shell', 'text', 'text-scp', 'text-scponly', 'nosub', 'nosub-bad', 'postcmd', 'key-utf8', 'key-cp1251', 'classic-gate', 'secrets', 'pass-store', 'jump-key', 'jump-pass', 'jump-ref', 'socks5', 'socks5-auth', 'socks4', 'socks4a', 'http-proxy', 'http-auth', 'hostkey', 'netfail', 'php', 'php74'),
+    [string[]]$Modes = @('sftp', 'scp', 'scponly', 'shell', 'text', 'text-scp', 'text-scponly', 'nosub', 'nosub-bad', 'postcmd', 'key-utf8', 'key-cp1251', 'classic-gate', 'secrets', 'pass-store', 'jump-key', 'jump-pass', 'jump-ref', 'socks5', 'socks5-auth', 'socks4', 'socks4a', 'http-proxy', 'http-auth', 'ipv6', 'hostkey', 'netfail', 'php', 'php74'),
     [string]$RemoteBase = '/tmp',
     [switch]$VerboseLog
 )
@@ -75,7 +78,7 @@ $KeyFileUtf8 = Join-Path $Bench 'keys\id_ed25519_utf8'
 $KeyFileCp1251 = Join-Path $Bench 'keys\id_ed25519_cp1251'
 
 $Modes = @($Modes | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
-$knownModes = 'sftp', 'scp', 'scponly', 'shell', 'text', 'text-scp', 'text-scponly', 'nosub', 'nosub-bad', 'postcmd', 'key-utf8', 'key-cp1251', 'classic-gate', 'secrets', 'pass-store', 'jump-key', 'jump-pass', 'jump-ref', 'socks5', 'socks5-auth', 'socks4', 'socks4a', 'http-proxy', 'http-auth', 'hostkey', 'netfail', 'php', 'php74'
+$knownModes = 'sftp', 'scp', 'scponly', 'shell', 'text', 'text-scp', 'text-scponly', 'nosub', 'nosub-bad', 'postcmd', 'key-utf8', 'key-cp1251', 'classic-gate', 'secrets', 'pass-store', 'jump-key', 'jump-pass', 'jump-ref', 'socks5', 'socks5-auth', 'socks4', 'socks4a', 'http-proxy', 'http-auth', 'ipv6', 'hostkey', 'netfail', 'php', 'php74'
 foreach ($m in $Modes) { if ($m -notin $knownModes) { throw "Unknown mode '$m'. Known: $($knownModes -join ', ')" } }
 
 # ---------------------------------------------------------------------------
@@ -167,6 +170,8 @@ $overrides = @{
                        server = '127.0.0.1:22'; proxynr = '6' }
     socks4a       = @{ scpfordata = '0'; scponly = '0'; shelltransfer = '0'; shelltransferforce = '0'; unixlinebreaks = '0'
                        server = 'ssh:22'; proxynr = '6' }
+    ipv6          = @{ scpfordata = '0'; scponly = '0'; shelltransfer = '0'; shelltransferforce = '0'; unixlinebreaks = '0'
+                       server = '[::1]:2225' }
     hostkey       = @{ server = '127.0.0.1:2224' }
     netfail       = @{}
     # PHP Agent: the password is the bench's TC_SFTP_AGENT_PSK.
@@ -182,7 +187,7 @@ $stores = @{
     'jump-ref'    = 'it-bastion=tester'
     'socks5-auth' = 'proxy2$$pass=proxypass'
     'http-auth'   = 'proxy7$$pass=proxypass'
-    netfail       = 'proxy8$$pass=wrongpass'
+    netfail       = 'proxy8$$pass=wrongpass|proxy9$$pass=wrongpass'
 }
 # The passphrase is typed the same way for both keys; the plugin has to
 # find the bytes the key was protected with. Built from code points so the
@@ -237,6 +242,12 @@ user=tester
 privkeyfile=$KeyFile
 proxynr=8
 
+[it-netfail-httppass]
+server=ssh:22
+user=tester
+privkeyfile=$KeyFile
+proxynr=9
+
 [proxy]
 proxytype=4
 proxyserver=127.0.0.1:1080
@@ -272,6 +283,12 @@ proxypassword=!
 [proxy8]
 proxytype=4
 proxyserver=127.0.0.1:1081
+proxyuser=proxyuser
+proxypassword=!
+
+[proxy9]
+proxytype=2
+proxyserver=127.0.0.1:8889
 proxyuser=proxyuser
 proxypassword=!
 

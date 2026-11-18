@@ -108,6 +108,10 @@ int NegotiateProxy(
     if (ProgressProcI(PluginNumber, progressbuf.data(), "-", progress))
         return -40;
 
+    SFTP_LOG("PROXY", "type=%d proxy='%s:%d' user=%d password_set=%d target='%s:%d'",
+             static_cast<int>(ConnectSettings->proxytype), ConnectSettings->proxyserver.c_str(), connecttoport,
+             ConnectSettings->proxyuser.empty() ? 0 : 1, ConnectSettings->proxypassword.empty() ? 0 : 1,
+             ConnectSettings->server.c_str(), static_cast<int>(ConnectSettings->customport));
     int hr = 0;
     switch (ConnectSettings->proxytype) {
     case sftp::Proxy::http:
@@ -125,6 +129,7 @@ int NegotiateProxy(
     default:
         break;
     }
+    SFTP_LOG("PROXY", "tunnel open");
     return 0;
 }
 
