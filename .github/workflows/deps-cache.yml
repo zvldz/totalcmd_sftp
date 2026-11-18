@@ -1,0 +1,73 @@
+name: Dependency cache
+
+# Keeps a built OpenSSL + libssh2 (src\lib) in the Actions cache for the
+# pre-release builds of release.yml. A cache is visible to the branch or tag
+# that saved it and to the default branch only, so it is saved from main,
+# where every tag run can restore it. The key (tools\deps-cache-key.ps1)
+# names everything the libraries are built from; a stable tag never uses the
+# cache and builds them from source.
+#
+# Runs when what the libraries are built from changes on main, and twice a
+# week: a cache nobody reads for 7 days is evicted, and the restore here
+# counts as a read. A runner image with a newer MSVC makes a new key, built
+# on the next run.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - build-deps.ps1
+      - thirdparty/**
+      - .gitmodules
+      - tools/deps-cache-key.ps1
+      - .github/workflows/deps-cache.yml
+  schedule:
+    - cron: '17 3 * * 1,4'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deps:
+    # The same image as release.yml: the key carries its MSVC version.
+    runs-on: windows-2025
+
+    steps:
+      - name: Checkout with submodules
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          submodules: true
+          persist-credentials: false
+
+      - name: Install NASM
+        shell: pwsh
+        run: choco install nasm --version=2.16.3 -y --no-progress
+
+      - name: Cache key
+        id: key
+        shell: pwsh
+        run: |
+          $key = ./tools/deps-cache-key.ps1
+          if ($LASTEXITCODE -ne 0 -or -not $key) { throw "Cache key failed" }
+          "key=$key" >> $env:GITHUB_OUTPUT
+          Write-Host "Cache key: $key"
+
+      - name: Restore
+        id: restore
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: src/lib
+          key: ${{ steps.key.outputs.key }}
+
+      - name: Build dependencies (OpenSSL, libssh2) from source
+        if: steps.restore.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: ./build-deps.ps1 -Clean
+
+      - name: Save
+        if: steps.restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: src/lib
+          key: ${{ steps.key.outputs.key }}

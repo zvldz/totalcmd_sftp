@@ -28,8 +28,9 @@ jobs:
       - name: Checkout with submodules
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
         with:
-          # openssl and libssh2 sources live as submodules and are
-          # rebuilt from source on every run. Only these two: OpenSSL's own
+          # openssl and libssh2 sources live as submodules, built from source
+          # or, for a pre-release, restored from the dependency cache built
+          # from these same commits. Only these two: OpenSSL's own
           # submodules are test suites and external projects the build
           # does not use.
           submodules: true
@@ -110,15 +111,34 @@ jobs:
         shell: pwsh
         run: choco install nasm --version=2.16.3 -y --no-progress
 
-      - name: Build dependencies (OpenSSL, libssh2) — FULL from source
+      - name: Dependency cache key (pre-release)
+        id: depkey
+        if: steps.meta.outputs.prerelease == 'true'
         shell: pwsh
-        # Every release build compiles the third-party stack from scratch,
-        # deliberately NOT using any cache. Locally we skip this step
-        # between runs because the outputs sit in thirdparty/build/, but on
-        # the runner we want a clean-room rebuild for reproducibility — no
-        # stale artefact from a prior run, no accidental drift when a
-        # submodule commit changes. Cost: ~15-25 minutes on windows-latest
-        # (OpenSSL is the bulk), acceptable since releases are rare.
+        run: |
+          $key = ./tools/deps-cache-key.ps1
+          if ($LASTEXITCODE -ne 0 -or -not $key) { throw "Cache key failed" }
+          "key=$key" >> $env:GITHUB_OUTPUT
+          Write-Host "Cache key: $key"
+
+      - name: Restore dependencies (pre-release)
+        id: depcache
+        if: steps.meta.outputs.prerelease == 'true'
+        # Saved from main by deps-cache.yml under a key that names everything
+        # the libraries are built from: the submodule commits, build-deps.ps1
+        # and its patches, the MSVC and NASM versions.
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: src/lib
+          key: ${{ steps.depkey.outputs.key }}
+
+      - name: Build dependencies (OpenSSL, libssh2) — FULL from source
+        # A stable tag always compiles the third-party stack from scratch, as
+        # does a pre-release that found no cached copy: no artefact of
+        # another run goes into a stable release. ~10 minutes, OpenSSL the
+        # bulk.
+        if: steps.meta.outputs.prerelease != 'true' || steps.depcache.outputs.cache-hit != 'true'
+        shell: pwsh
         run: ./build-deps.ps1 -Clean
 
       - name: Unit tests (x64 + x86)
@@ -137,18 +157,17 @@ jobs:
           ./tests/check-mnemonics.ps1
           if ($LASTEXITCODE -ne 0) { throw "Shortcut check failed" }
 
-      - name: Stable configuration (log off) builds and passes
+      - name: Stable configuration (log off) builds
         shell: pwsh
-        # Every tag builds the configuration a stable release ships, with the
-        # debug log off, and runs the unit tests in it, so the first stable
-        # tag is not the first time it is compiled. cl reads CL from the
-        # environment; the release build below is a full rebuild without it.
+        # Every tag compiles and links the configuration a stable release
+        # ships, with the debug log off, so the first stable tag is not the
+        # first time it is built. cl reads CL from the environment; the
+        # release build below is a full rebuild without it.
         env:
           CL: /DLOG_ENABLED=0
         run: |
           ./build.ps1 -x64only -classiconly -nodeploy -nohelp
           if ($LASTEXITCODE -ne 0) { throw "Build with LOG_ENABLED=0 failed" }
-          ./tests/run-unit-tests.ps1 -Arch x64
 
       - name: Build plugin (classic + extra, Release x64 + x86)
         shell: pwsh

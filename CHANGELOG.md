@@ -340,7 +340,9 @@ From this version the plugin comes in two builds: **classic**
   of a jump host's login with its result, the proxy used with each
   answer it gave, the TCP connect: the address tried, how long it took,
   and the error when it failed, and the connection a background transfer
-  closes when it ends.
+  closes when it ends. Its first line names the program that loaded the
+  plugin and its process, as Total Commander and Double Commander write to
+  the same file.
 - **SCP-only sessions.**
   - Setting a file's time (Total Commander's Change attributes) failed
     on a session without SFTP; it is now set with `touch`, as after an
@@ -963,7 +965,10 @@ From this version the plugin comes in two builds: **classic**
   is checked for missing strings and placeholders, and every dialog for
   repeated shortcuts; each package for its contents, the architecture of
   its plugin files, ASLR/DEP/CFG, the exported functions and system-only
-  DLLs. All of it runs in the release workflow. The integration tests also
+  DLLs. All of it runs in the release workflow. A pre-release takes OpenSSL
+  and libssh2 from a cache built from the same sources (a stable release
+  still builds them from scratch), which halves its build. The integration
+  tests also
   resume a download, move onto an existing file with and without
   overwrite, set a file's time and read it back, run a command and check
   its result and output, and upload names with control characters, in

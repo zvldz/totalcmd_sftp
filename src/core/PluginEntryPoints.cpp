@@ -584,8 +584,15 @@ static int _FsInit(int PluginNr)
     // paste the log tail and everyone knows exactly which build they are
     // running — matters most in the beta cycle where version.h stays put
     // between beta1/2/... and only git tag + SHA differ.
-    SFTP_LOG("STARTUP", "SFTPplug build tag=%s sha=%s date=%s variant=%s",
-             SFTP_BUILD_TAG, SFTP_BUILD_SHA, SFTP_BUILD_DATE, SFTP_BUILD_VARIANT);
+    // The program that loaded the plugin and its process: Total Commander
+    // and Double Commander write to the same log file.
+    std::array<WCHAR, MAX_PATH> hostPath{};
+    GetModuleFileNameW(nullptr, hostPath.data(), static_cast<DWORD>(hostPath.size()));
+    const WCHAR* hostName = wcsrchr(hostPath.data(), L'\\');
+    hostName = hostName ? hostName + 1 : hostPath.data();
+    SFTP_LOG("STARTUP", "SFTPplug build tag=%s sha=%s date=%s variant=%s host=%s pid=%lu",
+             SFTP_BUILD_TAG, SFTP_BUILD_SHA, SFTP_BUILD_DATE, SFTP_BUILD_VARIANT,
+             unicode_util::wide_to_internal(hostName).c_str(), GetCurrentProcessId());
 
     // Load language now in case FsSetDefaultParams was not called yet or registry lookup failed.
     DetectAndApplyLanguage(nullptr);
