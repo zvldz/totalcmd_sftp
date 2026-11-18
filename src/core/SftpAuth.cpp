@@ -36,9 +36,13 @@ void kbd_callback(LPCSTR name, int name_len,
         memcpy(retbuf.data(), prompts[i].text, copyLen);
         retbuf[copyLen] = '\0';
         ShowStatus(retbuf.data());
+        SFTP_LOG("AUTH", "kbd prompt %d/%d: '%s'", i + 1, num_prompts, retbuf.data());
         _strlwr_s(retbuf.data(), retbuf.size());
         const bool passwordPrompt = PromptLooksLikePasswordRequest(retbuf.data());
-        bool autoSendPassword = passwordPrompt && ConnectSettings &&
+        // "New password", "Retype new password": the server changes the
+        // password, the stored one is never the answer.
+        const bool newPasswordPrompt = passwordPrompt && strstr(retbuf.data(), "new") != nullptr;
+        bool autoSendPassword = passwordPrompt && !newPasswordPrompt && ConnectSettings &&
                                 !ConnectSettings->account_password.empty() &&
                                 !ConnectSettings->InteractivePasswordSent;
         if (autoSendPassword) {
@@ -82,7 +86,9 @@ void kbd_callback(LPCSTR name, int name_len,
                 // offered again, so a mistyped one is asked for anew. Only an
                 // answer to a password prompt: a one-time code kept here
                 // would be replayed as the password next time.
-                if (passwordPrompt && ConnectSettings)
+                if (newPasswordPrompt && ConnectSettings)
+                    ConnectSettings->changed_password = retbuf.data();
+                else if (passwordPrompt && ConnectSettings)
                     ConnectSettings->typed_password = retbuf.data();
                 ShowStatusId(IDS_LOG_SEND_USER_PASS, nullptr, true);
             } else {

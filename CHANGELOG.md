@@ -307,6 +307,15 @@ From this version the plugin comes in two builds: **classic**
 
 ### Fixes
 
+- **A password the server makes you change is saved.** With an expired
+  password (`chage -d 0`), OpenSSH asks for the current one and a new one
+  at keyboard-interactive prompts. The new password was not kept: the next
+  connection sent the old one and failed. It now replaces the session's
+  password, in the profile too when the profile saves it. The stored
+  password is no longer offered to a "New password" prompt.
+- **Debug log: logins in more detail.** The test build's log lists the
+  keyboard-interactive prompts (their text, never the answers) and each
+  step of a jump host's login with its result.
 - **SCP-only sessions.**
   - Setting a file's time (Total Commander's Change attributes) failed
     on a session without SFTP; it is now set with `touch`, as after an

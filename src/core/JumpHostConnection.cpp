@@ -198,6 +198,9 @@ extern "C" static void jmp_kbd_callback(
 {
     auto* ctx = static_cast<JmpKbdCtx*>(*abstract);
     for (int i = 0; i < num_prompts; i++) {
+        SFTP_LOG("JUMP", "kbd prompt %d/%d: '%.*s'", i + 1, num_prompts,
+                 prompts ? static_cast<int>(prompts[i].length) : 0,
+                 prompts && prompts[i].text ? reinterpret_cast<LPCSTR>(prompts[i].text) : "");
         const char* pw = "";
         if (ctx && ctx->password && !ctx->password->empty() && !ctx->sent) {
             std::array<char, 256> lower{};
@@ -210,6 +213,7 @@ extern "C" static void jmp_kbd_callback(
             if (copyLen == 0 || PromptLooksLikePasswordRequest(lower.data())) {
                 pw = ctx->password->c_str();
                 ctx->sent = true;
+                SFTP_LOG("JUMP", "kbd prompt %d: stored password sent", i + 1);
             }
         }
         std::array<char, 256> answer{};
@@ -220,6 +224,7 @@ extern "C" static void jmp_kbd_callback(
                              answer.data(), static_cast<int>(answer.size() - 1)))
                 pw = answer.data();
             ctx->promptDone = get_sys_ticks();
+            SFTP_LOG("JUMP", "kbd prompt %d: asked the user, answered=%d", i + 1, pw[0] ? 1 : 0);
         }
         responses[i].text   = _strdup(pw);
         responses[i].length = static_cast<unsigned int>(strlen(pw));
@@ -498,9 +503,11 @@ static bool AuthJumpHost(
         ShowStatusId(IDS_LOG_JUMP_AGENT_TRY, nullptr, true);
         if (SftpAuthPageantOn(authTarget, "Jump host: agent auth...",
                               progress, &loop, &lasttime, nullptr) == 0) {
+            SFTP_LOG("JUMP", "Agent auth ok");
             ShowStatusId(IDS_LOG_JUMP_AGENT_OK, nullptr, true);
             return true;
         }
+        SFTP_LOG("JUMP", "Agent auth failed");
         ShowStatusId(IDS_LOG_JUMP_AGENT_FAIL, nullptr, true);
     }
 
@@ -512,10 +519,12 @@ static bool AuthJumpHost(
         if (SftpAuthPubKeyOn(authTarget, "Jump host: public key auth...",
                              progress, &loop, &lasttime, nullptr,
                              AuthFailureUi::StatusOnly) == 0) {
+            SFTP_LOG("JUMP", "Public key auth ok");
             ShowStatusId(IDS_LOG_JUMP_PUBKEY_OK, nullptr, true);
             return true;
         }
         authTarget.keyOpened = nullptr;
+        SFTP_LOG("JUMP", "Public key auth failed (key opened=%d)", keyOpened ? 1 : 0);
         ShowStatusId(IDS_LOG_JUMP_PUBKEY_FAIL, nullptr, true);
         // The unlabelled secret opened the key, so it is the key's
         // passphrase, not the password: the password is asked for instead.
@@ -535,6 +544,7 @@ static bool AuthJumpHost(
             ShowStatusId(IDS_LOG_REQUEST_PASS, nullptr, true);
             if (RequestProcI(PluginNumber, RT_Password, title.c_str(), nullptr, buf.data(), buf.size() - 1))
                 cs->jump_entered_password = buf.data();
+            SFTP_LOG("JUMP", "Password asked, answered=%d", cs->jump_entered_password.empty() ? 0 : 1);
             SecureZeroMemory(buf.data(), buf.size());
             if (kbdCtx)
                 kbdCtx->promptDone = get_sys_ticks();
@@ -559,6 +569,7 @@ static bool AuthJumpHost(
             if (r == LIBSSH2_ERROR_EAGAIN && get_ticks_between(authStart) > SSH_AUTH_STAGE_TIMEOUT_MS)
                 break;
         }
+        SFTP_LOG("JUMP", "Password auth rc=%d", r);
         if (r == LIBSSH2_ERROR_NONE) {
             ShowStatusId(IDS_LOG_JUMP_PASS_OK, nullptr, true);
             return true;
@@ -584,6 +595,7 @@ static bool AuthJumpHost(
             if (r == LIBSSH2_ERROR_EAGAIN && get_ticks_between(since) > SSH_AUTH_STAGE_TIMEOUT_MS)
                 break;
         }
+        SFTP_LOG("JUMP", "Keyboard-interactive auth rc=%d", r);
         if (r == LIBSSH2_ERROR_NONE) {
             ShowStatusId(IDS_LOG_JUMP_KBD_OK, nullptr, true);
             return true;
@@ -592,6 +604,7 @@ static bool AuthJumpHost(
     }
 
     // A typed password the jump host refused is not kept for reconnects.
+    SFTP_LOG("JUMP", "Jump host auth failed");
     SecureZeroMemory(cs->jump_entered_password.data(), cs->jump_entered_password.size());
     cs->jump_entered_password.clear();
     ShowStatusId(IDS_LOG_JUMP_AUTH_FAIL, nullptr, true);

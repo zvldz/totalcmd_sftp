@@ -15,6 +15,30 @@
 #include "res/resource.h"
 #include "UnicodeHelpers.h"
 
+// A server-mandated password change replaces the login password of the
+// session and of the profile. A stored secret that also names the key's
+// passphrase keeps it.
+static void ApplyChangedPassword(pConnectSettings cs, const std::string& newpass)
+{
+    const StoredSecret old = SplitStoredSecret(cs->password);
+    std::string stored = newpass;
+    if (old.labelled)
+        stored = "\"" + stored + "\",\"" + old.keyPassphrase + "\"";
+    cs->password         = stored;
+    cs->account_password = newpass;
+    // Saved the way the profile keeps its password, with the dialog's
+    // rules: a refusing store is reported, a failed encryption keeps the
+    // old value, a stale store entry goes.
+    if (cs->passSaveMode != sftp::PassSaveMode::empty)
+        SavePasswordSetting(nullptr, cs->DisplayName.c_str(), "password",
+                            cs->DisplayName.c_str(), stored,
+                            cs->passSaveMode == sftp::PassSaveMode::crypt,
+                            cs->IniFileName.c_str());
+    SFTP_LOG("AUTH", "Changed password applied (saved=%d)",
+             cs->passSaveMode != sftp::PassSaveMode::empty ? 1 : 0);
+    SecureZeroMemory(stored.data(), stored.size());
+}
+
 extern "C"
 void newpassfunc(LIBSSH2_SESSION* /*session*/, LPSTR* newpw, int* newpw_len, LPVOID* abstract)
 {
@@ -41,23 +65,9 @@ void newpassfunc(LIBSSH2_SESSION* /*session*/, LPSTR* newpw, int* newpw_len, LPV
         strlcpy(*newpw, newpass.data(), bufsize);
         *newpw_len = (int)strlen(newpass.data());
         if (PassConnectSettings) {
-            // A server-mandated password change replaces the login password.
-            // A stored secret that also names the key's passphrase keeps it.
-            const StoredSecret old = SplitStoredSecret(PassConnectSettings->password);
-            std::string stored = newpass.data();
-            if (old.labelled)
-                stored = "\"" + stored + "\",\"" + old.keyPassphrase + "\"";
-            PassConnectSettings->password         = stored;
-            PassConnectSettings->account_password = newpass.data();
-            // Saved the way the profile keeps its password, with the
-            // dialog's rules: a refusing store is reported, a failed
-            // encryption keeps the old value, a stale store entry goes.
-            if (PassConnectSettings->passSaveMode != sftp::PassSaveMode::empty)
-                SavePasswordSetting(nullptr, PassConnectSettings->DisplayName.c_str(), "password",
-                                    PassConnectSettings->DisplayName.c_str(), stored,
-                                    PassConnectSettings->passSaveMode == sftp::PassSaveMode::crypt,
-                                    PassConnectSettings->IniFileName.c_str());
-            SecureZeroMemory(stored.data(), stored.size());
+            std::string changed = newpass.data();
+            ApplyChangedPassword(PassConnectSettings, changed);
+            SecureZeroMemory(changed.data(), changed.size());
         }
     }
     SecureZeroMemory(newpass.data(), newpass.size());
@@ -65,16 +75,21 @@ void newpassfunc(LIBSSH2_SESSION* /*session*/, LPSTR* newpw, int* newpw_len, LPV
 
 // A password typed at a keyboard-interactive prompt becomes the session's
 // password only when that login succeeded; a rejected one is dropped, so the
-// password method that may follow asks again instead of sending it.
+// password method that may follow asks again instead of sending it. A new
+// password the server asked for replaces the old one, in the profile too.
 static void CommitTypedPassword(pConnectSettings cs, bool loggedIn)
 {
-    if (loggedIn && !cs->typed_password.empty() && cs->account_password.empty()) {
+    if (loggedIn && !cs->changed_password.empty()) {
+        ApplyChangedPassword(cs, cs->changed_password);
+    } else if (loggedIn && !cs->typed_password.empty() && cs->account_password.empty()) {
         cs->account_password = cs->typed_password;
         if (cs->password.empty())
             cs->password = cs->typed_password;
     }
     SecureZeroMemory(cs->typed_password.data(), cs->typed_password.size());
     cs->typed_password.clear();
+    SecureZeroMemory(cs->changed_password.data(), cs->changed_password.size());
+    cs->changed_password.clear();
 }
 
 int NegotiateProxy(

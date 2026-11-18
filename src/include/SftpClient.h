@@ -89,7 +89,7 @@ struct tConnectSettings {
     // whatever a short string kept in place is overwritten too.
     ~tConnectSettings()
     {
-        for (std::string* s : { &password, &account_password, &typed_password, &key_passphrase,
+        for (std::string* s : { &password, &account_password, &typed_password, &changed_password, &key_passphrase,
                                 &proxypassword, &jump_password, &jump_key_passphrase,
                                 &jump_entered_password }) {
             s->resize(s->capacity());
@@ -112,6 +112,10 @@ struct tConnectSettings {
     // A password typed at a keyboard-interactive prompt, kept apart until
     // the login succeeds: a mistyped one is not sent again on its own.
     std::string typed_password;
+    // The answer to a keyboard-interactive "New password" prompt (a password
+    // change the server demands). It replaces the session's and the profile's
+    // password once the login succeeds.
+    std::string changed_password;
     std::string connectsendcommand;
     std::string sftpservercommand;   // empty: request the "sftp" subsystem
     WCHAR lastactivepath[1024];
