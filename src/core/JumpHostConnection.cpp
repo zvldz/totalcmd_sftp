@@ -553,32 +553,66 @@ static bool AuthJumpHost(
     }
 
     // --- 3. Password auth ---
+    // A refused password is asked for again: three typed ones in all, the
+    // one typed above included. Cancel ends it, and so does any answer but
+    // "refused": a dropped link, a timeout.
+    bool passwordRefused = false;
+    bool cancelled = false;
     if (canPassword && !jump.password.empty()) {
-        ShowStatusId(IDS_LOG_JUMP_PASS_TRY, nullptr, true);
-        int r = LIBSSH2_ERROR_EAGAIN;
-        const SYSTICKS authStart = get_sys_ticks();
-        while (r == LIBSSH2_ERROR_EAGAIN) {
-            r = jmpSession->userauthPassword(
-                jump.user.c_str(), static_cast<unsigned>(jump.user.size()),
-                jump.password.c_str(), static_cast<unsigned>(jump.password.size()),
-                nullptr);
-            if (r == LIBSSH2_ERROR_EAGAIN)
-                IsSocketReadable(jmpSock);
-            if (ProgressLoop("Jump host: password auth...", progress, progress + 5, &loop, &lasttime))
+        int typedTries = cs->jump_entered_password.empty() ? 0 : 1;
+        for (;;) {
+            ShowStatusId(IDS_LOG_JUMP_PASS_TRY, nullptr, true);
+            int r = LIBSSH2_ERROR_EAGAIN;
+            const SYSTICKS authStart = get_sys_ticks();
+            while (r == LIBSSH2_ERROR_EAGAIN) {
+                r = jmpSession->userauthPassword(
+                    jump.user.c_str(), static_cast<unsigned>(jump.user.size()),
+                    jump.password.c_str(), static_cast<unsigned>(jump.password.size()),
+                    nullptr);
+                if (r == LIBSSH2_ERROR_EAGAIN)
+                    IsSocketReadable(jmpSock);
+                if (ProgressLoop("Jump host: password auth...", progress, progress + 5, &loop, &lasttime))
+                    break;
+                if (r == LIBSSH2_ERROR_EAGAIN && get_ticks_between(authStart) > SSH_AUTH_STAGE_TIMEOUT_MS)
+                    break;
+            }
+            SFTP_LOG("JUMP", "Password auth rc=%d", r);
+            if (r == LIBSSH2_ERROR_NONE) {
+                // A typed one is kept for the reconnects of this connection.
+                if (typedTries > 0)
+                    cs->jump_entered_password = jump.password;
+                ShowStatusId(IDS_LOG_JUMP_PASS_OK, nullptr, true);
+                return true;
+            }
+            ShowStatusId(IDS_LOG_JUMP_PASS_FAIL, nullptr, true);
+            if (r != LIBSSH2_ERROR_AUTHENTICATION_FAILED || typedTries == 3)
                 break;
-            if (r == LIBSSH2_ERROR_EAGAIN && get_ticks_between(authStart) > SSH_AUTH_STAGE_TIMEOUT_MS)
+            passwordRefused = true;
+            ++typedTries;
+            std::array<char, 256> buf{};
+            const std::string title = std::format("Jump host password for {}@{}", jump.user, jump.host);
+            ShowStatusId(IDS_LOG_REQUEST_PASS, nullptr, true);
+            const bool answered = RequestProcI(PluginNumber, RT_Password, title.c_str(), nullptr,
+                                               buf.data(), buf.size() - 1) != 0;
+            if (kbdCtx)
+                kbdCtx->promptDone = get_sys_ticks();
+            SFTP_LOG("JUMP", "Password asked again (try %d): answered=%d", typedTries, answered ? 1 : 0);
+            SecureZeroMemory(jump.password.data(), jump.password.size());
+            jump.password = answered ? buf.data() : "";
+            SecureZeroMemory(buf.data(), buf.size());
+            if (!answered) {
+                cancelled = true;
                 break;
+            }
         }
-        SFTP_LOG("JUMP", "Password auth rc=%d", r);
-        if (r == LIBSSH2_ERROR_NONE) {
-            ShowStatusId(IDS_LOG_JUMP_PASS_OK, nullptr, true);
-            return true;
-        }
-        ShowStatusId(IDS_LOG_JUMP_PASS_FAIL, nullptr, true);
     }
 
     // --- 4. Keyboard-interactive ---
-    if (canKbd && !jump.password.empty()) {
+    // A password the password method refused is not sent again here: every
+    // prompt goes to the user.
+    if (kbdCtx && passwordRefused)
+        kbdCtx->sent = true;
+    if (canKbd && !cancelled && !jump.password.empty()) {
         ShowStatusId(IDS_LOG_JUMP_KBD_TRY, nullptr, true);
         int r = LIBSSH2_ERROR_EAGAIN;
         const SYSTICKS authStart = get_sys_ticks();

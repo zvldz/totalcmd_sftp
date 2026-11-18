@@ -313,6 +313,19 @@ From this version the plugin comes in two builds: **classic**
   connection sent the old one and failed. It now replaces the session's
   password, in the profile too when the profile saves it. The stored
   password is no longer offered to a "New password" prompt.
+- **A mistyped password or passphrase is asked again.**
+  - A key passphrase that does not open the key, stored or typed, is asked
+    for again, up to three typed tries. Before, a stored wrong one of an
+    OpenSSH key was never asked for, and a wrong one typed for a PuTTY key
+    ended the connection with only a line in the log window; now that
+    case shows an error box (Cancel does not).
+  - A password the server refuses is asked for again, up to three typed
+    tries, on the target server and on the jump host. Before, one typo
+    ended the connection.
+  - A stored password the server already refused is not sent again by
+    the next method: the password method after keyboard-interactive, or
+    keyboard-interactive after the password method (jump host too). One
+    typo no longer costs two failed logins.
 - **Debug log: logins in more detail.** The test build's log lists the
   keyboard-interactive prompts (their text, never the answers) and each
   step of a jump host's login with its result.

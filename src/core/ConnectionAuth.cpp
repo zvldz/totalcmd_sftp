@@ -309,56 +309,88 @@ int PerformAuthentication(
             auth = LIBSSH2_ERROR_INVAL;
             skippedKeyboardFirst = canKeyboardAuth;
         }
+        // The stored password keyboard-interactive already sent and the
+        // server refused: sending it again only counts towards a lockout.
+        bool storedRefused = auth != 0 && !skippedKeyboardFirst && canKeyboardAuth &&
+                             ConnectSettings->InteractivePasswordSent;
+        bool cancelled = false;   // Cancel at a password prompt ends the login
         if (auth != 0 && canPasswordAuth) {
-            std::string passphrase = ConnectSettings->account_password;
-            if (passphrase.empty()) {
-                std::string title = std::format("SFTP password for {}@{}", ConnectSettings->user, ConnectSettings->server);
-                if (ConnectSettings->feedback) {
-                    ConnectSettings->feedback->RequestText(title, "", passphrase, true);
-                } else {
-                    std::array<char, 256> tmpBuf{};
-                    RequestProcI(PluginNumber, RT_Password, title.c_str(), nullptr, tmpBuf.data(), tmpBuf.size()-1);
-                    passphrase = tmpBuf.data();
-                    SecureZeroMemory(tmpBuf.data(), tmpBuf.size());
-                }
-                ConnectSettings->authPromptDone = get_sys_ticks();
-            }
-
-            ShowStatusId(IDS_AUTH_PASSWORD_FOR, ConnectSettings->user.c_str(), true);
-            LoadStr(buf, IDS_AUTH_PASSWORD);
-            const SYSTICKS authStart = get_sys_ticks();
-            int passIter = 0;
-            // PASSWORD_EXPIRED is final: the server wanted a new password and
-            // none was given. Calling again would re-enter libssh2 with the
-            // state of the change it already gave up.
-            while (1) {
-                auth = ConnectSettings->session->userauthPassword(ConnectSettings->user.c_str(), (unsigned)ConnectSettings->user.size(), passphrase.c_str(), (unsigned)passphrase.length(), &newpassfunc);
-                if (auth != LIBSSH2_ERROR_EAGAIN)
-                    break;
-                {
-                    const int dirs = ConnectSettings->session->blockDirections();
-                    const DWORD elapsed = (DWORD)get_ticks_between((std::max)(authStart, ConnectSettings->authPromptDone));
-                    SFTP_LOG("AUTH", "pass EAGAIN #%d dirs=0x%x elapsed=%u", ++passIter, dirs, elapsed);
-                    if (ProgressLoop(buf.data(), progress, progress + 10, &loop, &lasttime))
+            std::string passphrase = storedRefused ? std::string() : ConnectSettings->account_password;
+            bool typed = false;
+            // The stored password is sent once; a refused one, or none, is
+            // asked for, up to three times. Cancel ends it, and so does any
+            // answer but "refused": an expired password, a dropped link.
+            for (int typedTries = 0; ; ) {
+                if (passphrase.empty()) {
+                    if (typedTries == 3)
                         break;
-                    if (elapsed > SSH_AUTH_STAGE_TIMEOUT_MS) {
-                        ShowStatusId(IDS_LOG_PASS_AUTH_TIMEOUT, nullptr, true);
+                    ++typedTries;
+                    std::string title = std::format("SFTP password for {}@{}", ConnectSettings->user, ConnectSettings->server);
+                    bool answered;
+                    if (ConnectSettings->feedback) {
+                        answered = ConnectSettings->feedback->RequestText(title, "", passphrase, true);
+                    } else {
+                        std::array<char, 256> tmpBuf{};
+                        answered = RequestProcI(PluginNumber, RT_Password, title.c_str(), nullptr, tmpBuf.data(), tmpBuf.size()-1) != 0;
+                        passphrase = tmpBuf.data();
+                        SecureZeroMemory(tmpBuf.data(), tmpBuf.size());
+                    }
+                    ConnectSettings->authPromptDone = get_sys_ticks();
+                    SFTP_LOG("AUTH", "Password asked (try %d): answered=%d", typedTries, answered ? 1 : 0);
+                    if (!answered) {
+                        auth = LIBSSH2_ERROR_AUTHENTICATION_FAILED;
+                        cancelled = true;
                         break;
                     }
-                    WaitForSshIo(ConnectSettings);
+                    typed = true;
                 }
+
+                ShowStatusId(IDS_AUTH_PASSWORD_FOR, ConnectSettings->user.c_str(), true);
+                LoadStr(buf, IDS_AUTH_PASSWORD);
+                const SYSTICKS authStart = get_sys_ticks();
+                int passIter = 0;
+                // PASSWORD_EXPIRED is final: the server wanted a new password and
+                // none was given. Calling again would re-enter libssh2 with the
+                // state of the change it already gave up.
+                while (1) {
+                    auth = ConnectSettings->session->userauthPassword(ConnectSettings->user.c_str(), (unsigned)ConnectSettings->user.size(), passphrase.c_str(), (unsigned)passphrase.length(), &newpassfunc);
+                    if (auth != LIBSSH2_ERROR_EAGAIN)
+                        break;
+                    {
+                        const int dirs = ConnectSettings->session->blockDirections();
+                        const DWORD elapsed = (DWORD)get_ticks_between((std::max)(authStart, ConnectSettings->authPromptDone));
+                        SFTP_LOG("AUTH", "pass EAGAIN #%d dirs=0x%x elapsed=%u", ++passIter, dirs, elapsed);
+                        if (ProgressLoop(buf.data(), progress, progress + 10, &loop, &lasttime))
+                            break;
+                        if (elapsed > SSH_AUTH_STAGE_TIMEOUT_MS) {
+                            ShowStatusId(IDS_LOG_PASS_AUTH_TIMEOUT, nullptr, true);
+                            break;
+                        }
+                        WaitForSshIo(ConnectSettings);
+                    }
+                }
+                SFTP_LOG("AUTH", "pass done auth=%d iters=%d typed=%d", auth, passIter, typed ? 1 : 0);
+                if (auth != LIBSSH2_ERROR_AUTHENTICATION_FAILED)
+                    break;
+                if (!typed)
+                    storedRefused = true;
+                ShowStatusId(IDS_ERR_AUTH_PASSWORD, nullptr, true);
+                SecureZeroMemory(passphrase.data(), passphrase.size());
+                passphrase.clear();
+                typed = false;
             }
-            SFTP_LOG("AUTH", "pass done auth=%d iters=%d", auth, passIter);
             if (auth) {
                 SftpLogLastError("libssh2_userauth_password_ex: ", auth);
-                if (!skippedKeyboardFirst)
+                // Cancel at the prompt is the user's own choice, not an error.
+                if (!skippedKeyboardFirst && !cancelled)
                     ShowErrorId(IDS_ERR_AUTH_PASSWORD);
                 else
                     ShowStatusId(IDS_ERR_AUTH_PASSWORD, nullptr, true);
-            } else if (ConnectSettings->account_password.empty()) {
-                // Remember it for the reconnects that run mid-transfer. The
-                // stored form only takes it over when it holds nothing at
-                // all, so a profile that packs a passphrase keeps it.
+            } else if (typed) {
+                // Remember it for the reconnects that run mid-transfer, in
+                // place of a stored one the server refused. The stored form
+                // only takes it over when it holds nothing at all, so a
+                // profile that packs a passphrase keeps it.
                 ConnectSettings->account_password = passphrase;
                 if (ConnectSettings->password.empty())
                     ConnectSettings->password = passphrase;
@@ -366,13 +398,15 @@ int PerformAuthentication(
             SecureZeroMemory(passphrase.data(), passphrase.size());
         }
 
-        if (auth != 0 && skippedKeyboardFirst) {
+        if (auth != 0 && skippedKeyboardFirst && !cancelled) {
             // Retry keyboard-interactive after password failure for servers that expose
             // both methods but only accept one depending on account policy.
             ShowStatusId(IDS_AUTH_KEYBDINT_FOR, ConnectSettings->user.c_str(), true);
             LoadStr(buf, IDS_AUTH_KEYBDINT);
             pConnectSettings cs = ConnectSettings;
-            cs->InteractivePasswordSent = false;
+            // A stored password the password method had refused is not
+            // offered again: every prompt goes to the user.
+            cs->InteractivePasswordSent = storedRefused;
             const SYSTICKS authStart = get_sys_ticks();
             int kbdIter2 = 0;
             while ((auth = cs->session->userauthKeyboardInteractive(cs->user.c_str(), (unsigned)cs->user.size(), &kbd_callback)) == LIBSSH2_ERROR_EAGAIN) {

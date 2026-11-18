@@ -96,9 +96,10 @@
 
 <h3>Passphrase handling</h3>
 <ul>
-  <li>Passphrase is prompted at connection time</li>
+  <li>Without a stored passphrase, it is asked for at connection time; one that does not open the key, stored or typed, is asked for again, up to three times</li>
   <li>Once entered, it is kept in memory for the rest of the connection, so automatic reconnects do not ask again</li>
-  <li>It is not written to the session profile (by design) and is never sent to the server</li>
+  <li>A passphrase typed at the prompt is not written to the session profile, and no passphrase is ever sent to the server</li>
+  <li>To store one, put it in the session's password field (below)</li>
   <li>To avoid the prompt entirely, load the key into Pageant — Pageant caches the unlocked key for the session</li>
 </ul>
 
@@ -111,8 +112,10 @@
 <p>
   The first value is sent to the server, the second only unlocks the private key.
   Leave the first empty (<code>"","key passphrase"</code>) for key-only logins.
-  A field that does not have this exact shape is treated as a plain account
-  password, so ordinary passwords need no quoting.
+  A field that does not have this exact shape stands for either secret: it is
+  tried as the key's passphrase (which never leaves the machine) and, unless it
+  opened the key, sent as the account password. Ordinary passwords need no
+  quoting.
 </p>
 
 <h2>Using Pageant (SSH Agent)</h2>

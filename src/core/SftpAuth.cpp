@@ -117,36 +117,43 @@ static bool EndsWithNoCase(LPCSTR text, LPCSTR suffix) noexcept
     return _stricmp(text + tlen - slen, suffix) == 0;
 }
 
-static void ShowPpkConversionFailure(PpkConvertError convErr)
+// The reason a PuTTY key did not convert, in the status line or, when the
+// connection ends on it, in a message box.
+static void ShowPpkConversionFailure(PpkConvertError convErr, bool dialog)
 {
+    int id;
     switch (convErr) {
     case PpkConvertError::unsupported_version:
-        ShowStatusId(IDS_LOG_PPK_ERR_VERSION, nullptr, true);
+        id = IDS_LOG_PPK_ERR_VERSION;
         break;
     case PpkConvertError::unsupported_algorithm:
-        ShowStatusId(IDS_LOG_PPK_ERR_ALGO, nullptr, true);
+        id = IDS_LOG_PPK_ERR_ALGO;
         break;
     case PpkConvertError::unsupported_encryption:
     case PpkConvertError::unsupported_kdf:
-        ShowStatusId(IDS_LOG_PPK_ERR_ENC, nullptr, true);
+        id = IDS_LOG_PPK_ERR_ENC;
         break;
     case PpkConvertError::kdf_unavailable:
-        ShowStatusId(IDS_LOG_PPK_ERR_ARGON2, nullptr, true);
+        id = IDS_LOG_PPK_ERR_ARGON2;
         break;
     case PpkConvertError::kdf_limits_exceeded:
-        ShowStatusId(IDS_LOG_PPK_ERR_LIMITS, nullptr, true);
+        id = IDS_LOG_PPK_ERR_LIMITS;
         break;
     case PpkConvertError::inconsistent_key:
-        ShowStatusId(IDS_LOG_PPK_ERR_INCONSISTENT, nullptr, true);
+        id = IDS_LOG_PPK_ERR_INCONSISTENT;
         break;
     case PpkConvertError::passphrase_required:
     case PpkConvertError::bad_passphrase_or_mac:
-        ShowStatusId(IDS_LOG_PPK_ERR_PASSPHRASE, nullptr, true);
+        id = IDS_LOG_PPK_ERR_PASSPHRASE;
         break;
     default:
-        ShowStatusId(IDS_LOG_PPK_ERR_GENERIC, nullptr, true);
+        id = IDS_LOG_PPK_ERR_GENERIC;
         break;
     }
+    if (dialog)
+        ShowErrorId(id, nullptr);
+    else
+        ShowStatusId(id, nullptr, true);
 }
 
 static void ExpandAuthPath(char* path, size_t pathLen, LPCSTR user)
@@ -308,7 +315,9 @@ static bool PpkIsEncrypted(const char* ppkPath)
 }
 
 // A PuTTY key is converted in memory into `outConvertedPem`; its public half
-// is then derived from it, so the public key file is dropped.
+// is then derived from it, so the public key file is dropped. A passphrase
+// that does not open the key is asked for again, up to three times; when
+// every typed one fails, `failureDialog` puts the reason in a message box.
 static bool PreparePrivateKeyForAuth(
     LPCSTR user,
     LPCSTR host,
@@ -318,7 +327,8 @@ static bool PreparePrivateKeyForAuth(
     bool* outConverted,
     std::string& outConvertedPem,
     char* ioPromptBuf,
-    size_t ioPromptBufLen)
+    size_t ioPromptBufLen,
+    bool failureDialog)
 {
     if (!privKeyFile || !ioPubKeyPtr || !outConverted || !ioPromptBuf)
         return false;
@@ -333,27 +343,40 @@ static bool PreparePrivateKeyForAuth(
     AUTH_LOG("PPK conversion: converted=%d, convErr=%d", converted, convErr);
     ShowStatus(convStatus.c_str());
 
-    if (!converted && (convErr == PpkConvertError::passphrase_required ||
-                       convErr == PpkConvertError::bad_passphrase_or_mac)) {
+    bool typed = false;
+    for (int attempt = 1; attempt <= 3 && !converted &&
+                          (convErr == PpkConvertError::passphrase_required ||
+                           convErr == PpkConvertError::bad_passphrase_or_mac); ++attempt) {
+        if (attempt > 1)
+            ShowStatusId(IDS_LOG_PPK_ERR_PASSPHRASE, nullptr, true);
         std::array<char, 250> title{};
         std::array<char, 256> ppkPassBuf{};
-        title[0] = 0;
-        ppkPassBuf[0] = 0;
         LoadStr(ioPromptBuf, ioPromptBufLen, IDS_KEYPASSPHRASE);
         BuildUserAtServerTitle(title.data(), title.size(), IDS_PASSPHRASE, user, host);
-        if (RequestProcI(PluginNumber, RT_Password, title.data(), ioPromptBuf, ppkPassBuf.data(), ppkPassBuf.size() - 1)) {
-            converted = ConvertPpkInEitherEncoding(privKeyFile, ppkPassBuf.data(), outConvertedPem, &convErr);
-            // This prompt is only reached once the passphrase already held
-            // failed to open the key, so a conversion that succeeds here
-            // replaces it: what opened the key outranks what was assumed.
-            if (converted)
-                keyPassphrase = ppkPassBuf.data();
+        const bool answered = RequestProcI(PluginNumber, RT_Password, title.data(), ioPromptBuf,
+                                           ppkPassBuf.data(), ppkPassBuf.size() - 1) != 0;
+        AUTH_LOG("PPK passphrase asked (try %d): answered=%d empty=%d", attempt, answered, ppkPassBuf[0] == 0);
+        if (!answered) {
+            SecureZeroMemory(ppkPassBuf.data(), ppkPassBuf.size());
+            break;
         }
+        typed = true;
+        converted = ConvertPpkInEitherEncoding(privKeyFile, ppkPassBuf.data(), outConvertedPem, &convErr);
+        AUTH_LOG("PPK conversion with the typed passphrase: converted=%d, convErr=%d", converted, convErr);
+        // This prompt is only reached once the passphrase already held
+        // failed to open the key, so a conversion that succeeds here
+        // replaces it: what opened the key outranks what was assumed.
+        if (converted)
+            keyPassphrase = ppkPassBuf.data();
         SecureZeroMemory(ppkPassBuf.data(), ppkPassBuf.size());
     }
 
     if (!converted) {
-        ShowPpkConversionFailure(convErr);
+        // Cancel at the prompt is the user's own choice, not an error to
+        // show; a key that is broken or a passphrase typed wrong is.
+        const bool cancelled = !typed && (convErr == PpkConvertError::passphrase_required ||
+                                          convErr == PpkConvertError::bad_passphrase_or_mac);
+        ShowPpkConversionFailure(convErr, failureDialog && !cancelled);
         return false;
     }
 
@@ -567,7 +590,8 @@ int SftpAuthPubKeyOn(const SshAuthTarget& target, LPCSTR progressbuf, int progre
     if (!PreparePrivateKeyForAuth(target.user.c_str(), target.host.c_str(), *target.keyPassphrase,
                                   privkeyfile.data(), &pubkeyfileptr,
                                   &convertedPpk, convertedPem,
-                                  buf.data(), buf.size())) {
+                                  buf.data(), buf.size(),
+                                  onFailure != AuthFailureUi::StatusOnly)) {
         clearPassphrase();
         return -LIBSSH2_ERROR_FILE;
     }
@@ -602,6 +626,7 @@ int SftpAuthPubKeyOn(const SshAuthTarget& target, LPCSTR progressbuf, int progre
     const std::string encStatus = std::format("Key: {}", isencrypted ? "encrypted" : "unencrypted");
     AUTH_LOG("Encryption check result: %s", encStatus.c_str());
     ShowStatus(encStatus.c_str());
+    bool passphraseCancelled = false;
     if (isencrypted) {
         AUTH_LOG("Key is encrypted, requesting passphrase");
         std::array<char, 250> title{};
@@ -612,7 +637,8 @@ int SftpAuthPubKeyOn(const SshAuthTarget& target, LPCSTR progressbuf, int progre
             strlcpy(passphrase.data(), target.keyPassphrase->c_str(), passphrase.size()-1);
         } else {
             AUTH_LOG("No stored passphrase, requesting from user");
-            RequestProcI(PluginNumber, RT_Password, title.data(), buf.data(), passphrase.data(), passphrase.size()-1);
+            passphraseCancelled = !RequestProcI(PluginNumber, RT_Password, title.data(), buf.data(),
+                                                passphrase.data(), passphrase.size()-1);
         }
     } else {
         AUTH_LOG("Key is NOT encrypted, no passphrase needed");
@@ -666,30 +692,56 @@ int SftpAuthPubKeyOn(const SshAuthTarget& target, LPCSTR progressbuf, int progre
         }
         return rc;
     };
-    auth = tryKey(passphrasePtr);
-    AUTH_LOG("userauthPubkeyFromMemory result=%d", auth);
+    // Both errors are raised while reading the key, before the server is
+    // asked: the passphrase did not open it.
+    const auto keyNotOpened = [](int rc) {
+        return rc == LIBSSH2_ERROR_KEYFILE_AUTH_FAILED || rc == LIBSSH2_ERROR_FILE;
+    };
+    // A key that would not open with the passphrase as typed gets the same
+    // passphrase in the system codepage, as Windows tools encrypt with it.
+    const auto tryKeyInEitherEncoding = [&](const char* keyPass) {
+        int rc = tryKey(keyPass);
+        AUTH_LOG("userauthPubkeyFromMemory result=%d", rc);
+        if (keyNotOpened(rc) && keyPass && HasNonAscii(keyPass)) {
+            std::string acp = unicode_util::internal_to_acp(keyPass);
+            rc = tryKey(acp.c_str());
+            SecureZeroMemory(acp.data(), acp.size());
+            AUTH_LOG("userauthPubkeyFromMemory with the passphrase in the system codepage: result=%d", rc);
+        }
+        return rc;
+    };
+    auth = tryKeyInEitherEncoding(passphrasePtr);
+    // A stored or typed passphrase that does not open the key is asked for
+    // again: three typed ones in all. Cancel ends the asking.
+    const int retries = target.keyPassphrase->empty() ? 2 : 3;
+    for (int attempt = 1; attempt <= retries && isencrypted && !passphraseCancelled && keyNotOpened(auth); ++attempt) {
+        ShowStatusId(IDS_LOG_PPK_ERR_PASSPHRASE, nullptr, true);
+        std::array<char, 250> title{};
+        BuildUserAtServerTitle(title.data(), title.size(), IDS_PASSPHRASE, target.user.c_str(), target.host.c_str());
+        LoadStr(buf, IDS_KEYPASSPHRASE);
+        clearPassphrase();
+        const bool answered = RequestProcI(PluginNumber, RT_Password, title.data(), buf.data(),
+                                           passphrase.data(), passphrase.size() - 1) != 0;
+        AUTH_LOG("Key passphrase asked again (try %d): answered=%d", attempt, answered);
+        LoadStr(buf, IDS_AUTH_PUBKEY);
+        if (!answered)
+            break;
+        passphrasePtr = passphrase.data();
+        auth = tryKeyInEitherEncoding(passphrasePtr);
+    }
     // A PuTTY key opened during conversion, with the passphrase held, when
     // its header names a cipher.
     bool keyOpenedWithPassphrase = convertedPpk && !target.keyPassphrase->empty() &&
                                    PpkIsEncrypted(privkeyfile.data());
-    // A key that would not open with the passphrase as typed (both errors are
-    // raised while reading the key, before the server is asked) gets the same
-    // passphrase in the system codepage, as Windows tools encrypt with it.
-    if ((auth == LIBSSH2_ERROR_KEYFILE_AUTH_FAILED || auth == LIBSSH2_ERROR_FILE) &&
-        passphrasePtr && HasNonAscii(passphrasePtr)) {
-        std::string acp = unicode_util::internal_to_acp(passphrasePtr);
-        auth = tryKey(acp.c_str());
-        SecureZeroMemory(acp.data(), acp.size());
-        AUTH_LOG("userauthPubkeyFromMemory with the passphrase in the system codepage: result=%d", auth);
-    }
-    // Both errors are raised while reading the key, before the server is
-    // asked; anything else means the passphrase opened it.
-    if (isencrypted && passphrasePtr && passphrasePtr[0] &&
-        auth != LIBSSH2_ERROR_KEYFILE_AUTH_FAILED && auth != LIBSSH2_ERROR_FILE)
+    // Any other result means the passphrase opened the key.
+    if (isencrypted && passphrasePtr && passphrasePtr[0] && !keyNotOpened(auth))
         keyOpenedWithPassphrase = true;
     if (target.keyOpened)
         *target.keyOpened = keyOpenedWithPassphrase;
     if (auth) {
+        if (auth == LIBSSH2_ERROR_AUTHENTICATION_FAILED || auth == LIBSSH2_ERROR_PUBLICKEY_UNVERIFIED)
+            AUTH_LOG("The server refused the key (user=%s): not in its authorized_keys, or not readable there",
+                     target.user.c_str());
         cleanupConvertedIfNeeded();
         char* errMsg = nullptr;
         int errLen = 0;
