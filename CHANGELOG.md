@@ -967,7 +967,9 @@ From this version the plugin comes in two builds: **classic**
   resume a download, move onto an existing file with and without
   overwrite, set a file's time and read it back, run a command and check
   its result and output, and upload names with control characters, in
-  every transfer mode. They also connect over IPv6, through SOCKS4,
+  every transfer mode. The shell and SCP-only modes run against a shell
+  that writes systemd 257's OSC 3008 records. They also connect over
+  IPv6, through SOCKS4,
   SOCKS4A and an HTTP proxy with a user and password, and check that a
   SOCKS5 or HTTP
   proxy refusing the password ends the connect with an error.

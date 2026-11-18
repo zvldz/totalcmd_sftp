@@ -12,6 +12,8 @@ RUN apt-get update \
 
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod 755 /entrypoint.sh
+# systemd 257's OSC 3008 records in interactive shells, without systemd.
+COPY 80-osc-context.sh /etc/profile.d/80-osc-context.sh
 
 EXPOSE 22
 ENTRYPOINT ["/entrypoint.sh"]
