@@ -338,8 +338,9 @@ From this version the plugin comes in two builds: **classic**
 - **Debug log: logins in more detail.** The test build's log lists the
   keyboard-interactive prompts (their text, never the answers), each step
   of a jump host's login with its result, the proxy used with each
-  answer it gave, and the TCP connect: the address tried, how long it
-  took, and the error when it failed.
+  answer it gave, the TCP connect: the address tried, how long it took,
+  and the error when it failed, and the connection a background transfer
+  closes when it ends.
 - **SCP-only sessions.**
   - Setting a file's time (Total Commander's Change attributes) failed
     on a session without SFTP; it is now set with `touch`, as after an

@@ -866,7 +866,13 @@ static void StatusInfo(const std::string& remoteDir, int InfoStartEnd, int InfoO
                 // background transfers keep theirs.
                 std::array<char, MAX_PATH> endName{};
                 GetDisplayNameFromPath(RemoteDir, endName.data(), endName.size() - 1);
-                DisconnectServerForThread(endName.data(), GetCurrentThreadId());
+                // A transfer into the plugin root (a session file) had no
+                // connection to close.
+                if (endName[0]) {
+                    const size_t closed = DisconnectServerForThread(endName.data(), GetCurrentThreadId());
+                    SFTP_LOG("STATUS", "background transfer done: %zu connection(s) of '%s' closed, tid=%lu",
+                             closed, endName.data(), GetCurrentThreadId());
+                }
                 return;
             }
             // Only a transfer into or out of a saved session needs a
