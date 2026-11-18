@@ -1,17 +1,19 @@
 # Proxies in front of the test SSH server, for the plugin's proxy modes:
 #   1080  SOCKS5, no authentication           (microsocks)
 #   1081  SOCKS5, user proxyuser / proxypass  (microsocks)
+#   1082  SOCKS4 and SOCKS4A                  (ssh -D into the test server)
 #   8888  HTTP CONNECT                         (tinyproxy)
+#   8889  HTTP CONNECT, proxyuser / proxypass  (tinyproxy)
 FROM debian:stable-slim
 
 RUN apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        microsocks tinyproxy \
+        microsocks tinyproxy openssh-client \
  && rm -rf /var/lib/apt/lists/*
 
-COPY tinyproxy.conf /etc/tinyproxy/tinyproxy.conf
+COPY tinyproxy.conf tinyproxy-auth.conf /etc/tinyproxy/
 COPY proxy-entrypoint.sh /proxy-entrypoint.sh
 RUN chmod 755 /proxy-entrypoint.sh
 
-EXPOSE 1080 1081 8888
+EXPOSE 1080 1081 1082 8888 8889
 ENTRYPOINT ["/proxy-entrypoint.sh"]

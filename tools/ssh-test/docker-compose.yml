@@ -11,8 +11,10 @@
 # ssh-nosub  port 2223, no subsystem: SFTP only through
 #            sftpservercommand=/usr/lib/openssh/sftp-server
 # ssh-hk     port 2224, whose host key a test replaces mid-run
-# proxy      SOCKS5 on 1080 (open) and 1081 (proxyuser / proxypass), HTTP
-#            CONNECT on 8888; they reach the server as ssh:22
+# proxy      SOCKS5 on 1080 (open) and 1081 (proxyuser / proxypass), SOCKS4
+#            and SOCKS4A on 1082, HTTP CONNECT on 8888 (open) and 8889
+#            (proxyuser / proxypass); they reach the server as ssh:22, and
+#            1082 as 127.0.0.1:22 too
 
 x-ssh: &ssh
   build: .
@@ -47,7 +49,11 @@ services:
     restart: "no"
     depends_on:
       - ssh
+    volumes:
+      - ./keys:/keys:ro
     ports:
       - "127.0.0.1:1080:1080"
       - "127.0.0.1:1081:1081"
+      - "127.0.0.1:1082:1082"
       - "127.0.0.1:8888:8888"
+      - "127.0.0.1:8889:8889"

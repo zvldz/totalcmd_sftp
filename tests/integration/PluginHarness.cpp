@@ -9,7 +9,7 @@
 //   mode         the transfer mode the session is set up for (sftp, scp,
 //                scponly, shell, text, text-scp, text-scponly, nosub,
 //                nosub-bad, postcmd, key-*, classic-gate, secrets, jump-*,
-//                pass-store, socks5*, http-proxy, hostkey, netfail, php*); the
+//                pass-store, socks5*, socks4*, http-*, hostkey, netfail, php*); the
 //                text* modes also run the text-mode (CRLF <-> LF) checks; php*
 //                (PHP Agent) skips the chmod checks; secrets needs
 //                no server: it checks where passwords end up when sessions are
@@ -509,6 +509,15 @@ int wmain(int argc, wchar_t** argv)
         seconds = timed(L"\\it-netfail-silent", listed);
         Check(!listed && seconds < 45,
               "a server that never answers the handshake is given up on, in " + std::to_string(seconds) + " s");
+        // The proxy refuses the user's password: an error naming the proxy,
+        // not a hang and not an SSH login attempt.
+        listed = true;
+        const int messagesBefore = g_messages;
+        seconds = timed(L"\\it-netfail-socks5pass", listed);
+        Check(!listed && seconds < 15,
+              "a SOCKS5 proxy refusing the password fails the connect, in " + std::to_string(seconds) + " s");
+        Check(g_messages > messagesBefore && g_lastMessage.find(L"SOCKS") != std::wstring::npos,
+              "the error names the SOCKS proxy");
         Check(g_unexpectedPrompts == 0, "no unexpected prompts");
         std::printf("%d passed, %d failed, %d known\n", g_passed, g_failed, g_known);
         return g_failed == 0 ? 0 : 1;
