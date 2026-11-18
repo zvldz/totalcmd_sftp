@@ -773,6 +773,8 @@ static void ApplyEnumerationToCache(sftp::IExternalSessionSource* adapter,
     sftp::EnumerationResult result = channelTag == "standard"
         ? adapter->EnumerateStandard()
         : adapter->EnumerateCustomPath(unicode_util::internal_to_utf8(channelTag));
+    sftp::GetImportCache().SetChannelReachable(sourceId, channelTag,
+                                               result.status != sftp::EnumerationStatus::Unreachable);
     switch (result.status) {
         case sftp::EnumerationStatus::Unreachable:
             return;

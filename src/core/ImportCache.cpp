@@ -228,11 +228,27 @@ std::string ImportCache::SectionNameForConnect(const std::string& sourceId,
                                                 const std::string& displayName) const
 {
     std::lock_guard<std::mutex> lock(m_mutex);
+    const CachedSessionRef* fallback = nullptr;
     for (const auto& r : m_sessions) {
-        if (r.sourceId == sourceId && r.displayName == displayName)
+        if (r.sourceId != sourceId || r.displayName != displayName)
+            continue;
+        if (!m_unreachable.count(sourceId + "\n" + r.sourceOrigin))
             return SectionName(sourceId, r.sourceOrigin, displayName);
+        if (!fallback)
+            fallback = &r;
     }
-    return {};
+    return fallback ? SectionName(sourceId, fallback->sourceOrigin, displayName) : std::string();
+}
+
+void ImportCache::SetChannelReachable(const std::string& sourceId,
+                                      const std::string& channel, bool reachable)
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    const std::string key = sourceId + "\n" + channel;
+    if (reachable)
+        m_unreachable.erase(key);
+    else
+        m_unreachable.insert(key);
 }
 
 void ImportCache::Load()

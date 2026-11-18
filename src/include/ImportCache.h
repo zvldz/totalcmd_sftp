@@ -1,6 +1,7 @@
 #pragma once
 
 #include <mutex>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -48,14 +49,21 @@ public:
                                    const std::string& channel,
                                    const std::string& displayName) noexcept;
 
-    // Full on-disk INI section name of *any* channel that currently caches
-    // the (sourceId, displayName). Used by callers that need to read a
-    // session's fields (virtual connect / F5 materialise / F5 export)
-    // without knowing which channel produced them — every channel's copy
-    // has the same connect fields, so the first hit is authoritative.
-    // Returns empty string if the session is not cached.
+    // Full on-disk INI section name of a channel that caches the (sourceId,
+    // displayName), for callers that read a session's fields (virtual
+    // connect / F5 materialise / F5 export) without knowing which channel
+    // produced them. Two channels may hold the same name — a folder that
+    // has gone keeps its sessions — so one that answered the last scan wins
+    // over one that did not: the gone folder's copy is old, and its source
+    // can no longer be read for the password. Returns empty string if the
+    // session is not cached.
     std::string SectionNameForConnect(const std::string& sourceId,
                                        const std::string& displayName) const;
+
+    // Whether (sourceId, channel) could be read at its last scan. A channel
+    // never scanned in this run counts as readable.
+    void SetChannelReachable(const std::string& sourceId,
+                             const std::string& channel, bool reachable);
 
     // The dependency a cached session cannot be served without, empty when it
     // has none. Read straight from the section so callers that already hold
@@ -104,6 +112,8 @@ private:
     std::string                   m_cachePath;   // Resolved once in ctor
     bool                          m_loaded = false;
     std::vector<CachedSessionRef> m_sessions;    // All sessions, all sources
+    // "<sourceId>\n<channel>" of channels the last scan could not read.
+    std::set<std::string>         m_unreachable;
 };
 
 // Meyers singleton.

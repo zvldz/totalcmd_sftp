@@ -326,13 +326,20 @@ From this version the plugin comes in two builds: **classic**
     the next method: the password method after keyboard-interactive, or
     keyboard-interactive after the password method (jump host too). One
     typo no longer costs two failed logins.
+- **An imported session is taken from the folder that still has it.**
+  With two custom locations holding the same session name — one of them
+  gone, its sessions kept in the cache — connecting, F3 or F5 took the
+  gone folder's copy: old settings, and a saved KiTTY or FileZilla
+  password asked for again since that folder could no longer be read.
+  The copy from a folder that answered the last scan is used now.
 - **An HTTP proxy's refusal says why.** The error for a connection the
   HTTP proxy refused now carries the proxy's status line, such as
   `HTTP/1.1 407` for a wrong password.
 - **Debug log: logins in more detail.** The test build's log lists the
   keyboard-interactive prompts (their text, never the answers), each step
-  of a jump host's login with its result, and the proxy used with each
-  answer it gave.
+  of a jump host's login with its result, the proxy used with each
+  answer it gave, and the TCP connect: the address tried, how long it
+  took, and the error when it failed.
 - **SCP-only sessions.**
   - Setting a file's time (Total Commander's Change attributes) failed
     on a session without SFTP; it is now set with `touch`, as after an

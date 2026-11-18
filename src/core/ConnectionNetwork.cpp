@@ -33,7 +33,10 @@ int EstablishSocketConnection(pConnectSettings ConnectSettings, LPCSTR connectto
     // Looked up in Unicode: a host name with characters outside the Windows
     // codepage would not survive the ANSI form.
     ADDRINFOW* res = nullptr;
+    SFTP_LOG("NET", "TCP connect to '%s:%d'", connecttoserver, connecttoport);
+    const SYSTICKS connectStart = get_sys_ticks();
     if (GetAddrInfoW(unicode_util::internal_to_wide(connecttoserver).c_str(), portStr.c_str(), &hints, &res) != 0) {
+        SFTP_LOG("NET", "DNS lookup failed (WSA error %d)", WSAGetLastError());
         ShowErrorId(IDS_ERR_GETADDRINFO);
         if (LogProc || LogProcW) {
             const std::string msg = std::format("SFTP: DNS lookup failed for '{}' (WSA error {})", connecttoserver, WSAGetLastError());
@@ -42,6 +45,7 @@ int EstablishSocketConnection(pConnectSettings ConnectSettings, LPCSTR connectto
         return -20;
     }
     ConnectSettings->sock = INVALID_SOCKET;
+    int connectError = 0;   // why the last address failed, for the log
     for (ADDRINFOW* ai = res; ai && !cancelled; ai = ai->ai_next) {
         closesocket(ConnectSettings->sock);
         ConnectSettings->sock = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
@@ -53,7 +57,9 @@ int EstablishSocketConnection(pConnectSettings ConnectSettings, LPCSTR connectto
         if (getnameinfo(ai->ai_addr, static_cast<socklen_t>(ai->ai_addrlen), host.data(), static_cast<DWORD>(host.size()),
                         port.data(), static_cast<DWORD>(port.size()), NI_NUMERICHOST | NI_NUMERICSERV) == 0) {
             const bool v6 = ai->ai_family == AF_INET6;
-            ShowStatus(std::format("IP address: {}{}{}:{}", v6 ? "[" : "", host.data(), v6 ? "]" : "", port.data()).c_str());
+            const std::string address = std::format("{}{}{}:{}", v6 ? "[" : "", host.data(), v6 ? "]" : "", port.data());
+            ShowStatus(("IP address: " + address).c_str());
+            SFTP_LOG("NET", "trying %s", address.c_str());
         }
 
         int nodelay = 1;
@@ -62,14 +68,23 @@ int EstablishSocketConnection(pConnectSettings ConnectSettings, LPCSTR connectto
         EnableTcpKeepAlive(ConnectSettings->sock);
         SetBlockingSocket(ConnectSettings->sock, false);
         connected = connect(ConnectSettings->sock, ai->ai_addr, (int)ai->ai_addrlen) == 0;
-        if (!connected && WSAGetLastError() == WSAEWOULDBLOCK) {
+        connectError = connected ? 0 : WSAGetLastError();
+        if (!connected && connectError == WSAEWOULDBLOCK) {
             while (true) {
                 if (IsSocketWritable(ConnectSettings->sock)) {
                     connected = true;
                     break;
                 }
-                if (IsSocketError(ConnectSettings->sock))
+                if (IsSocketError(ConnectSettings->sock)) {
+                    // A failed non-blocking connect keeps its reason on the
+                    // socket: 10060 timed out, 10061 refused.
+                    int soError = 0;
+                    int soLen = sizeof(soError);
+                    getsockopt(ConnectSettings->sock, SOL_SOCKET, SO_ERROR,
+                               reinterpret_cast<char*>(&soError), &soLen);
+                    connectError = soError;
                     break;
+                }
                 // Cancel ends the connect, not just the wait on this address.
                 if (ProgressLoop(progressBuf.data(), 0, progress, &loop, &lasttime)) {
                     cancelled = true;
@@ -81,6 +96,9 @@ int EstablishSocketConnection(pConnectSettings ConnectSettings, LPCSTR connectto
             break;
     }
     FreeAddrInfoW(res);
+    SFTP_LOG("NET", "TCP connect %s after %d ms (WSA error %d)",
+             connected ? "done" : cancelled ? "cancelled" : "failed",
+             static_cast<int>(get_ticks_between(connectStart)), connected ? 0 : connectError);
 
     if (!connected) {
         // A connect the user cancelled ends without an error box.
