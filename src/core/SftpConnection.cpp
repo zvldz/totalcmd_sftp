@@ -324,7 +324,10 @@ static bool IsTcpSocketDead(SOCKET s) noexcept
     FD_SET(s, &rfds);
     struct timeval tv = { 0, 0 };  // instant, no wait
     const int selRet = select(0, &rfds, nullptr, nullptr, &tv);
-    if (selRet < 0)                  return true;   // select failed → treat as dead
+    if (selRet < 0) {                                // select failed → treat as dead
+        SFTP_LOG("NET", "connection dead: select failed (WSA error %d)", WSAGetLastError());
+        return true;
+    }
     if (selRet == 0)                 return false;  // no data pending, idle-but-alive
 
     // Socket is readable — could be legit incoming data OR a FIN/RST. Peek
@@ -333,10 +336,18 @@ static bool IsTcpSocketDead(SOCKET s) noexcept
     // dead connection.
     char peek = 0;
     const int rc = recv(s, &peek, 1, MSG_PEEK);
-    if (rc == 0)                     return true;
+    // Which side ended it: a FIN is the server (or something next to it)
+    // closing; 10054 a reset; 10060/10052 the keepalive found no path.
+    if (rc == 0) {
+        SFTP_LOG("NET", "connection dead: closed by the peer (FIN)");
+        return true;
+    }
     if (rc < 0) {
         const int err = WSAGetLastError();
-        return err != WSAEWOULDBLOCK;
+        if (err == WSAEWOULDBLOCK)
+            return false;
+        SFTP_LOG("NET", "connection dead: WSA error %d", err);
+        return true;
     }
     return false;  // real data present → alive
 }

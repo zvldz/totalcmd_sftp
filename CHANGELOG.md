@@ -360,7 +360,8 @@ side works; full operation of the extra build there is not guaranteed.
   and the error when it failed, and the connection a background transfer
   closes when it ends. Its first line names the program that loaded the
   plugin and its process, as Total Commander and Double Commander write to
-  the same file.
+  the same file. A connection found dead before reuse is logged with why:
+  closed by the server, reset, or no answer to the keepalive.
 - **SCP-only sessions.**
   - Setting a file's time (Total Commander's Change attributes) failed
     on a session without SFTP; it is now set with `touch`, as after an
