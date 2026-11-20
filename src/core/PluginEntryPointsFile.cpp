@@ -1443,7 +1443,7 @@ static bool RemoteFileExists(pConnectSettings cs, LPCWSTR remoteRelative)
         do {
             rc = cs->sftpsession->lstat(pathA.c_str(), &attr);
             if (rc == LIBSSH2_ERROR_EAGAIN)
-                IsSocketReadable(cs->sock);
+                WaitForSshIo(cs);
         } while (rc == LIBSSH2_ERROR_EAGAIN);
         if (rc >= 0)
             return true;

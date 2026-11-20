@@ -58,7 +58,7 @@ std::unique_ptr<ISftpHandle> OpenSftpFileWithRetry(
             ShowStatusId(IDS_LOG_SFTP_OPEN_TIMEOUT, nullptr, true);
             break;
         }
-        IsSocketReadable(cs->sock);
+        WaitForSshIo(cs);
     } while (!handle);
     return handle;
 }
@@ -279,7 +279,7 @@ int DownloadLoop(pConnectSettings cs, Handle& remote, LocalFile& local,
                     break;
                 }
             }
-            IsSocketReadable(cs->sock);
+            WaitForSshIo(cs);
         } else if (len < 0) {
             SftpLogLastError("Download read error: ", len);
             ret = SFTP_READFAILED;
@@ -606,7 +606,7 @@ int SftpUploadFileW(pConnectSettings cs, LPCWSTR LocalName, LPCWSTR RemoteName,
                     ShowStatusId(IDS_LOG_SCP_OPEN_TIMEOUT, nullptr, true);
                     break;
                 }
-                IsSocketReadable(cs->sock);
+                WaitForSshIo(cs);
             }
             if (!scpHandle) {
                 SFTP_LOG("SCP", "Upload: the scp channel did not open (%d)", openErr);
@@ -632,7 +632,7 @@ int SftpUploadFileW(pConnectSettings cs, LPCWSTR LocalName, LPCWSTR RemoteName,
             do {
                 rc = sftpHandle->fstat(&attr, 0);
                 if (rc == LIBSSH2_ERROR_EAGAIN)
-                    IsSocketReadable(cs->sock);
+                    WaitForSshIo(cs);
             } while (rc == LIBSSH2_ERROR_EAGAIN);
             // Resuming continues a remote file that is a prefix of this one.
             // A size the server does not report, or one larger than the local
@@ -779,7 +779,7 @@ int SftpUploadFileW(pConnectSettings cs, LPCWSTR LocalName, LPCWSTR RemoteName,
                 do {
                     int rc = cs->sftpsession->setstat(remotePath.c_str(), &attr);
                     if (rc != LIBSSH2_ERROR_EAGAIN) break;
-                    IsSocketReadable(cs->sock);
+                    WaitForSshIo(cs);
                 } while (true);
             }
         }

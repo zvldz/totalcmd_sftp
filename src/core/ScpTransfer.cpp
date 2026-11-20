@@ -226,7 +226,7 @@ static ScpSource ScpSourceState(pConnectSettings cs, const char* filename)
     do {
         rc = cs->sftpsession->lstat(filename, &attr);
         if (rc == LIBSSH2_ERROR_EAGAIN)
-            IsSocketReadable(cs->sock);
+            WaitForSshIo(cs);
     } while (rc == LIBSSH2_ERROR_EAGAIN);
     const unsigned long fx = (rc == LIBSSH2_ERROR_SFTP_PROTOCOL) ? cs->sftpsession->lastError() : 0;
     SFTP_LOG("SCP", "missing-check '%s': lstat rc=%d fx=%lu", filename, rc, fx);
@@ -260,7 +260,7 @@ bool OpenScpDownloadChannel(pConnectSettings cs, const char* filename,
                     ShowStatusId(IDS_LOG_SCP_OPEN_TIMEOUT, nullptr, true);
                     break;
                 }
-                IsSocketReadable(cs->sock);
+                WaitForSshIo(cs);
             } else if (!didReconnect &&
                        (err == LIBSSH2_ERROR_SOCKET_DISCONNECT ||
                         err == LIBSSH2_ERROR_SOCKET_RECV ||
@@ -428,7 +428,7 @@ int ShellScpDownloadFile(pConnectSettings cs,
                     ShowStatus("SCP download stalled.");
                     return SFTP_READFAILED;
                 }
-                IsSocketReadable(cs->sock);
+                WaitForSshIo(cs);
             } else {
                 return SFTP_READFAILED;
             }

@@ -315,7 +315,7 @@ bool WriteShellCommand(pConnectSettings cs, const std::string& command, DWORD ti
         if (std::chrono::steady_clock::now() - start > std::chrono::milliseconds(timeoutMs))
             return false;
         if (cs->sock != INVALID_SOCKET)
-            IsSocketReadable(cs->sock);
+            WaitForSshIo(cs);
         else
             Sleep(25);
     }

@@ -310,6 +310,13 @@ side works; full operation of the extra build there is not guaranteed.
 
 ### Fixes
 
+- **Waits over a jump host go through its tunnel.** The SFTP and SCP
+  loops that wait for the server (listing, folders, links, transfers,
+  the persistent shell) watched the raw socket; over a jump host that is
+  the socket to the jump host, while the tunnel's own wait knows which
+  way the inner session is blocked. They all use that wait now.
+  *Idea from [wzj-zz/totalcmd_sftp](https://github.com/wzj-zz/totalcmd_sftp)
+  f432b957, a3b51b65.*
 - **Double Commander: viewing a file no longer drops the session.** F3
   there reports a background transfer but runs it in the panel's thread.
   The plugin opened a second connection in place of the panel's and closed
