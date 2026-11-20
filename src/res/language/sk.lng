@@ -348,6 +348,13 @@
 12177=ProxyJump: overenie na prechodovom hostiteľovi zlyhalo.\nPoužívateľ: {}
 12178=ProxyJump: nie je možné otvoriť tunel k {}\n{}
 12179=Agent PHP na serveri je pre túto verziu doplnku príliš starý: neprijíma podpísané požiadavky. Nahrajte sftp.php dodaný s doplnkom.
+12180={} - PHP Shell (pseudoterminál cez HTTP)
+12181=PHP Shell: pseudoterminál cez HTTP, obsluhovaný súborom sftp.php na serveri.
+12182=Zadajte príkaz a stlačte Enter. Hore/Dole: história, 'history -c' ju vymaže. Celoobrazovkové programy (vi, top, mc) tu nefungujú.
+12183=História vymazaná.
+12184=Kopírovať
+12185=Prilepiť
+12186=Vybrať všetko
 12089=SFTP
 12104=(ručne)
 12105= (chýba)

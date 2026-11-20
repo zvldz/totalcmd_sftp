@@ -325,6 +325,14 @@ side works; full operation of the extra build there is not guaranteed.
   thread each time; the connections opened there stayed until DC closed.
   They are now closed when the copy ends. These Double Commander paths are
   taken only when the plugin does not run in Total Commander.
+- **PHP Shell console: title, icon, translations, UTF-8** (extra build).
+  The window had an empty title bar and no icon; it now says "*session* -
+  PHP Shell (pseudo-terminal over HTTP)" in the user's language and
+  carries the plugin's icon, and its welcome lines and menu are
+  translated. Server output and typed commands are UTF-8 end to end, so
+  file names outside the system code page show, and are sent, as they
+  are.
+  *From [wesmar/sftp](https://github.com/wesmar/sftp) 36f8c67.*
 - **A password the server makes you change is saved.** With an expired
   password (`chage -d 0`), OpenSSH asks for the current one and a new one
   at keyboard-interactive prompts. The new password was not kept: the next

@@ -338,6 +338,13 @@
 12177=ProxyJump: uwierzytelnianie na hoście pośrednim nie powiodło się.\nUżytkownik: {}
 12178=ProxyJump: nie można otworzyć tunelu do {}\n{}
 12179=Agent PHP na serwerze jest za stary dla tej wersji wtyczki: nie przyjmuje podpisanych żądań. Wgraj sftp.php dołączony do wtyczki.
+12180={} - PHP Shell (pseudoterminal przez HTTP)
+12181=PHP Shell: pseudoterminal przez HTTP, obsługiwany przez sftp.php na serwerze.
+12182=Wpisz polecenie i naciśnij Enter. Góra/Dół: historia, 'history -c' ją czyści. Programy pełnoekranowe (vi, top, mc) tu nie działają.
+12183=Historia wyczyszczona.
+12184=Kopiuj
+12185=Wklej
+12186=Zaznacz wszystko
 12089=SFTP
 12090=Szukam peera LAN Pair w sieci lokalnej...
 12091={} s

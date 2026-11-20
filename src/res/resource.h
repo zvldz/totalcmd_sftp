@@ -537,6 +537,13 @@
 #define IDS_ERR_JUMP_AUTH               12177  // jump host login failed ({} = user)
 #define IDS_ERR_JUMP_TUNNEL             12178  // tunnel through jump host refused ({} = target, {} = reason)
 #define IDS_PHP_ERR_AGENT_OUTDATED      12179  // PHP agent does not sign requests: upload the new sftp.php
+#define IDS_PHPSHELL_TITLE           12180
+#define IDS_PHPSHELL_READY           12181
+#define IDS_PHPSHELL_HELP            12182
+#define IDS_PHPSHELL_HISTORY_CLEARED 12183
+#define IDS_PHPSHELL_COPY            12184
+#define IDS_PHPSHELL_PASTE           12185
+#define IDS_PHPSHELL_SELECT_ALL      12186
 
 // Next default values for new objects
 //

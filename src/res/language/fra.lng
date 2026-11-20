@@ -349,6 +349,13 @@
 12177=ProxyJump : échec de l'authentification sur l'hôte intermédiaire.\nUtilisateur : {}
 12178=ProxyJump : impossible d'ouvrir le tunnel vers {}\n{}
 12179=L'agent PHP du serveur est trop ancien pour cette version du plugin : il n'accepte pas les requêtes signées. Envoyez le sftp.php fourni avec le plugin.
+12180={} - PHP Shell (pseudo-terminal via HTTP)
+12181=PHP Shell : un pseudo-terminal via HTTP, exécuté par sftp.php sur le serveur.
+12182=Tapez une commande et appuyez sur Entrée. Haut/Bas : historique, 'history -c' l'efface. Les programmes plein écran (vi, top, mc) ne fonctionnent pas ici.
+12183=Historique effacé.
+12184=Copier
+12185=Coller
+12186=Tout sélectionner
 12089=SFTP
 12104=(manuel)
 12105= (introuvable)

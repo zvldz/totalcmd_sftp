@@ -348,6 +348,13 @@
 12177=ProxyJump: aanmelden bij de tussenliggende host mislukt.\nGebruiker: {}
 12178=ProxyJump: kan geen tunnel openen naar {}\n{}
 12179=De PHP-agent op de server is te oud voor deze pluginversie: hij accepteert geen ondertekende verzoeken. Upload de sftp.php die bij de plugin hoort.
+12180={} - PHP Shell (pseudo-terminal via HTTP)
+12181=PHP Shell: een pseudo-terminal via HTTP, uitgevoerd door sftp.php op de server.
+12182=Typ een opdracht en druk op Enter. Omhoog/omlaag: geschiedenis, 'history -c' wist die. Programma's op volledig scherm (vi, top, mc) werken hier niet.
+12183=Geschiedenis gewist.
+12184=Kopiëren
+12185=Plakken
+12186=Alles selecteren
 12089=SFTP
 12104=(handmatig)
 12105= (ontbreekt)

@@ -349,6 +349,13 @@
 12177=ProxyJump: Anmeldung am Jump-Host fehlgeschlagen.\nBenutzer: {}
 12178=ProxyJump: Tunnel zu {} kann nicht geöffnet werden\n{}
 12179=Der PHP-Agent auf dem Server ist für diese Plugin-Version zu alt: Er nimmt keine signierten Anfragen an. Laden Sie die mit dem Plugin gelieferte sftp.php hoch.
+12180={} - PHP Shell (Pseudo-Terminal über HTTP)
+12181=PHP Shell: ein Pseudo-Terminal über HTTP, ausgeführt von sftp.php auf dem Server.
+12182=Befehl eingeben und Enter drücken. Auf/Ab: Verlauf, 'history -c' löscht ihn. Vollbildprogramme (vi, top, mc) funktionieren hier nicht.
+12183=Verlauf gelöscht.
+12184=Kopieren
+12185=Einfügen
+12186=Alles auswählen
 12089=SFTP
 12104=(manuell)
 12105= (fehlt)
