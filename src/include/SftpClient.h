@@ -330,8 +330,11 @@ bool SftpChmodW(pConnectSettings ConnectSettings, LPCWSTR RemoteName, LPCWSTR ch
 // Key of a directory in listingExtras: Total Commander's form, no trailing
 // separator except for the root.
 std::wstring ListingDirKey(std::wstring_view dir);
-// Extras the last listing gave for a path relative to the session, or null.
-const ListingExtra* FindListingExtra(pConnectSettings cs, std::wstring_view relPath);
+// A copy of the extras the last listing gave for a path relative to the
+// session; false when it gave none. Copied under a lock: Double Commander
+// reads the custom columns from a thread of its own while the panel's thread
+// lists. Total Commander reads them in the panel's thread.
+bool CopyListingExtra(pConnectSettings cs, std::wstring_view relPath, ListingExtra& out);
 // "rwxr-xr-x" with s/S and t/T for the special bits, as `ls` writes it.
 std::wstring FormatPermissions(DWORD mode);
 bool SftpLinkFolderTargetW(pConnectSettings ConnectSettings, LPWSTR RemoteName, size_t maxlen);

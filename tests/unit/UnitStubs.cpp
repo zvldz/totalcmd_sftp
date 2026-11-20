@@ -38,3 +38,10 @@ int SftpCloseConnection(tConnectSettings*)
 {
     return 0;
 }
+
+// Nor is anything ever listed.
+struct ListingExtra;
+bool CopyListingExtra(tConnectSettings*, std::wstring_view, ListingExtra&)
+{
+    return false;
+}

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <string_view>
 
 typedef LPVOID  SERVERID;
 typedef LPVOID  SERVERHANDLE;
@@ -34,12 +35,28 @@ size_t DisconnectServerByName(LPCSTR name) noexcept;
 // main thread's or one background thread's) and drops its row.
 size_t DisconnectServerForThread(LPCSTR name, DWORD threadId) noexcept;
 
+// Closes every connection a non-main thread `threadId` holds, whatever the
+// session. Double Commander copies inside the plugin (FsRenMovFile) in a new
+// thread each time, with no background-transfer status around it, so nothing
+// else would close the connections it opened. Total Commander uses other
+// threads only for background transfers, which close theirs themselves.
+size_t DisconnectAllForThread(DWORD threadId) noexcept;
+
 // Copies the secrets the main-thread connection to `name` already holds,
 // for a background transfer opening its own connection. False when that
 // session is not connected. `phpTar` (optional) receives whether it is a
 // PHP Agent session with TAR batches.
 struct RuntimeSecrets;
 bool CopyMainThreadSecrets(LPCSTR name, RuntimeSecrets& out, bool* phpTar = nullptr) noexcept;
+
+// Copies what the main-thread connection to `name` last listed for
+// `relPath` (relative to the session). For custom-column reads from a thread
+// that has no connection of its own: Double Commander makes them from a
+// thread of its own, Total Commander from the main thread, which finds its
+// connection directly. False when the session is not connected or the path
+// was not listed.
+struct ListingExtra;
+bool CopyMainThreadListingExtra(LPCSTR name, std::wstring_view relPath, ListingExtra& out) noexcept;
 
 // Path helpers
 void GetDisplayNameFromPath(LPCSTR Path, LPSTR DisplayName, size_t maxlen) noexcept;

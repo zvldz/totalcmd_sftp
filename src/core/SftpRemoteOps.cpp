@@ -6,6 +6,7 @@
 #include <vector>
 #include <array>
 #include <memory>
+#include <mutex>
 #include <chrono>
 #include <format>
 #include "SftpClient.h"
@@ -64,6 +65,14 @@ struct ScpData {
 // (a search or a tree copy lists thousands), and a folder shown again is
 // listed, and filled, again.
 constexpr size_t kMaxListedDirs = 64;
+
+// Guards listingExtras of every connection. The panel's thread writes them as
+// it lists; Double Commander reads them for the custom columns from a thread
+// of its own (CopyListingExtra). Total Commander reads in the panel's thread,
+// where the lock is never contended.
+std::mutex g_listingExtrasMutex;
+
+// Caller holds g_listingExtrasMutex.
 DirectoryExtras& FreshListingExtras(pConnectSettings cs, const std::wstring& key)
 {
     if (cs->listingExtras.size() >= kMaxListedDirs && !cs->listingExtras.count(key))
@@ -480,7 +489,10 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
             *davdataptr = scpd.release();
             ++cs->openFindHandles;
             wcslcpy(cs->lastactivepath, remotedir, _countof(cs->lastactivepath) - 1);
-            FreshListingExtras(cs, ListingDirKey(remotedir)) = std::move(extras);
+            {
+                std::lock_guard<std::mutex> lock(g_listingExtrasMutex);
+                FreshListingExtras(cs, ListingDirKey(remotedir)) = std::move(extras);
+            }
 
             return SFTP_OK;
         }
@@ -557,7 +569,10 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
     // this key: a listing opened meanwhile in another folder moves
     // lastactivepath, not this.
     dirData->dirKey = ListingDirKey(remotedir);
-    FreshListingExtras(cs, dirData->dirKey);
+    {
+        std::lock_guard<std::mutex> lock(g_listingExtrasMutex);
+        FreshListingExtras(cs, dirData->dirKey);
+    }
     *davdataptr = dirData.release();
     ++cs->openFindHandles;
     wcslcpy(cs->lastactivepath, remotedir, _countof(cs->lastactivepath) - 1);
@@ -688,6 +703,7 @@ static int SftpFindNextEntryW(pConnectSettings cs, LPVOID davdataptr, LPWIN32_FI
             extra.owner = std::to_wstring(file.uid);
             extra.group = std::to_wstring(file.gid);
         }
+        std::lock_guard<std::mutex> lock(g_listingExtrasMutex);
         cs->listingExtras[scpd->dirKey][FindData->cFileName] = std::move(extra);
         return SFTP_OK;
     }
@@ -705,18 +721,24 @@ std::wstring ListingDirKey(std::wstring_view dir)
     return key;
 }
 
-const ListingExtra* FindListingExtra(pConnectSettings cs, std::wstring_view relPath)
+bool CopyListingExtra(pConnectSettings cs, std::wstring_view relPath, ListingExtra& out)
 {
     if (!cs)
-        return nullptr;
+        return false;
     const size_t sep = relPath.find_last_of(L"\\/");
     if (sep == std::wstring_view::npos)
-        return nullptr;
-    const auto dir = cs->listingExtras.find(ListingDirKey(relPath.substr(0, sep)));
+        return false;
+    const std::wstring dirKey = ListingDirKey(relPath.substr(0, sep));
+    const std::wstring name(relPath.substr(sep + 1));
+    std::lock_guard<std::mutex> lock(g_listingExtrasMutex);
+    const auto dir = cs->listingExtras.find(dirKey);
     if (dir == cs->listingExtras.end())
-        return nullptr;
-    const auto it = dir->second.find(std::wstring(relPath.substr(sep + 1)));
-    return it == dir->second.end() ? nullptr : &it->second;
+        return false;
+    const auto it = dir->second.find(name);
+    if (it == dir->second.end())
+        return false;
+    out = it->second;
+    return true;
 }
 
 int SftpFindClose(pConnectSettings cs, LPVOID davdataptr)
@@ -1488,20 +1510,20 @@ void SftpShowPropertiesW(pConnectSettings cs, LPCWSTR remotename)
 
     PropertiesData d;
     d.name = pathW;
-    if (const ListingExtra* extra = FindListingExtra(cs, remotename)) {
-        if (!extra->linkTarget.empty())
-            d.name += L" -> " + extra->linkTarget;
-        d.owner = extra->owner;
-        d.group = extra->group;
-        if (extra->mode) {
+    if (ListingExtra extra; CopyListingExtra(cs, remotename, extra)) {
+        if (!extra.linkTarget.empty())
+            d.name += L" -> " + extra.linkTarget;
+        d.owner = extra.owner;
+        d.group = extra.group;
+        if (extra.mode) {
             std::array<wchar_t, 16> octal{};
-            swprintf_s(octal.data(), octal.size(), L" (%04o)", extra->mode & 07777);
-            d.permissions = FormatPermissions(extra->mode) + octal.data();
+            swprintf_s(octal.data(), octal.size(), L" (%04o)", extra.mode & 07777);
+            d.permissions = FormatPermissions(extra.mode) + octal.data();
         }
-        if ((extra->mode & LIBSSH2_SFTP_S_IFMT) != LIBSSH2_SFTP_S_IFDIR &&
-            (extra->mode & LIBSSH2_SFTP_S_IFMT) != LIBSSH2_SFTP_S_IFLNK)
-            d.size = FormatSize(extra->size);
-        d.modified = FormatFileTime(extra->mtime);
+        if ((extra.mode & LIBSSH2_SFTP_S_IFMT) != LIBSSH2_SFTP_S_IFDIR &&
+            (extra.mode & LIBSSH2_SFTP_S_IFMT) != LIBSSH2_SFTP_S_IFLNK)
+            d.size = FormatSize(extra.size);
+        d.modified = FormatFileTime(extra.mtime);
     }
 
     std::array<char, 8192> reply{};

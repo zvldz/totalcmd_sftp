@@ -63,6 +63,7 @@ bool CryptCheckPass = false;   // check 'store password encrypted' by default
 int PluginNumber = 0;
 int CryptoNumber = 0;
 DWORD mainthreadid = 0;
+bool hostIsTotalCommander = true;
 tProgressProc  ProgressProc = nullptr;
 tProgressProcW ProgressProcW = nullptr;
 tLogProc       LogProc = nullptr;
@@ -485,6 +486,20 @@ pConnectSettings GetServerIdAndRelativePathFromPath(LPCSTR Path, LPSTR RelativeP
     return serverid;
 }
 
+// The part of `Path` after the session name `r` resolved, taken from Total
+// Commander's path itself rather than from the internal string: a remote name
+// may hold units that encoding cannot carry (the stand-ins for bytes that are
+// not UTF-8, utf8_escape), and they have to reach the server intact.
+static std::wstring RelativePathW(LPCWSTR Path, const PathResolution& r)
+{
+    const std::wstring_view p(Path);
+    const size_t at = p.find_first_not_of(L"\\/");
+    const size_t nameLen = unicode_util::internal_to_wide(r.displayName).size();
+    return at != std::wstring_view::npos && at + nameLen < p.size()
+        ? std::wstring(p.substr(at + nameLen))
+        : unicode_util::internal_to_wide(r.relative);
+}
+
 pConnectSettings GetServerIdAndRelativePathFromPathW(LPCWSTR Path, LPWSTR RelativePath, size_t maxlen)
 {
     if (!Path || !RelativePath || maxlen == 0)
@@ -497,17 +512,7 @@ pConnectSettings GetServerIdAndRelativePathFromPathW(LPCWSTR Path, LPWSTR Relati
             GetServerIdFromName(r.displayName.c_str(), GetCurrentThreadId()));
     }
     if (serverid && !r.relative.empty()) {
-        // The part after the session name, taken from Total Commander's path
-        // itself rather than from the internal string: a remote name may hold
-        // units that encoding cannot carry (the stand-ins for bytes that are
-        // not UTF-8, utf8_escape), and they have to reach the server intact.
-        const std::wstring_view p(Path);
-        const size_t at = p.find_first_not_of(L"\\/");
-        const size_t nameLen = unicode_util::internal_to_wide(r.displayName).size();
-        const std::wstring wrel = at != std::wstring_view::npos && at + nameLen < p.size()
-            ? std::wstring(p.substr(at + nameLen))
-            : unicode_util::internal_to_wide(r.relative);
-        wcslcpy(RelativePath, wrel.c_str(), maxlen - 1);
+        wcslcpy(RelativePath, RelativePathW(Path, r).c_str(), maxlen - 1);
     } else {
         wcslcpy(RelativePath, L"\\", maxlen - 1);
     }
@@ -590,9 +595,11 @@ static int _FsInit(int PluginNr)
     GetModuleFileNameW(nullptr, hostPath.data(), static_cast<DWORD>(hostPath.size()));
     const WCHAR* hostName = wcsrchr(hostPath.data(), L'\\');
     hostName = hostName ? hostName + 1 : hostPath.data();
-    SFTP_LOG("STARTUP", "SFTPplug build tag=%s sha=%s date=%s variant=%s host=%s pid=%lu",
+    hostIsTotalCommander = _wcsnicmp(hostName, L"totalcmd", 8) == 0;
+    SFTP_LOG("STARTUP", "SFTPplug build tag=%s sha=%s date=%s variant=%s host=%s tc=%d pid=%lu",
              SFTP_BUILD_TAG, SFTP_BUILD_SHA, SFTP_BUILD_DATE, SFTP_BUILD_VARIANT,
-             unicode_util::wide_to_internal(hostName).c_str(), GetCurrentProcessId());
+             unicode_util::wide_to_internal(hostName).c_str(), hostIsTotalCommander ? 1 : 0,
+             GetCurrentProcessId());
 
     // Load language now in case FsSetDefaultParams was not called yet or registry lookup failed.
     DetectAndApplyLanguage(nullptr);
@@ -769,15 +776,20 @@ BOOL WINAPI FsDisconnect(LPCSTR DisconnectRoot)
     });
 }
 
+// Background transfers (GET/PUT_MULTI_THREAD) running in this thread, the
+// main thread's not counted. While one runs, the connections of the thread
+// belong to it and are closed when it ends.
+static thread_local int t_backgroundTransfers = 0;
+
 // Body of FsStatusInfoW / FsStatusInfo; `remoteDir` is an internal string.
 static void StatusInfo(const std::string& remoteDir, int InfoStartEnd, int InfoOperation)
 {
     const char* RemoteDir = remoteDir.c_str();
     {
-        SFTP_LOG("STATUS", "FsStatusInfo op=%d %s dir='%s'",
+        SFTP_LOG("STATUS", "FsStatusInfo op=%d %s dir='%s' tid=%lu main=%lu",
                  InfoOperation,
                  InfoStartEnd == FS_STATUS_START ? "START" : "END",
-                 RemoteDir);
+                 RemoteDir, GetCurrentThreadId(), mainthreadid);
 
         if (InfoOperation == FS_STATUS_OP_GET_MULTI || InfoOperation == FS_STATUS_OP_GET_MULTI_THREAD) {
             if (InfoStartEnd == FS_STATUS_START)
@@ -869,6 +881,13 @@ static void StatusInfo(const std::string& remoteDir, int InfoStartEnd, int InfoO
                         ShowStatusId(IDS_LOG_TAR_UPLOAD_FAIL, nullptr, false);
                 }
 #endif
+                // Run on the main thread (Double Commander's F3 does this):
+                // the transfer used the panel's connection, which stays.
+                // Total Commander always runs it in a thread of its own.
+                if (!hostIsTotalCommander && GetCurrentThreadId() == mainthreadid)
+                    return;
+                if (t_backgroundTransfers > 0)
+                    --t_backgroundTransfers;
                 // This thread's own connection only: the panel and other
                 // background transfers keep theirs.
                 std::array<char, MAX_PATH> endName{};
@@ -882,14 +901,27 @@ static void StatusInfo(const std::string& remoteDir, int InfoStartEnd, int InfoO
                 }
                 return;
             }
+            // On the main thread the transfer goes through the panel's own
+            // connection: a second one registered for this thread would
+            // replace it, and closing it at the end would drop the session.
+            // Double Commander's F3 reports a background transfer this way;
+            // Total Commander always runs one in a thread of its own, so it
+            // never comes here.
+            if (!hostIsTotalCommander && GetCurrentThreadId() == mainthreadid) {
+                SFTP_LOG("STATUS", "background transfer start on the main thread: the panel's connection is used");
+                return;
+            }
+            ++t_backgroundTransfers;
             // Only a transfer into or out of a saved session needs a
             // connection. One into the plugin root or a folder of sessions
             // is a session file being imported: there is nothing to connect
             // to, and connecting to the folder's name would open the dialog
             // for a new session.
             const PathKind kind = ResolvePathKind(RemoteDir).kind;
-            if (kind != PathKind::SessionLeaf && kind != PathKind::SessionWithSubpath)
+            if (kind != PathKind::SessionLeaf && kind != PathKind::SessionWithSubpath) {
+                SFTP_LOG("STATUS", "background transfer start: not a session path (kind=%d)", static_cast<int>(kind));
                 return;
+            }
             std::array<char, MAX_PATH> displayName{};
             RuntimeSecrets inherited;
             GetDisplayNameFromPath(RemoteDir, displayName.data(), displayName.size() - 1);
@@ -935,8 +967,25 @@ static void StatusInfo(const std::string& remoteDir, int InfoStartEnd, int InfoO
                 serverid = SftpConnectToServer(displayName.data(), inifilename, oldpass,
                                                nullptr, &inherited);
             }
+            SFTP_LOG("STATUS", "background transfer start: connection to '%s' %s, tid=%lu",
+                     displayName.data(), serverid ? "opened" : "not opened", GetCurrentThreadId());
             if (serverid)
                 SetServerIdForName(displayName.data(), static_cast<SERVERID>(serverid));
+            return;
+        }
+
+        // The end of any other operation in a thread other than the main one,
+        // with no background transfer running in it: Double Commander copies
+        // inside the plugin (RENMOV) in a new thread each time, and the
+        // connections opened there would stay until the plugin is unloaded.
+        // Total Commander calls from other threads only inside a background
+        // transfer, so it never gets here.
+        if (!hostIsTotalCommander && InfoStartEnd == FS_STATUS_END &&
+            GetCurrentThreadId() != mainthreadid && t_backgroundTransfers == 0) {
+            const size_t closed = DisconnectAllForThread(GetCurrentThreadId());
+            if (closed)
+                SFTP_LOG("STATUS", "operation %d done: %zu connection(s) of this thread closed, tid=%lu",
+                         InfoOperation, closed, GetCurrentThreadId());
         }
     }
 }
@@ -1221,11 +1270,26 @@ int WINAPI FsContentGetValueW(WCHAR* FileName, int FieldIndex, int UnitIndex, vo
         // terminator, or the copy below would run past the buffer.
         if (!FieldValue || maxlen < static_cast<int>(2 * sizeof(WCHAR)))
             return ft_fieldempty;
-        std::array<WCHAR, wdirtypemax> relative{};
-        pConnectSettings serverid = GetServerIdAndRelativePathFromPathW(FileName, relative.data(), relative.size() - 1);
-        const ListingExtra* extra = FindListingExtra(serverid, relative.data());
-        if (!extra)
+        if (!FileName)
             return ft_fieldempty;
+        // The thread's own connection: Total Commander asks in the panel's
+        // thread and finds the panel's connection here. Double Commander
+        // asks from a thread of its own, which has none; the panel's
+        // listing is then read through the registry. Total Commander never
+        // takes that second path.
+        ListingExtra extraValue;
+        bool listed = false;
+        std::array<WCHAR, wdirtypemax> relative{};
+        if (pConnectSettings serverid = GetServerIdAndRelativePathFromPathW(FileName, relative.data(), relative.size() - 1)) {
+            listed = CopyListingExtra(serverid, relative.data(), extraValue);
+        } else if (!hostIsTotalCommander && GetCurrentThreadId() != mainthreadid) {
+            const PathResolution r = ResolvePathKindW(FileName);
+            if (r.kind == PathKind::SessionWithSubpath)
+                listed = CopyMainThreadListingExtra(r.displayName.c_str(), RelativePathW(FileName, r), extraValue);
+        }
+        if (!listed)
+            return ft_fieldempty;
+        const ListingExtra* extra = &extraValue;
 
         std::wstring value;
         switch (FieldIndex) {

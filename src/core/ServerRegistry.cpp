@@ -149,6 +149,15 @@ size_t DisconnectServerForThread(LPCSTR name, DWORD threadId) noexcept
     });
 }
 
+size_t DisconnectAllForThread(DWORD threadId) noexcept
+{
+    if (threadId == mainthreadid || threadId == 0)
+        return 0;
+    return RemoveAndClose([&](const SERVERENTRY& e) {
+        return e.is_background && e.threadid == threadId;
+    });
+}
+
 bool CopyMainThreadSecrets(LPCSTR name, RuntimeSecrets& out, bool* phpTar) noexcept
 {
     if (phpTar)
@@ -172,6 +181,24 @@ bool CopyMainThreadSecrets(LPCSTR name, RuntimeSecrets& out, bool* phpTar) noexc
     if (phpTar)
         *phpTar = IsPhpAgentTransport(cs) && cs->php_tar;
     return true;
+}
+
+bool CopyMainThreadListingExtra(LPCSTR name, std::wstring_view relPath, ListingExtra& out) noexcept
+{
+    if (!name || !name[0])
+        return false;
+    try {
+        // Under the registry lock, as CopyMainThreadSecrets: the connection
+        // cannot be removed and freed while it is read. CopyListingExtra
+        // takes the listing lock inside this one, never the other way round.
+        std::lock_guard<std::mutex> lock(g_registryMutex);
+        const SERVERENTRY* entry = FindEntry(mainthreadid, name, false);
+        if (!entry || !entry->serverid)
+            return false;
+        return CopyListingExtra(static_cast<pConnectSettings>(entry->serverid), relPath, out);
+    } catch (...) {
+        return false;
+    }
 }
 
 bool SetServerIdForName(LPCSTR name, SERVERID id) noexcept

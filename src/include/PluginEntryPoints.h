@@ -8,6 +8,10 @@ extern HINSTANCE hinst;
 extern int PluginNumber;
 extern int CryptoNumber;
 extern DWORD mainthreadid;
+// The plugin runs in Total Commander (TOTALCMD*.EXE), set by FsInit. Paths
+// written for how another host (Double Commander) calls the plugin are taken
+// only when this is false, so Total Commander keeps its own behaviour.
+extern bool hostIsTotalCommander;
 
 extern tProgressProc  ProgressProc;
 extern tProgressProcW ProgressProcW;

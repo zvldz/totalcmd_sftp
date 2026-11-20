@@ -17,6 +17,9 @@ From this version the plugin comes in two builds: **classic**
 (`SFTPplug-<version>.zip`, SSH only) and **extra**
 (`SFTPplug-<version>-extra.zip`, + PHP Agent, PHP Shell, LAN Pair).
 
+The plugin is written for Total Commander. In Double Commander the SSH
+side works; full operation of the extra build there is not guaranteed.
+
 ### Security
 
 - **A session file from elsewhere no longer pre-trusts a host key.**
@@ -307,6 +310,21 @@ From this version the plugin comes in two builds: **classic**
 
 ### Fixes
 
+- **Double Commander: viewing a file no longer drops the session.** F3
+  there reports a background transfer but runs it in the panel's thread.
+  The plugin opened a second connection in place of the panel's and closed
+  it at the end, after which every copy or view in the session failed
+  until it was reconnected. Such a transfer now uses the panel's
+  connection.
+- **Double Commander: owner and group columns are filled.** DC asks for
+  the plugin's custom columns from a thread of its own, which found no
+  connection and left them empty. They are now read from the panel's
+  listing, under a lock, since the panel may be listing at that moment.
+- **Double Commander: copying inside the plugin no longer leaves SSH
+  sessions open.** DC copies within a session or between two in a new
+  thread each time; the connections opened there stayed until DC closed.
+  They are now closed when the copy ends. These Double Commander paths are
+  taken only when the plugin does not run in Total Commander.
 - **A password the server makes you change is saved.** With an expired
   password (`chage -d 0`), OpenSSH asks for the current one and a new one
   at keyboard-interactive prompts. The new password was not kept: the next
