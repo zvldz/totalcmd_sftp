@@ -994,7 +994,9 @@ side works; full operation of the extra build there is not guaranteed.
   its plugin files, ASLR/DEP/CFG, the exported functions and system-only
   DLLs. All of it runs in the release workflow. A pre-release takes OpenSSL
   and libssh2 from a cache built from the same sources (a stable release
-  still builds them from scratch), which halves its build. The integration
+  still builds them from scratch), which halves its build. The build runs
+  with a read-only token; only a separate job, which builds nothing,
+  creates the release from its files. The integration
   tests also
   resume a download, move onto an existing file with and without
   overwrite, set a file's time and read it back, run a command and check

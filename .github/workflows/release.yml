@@ -14,15 +14,22 @@ on:
     tags:
       - 'v*'
 
+# Read-only by default. Only the publish job, which builds nothing and runs
+# no code of the repository, gets the right to write: the build, with its
+# third-party sources, scripts and tools, never holds a token that can
+# change the repository or its releases.
 permissions:
-  # Required to create a GitHub Release and attach the built ZIP.
-  contents: write
+  contents: read
 
 jobs:
   build:
     # A named image: the toolchain changes when the workflow says so, not when
     # GitHub moves windows-latest.
     runs-on: windows-2025
+    permissions:
+      contents: read
+    outputs:
+      prerelease: ${{ steps.meta.outputs.prerelease }}
 
     steps:
       - name: Checkout with submodules
@@ -185,18 +192,20 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Package check failed" }
 
       - name: Rename release artifacts
-        id: zip
         shell: pwsh
         env:
           TAG: ${{ steps.meta.outputs.tag }}
         run: |
           $tag = $env:TAG
-          # Two builds: classic (SSH only) and extra (+ PHP Agent, LAN Pair).
+          # Everything the release page offers goes into dist\, and nothing
+          # else: the publish job attaches the whole folder.
+          New-Item -ItemType Directory -Path dist -Force | Out-Null
           $paths = @()
+          # Two builds: classic (SSH only) and extra (+ PHP Agent, LAN Pair).
           # The symbols archive resolves crash-report addresses of this build.
-          foreach ($pair in @(@("bin\SFTPplug.zip", "bin\SFTPplug-$tag.zip"),
-                              @("bin\SFTPplug-extra.zip", "bin\SFTPplug-$tag-extra.zip"),
-                              @("bin\SFTPplug-pdb.zip", "bin\SFTPplug-$tag-pdb.zip"))) {
+          foreach ($pair in @(@("bin\SFTPplug.zip", "dist\SFTPplug-$tag.zip"),
+                              @("bin\SFTPplug-extra.zip", "dist\SFTPplug-$tag-extra.zip"),
+                              @("bin\SFTPplug-pdb.zip", "dist\SFTPplug-$tag-pdb.zip"))) {
             if (-not (Test-Path $pair[0])) {
               throw "Build did not produce $($pair[0])"
             }
@@ -208,12 +217,7 @@ jobs:
           $sums = foreach ($p in $paths) {
             "$((Get-FileHash -Algorithm SHA256 $p).Hash.ToLowerInvariant())  $(Split-Path -Leaf $p)"
           }
-          $sums -join "`n" | Out-File -Encoding ascii -NoNewline bin\SHA256SUMS
-          $paths += "bin\SHA256SUMS"
-          # Newline-separated, as the release step takes a file list.
-          "paths<<EOF" >> $env:GITHUB_OUTPUT
-          $paths -join "`n" >> $env:GITHUB_OUTPUT
-          "EOF" >> $env:GITHUB_OUTPUT
+          $sums -join "`n" | Out-File -Encoding ascii -NoNewline dist\SHA256SUMS
 
       - name: Extract CHANGELOG section for release notes
         id: notes
@@ -242,13 +246,42 @@ jobs:
 
           $body = if ($match.Success) { $match.Value.Trim() } else { "Release $tag" }
           $body | Out-File -Encoding utf8 release-notes.md
-          "path=release-notes.md" >> $env:GITHUB_OUTPUT
+
+      - name: Hand the release files to the publish job
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: release
+          # dist\ holds the files to attach; the notes go next to it, not
+          # into it, so they are not attached.
+          path: |
+            dist/
+            release-notes.md
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: build
+    # Builds nothing and runs nothing of the repository: it takes the
+    # build's files and creates the release, the one step that writes.
+    runs-on: ubuntu-24.04
+    permissions:
+      # Required to create a GitHub Release and attach the built ZIPs.
+      contents: write
+
+    steps:
+      - name: Take the build's release files
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          name: release
+          path: release
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65  # v2.6.2
         with:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}
-          prerelease: ${{ steps.meta.outputs.prerelease == 'true' }}
-          files: ${{ steps.zip.outputs.paths }}
-          body_path: ${{ steps.notes.outputs.path }}
+          prerelease: ${{ needs.build.outputs.prerelease == 'true' }}
+          files: release/dist/*
+          body_path: release/release-notes.md
+          # Every file of the build is attached, or the release fails.
+          fail_on_unmatched_files: true
