@@ -356,6 +356,10 @@ try {
     }
 } finally {
     Remove-Item -LiteralPath $iniDir -Recurse -Force -ErrorAction SilentlyContinue
+    # Local working folders the harness creates per mode (NewTempDir).
+    Get-ChildItem -LiteralPath ([System.IO.Path]::GetTempPath()) -Directory -Filter 'sftpplug-it-*' -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -match '^sftpplug-it-(src|dst|secrets|names)-\d+$' } |
+        Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 if ($failures.Count) {
