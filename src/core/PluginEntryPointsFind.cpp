@@ -461,27 +461,25 @@ static HANDLE BuildPluginFolderListing(const std::string& folderPrefix,
 // is a bulk [Disconnect All]; remaining rows are every currently-connected
 // session by its full DisplayName (folder-nested sessions keep their slashes,
 // so a row reads e.g. "home/raspi" — flat, one F8 away from disconnect).
+namespace {
+std::string ActiveSessionLabel(const std::string& registryName);
+}
+
 static HANDLE BuildActiveSessionsListing(WIN32_FIND_DATAW* FindData)
 {
     auto state = std::make_unique<PluginFolderFindState>();
 
     // Active sessions first; [Disconnect All] only appears when at least one
     // session is connected (an empty listing after F8 simply leaves the user
-    // with TC's `..` parent entry to back out).
-    //
-    // Virtual (Imports-backed) sessions are surfaced under their TC-safe
-    // alias (`__vimp_<sourceId>_<hash>`) rather than the human-readable
-    // displayName they carry inside `[Imports]`. This keeps the F8-in-Active
-    // Sessions round-trip correct — IsActiveSessionsPath must be able to
-    // split the entry off the parent, which forbids `/`, `[`, or `\` inside
-    // the entry name. The alias is what the user sees.
-    // TODO: render a readable label using a non-splitting substitute character.
+    // with TC's `..` parent entry to back out). A session from [Imports] is
+    // listed under its source and its name there; IsActiveSessionsPath turns
+    // that label back into the session.
     std::array<char, wdirtypemax> nameBuf{};
     SERVERHANDLE hdl = FindFirstServer(nameBuf.data(), nameBuf.size() - 1);
     while (hdl) {
         if (GetServerIdFromName(nameBuf.data(), GetCurrentThreadId()) != nullptr) {
             PluginFolderEntry e;
-            e.name = nameBuf.data();
+            e.name = ActiveSessionLabel(nameBuf.data());
             e.kind = PluginFolderEntry::Kind::ActiveSession;
             state->entries.push_back(std::move(e));
         }
@@ -839,9 +837,53 @@ static bool IsMagicFolderPath(LPCWSTR path, const char* identity, std::string* o
 }
 
 // See PluginEntryPointsInternal.h for the contracts.
+namespace {
+
+// How an open session is named in [Active Sessions]: one from [Imports] by
+// its source folder and its name there ("[SecureCRT] my/ha1"), any other by
+// its own name. No saved session's name starts with '[', so the two never
+// meet.
+std::string ActiveSessionLabel(const std::string& registryName)
+{
+    if (!sftp::IsVirtualSessionAlias(registryName.c_str()))
+        return registryName;
+    const auto info = sftp::LookupVirtualSession(registryName);
+    const auto* adapter = info ? sftp::GetImportSourceRegistry().Find(info->sourceId.c_str()) : nullptr;
+    if (!adapter)
+        return registryName;
+    return std::string(adapter->FolderName()) + " " + info->displayName;
+}
+
+// The session an [Active Sessions] row stands for: the alias of the open
+// imported session it labels, or the row name itself.
+std::string ActiveSessionFromLabel(const std::string& label)
+{
+    if (label.empty() || label[0] != '[' || label == kDisconnectAllEntry)
+        return label;
+    std::array<char, wdirtypemax> nameBuf{};
+    SERVERHANDLE hdl = FindFirstServer(nameBuf.data(), nameBuf.size() - 1);
+    while (hdl) {
+        if (sftp::IsVirtualSessionAlias(nameBuf.data()) &&
+            _stricmp(ActiveSessionLabel(nameBuf.data()).c_str(), label.c_str()) == 0) {
+            const std::string alias = nameBuf.data();
+            FindCloseServer(hdl);
+            return alias;
+        }
+        nameBuf[0] = 0;
+        hdl = FindNextServer(hdl, nameBuf.data(), nameBuf.size() - 1);
+    }
+    return label;
+}
+
+}  // namespace
+
 bool IsActiveSessionsPath(LPCWSTR path, std::string* outEntry)
 {
-    return IsMagicFolderPath(path, kActiveSessionsFolder, outEntry, { kDisconnectAllEntry });
+    if (!IsMagicFolderPath(path, kActiveSessionsFolder, outEntry, { kDisconnectAllEntry }))
+        return false;
+    if (outEntry)
+        *outEntry = ActiveSessionFromLabel(*outEntry);
+    return true;
 }
 
 bool IsProxiesPath(LPCWSTR path, std::string* outEntry)

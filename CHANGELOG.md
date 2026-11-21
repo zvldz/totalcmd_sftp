@@ -335,6 +335,10 @@ side works; full operation of the extra build there is not guaranteed.
 
 ### Fixes
 
+- **An imported session is listed by its name in `[Active Sessions]`.**
+  A connected session from `[Imports]` showed there as
+  `__vimp_securecrt_95c721482a083beb`; it now reads like
+  `[SecureCRT] my/ha1`, and Enter, F3 and F8 on it work as before.
 - **A login script that prints text no longer breaks SCP and shell
   transfers.** A `.bashrc` with an `echo` for every command made each scp
   upload and download fail with "SCP Protocol Error", and broke resumes,
