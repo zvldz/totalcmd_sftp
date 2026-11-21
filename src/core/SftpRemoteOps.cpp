@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 #include <array>
+#include <algorithm>
+#include <cctype>
 #include <memory>
 #include <mutex>
 #include <chrono>
@@ -20,6 +22,7 @@
 #include "TerminalText.h"
 #include "RemoteNames.h"
 #include "ScpTransfer.h"
+#include "TransferUtils.h"
 #if SFTP_EXTRA
 #include "PhpAgentClient.h"
 #endif
@@ -1595,27 +1598,210 @@ bool SftpSupportsResume(pConnectSettings ConnectSettings)
     return ConnectSettings != nullptr;
 }
 
+// ---------------------------------------------------------------------------
+// Checksums on the server. Total Commander's Synchronize directories "by
+// content" asks for them instead of downloading each file: the server hashes
+// and one line comes back. SHA-256 only, with `sha256sum` or, failing that,
+// `openssl dgst`; each file on an exec channel of its own, read without
+// waiting, so a large file does not hold Total Commander up. The persistent
+// shell of the shell-only mode, PHP Agent and LAN Pair offer none.
+// ---------------------------------------------------------------------------
+namespace {
+
+enum ChecksumTool { kChecksumNotAsked = 0, kChecksumNone, kChecksumSha256sum, kChecksumOpenssl };
+
+// sshd allows 10 channels per connection by default; the panel's listing and
+// transfers need some of them.
+constexpr size_t kMaxChecksumJobs = 6;
+constexpr DWORD kChecksumProbeTimeoutMs = 10000;
+constexpr size_t kChecksumOutputMax = 4096;
+
+bool ChecksumsPossible(pConnectSettings cs)
+{
+    return cs && cs->session && !cs->shell_transfer_force &&
+           !IsPhpAgentTransport(cs) && !IsLanPairTransport(cs);
+}
+
+// The lines a short command prints on an exec channel, or none when it could
+// not run. Nothing goes to Total Commander's log window.
+std::vector<std::string> RunQuietCommand(pConnectSettings cs, const char* command, DWORD timeoutMs)
+{
+    std::vector<std::string> lines;
+    auto channel = ConnectChannel(cs->session.get(), cs->sock);
+    if (!channel || !SendChannelCommand(cs->session.get(), channel.get(), command, cs->sock))
+        return lines;
+
+    std::string out;
+    std::array<char, 1024> buf{};
+    const SYSTICKS start = get_sys_ticks();
+    while (true) {
+        const ssize_t rc = channel->read(buf.data(), buf.size());
+        if (rc > 0) {
+            if (out.size() < kChecksumOutputMax)
+                out.append(buf.data(), static_cast<size_t>(rc));
+            continue;
+        }
+        if (rc != LIBSSH2_ERROR_EAGAIN || channel->eof())
+            break;
+        if (get_ticks_between(start) > static_cast<int>(timeoutMs))
+            return lines;
+        WaitForSshIo(cs);
+    }
+
+    size_t pos = 0;
+    while (pos < out.size()) {
+        size_t end = out.find('\n', pos);
+        if (end == std::string::npos)
+            end = out.size();
+        std::string line = out.substr(pos, end - pos);
+        if (!line.empty() && line.back() == '\r')
+            line.pop_back();
+        lines.push_back(std::move(line));
+        pos = end + 1;
+    }
+    return lines;
+}
+
+// Which tool the server hashes with, asked once per connection. Each `echo`
+// is its own line, so a login script that prints something does not count.
+int ChecksumToolFor(pConnectSettings cs)
+{
+    if (cs->checksumTool != kChecksumNotAsked)
+        return cs->checksumTool;
+    const auto lines = RunQuietCommand(cs,
+        "command -v sha256sum >/dev/null 2>&1 && echo sha256sum; "
+        "command -v openssl >/dev/null 2>&1 && echo openssl",
+        kChecksumProbeTimeoutMs);
+    int tool = kChecksumNone;
+    for (const std::string& line : lines) {
+        if (line == "sha256sum") {
+            tool = kChecksumSha256sum;
+            break;
+        }
+        if (line == "openssl")
+            tool = kChecksumOpenssl;
+    }
+    cs->checksumTool = tool;
+    SFTP_LOG("CHECKSUM", "server tool: %s",
+             tool == kChecksumSha256sum ? "sha256sum" : tool == kChecksumOpenssl ? "openssl" : "none");
+    return tool;
+}
+
+// The hash in what `sha256sum` or `openssl dgst -sha256 -r` printed: the first
+// word of a line, 64 hex digits. sha256sum puts a backslash before it when the
+// file name holds a backslash or a newline.
+bool ParseSha256Output(const std::string& out, std::string& hex)
+{
+    size_t pos = 0;
+    while (pos < out.size()) {
+        size_t end = out.find('\n', pos);
+        if (end == std::string::npos)
+            end = out.size();
+        std::string_view line(out.data() + pos, end - pos);
+        if (!line.empty() && line.front() == '\\')
+            line.remove_prefix(1);
+        const std::string_view word = line.substr(0, line.find_first_of(" \t\r"));
+        if (word.size() == 64 &&
+            std::all_of(word.begin(), word.end(), [](char c) { return isxdigit(static_cast<unsigned char>(c)) != 0; })) {
+            hex.assign(word);
+            std::transform(hex.begin(), hex.end(), hex.begin(),
+                           [](char c) { return static_cast<char>(tolower(static_cast<unsigned char>(c))); });
+            return true;
+        }
+        pos = end + 1;
+    }
+    return false;
+}
+
+}  // namespace
+
 int SftpServerSupportsChecksumsW(pConnectSettings ConnectSettings, LPCWSTR RemoteName)
 {
-    (void)ConnectSettings;
     (void)RemoteName;
-    return 0;
+    const bool possible = ChecksumsPossible(ConnectSettings);
+    SFTP_LOG("CHECKSUM", "supported types asked: possible=%d", possible ? 1 : 0);
+    if (!possible)
+        return 0;
+    const int tool = ChecksumToolFor(ConnectSettings);
+    return tool == kChecksumSha256sum || tool == kChecksumOpenssl ? FS_CHK_SHA256 : 0;
 }
 
 HANDLE SftpStartFileChecksumW(int ChecksumType, pConnectSettings ConnectSettings, LPCWSTR RemoteName)
 {
-    (void)ChecksumType;
-    (void)ConnectSettings;
-    (void)RemoteName;
-    return nullptr;
+    pConnectSettings cs = ConnectSettings;
+    if (ChecksumType != FS_CHK_SHA256 || !RemoteName || !ChecksumsPossible(cs))
+        return nullptr;
+    const int tool = ChecksumToolFor(cs);
+    if (tool != kChecksumSha256sum && tool != kChecksumOpenssl)
+        return nullptr;
+    if (cs->checksumJobs.size() >= kMaxChecksumJobs) {
+        SFTP_LOG("CHECKSUM", "refused: %zu checksums already running", cs->checksumJobs.size());
+        return nullptr;
+    }
+
+    const std::string path = ToRemotePathA(cs, RemoteName);
+    if (path.empty())
+        return nullptr;
+    std::string command = tool == kChecksumSha256sum ? "sha256sum '" : "openssl dgst -sha256 -r '";
+    command += string_util::ShellQuoteSingle(path);
+    command += "' 2>/dev/null";
+
+    auto job = std::make_unique<ChecksumJob>();
+    job->channel = ConnectChannel(cs->session.get(), cs->sock);
+    if (!job->channel || !SendChannelCommand(cs->session.get(), job->channel.get(), command.c_str(), cs->sock)) {
+        SFTP_LOG("CHECKSUM", "start failed");
+        return nullptr;
+    }
+    HANDLE handle = job.get();
+    cs->checksumJobs.push_back(std::move(job));
+    SFTP_LOG("CHECKSUM", "started (%zu running)", cs->checksumJobs.size());
+    return handle;
 }
 
 int SftpGetFileChecksumResultW(bool WantResult, HANDLE ChecksumHandle, pConnectSettings ConnectSettings, LPSTR checksum, size_t maxlen)
 {
-    (void)WantResult;
-    (void)ChecksumHandle;
-    (void)ConnectSettings;
     if (checksum && maxlen > 0)
         checksum[0] = 0;
-    return FS_CHK_ERR_FAIL;
+    pConnectSettings cs = ConnectSettings;
+    if (!cs || !ChecksumHandle)
+        return FS_CHK_ERR_FAIL;
+    // Only a job of this connection: a handle from a closed session, or from
+    // another thread's connection, is not one.
+    const auto it = std::find_if(cs->checksumJobs.begin(), cs->checksumJobs.end(),
+        [&](const std::unique_ptr<ChecksumJob>& j) { return j.get() == ChecksumHandle; });
+    if (it == cs->checksumJobs.end()) {
+        SFTP_LOG("CHECKSUM", "result asked for an unknown handle");
+        return FS_CHK_ERR_FAIL;
+    }
+    const auto finish = [&](int rc) {
+        cs->checksumJobs.erase(it);
+        return rc;
+    };
+    // Total Commander no longer wants it: the command is left to end on its
+    // own, its channel closed.
+    if (!WantResult)
+        return finish(FS_CHK_ERR_FAIL);
+
+    ChecksumJob& job = **it;
+    std::array<char, 512> buf{};
+    while (true) {
+        const ssize_t rc = job.channel->read(buf.data(), buf.size());
+        if (rc > 0) {
+            if (job.output.size() < kChecksumOutputMax)
+                job.output.append(buf.data(), static_cast<size_t>(rc));
+            continue;
+        }
+        if (rc == LIBSSH2_ERROR_EAGAIN && !job.channel->eof())
+            return FS_CHK_ERR_BUSY;
+        break;
+    }
+
+    std::string hex;
+    if (!ParseSha256Output(job.output, hex) || !checksum || maxlen <= hex.size()) {
+        SFTP_LOG("CHECKSUM", "no hash in the reply (%zu bytes)", job.output.size());
+        return finish(FS_CHK_ERR_FAIL);
+    }
+    strlcpy(checksum, hex.c_str(), maxlen);
+    SFTP_LOG("CHECKSUM", "done");
+    return finish(0);
 }

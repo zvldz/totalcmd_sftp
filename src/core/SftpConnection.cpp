@@ -974,6 +974,12 @@ int SftpCloseConnection(pConnectSettings ConnectSettings)
         ConnectSettings->scpShellErrBuf.clear();
     }
 
+    //    Checksums still being computed: their channels belong to the
+    //    session freed below. A handle Total Commander still holds finds no
+    //    job afterwards and fails.
+    ConnectSettings->checksumJobs.clear();
+    ConnectSettings->checksumTool = 0;
+
     // 3. SFTP subsystem (only present in SFTP mode). ~Libssh2SftpSession()
     //    sends SFTP_FXP_SHUTDOWN with a bounded retry.
     ConnectSettings->sftpsession.reset();

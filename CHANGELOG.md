@@ -283,6 +283,16 @@ side works; full operation of the extra build there is not guaranteed.
 
 ### Features
 
+- **Checksums on the server.** Total Commander's Synchronize directories
+  with "by content" and "ignore date" now compares remote files by
+  content: the server computes their SHA-256 (`sha256sum`, or
+  `openssl dgst` where that is missing) and only the hash comes back,
+  nothing is downloaded. A large file is hashed in the
+  background, without holding Total Commander up. Not over a shell-only
+  session, PHP Agent or LAN Pair, which download as before; Double
+  Commander does not ask for checksums.
+  *Idea from [wzj-zz/totalcmd_sftp](https://github.com/wzj-zz/totalcmd_sftp)
+  53388438.*
 - **SFTP through a server command.** A session can name the SFTP server
   to run, for example `/usr/libexec/sftp-server`, and the plugin executes
   it instead of requesting the `sftp` subsystem — like `sftp -s` in

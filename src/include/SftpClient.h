@@ -9,6 +9,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <vector>
 #include "ServerRegistry.h"
 #include "CoreUtils.h"
 #include "ISshBackend.h"
@@ -80,6 +81,14 @@ struct ListingExtra {
 
 // Entry name → its extras, for one directory.
 using DirectoryExtras = std::unordered_map<std::wstring, ListingExtra>;
+
+// A checksum the server is computing (FsStartFileChecksum): the channel that
+// runs the command and what it printed so far. Kept by the connection, which
+// frees the channel before its session.
+struct ChecksumJob {
+    std::unique_ptr<ISshChannel> channel;
+    std::string                  output;
+};
 
 struct tConnectSettings {
     tConnectSettings() = default;
@@ -252,6 +261,11 @@ struct tConnectSettings {
     // names it (`\etc`). A new listing replaces that directory's entry only,
     // so the other panel showing another directory keeps its columns.
     std::unordered_map<std::wstring, DirectoryExtras> listingExtras;
+
+    // Checksums on the server: the tool it hashes with (0 until asked, see
+    // SftpServerSupportsChecksumsW) and the computations still running.
+    int checksumTool = 0;
+    std::vector<std::unique_ptr<ChecksumJob>> checksumJobs;
 };
 
 using pConnectSettings = tConnectSettings*;

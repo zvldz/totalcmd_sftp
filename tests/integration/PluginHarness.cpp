@@ -37,6 +37,7 @@
 #include <windows.h>
 #include <bcrypt.h>
 
+#include <array>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -79,6 +80,9 @@ struct Plugin {
     BOOL (WINAPI* Disconnect)(LPCSTR) = nullptr;
     void (WINAPI* StatusInfoW)(LPCWSTR, int, int) = nullptr;
     void (WINAPI* SetCryptCallbackW)(tCryptProcW, int, int) = nullptr;
+    int (WINAPI* ServerSupportsChecksumsW)(LPCWSTR) = nullptr;
+    HANDLE (WINAPI* StartFileChecksumW)(int, LPCWSTR) = nullptr;
+    int (WINAPI* GetFileChecksumResultW)(BOOL, HANDLE, LPCWSTR, LPSTR, int) = nullptr;
 
     template <class F> bool Bind(F& fn, const char* name)
     {
@@ -100,7 +104,10 @@ struct Plugin {
                Bind(MkDirW, "FsMkDirW") && Bind(RemoveDirW, "FsRemoveDirW") && Bind(DeleteFileW, "FsDeleteFileW") &&
                Bind(PutFileW, "FsPutFileW") && Bind(GetFileW, "FsGetFileW") && Bind(RenMovFileW, "FsRenMovFileW") &&
                Bind(ExecuteFileW, "FsExecuteFileW") && Bind(SetTimeW, "FsSetTimeW") && Bind(Disconnect, "FsDisconnect") &&
-               Bind(StatusInfoW, "FsStatusInfoW") && Bind(SetCryptCallbackW, "FsSetCryptCallbackW");
+               Bind(StatusInfoW, "FsStatusInfoW") && Bind(SetCryptCallbackW, "FsSetCryptCallbackW") &&
+               Bind(ServerSupportsChecksumsW, "FsServerSupportsChecksumsW") &&
+               Bind(StartFileChecksumW, "FsStartFileChecksumW") &&
+               Bind(GetFileChecksumResultW, "FsGetFileChecksumResultW");
     }
 } g_plugin;
 
@@ -797,6 +804,53 @@ int wmain(int argc, wchar_t** argv)
         const auto it = entries.find(s.name);
         Check(it != entries.end() && it->second.size == s.content.size(),
               "listing shows " + Narrow(s.name) + " with " + std::to_string(s.content.size()) + " bytes");
+    }
+
+    // Checksums on the server (Synchronize directories by content): SHA-256
+    // from the server's own tool, read without blocking. None over the
+    // persistent shell only, nor over PHP Agent.
+    {
+        const int mask = g_plugin.ServerSupportsChecksumsW((dir + L"\\" + samples[0].name).c_str());
+        const bool expected = !phpMode && mode != L"shell";
+        Check(mask == (expected ? FS_CHK_SHA256 : 0),
+              "server checksums offered: " + std::to_string(mask));
+        // Polls the way Total Commander does until the hash is ready.
+        const auto checksumOf = [&](const std::wstring& path, std::string& out) {
+            HANDLE h = g_plugin.StartFileChecksumW(FS_CHK_SHA256, path.c_str());
+            if (!h)
+                return -100;
+            std::array<char, 200> buf{};
+            int rc = FS_CHK_ERR_BUSY;
+            for (int i = 0; i < 6000 && rc == FS_CHK_ERR_BUSY; ++i) {
+                rc = g_plugin.GetFileChecksumResultW(TRUE, h, path.c_str(), buf.data(), static_cast<int>(buf.size()));
+                if (rc == FS_CHK_ERR_BUSY)
+                    Sleep(10);
+            }
+            out = buf.data();
+            return rc;
+        };
+        if (expected) {
+            // Text modes may change a .txt on the way up; binaries never.
+            for (const auto& s : samples) {
+                if (textChecks && s.name.ends_with(L".txt"))
+                    continue;
+                const std::wstring& name = s.name;
+                std::string hash;
+                const int rc = checksumOf(dir + L"\\" + name, hash);
+                Check(rc == 0 && hash == expectedHash[name],
+                      "server SHA-256 of " + Narrow(name) + " (rc=" + std::to_string(rc) + ", " + hash + ")");
+            }
+            std::string none;
+            Check(checksumOf(dir + L"\\no such file", none) != 0, "no checksum for a file that is not there");
+
+            const std::wstring path = dir + L"\\" + samples[0].name;
+            HANDLE h = g_plugin.StartFileChecksumW(FS_CHK_SHA256, path.c_str());
+            std::array<char, 200> buf{};
+            Check(h != nullptr, "a checksum starts");
+            g_plugin.GetFileChecksumResultW(FALSE, h, path.c_str(), buf.data(), static_cast<int>(buf.size()));
+            Check(g_plugin.GetFileChecksumResultW(TRUE, h, path.c_str(), buf.data(), static_cast<int>(buf.size())) == FS_CHK_ERR_FAIL,
+                  "a dropped checksum's handle is not accepted again");
+        }
     }
 
     for (const auto& s : samples) {
