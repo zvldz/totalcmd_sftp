@@ -66,11 +66,12 @@ void ShutdownSymbols() noexcept;
 //
 // Required because DllExceptionBarrier only catches C++ exceptions. Native
 // crashes inside libssh2 / OpenSSL / our callbacks bypass it entirely.
-// Installed only in a build with logging on, since the log is all it writes
-// to; the vectored handler logs only exceptions raised in this module.
+// Installed only when the debug log is switched on, since the log is all it
+// writes to; the vectored handler logs only exceptions raised in this module.
 //
-// Call InstallCrashHandler from DllMain DLL_PROCESS_ATTACH;
-// UninstallCrashHandler from DLL_PROCESS_DETACH (before ShutdownSymbols).
+// InstallCrashHandler is called when the log is switched on (more calls do
+// nothing); UninstallCrashHandler from DLL_PROCESS_DETACH (before
+// ShutdownSymbols), and does nothing when none was installed.
 // ---------------------------------------------------------------------------
 void InstallCrashHandler() noexcept;
 void UninstallCrashHandler() noexcept;

@@ -83,12 +83,9 @@ jobs:
 
       - name: Check tag against the sources
         shell: pwsh
-        # The tag names the version the plugin reports, and a stable release
-        # never ships with the debug log on (it writes every operation to
-        # %TEMP%\sftpplug.log). Pre-releases keep the log for testing.
+        # The tag names the version the plugin reports.
         env:
           TAG: ${{ steps.meta.outputs.tag }}
-          PRERELEASE: ${{ steps.meta.outputs.prerelease }}
         run: |
           $version = $env:TAG.TrimStart('v') -replace '-(beta|rc)\d*$', ''
           $header = Get-Content -Raw src\include\version.h
@@ -97,12 +94,6 @@ jobs:
           }
           if ($Matches[1] -ne $version) {
             throw "Tag $version does not match version.h $($Matches[1])"
-          }
-          if ($env:PRERELEASE -ne "true") {
-            $global = Get-Content -Raw src\include\global.h
-            if ($global -notmatch '(?m)^#define LOG_ENABLED\s+0\b') {
-              throw "Stable tag with LOG_ENABLED on in global.h"
-            }
           }
           Write-Host "Tag matches version.h $version"
 
@@ -163,18 +154,6 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Language check failed" }
           ./tests/check-mnemonics.ps1
           if ($LASTEXITCODE -ne 0) { throw "Shortcut check failed" }
-
-      - name: Stable configuration (log off) builds
-        shell: pwsh
-        # Every tag compiles and links the configuration a stable release
-        # ships, with the debug log off, so the first stable tag is not the
-        # first time it is built. cl reads CL from the environment; the
-        # release build below is a full rebuild without it.
-        env:
-          CL: /DLOG_ENABLED=0
-        run: |
-          ./build.ps1 -x64only -classiconly -nodeploy -nohelp
-          if ($LASTEXITCODE -ne 0) { throw "Build with LOG_ENABLED=0 failed" }
 
       - name: Build plugin (classic + extra, Release x64 + x86)
         shell: pwsh

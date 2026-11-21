@@ -891,7 +891,16 @@ static int ProbeAgent(pConnectSettings cs, std::string* outBody, std::string* ou
 int PhpAgentProbe(pConnectSettings cs, std::string& outErrorText)
 {
     outErrorText.clear();
-    PHP_LOG("Probe start url='%s'", (cs && !cs->server.empty()) ? cs->server.c_str() : "");
+    // A "user:password@" in the URL stays out of the log.
+    if (sftp_debug_enabled() && cs) {
+        std::string shown = cs->server;
+        const size_t scheme = shown.find("://");
+        const size_t hostAt = scheme == std::string::npos ? 0 : scheme + 3;
+        const size_t at = shown.find('@', hostAt);
+        if (at != std::string::npos && at < shown.find('/', hostAt))
+            shown.erase(hostAt, at + 1 - hostAt);
+        PHP_LOG("Probe start url='%s'", shown.c_str());
+    }
     std::string body;
     const int rc = ProbeAgent(cs, &body, &outErrorText);
     if (rc != SFTP_OK)

@@ -67,31 +67,26 @@ using ServerHandle = void*;
 constexpr size_t wdirtypemax = 1024;
 
 // ============================================================================
-// Logging Configuration
+// Debug log
 // ============================================================================
-// Set LOG_TO_FILE to 1 to enable file logging, 0 to disable.
-// When enabled, output goes to LOG_FILE_NAME in the user's temporary folder
-// (%TEMP%), which only that user can read or write.
-// OutputDebugString is always used when logging is active.
-// WARNING: File logging is slow — enable only during active investigation.
-// A stable release is built with LOG_ENABLED 0; the release workflow refuses
-// a stable tag otherwise.
+// Compiled into every build and off until sftpplug.ini says
+// [Configuration] DebugLog=1 (read in FsSetDefaultParams, so a change takes
+// effect when the plugin is loaded again). When on, each line goes to
+// OutputDebugString and to a file in the user's temporary folder (%TEMP%),
+// which only that user can read or write. Off, SFTP_LOG costs one check and
+// its arguments are not evaluated.
 
-// A build can override it (cl /DLOG_ENABLED=0): CI builds and tests the
-// stable configuration that way on every tag, before a stable one exists.
-#ifndef LOG_ENABLED
-#define LOG_ENABLED  1                              // Master switch: 0 = off, 1 = on
-#endif
-#define LOG_TO_FILE  1                            // 0 = OutputDebugString only, 1 = + file
+#include <atomic>
+
 #define LOG_FILE_NAME L"sftpplug.log"              // File name inside %TEMP% under Total Commander
 
-// Internal aliases — do not edit below this line.
-#define SFTP_DEBUG_ENABLED  LOG_ENABLED
-#define SFTP_DEBUG_TO_FILE  LOG_TO_FILE
-#define SFTP_DEBUG_LEVEL    (LOG_ENABLED ? 2 : 0)
+inline std::atomic<bool> g_sftpDebugLogOn{false};
 
-#if SFTP_DEBUG_ENABLED
-#if SFTP_DEBUG_TO_FILE
+inline bool sftp_debug_enabled() noexcept
+{
+    return g_sftpDebugLogOn.load(std::memory_order_relaxed);
+}
+
 // The log file of this process, chosen once from the host executable so that
 // two hosts never mix their lines: Total Commander writes LOG_FILE_NAME,
 // Double Commander sftpplug-dc.log, any other host (the test harness, the
@@ -120,14 +115,12 @@ inline const wchar_t* sftp_debug_log_file_name() noexcept
     }();
     return name;
 }
-#endif
 
 inline void sftp_debug_emit_line(const char* line) noexcept
 {
     if (!line) return;
     OutputDebugStringA(line);
     OutputDebugStringA("\n");
-#if SFTP_DEBUG_TO_FILE
     wchar_t logPath[MAX_PATH + 96] = {};
     const DWORD n = GetTempPathW(MAX_PATH + 1, logPath);
     if (n == 0 || n > MAX_PATH)
@@ -166,7 +159,6 @@ inline void sftp_debug_emit_line(const char* line) noexcept
         }
         CloseHandle(hf);
     }
-#endif
 }
 
 inline void sftp_debug_logf(const char* tag, const char* fmt, ...) noexcept
@@ -192,15 +184,10 @@ inline void sftp_debug_logf(const char* tag, const char* fmt, ...) noexcept
     sftp_debug_emit_line(line);
 }
 
-    #define SFTP_LOG(tag, fmt, ...) do { \
+#define SFTP_LOG(tag, fmt, ...) do { \
+    if (sftp_debug_enabled()) \
         sftp_debug_logf(tag, fmt, ##__VA_ARGS__); \
-    } while(0)
-    #define DEBUG_LOG(fmt, ...) SFTP_LOG("DBG", fmt, ##__VA_ARGS__)
-    #define ENABLE_SCP_DEBUG
-#else
-    #define SFTP_LOG(tag, fmt, ...) do {} while(0)
-    #define DEBUG_LOG(fmt, ...) do {} while(0)
-#endif
+} while(0)
 
 // Inline helper for safe string operations
 namespace detail {

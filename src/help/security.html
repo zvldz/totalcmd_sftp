@@ -73,9 +73,9 @@ icacls "C:\Program Files\Total Commander\wcx_ftp.ini" /grant "${env:USERNAME}:F"
 
 <h2>Debug log</h2>
 <ul>
-  <li>Stable releases write no debug log.</li>
-  <li>Test (rc/beta) builds write a debug log to <code>%TEMP%\sftpplug.log</code> (under Double Commander <code>sftpplug-dc.log</code>), in the Windows user's own temporary folder.</li>
-  <li>Quote commands, the SFTP server command and SCP commands are not written to the log. Remove host names, user names and paths before sharing it.</li>
+  <li>No debug log is written unless <code>DebugLog=1</code> is set in <code>sftpplug.ini</code> (<a href="plugin-config.html#debuglog">Debug log</a>).</li>
+  <li>When on, it goes to <code>%TEMP%\sftpplug.log</code> (under Double Commander <code>sftpplug-dc.log</code>), in the Windows user's own temporary folder.</li>
+  <li>Passwords, passphrases, answers to login prompts, quote commands, the SFTP server command and SCP commands are not written to the log. Remove host names, user names and paths before sharing it.</li>
 </ul>
 
 <h2>Operational recommendations</h2>

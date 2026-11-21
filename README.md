@@ -586,9 +586,8 @@ Switches: `-classiconly` (classic only), `-x64only`, `-nohelp` (skip the help pa
 - Whole program optimization: enabled
 
 **Debug log:**
-- Controlled by `LOG_ENABLED` in `src\include\global.h` (and `LOG_TO_FILE`), not by the build configuration
-- When on: `OutputDebugString` output plus the file `%TEMP%\sftpplug.log` (another host writes `sftpplug-<exe name>.log`, Double Commander `sftpplug-dc.log`); quote commands, the SFTP server command and SCP commands are not written to it
-- Test (rc/beta) builds keep it on; a stable release is built with `LOG_ENABLED 0`, and the release workflow refuses a stable tag otherwise
+- Compiled into every build, off by default; `[Configuration] DebugLog=1` in `sftpplug.ini` turns it on (read when the plugin loads)
+- When on: `OutputDebugString` output plus the file `%TEMP%\sftpplug.log` (another host writes `sftpplug-<exe name>.log`, Double Commander `sftpplug-dc.log`), and the crash hooks that write to it; no password or passphrase, quote commands, the SFTP server command and SCP commands are not written to it
 
 **Rebuilding dependency libraries (`build-deps.ps1`):**
 

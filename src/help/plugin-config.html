@@ -30,7 +30,18 @@
     <td><em>(follows TC)</em></td>
     <td>Overrides the plugin UI language. See <a href="#language">Language override</a> below.</td>
   </tr>
+  <tr>
+    <td><code>DebugLog</code></td>
+    <td><code>0</code></td>
+    <td><code>1</code> writes a debug log. See <a href="#debuglog">Debug log</a> below.</td>
+  </tr>
 </table>
+
+<h2 id="debuglog">Debug log</h2>
+<p>With <code>DebugLog=1</code> the plugin writes what it does — connections, logins, transfers, server commands — to a file in your Windows temporary folder: <code>%TEMP%\sftpplug.log</code> under Total Commander, <code>%TEMP%\sftpplug-dc.log</code> under Double Commander. Only your Windows account can read it. Passwords, passphrases and answers to login prompts are never written; host names, user names, paths and file names are.</p>
+<p>Turn it on to report a problem: add the line, restart Total Commander, repeat what went wrong, and attach the end of the file. Turn it off again afterwards: the file grows with every operation (at 20 MB it is moved to <code>sftpplug.log.old</code> and starts over).</p>
+<pre>[Configuration]
+DebugLog=1</pre>
 
 <h2 id="language">Language override</h2>
 <p>By default the plugin detects the language from Total Commander's own setting (<code>wincmd.ini</code> → <code>LanguageIni</code>). The <code>Language=</code> key overrides this detection.</p>

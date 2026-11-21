@@ -30,3 +30,8 @@
 ;
 ; Example — force Polish:
 ;Language=Polish
+
+; DebugLog=1 writes a debug log to %TEMP%\sftpplug.log (Double Commander:
+; %TEMP%\sftpplug-dc.log), for reporting a problem. Off by default; takes
+; effect when Total Commander is restarted. No password is ever written.
+;DebugLog=1

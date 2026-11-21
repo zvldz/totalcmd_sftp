@@ -330,10 +330,6 @@ BOOL APIENTRY DllMain( HANDLE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 {
     if (ul_reason_for_call == DLL_PROCESS_ATTACH) {
         hinst = (HINSTANCE)hModule;
-        // Top-level SEH filter for native crashes (AV, stack overflow, etc.)
-        // that bypass DllExceptionBarrier. Installed first so it's active for
-        // the whole DLL lifetime.
-        sftp::InstallCrashHandler();
         LoadStringW(hinst, IDS_F7NEW, s_f7newconnectionW.data(), static_cast<int>(s_f7newconnectionW.size()) - 1);
         wilcopy(s_f7newconnection, s_f7newconnectionW.data(), countof(s_f7newconnection) - 1);
         LoadStringW(hinst, IDS_QUICKCONNECT, s_quickconnectW.data(), static_cast<int>(s_quickconnectW.size()) - 1);
@@ -585,21 +581,11 @@ static int _FsInit(int PluginNr)
     PluginNumber = PluginNr;
     mainthreadid = GetCurrentThreadId();
 
-    // Emitted once per plugin load so a user submitting a bug report can
-    // paste the log tail and everyone knows exactly which build they are
-    // running — matters most in the beta cycle where version.h stays put
-    // between beta1/2/... and only git tag + SHA differ.
-    // The program that loaded the plugin and its process: Total Commander
-    // and Double Commander write to the same log file.
     std::array<WCHAR, MAX_PATH> hostPath{};
     GetModuleFileNameW(nullptr, hostPath.data(), static_cast<DWORD>(hostPath.size()));
     const WCHAR* hostName = wcsrchr(hostPath.data(), L'\\');
     hostName = hostName ? hostName + 1 : hostPath.data();
     hostIsTotalCommander = _wcsnicmp(hostName, L"totalcmd", 8) == 0;
-    SFTP_LOG("STARTUP", "SFTPplug build tag=%s sha=%s date=%s variant=%s host=%s tc=%d pid=%lu",
-             SFTP_BUILD_TAG, SFTP_BUILD_SHA, SFTP_BUILD_DATE, SFTP_BUILD_VARIANT,
-             unicode_util::wide_to_internal(hostName).c_str(), hostIsTotalCommander ? 1 : 0,
-             GetCurrentProcessId());
 
     // Load language now in case FsSetDefaultParams was not called yet or registry lookup failed.
     DetectAndApplyLanguage(nullptr);
@@ -1062,6 +1048,22 @@ void WINAPI FsSetDefaultParams(FsDefaultParamStruct * dps)
                     SFTP_LOG("ENTRY", "plugin INI folder taken from COMMANDER_INI");
                 }
             }
+        }
+
+        // The debug log, off unless [Configuration] DebugLog=1. Its crash
+        // hooks come with it, and its first line names the build and the
+        // program that loaded the plugin, for a bug report's log tail.
+        if (IniGetInt(L"Configuration", L"DebugLog", 0, inifilenameW) != 0 && !sftp_debug_enabled()) {
+            g_sftpDebugLogOn = true;
+            sftp::InstallCrashHandler();
+            std::array<WCHAR, MAX_PATH> hostPath{};
+            GetModuleFileNameW(nullptr, hostPath.data(), static_cast<DWORD>(hostPath.size()));
+            const WCHAR* hostName = wcsrchr(hostPath.data(), L'\\');
+            hostName = hostName ? hostName + 1 : hostPath.data();
+            SFTP_LOG("STARTUP", "SFTPplug build tag=%s sha=%s date=%s variant=%s host=%s tc=%d pid=%lu",
+                     SFTP_BUILD_TAG, SFTP_BUILD_SHA, SFTP_BUILD_DATE, SFTP_BUILD_VARIANT,
+                     unicode_util::wide_to_internal(hostName).c_str(), hostIsTotalCommander ? 1 : 0,
+                     GetCurrentProcessId());
         }
 
         // Apply language override from sftpplug.ini [Configuration] Language= (overrides TC detection).

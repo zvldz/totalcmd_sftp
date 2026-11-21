@@ -224,6 +224,7 @@ namespace {
 LPTOP_LEVEL_EXCEPTION_FILTER g_prev_filter   = nullptr;
 PVOID                        g_veh_handle    = nullptr;
 std::terminate_handler       g_prev_terminate = nullptr;
+bool                         g_installed     = false;
 
 const char* ExceptionCodeName(DWORD code) noexcept
 {
@@ -401,15 +402,16 @@ void OnPureCall() noexcept
 
 } // anonymous namespace
 
-// The hooks only write to the log, so without logging none is installed.
-// The CRT's invalid-parameter handler is left alone: its default ends the
-// process at once, where a handler that returns would let an overflow
-// caught by a *_s function carry on.
+// The hooks only write to the log, so they are installed when the log is
+// switched on, once. The CRT's invalid-parameter handler is left alone: its
+// default ends the process at once, where a handler that returns would let
+// an overflow caught by a *_s function carry on.
 void InstallCrashHandler() noexcept
 {
-#if !SFTP_DEBUG_ENABLED
-    return;
-#else
+    if (g_installed)
+        return;
+    g_installed = true;
+
     // 1. Top-level SEH filter — for unhandled hardware exceptions.
     g_prev_filter = ::SetUnhandledExceptionFilter(CrashFilter);
 
@@ -429,12 +431,13 @@ void InstallCrashHandler() noexcept
     std::signal(SIGSEGV, OnSignal);
     std::signal(SIGFPE,  OnSignal);
     std::signal(SIGILL,  OnSignal);
-#endif
 }
 
 void UninstallCrashHandler() noexcept
 {
-#if SFTP_DEBUG_ENABLED
+    if (!g_installed)
+        return;
+    g_installed = false;
     // A filter set after ours belongs to someone else and stays; ours is
     // replaced by the one it took over from.
     const LPTOP_LEVEL_EXCEPTION_FILTER current = ::SetUnhandledExceptionFilter(g_prev_filter);
@@ -452,7 +455,6 @@ void UninstallCrashHandler() noexcept
     std::signal(SIGSEGV, SIG_DFL);
     std::signal(SIGFPE,  SIG_DFL);
     std::signal(SIGILL,  SIG_DFL);
-#endif
 }
 
 // ============================================================================

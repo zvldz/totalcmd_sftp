@@ -209,6 +209,10 @@ $env:SFTP_IT_PASSPHRASE = -join [char[]](0x43F, 0x430, 0x440, 0x43E, 0x43B, 0x44
 $iniDir = Join-Path ([System.IO.Path]::GetTempPath()) "sftpplug-it-ini-$PID"
 New-Item -ItemType Directory -Path $iniDir -Force | Out-Null
 $ini = [System.Text.StringBuilder]::new()
+# The debug log on, so a failing run leaves its trace in
+# %TEMP%\sftpplug-plugin_harness.log.
+[void]$ini.AppendLine('[Configuration]')
+[void]$ini.AppendLine('DebugLog=1')
 foreach ($mode in $Modes) {
     [void]$ini.AppendLine("[it-$mode]")
     foreach ($key in $base.Keys) {

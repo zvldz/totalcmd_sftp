@@ -392,7 +392,7 @@ curl --socks5 proxy:1080 https://example.com
   <li>Reproduce the issue</li>
   <li>Review Total Commander log window</li>
 </ol>
-<p>Test (rc/beta) builds also write a debug log to <code>%TEMP%\sftpplug.log</code> (under Double Commander <code>%TEMP%\sftpplug-dc.log</code>). Stable releases write no such file.</p>
+<p>For more detail, turn on the debug log: <code>DebugLog=1</code> in the <code>[Configuration]</code> section of <code>sftpplug.ini</code>, then restart Total Commander. It is written to <code>%TEMP%\sftpplug.log</code> (under Double Commander <code>%TEMP%\sftpplug-dc.log</code>); see <a href="plugin-config.html#debuglog">Debug log</a>.</p>
 
 <h3>Log Analysis</h3>
 <h4>Connection Log</h4>

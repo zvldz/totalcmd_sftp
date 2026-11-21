@@ -283,6 +283,14 @@ side works; full operation of the extra build there is not guaranteed.
 
 ### Features
 
+- **Debug log in every build, switched in `sftpplug.ini`.**
+  `[Configuration] DebugLog=1` writes the log to `%TEMP%\sftpplug.log`
+  (Double Commander `sftpplug-dc.log`) after Total Commander is restarted;
+  off by default, pre-releases included. Before, only test builds wrote it
+  and a stable release had none to report a problem with. No password,
+  passphrase or answer to a login prompt is written, and a `user:password@`
+  in a PHP Agent URL is left out. A release is now one build: the second,
+  log-off build and its check are gone from the release workflow.
 - **Checksums on the server.** Total Commander's Synchronize directories
   with "by content" and "ignore date" now compares remote files by
   content: the server computes their SHA-256 (`sha256sum`, or
