@@ -320,6 +320,11 @@ side works; full operation of the extra build there is not guaranteed.
 
 ### Fixes
 
+- **Server commands no longer take two seconds each.** A command over its
+  own channel (a command typed in Total Commander's command line, the
+  check before each SCP-only upload, the scp check at connect) waited
+  two seconds after it had finished before it was taken as done, so ten
+  files uploaded with SCP only lost twenty seconds.
 - **Waits over a jump host go through its tunnel.** The SFTP and SCP
   loops that wait for the server (listing, folders, links, transfers,
   the persistent shell) watched the raw socket; over a jump host that is

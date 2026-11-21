@@ -502,15 +502,10 @@ bool ReadChannelLine(ISshChannel* channel, char* line, size_t lineLen,
             return true;
         }
 
-        if (rc == LIBSSH2_ERROR_EAGAIN || rc == 0) {
-            ++consecutiveEagain;
-            if (sock != INVALID_SOCKET)
-                IsSocketReadable(sock);
-            else
-                Sleep(consecutiveEagain > 20 ? 200 : 50);
-        }
-
-        if (endReceived && rc <= 0 && rc != LIBSSH2_ERROR_EAGAIN) {
+        // EOF was seen before these reads, so all the output is already in
+        // libssh2's buffers: reads that bring nothing mean it is used up,
+        // whether they say 0 or EAGAIN.
+        if (endReceived && rc <= 0 && rcerr <= 0) {
             if (!msgbuf.empty() && msgbuf[0] != '\r' && msgbuf[0] != '\n') {
                 // Flush the remaining partial line (no trailing newline from the server).
                 const size_t copyLen = (std::min)(msgbuf.size(), lineLen - 1);
@@ -521,6 +516,19 @@ bool ReadChannelLine(ISshChannel* channel, char* line, size_t lineLen,
                 return true;
             }
             return false;
+        }
+
+        // EOF that came in with these reads: one more pass drains what came
+        // with it and ends, nothing is left to wait for.
+        if (!endReceived && channel->eof())
+            continue;
+
+        if (rc == LIBSSH2_ERROR_EAGAIN || rc == 0) {
+            ++consecutiveEagain;
+            if (sock != INVALID_SOCKET)
+                IsSocketReadable(sock);
+            else
+                Sleep(consecutiveEagain > 20 ? 200 : 50);
         }
     }
 }
