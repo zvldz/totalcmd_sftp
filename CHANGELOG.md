@@ -320,6 +320,16 @@ side works; full operation of the extra build there is not guaranteed.
 
 ### Fixes
 
+- **A login script that prints text no longer breaks SCP and shell
+  transfers.** A `.bashrc` with an `echo` for every command made each scp
+  upload and download fail with "SCP Protocol Error", and broke resumes,
+  folder creation and server commands. The plugin learns that text once
+  per connection and cuts it off the answers of its own commands, and
+  scp's handshake passes over text lines before its first word. Without
+  such text nothing changes; `loginnoise=0` in the session's section of
+  `sftpplug.ini` turns it off. SFTP through such a shell still fails, as
+  in every other client. *Idea from
+  [wzj-zz/totalcmd_sftp](https://github.com/wzj-zz/totalcmd_sftp) 216c1077.*
 - **Server commands no longer take two seconds each.** A command over its
   own channel (a command typed in Total Commander's command line, the
   check before each SCP-only upload, the scp check at connect) waited

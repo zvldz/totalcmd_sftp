@@ -979,6 +979,9 @@ int SftpCloseConnection(pConnectSettings ConnectSettings)
     //    job afterwards and fails.
     ConnectSettings->checksumJobs.clear();
     ConnectSettings->checksumTool = 0;
+    // The login script is asked again on the next connection.
+    ConnectSettings->loginNoiseState = 0;
+    ConnectSettings->loginNoise.clear();
 
     // 3. SFTP subsystem (only present in SFTP mode). ~Libssh2SftpSession()
     //    sends SFTP_FXP_SHUTDOWN with a bounded retry.

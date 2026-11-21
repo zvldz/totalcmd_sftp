@@ -172,14 +172,155 @@ bool SendChannelCommand(ISshSession* session, ISshChannel* channel, const char* 
     return true;
 }
 
+namespace {
+
+constexpr char kLoginNoiseMarker[] = "__SFTPPLUG_LOGIN_NOISE__";
+constexpr DWORD kLoginNoiseTimeoutMs = 10000;
+constexpr size_t kLoginNoiseMax = 16384;
+
+// A channel whose first output bytes were read ahead to compare them with the
+// login script's text and turned out to be something else: they are handed
+// back to the reader first, then the channel's own output follows.
+class PendingOutputChannel final : public ISshChannel {
+public:
+    PendingOutputChannel(std::unique_ptr<ISshChannel> inner, std::string pending)
+        : inner_(std::move(inner)), pending_(std::move(pending)) {}
+
+    ssize_t read(char* buf, size_t len) override
+    {
+        if (pos_ < pending_.size()) {
+            const size_t n = (std::min)(len, pending_.size() - pos_);
+            memcpy(buf, pending_.data() + pos_, n);
+            pos_ += n;
+            return static_cast<ssize_t>(n);
+        }
+        return inner_->read(buf, len);
+    }
+    ssize_t readStderr(char* buf, size_t len) override { return inner_->readStderr(buf, len); }
+    ssize_t write(const char* buf, size_t len) override { return inner_->write(buf, len); }
+    ssize_t writeEx(int streamId, const char* buf, size_t len) override { return inner_->writeEx(streamId, buf, len); }
+    int exec(const char* cmd) override { return inner_->exec(cmd); }
+    int shell() override { return inner_->shell(); }
+    int sendEof() override { return inner_->sendEof(); }
+    int eof() override { return pos_ < pending_.size() ? 0 : inner_->eof(); }
+    int waitEof() override { return inner_->waitEof(); }
+    int channelClose() override { return inner_->channelClose(); }
+    int waitClosed() override { return inner_->waitClosed(); }
+    int channelFree() override { return inner_->channelFree(); }
+    int flush() override { return inner_->flush(); }
+    int getExitStatus() override { return inner_->getExitStatus(); }
+    void setBlocking(int blocking) override { inner_->setBlocking(blocking); }
+    int requestPty(const char* term, unsigned termLen, const char* modes, unsigned modesLen,
+                   int width, int height, int widthPx, int heightPx) override
+    {
+        return inner_->requestPty(term, termLen, modes, modesLen, width, height, widthPx, heightPx);
+    }
+
+private:
+    std::unique_ptr<ISshChannel> inner_;
+    std::string pending_;
+    size_t pos_ = 0;
+};
+
+} // anonymous namespace
+
+void LearnLoginNoise(pConnectSettings cs)
+{
+    if (!cs || !cs->session || !cs->loginNoiseHandling || cs->loginNoiseState != 0)
+        return;
+    cs->loginNoiseState = 1;
+
+    // A bare `echo` is understood by every shell, Windows ones included. A
+    // restricted shell that refuses it leaves the connection as one without
+    // noise.
+    auto channel = ConnectChannel(cs->session.get(), cs->sock);
+    if (!channel)
+        return;
+    const std::string command = std::string("echo ") + kLoginNoiseMarker;
+    if (!SendChannelCommand(cs->session.get(), channel.get(), command.c_str(), cs->sock))
+        return;
+
+    std::string out;
+    std::array<char, 1024> buf{};
+    const SYSTICKS start = get_sys_ticks();
+    while (out.size() < kLoginNoiseMax) {
+        const ssize_t rc = channel->read(buf.data(), buf.size());
+        if (rc > 0) {
+            out.append(buf.data(), static_cast<size_t>(rc));
+            continue;
+        }
+        if (rc != LIBSSH2_ERROR_EAGAIN || channel->eof())
+            break;
+        if (get_ticks_between(start) > static_cast<int>(kLoginNoiseTimeoutMs))
+            break;
+        WaitForSshIo(cs);
+    }
+
+    const size_t at = out.find(kLoginNoiseMarker);
+    if (at == std::string::npos || (at > 0 && out[at - 1] != '\n')) {
+        SFTP_LOG("SHELL", "login script check: no answer to echo, taken as quiet");
+        return;
+    }
+    if (at == 0) {
+        SFTP_LOG("SHELL", "login script check: quiet");
+        return;
+    }
+    cs->loginNoise = out.substr(0, at);
+    cs->loginNoiseState = 2;
+    SFTP_LOG("SHELL", "login script prints %zu bytes before every command; cut off", at);
+}
+
+bool SendExecCommand(pConnectSettings cs, std::unique_ptr<ISshChannel>& channel, const char* command, bool sendEof)
+{
+    if (!cs || !channel)
+        return false;
+    LearnLoginNoise(cs);
+    const bool sent = sendEof
+        ? SendChannelCommand(cs->session.get(), channel.get(), command, cs->sock)
+        : SendChannelCommandNoEof(cs->session.get(), channel.get(), command, cs->sock);
+    if (!sent || cs->loginNoiseState != 2)
+        return sent;
+
+    // The login script's text comes first, before the command runs. Only an
+    // exact match is dropped; whatever else arrived is given back to the
+    // reader unchanged.
+    const std::string& noise = cs->loginNoise;
+    std::string got;
+    std::array<char, 1024> buf{};
+    const SYSTICKS start = get_sys_ticks();
+    while (got.size() < noise.size()) {
+        const ssize_t rc = channel->read(buf.data(), (std::min)(buf.size(), noise.size() - got.size()));
+        if (rc > 0) {
+            got.append(buf.data(), static_cast<size_t>(rc));
+            if (noise.compare(0, got.size(), got) != 0)
+                break;
+            continue;
+        }
+        if (rc != LIBSSH2_ERROR_EAGAIN || channel->eof())
+            break;
+        if (get_ticks_between(start) > static_cast<int>(kLoginNoiseTimeoutMs))
+            break;
+        WaitForSshIo(cs);
+    }
+    if (got == noise)
+        return true;
+    SFTP_LOG("SHELL", "output did not start with the login script's text (%zu of %zu bytes read); kept",
+             got.size(), noise.size());
+    if (!got.empty())
+        channel = std::make_unique<PendingOutputChannel>(std::move(channel), std::move(got));
+    return true;
+}
+
 // The command's exit status decides: a server may write a banner or a
 // warning to stderr for a command that worked. What it wrote there is shown
 // when the command failed.
-bool GetChannelCommandReply(ISshSession* session, ISshChannel* channel, const char* command, SOCKET sock)
+bool GetChannelCommandReply(pConnectSettings cs, std::unique_ptr<ISshChannel>& channelOwner, const char* command)
 {
     std::string stderrText;
-    if (!SendChannelCommand(session, channel, command, sock))
+    if (!SendExecCommand(cs, channelOwner, command, true))
         return false;
+    ISshChannel* channel = channelOwner.get();
+    const SOCKET sock = cs->sock;
 
     const auto start = std::chrono::steady_clock::now();
     std::array<char, 1024> buf{};
@@ -619,7 +760,7 @@ int SftpQuoteCommand2(pConnectSettings cs, const char* remotedir, const char* cm
     if (!channel)
         return -1;
 
-    if (!SendChannelCommand(cs->session.get(), channel.get(), fullCmd.c_str(), cs->sock)) {
+    if (!SendExecCommand(cs, channel, fullCmd.c_str(), true)) {
         return -1;
     }
 
@@ -721,7 +862,7 @@ int SftpQuoteCommand2W(pConnectSettings cs, LPCWSTR remotedir, LPCWSTR cmd,
     if (!channel)
         return -1;
 
-    if (!SendChannelCommand(cs->session.get(), channel.get(), fullCmd.c_str(), cs->sock)) {
+    if (!SendExecCommand(cs, channel, fullCmd.c_str(), true)) {
         return -1;
     }
 

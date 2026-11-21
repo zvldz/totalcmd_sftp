@@ -291,7 +291,7 @@ static int64_t ShellGetRemoteFileSize(pConnectSettings cs, const std::string& re
         return -1;
     }
 
-    if (!SendChannelCommand(cs->session.get(), ch.get(), cmd.c_str(), cs->sock)) {
+    if (!SendExecCommand(cs, ch, cmd.c_str(), true)) {
         DisconnectShell(ch.get());
         return -1;
     }
@@ -345,7 +345,7 @@ bool ShellSetRemoteMtime(pConnectSettings cs, const std::string& remotePath, lon
     std::unique_ptr<ISshChannel> ch = OpenShellDdChannel(cs, "ShellSetRemoteMtime");
     if (!ch)
         return ShellExecPersistentCollectLines(cs, cmd, lines) && okFrom(lines);
-    if (!SendChannelCommand(cs->session.get(), ch.get(), cmd.c_str(), cs->sock)) {
+    if (!SendExecCommand(cs, ch, cmd.c_str(), true)) {
         DisconnectShell(ch.get());
         return false;
     }
@@ -390,9 +390,8 @@ static int ShellDdDownloadRaw(
     if (!ch)
         return SFTP_FAILED;
 
-    // SendChannelCommand sends EOF so the remote process gets stdin-EOF.
-    // We use SendChannelCommandNoEof here because we need to read stdout.
-    if (!SendChannelCommandNoEof(cs->session.get(), ch.get(), cmd.c_str(), cs->sock)) {
+    // Sent without EOF: it goes out separately below.
+    if (!SendExecCommand(cs, ch, cmd.c_str(), false)) {
         DisconnectShell(ch.get());
         return SFTP_READFAILED;
     }
@@ -638,7 +637,7 @@ static int ShellDdUploadRaw(
         return SFTP_FAILED;
 
     // Do not send EOF yet; data must be written first.
-    if (!SendChannelCommandNoEof(cs->session.get(), ch.get(), cmd.c_str(), cs->sock)) {
+    if (!SendExecCommand(cs, ch, cmd.c_str(), false)) {
         DisconnectShell(ch.get());
         return SFTP_WRITEFAILED;
     }
@@ -1085,14 +1084,14 @@ int ShellScpUploadFile(
     std::string cmd = mtime ? "scp -pt " : "scp -t ";
     cmd += remotePathArg;
     SFTP_LOG("SCP", "upload: sending scp -t");
-    if (!SendChannelCommandNoEof(cs->session.get(), channel.get(), cmd.c_str(), cs->sock)) {
+    if (!SendExecCommand(cs, channel, cmd.c_str(), false)) {
         SFTP_LOG("SCP", "upload: sending the command failed");
         DisconnectShell(channel.get());
         return SFTP_WRITEFAILED;
     }
 
     std::string ackErr;
-    if (!ScpReadAck(channel.get(), cs, ackErr)) {
+    if (!ScpReadFirstAck(channel.get(), cs, ackErr)) {
         SFTP_LOG("SCP", "upload handshake failed: err='%s'", ackErr.c_str());
         if (!ackErr.empty())
             ShowStatus(ackErr.c_str());

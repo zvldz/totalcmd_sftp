@@ -285,7 +285,14 @@ void  StripEscapeSequences(LPSTR msgbuf);
 std::unique_ptr<ISshChannel> ConnectChannel(ISshSession* session, SOCKET sock = INVALID_SOCKET);
 bool  SendChannelCommand(ISshSession* session, ISshChannel* channel, LPCSTR command, SOCKET sock = INVALID_SOCKET);
 bool  SendChannelCommandNoEof(ISshSession* session, ISshChannel* channel, LPCSTR command, SOCKET sock = INVALID_SOCKET);
-bool  GetChannelCommandReply(ISshSession* session, ISshChannel* channel, LPCSTR command, SOCKET sock = INVALID_SOCKET);
+bool  GetChannelCommandReply(pConnectSettings cs, std::unique_ptr<ISshChannel>& channel, LPCSTR command);
+// Learns, once per connection, what the login script prints ahead of every
+// command (cs->loginNoise); does nothing when "loginnoise=0".
+void  LearnLoginNoise(pConnectSettings cs);
+// Runs one of the plugin's own commands on `channel`, with or without EOF
+// after it, and cuts the login script's text off its output. `channel` may be
+// replaced by one that hands back output read ahead.
+bool  SendExecCommand(pConnectSettings cs, std::unique_ptr<ISshChannel>& channel, LPCSTR command, bool sendEof);
 // Closes an exec or shell channel. `exitStatus`, when given, receives the
 // command's exit status once the server has closed the channel, or -1 when
 // it did not close in time.

@@ -21,11 +21,20 @@ if [ "$NO_SFTP_SUBSYSTEM" = "1" ]; then
     sed -i '/^Subsystem[[:space:]]/d' /etc/ssh/sshd_config
 fi
 
+# SFTP inside sshd, without the user's shell and its login script.
+if [ "$INTERNAL_SFTP" = "1" ]; then
+    sed -i 's/^Subsystem[[:space:]].*/Subsystem sftp internal-sftp/' /etc/ssh/sshd_config
+fi
+
 # The bind mount comes with Windows permissions, which sshd's StrictModes
 # refuses, so the keys are copied with the modes it expects.
-install -d -m 700 -o tester -g tester /home/tester/.ssh
-if [ -f /keys/authorized_keys ]; then
-    install -m 600 -o tester -g tester /keys/authorized_keys /home/tester/.ssh/authorized_keys
-fi
+# "noisy" prints a line from its .bashrc for every command, as a talkative
+# login script does.
+for u in tester noisy; do
+    install -d -m 700 -o $u -g $u /home/$u/.ssh
+    if [ -f /keys/authorized_keys ]; then
+        install -m 600 -o $u -g $u /keys/authorized_keys /home/$u/.ssh/authorized_keys
+    fi
+done
 
 exec /usr/sbin/sshd -D -e

@@ -8,7 +8,9 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/* \
  && mkdir -p /run/sshd \
  && useradd -m -s /bin/bash tester \
- && echo 'tester:tester' | chpasswd
+ && echo 'tester:tester' | chpasswd \
+ && useradd -m -s /bin/bash noisy \
+ && sed -i '1i echo "Welcome, noisy"' /home/noisy/.bashrc
 
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod 755 /entrypoint.sh

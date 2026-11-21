@@ -804,7 +804,7 @@ int SftpCreateDirectoryW(pConnectSettings cs, LPCWSTR Path)
             // The session's mode for new folders, as SFTP's mkdir gets it.
             const std::string cmd = std::format("mkdir -m {:o} '", (cs->dirmod ? cs->dirmod : 0755) & 07777) +
                                     string_util::ShellQuoteSingle(dirStr) + "'";
-            if (GetChannelCommandReply(cs->session.get(), channel.get(), cmd.c_str(), cs->sock))
+            if (GetChannelCommandReply(cs, channel, cmd.c_str()))
                 return SFTP_OK;
         }
         ShowStatusId(IDS_LOG_SCP_MKDIR_FAIL, nullptr, true);

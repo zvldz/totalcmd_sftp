@@ -14,6 +14,8 @@ inline constexpr size_t SFTP_SCP_BLOCK_SIZE = 16'384;
 
 inline constexpr int SFTP_SCP_READ_IDLE_TIMEOUT_MS  = 20'000;
 inline constexpr int SFTP_SCP_WRITE_IDLE_TIMEOUT_MS = 20'000;
+// Lines of login-script text passed over before scp's first word.
+inline constexpr int kScpNoiseLinesMax = 64;
 
 void ShowTransferSpeedIfLarge(LPCSTR prefix, int64_t bytesTransferred, SYSTICKS starttime);
 bool ScpWriteAll(ISshChannel* channel, pConnectSettings cs, const char* data, size_t len, DWORD timeoutMs);
@@ -21,3 +23,5 @@ bool ScpReadByte(ISshChannel* channel, pConnectSettings cs, char* outByte, DWORD
 bool ScpReadLine(ISshChannel* channel, pConnectSettings cs, std::string& outLine, DWORD timeoutMs);
 bool ScpSendAck(ISshChannel* channel, pConnectSettings cs);
 bool ScpReadAck(ISshChannel* channel, pConnectSettings cs, std::string& err);
+// The first acknowledgement of scp -t, past any login-script text before it.
+bool ScpReadFirstAck(ISshChannel* channel, pConnectSettings cs, std::string& err);

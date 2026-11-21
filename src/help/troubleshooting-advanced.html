@@ -199,6 +199,15 @@ Subsystem sftp /usr/lib/openssh/sftp-server  # Must be present
   <li>Enable shell transfer as fallback</li>
 </ul>
 
+<h3>A Login Script That Prints Text</h3>
+
+<p>A <code>~/.bashrc</code> (or another login script) that prints a line for every command, such as an <code>echo "Welcome"</code>, puts that text in front of what each command answers.</p>
+<ul>
+  <li><b>SCP and shell transfers, server commands:</b> the plugin learns the text once per connection, with an <code>echo</code>, and cuts it off the answers; scp's handshake also passes over text lines before its first word. Text that changes with every command (a date, a fortune) cannot be cut off this way.</li>
+  <li><b>SFTP:</b> the text lands in the SFTP stream itself, and SFTP fails ("SFTP initialization failed"), as it does in OpenSSH's <code>sftp</code> and other clients. Use "Use SCP for everything", or make the script print only in interactive shells: <code>[ -t 1 ] &amp;&amp; echo "Welcome"</code> or below Debian's <code>case $- in *i*)</code> check. A server whose SFTP is <code>internal-sftp</code> runs no login script for it.</li>
+  <li>The handling can be turned off for a session with <code>loginnoise=0</code> in its section of <code>sftpplug.ini</code>.</li>
+</ul>
+
 <h3>Transfer Speed Slow</h3>
 
 <h4>Diagnosis</h4>

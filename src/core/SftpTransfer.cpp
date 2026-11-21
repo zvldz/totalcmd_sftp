@@ -33,6 +33,17 @@ namespace {
 constexpr size_t SFTP_PREFETCH_FACTOR = 64;
 constexpr int SFTP_SCP_CHANNEL_OPEN_TIMEOUT_MS = 20000;
 
+// SCP beside SFTP is spoken by libssh2, which fails on login-script text
+// ahead of scp's first word. Where the login script prints such text, the
+// plugin's own SCP, which passes it over, carries the file instead.
+bool ScpThroughShell(pConnectSettings cs)
+{
+    if (cs->scponly)
+        return true;
+    LearnLoginNoise(cs);
+    return cs->loginNoiseState == 2;
+}
+
 // Opens a remote SFTP file, retrying on EAGAIN until the timeout or Escape.
 // Shared by the download and upload paths.
 std::unique_ptr<ISftpHandle> OpenSftpFileWithRetry(
@@ -342,7 +353,7 @@ int SftpDownloadFileW(pConnectSettings cs, LPCWSTR RemoteName, LPCWSTR LocalName
     // the server refuses to read leaves no empty local file behind and does
     // not truncate a local file about to be overwritten. The shell paths open
     // the remote side themselves and come after the local file.
-    const bool shellPath = forceShellFallback || (useScp && cs->scponly);
+    const bool shellPath = forceShellFallback || (useScp && ScpThroughShell(cs));
     std::unique_ptr<ISftpHandle> sftpHandle;
     std::unique_ptr<ISshChannel> scpHandle;
     libssh2_struct_stat scpInfo{};
@@ -575,7 +586,7 @@ int SftpUploadFileW(pConnectSettings cs, LPCWSTR LocalName, LPCWSTR RemoteName,
     int64_t resumeOffset = 0;
 
     if (useScp) {
-        if (cs->scponly) {
+        if (ScpThroughShell(cs)) {
             // Shell SCP upload
             return ShellScpUploadFile(cs, BuildShellScpArgument(remotePath), RemoteName,
                                       local.get(), LocalName, uploadSize, textMode, &filesize,

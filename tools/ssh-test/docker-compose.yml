@@ -11,6 +11,8 @@
 # ssh-nosub  port 2223, no subsystem: SFTP only through
 #            sftpservercommand=/usr/lib/openssh/sftp-server
 # ssh-hk     port 2224, whose host key a test replaces mid-run
+# ssh-internal  port 2226, SFTP as internal-sftp: no shell, so the login
+#            script of user noisy reaches scp but not SFTP
 # proxy      SOCKS5 on 1080 (open) and 1081 (proxyuser / proxypass), SOCKS4
 #            and SOCKS4A on 1082, HTTP CONNECT on 8888 (open) and 8889
 #            (proxyuser / proxypass); they reach the server as ssh:22, and
@@ -41,6 +43,13 @@ services:
     <<: *ssh
     ports:
       - "127.0.0.1:2224:22"
+
+  ssh-internal:
+    <<: *ssh
+    environment:
+      INTERNAL_SFTP: "1"
+    ports:
+      - "127.0.0.1:2226:22"
 
   proxy:
     build:

@@ -266,6 +266,14 @@ struct tConnectSettings {
     // SftpServerSupportsChecksumsW) and the computations still running.
     int checksumTool = 0;
     std::vector<std::unique_ptr<ChecksumJob>> checksumJobs;
+
+    // What the login script prints ahead of every command (a talkative
+    // .bashrc), learned once per connection by LearnLoginNoise and cut off
+    // the output of the plugin's own commands. INI key "loginnoise=0" turns
+    // the whole handling off.
+    bool loginNoiseHandling = true;
+    int loginNoiseState = 0;   // 0 = not asked, 1 = none, 2 = loginNoise holds it
+    std::string loginNoise;
 };
 
 using pConnectSettings = tConnectSettings*;

@@ -112,6 +112,26 @@ bool ParseScpCLine(const std::string& line, int64_t& outSize, std::string& outNa
     return true;
 }
 
+// The rest of a T line after the 'T': four numbers, "mtime 0 atime 0".
+bool IsScpTimeLine(const std::string& rest)
+{
+    int numbers = 0;
+    size_t i = 0;
+    while (i < rest.size()) {
+        if (rest[i] < '0' || rest[i] > '9')
+            return false;
+        while (i < rest.size() && rest[i] >= '0' && rest[i] <= '9')
+            ++i;
+        ++numbers;
+        if (i < rest.size()) {
+            if (rest[i] != ' ')
+                return false;
+            ++i;
+        }
+    }
+    return numbers == 4;
+}
+
 } // anonymous namespace
 
 void ShowTransferSpeedIfLarge(LPCSTR prefix, int64_t bytesTransferred, SYSTICKS starttime)
@@ -193,6 +213,32 @@ bool ScpReadAck(ISshChannel* channel, pConnectSettings cs, std::string& err)
         return false;
     }
 
+    err = LngStrA(IDS_SCP_PROTOCOL_ERROR, "SCP protocol error.");
+    return false;
+}
+
+// scp -t's first acknowledgement. Text lines a login script printed before
+// it are passed over: the acknowledgement is a 0, 1 or 2 byte, which text
+// does not hold.
+bool ScpReadFirstAck(ISshChannel* channel, pConnectSettings cs, std::string& err)
+{
+    err.clear();
+    for (int lines = 0; lines <= kScpNoiseLinesMax; ++lines) {
+        char code = 0;
+        if (!ScpReadByte(channel, cs, &code, SFTP_SCP_READ_IDLE_TIMEOUT_MS))
+            return false;
+        if (code == 0)
+            return true;
+        if (code == 1 || code == 2) {
+            if (!ScpReadLine(channel, cs, err, SFTP_SCP_READ_IDLE_TIMEOUT_MS))
+                err = LngStrA(IDS_SCP_PROTOCOL_ERROR, "SCP protocol error.");
+            return false;
+        }
+        std::string rest;
+        if (code != '\n' && !ScpReadLine(channel, cs, rest, SFTP_SCP_READ_IDLE_TIMEOUT_MS))
+            break;
+        SFTP_LOG("SCP", "upload: line before the acknowledgement passed over (%zu bytes)", rest.size() + 1);
+    }
     err = LngStrA(IDS_SCP_PROTOCOL_ERROR, "SCP protocol error.");
     return false;
 }
@@ -327,7 +373,7 @@ int ShellScpDownloadFile(pConnectSettings cs,
     std::string cmd = "scp -f ";
     cmd += remotePathArg;
     SFTP_LOG("SCP", "download: sending scp -f");
-    if (!SendChannelCommandNoEof(cs->session.get(), channel.get(), cmd.c_str(), cs->sock)) {
+    if (!SendExecCommand(cs, channel, cmd.c_str(), false)) {
         SFTP_LOG("SCP", "download: sending the command failed");
         return SFTP_READFAILED;
     }
@@ -336,7 +382,8 @@ int ShellScpDownloadFile(pConnectSettings cs,
     // from here, and what comes back is already the file's header, beginning
     // with 'C'. There is no acknowledgement to read in this direction — the
     // loop below reads that header, and handles the 1 and 2 error codes a
-    // failing scp would send in its place.
+    // failing scp would send in its place. Lines a login script printed
+    // before it are passed over until the first header that parses.
     ScpChannel scp(std::move(channel), cs);
     if (!scp.SendAck(SFTP_SCP_WRITE_IDLE_TIMEOUT_MS)) {
         SFTP_LOG("SCP", "download: could not ask for the file");
@@ -350,6 +397,15 @@ int ShellScpDownloadFile(pConnectSettings cs,
     std::vector<char> converted;
     // The stall timeout counts from the last data, not from the start.
     auto lastData = std::chrono::steady_clock::now();
+    // Until scp's first header, a line that is not one is login-script text.
+    bool scpSpoke = false;
+    int noiseLines = 0;
+    const auto passOver = [&](std::string line) {
+        if (scpSpoke || ++noiseLines > kScpNoiseLinesMax)
+            return false;
+        SFTP_LOG("SCP", "download: line before the header passed over (%zu bytes)", line.size());
+        return true;
+    };
 
     while (true) {
         char type = 0;
@@ -358,15 +414,23 @@ int ShellScpDownloadFile(pConnectSettings cs,
         }
         if (type == 'T') {
             std::string tline;
-            if (!scp.ReadLine(tline, SFTP_SCP_READ_IDLE_TIMEOUT_MS) ||
-                !scp.SendAck(SFTP_SCP_WRITE_IDLE_TIMEOUT_MS)) {
+            if (!scp.ReadLine(tline, SFTP_SCP_READ_IDLE_TIMEOUT_MS))
+                return SFTP_READFAILED;
+            if (!IsScpTimeLine(tline)) {
+                if (passOver("T" + tline))
+                    continue;
                 return SFTP_READFAILED;
             }
+            scpSpoke = true;
+            if (!scp.SendAck(SFTP_SCP_WRITE_IDLE_TIMEOUT_MS))
+                return SFTP_READFAILED;
             continue;
         }
         if (type == 'E') {
             std::string eline;
             scp.ReadLine(eline, SFTP_SCP_READ_IDLE_TIMEOUT_MS);
+            if (!eline.empty() && passOver("E" + eline))
+                continue;
             scp.SendAck(SFTP_SCP_WRITE_IDLE_TIMEOUT_MS);
             break;
         }
@@ -377,6 +441,14 @@ int ShellScpDownloadFile(pConnectSettings cs,
             return SFTP_READFAILED;
         }
         if (type != 'C') {
+            if (type == '\n' || type == '\r') {
+                if (passOver(std::string()))
+                    continue;
+                return SFTP_READFAILED;
+            }
+            std::string rest;
+            if (scp.ReadLine(rest, SFTP_SCP_READ_IDLE_TIMEOUT_MS) && passOver(std::string(1, type) + rest))
+                continue;
             return SFTP_READFAILED;
         }
 
@@ -386,8 +458,13 @@ int ShellScpDownloadFile(pConnectSettings cs,
         }
         cline.insert(cline.begin(), 'C');
         std::string remoteName;
-        if (!ParseScpCLine(cline, remoteSize, remoteName) ||
-            !scp.SendAck(SFTP_SCP_WRITE_IDLE_TIMEOUT_MS)) {
+        if (!ParseScpCLine(cline, remoteSize, remoteName)) {
+            if (passOver(cline))
+                continue;
+            return SFTP_READFAILED;
+        }
+        scpSpoke = true;
+        if (!scp.SendAck(SFTP_SCP_WRITE_IDLE_TIMEOUT_MS)) {
             return SFTP_READFAILED;
         }
         gotDataHeader = true;

@@ -23,11 +23,15 @@ Everything a run creates on the server lives in one directory under
 -RemoteBase, and only that directory is removed.
 
 .PARAMETER Modes
-sftp, scp, scponly, shell, text, text-scp, text-scponly, nosub, nosub-bad,
-postcmd, key-utf8, key-cp1251, classic-gate, secrets, pass-store, jump-key,
-jump-pass, jump-ref, socks5, socks5-auth, socks4, socks4a, http-proxy,
-http-auth, ipv6, hostkey, netfail, php, php74 (default: all).
+sftp, scp, scponly, shell, text, text-scp, text-scponly, scponly-noisy,
+scp-noisy, shell-noisy, nosub, nosub-bad, postcmd, key-utf8, key-cp1251,
+classic-gate, secrets, pass-store, jump-key, jump-pass, jump-ref, socks5,
+socks5-auth, socks4, socks4a, http-proxy, http-auth, ipv6, hostkey, netfail,
+php, php74 (default: all).
   text*      text mode (CRLF <-> LF) over SFTP, SCP and SCP-only
+  *-noisy    SCP-only, SCP beside SFTP and the shell transfer as a user whose
+             .bashrc prints a line for every command, ahead of what the command
+             itself prints
   nosub      SFTP through sftpservercommand; the server is restarted
              mid-run and the session has to reconnect through the command
   nosub-bad  a wrong sftpservercommand: fails, and without hanging
@@ -64,7 +68,7 @@ http-auth, ipv6, hostkey, netfail, php, php74 (default: all).
 #>
 param(
     [ValidateSet('x64', 'x86', 'both')] [string]$Arch = 'both',
-    [string[]]$Modes = @('sftp', 'scp', 'scponly', 'shell', 'text', 'text-scp', 'text-scponly', 'nosub', 'nosub-bad', 'postcmd', 'key-utf8', 'key-cp1251', 'classic-gate', 'secrets', 'pass-store', 'jump-key', 'jump-pass', 'jump-ref', 'socks5', 'socks5-auth', 'socks4', 'socks4a', 'http-proxy', 'http-auth', 'ipv6', 'hostkey', 'netfail', 'php', 'php74'),
+    [string[]]$Modes = @('sftp', 'scp', 'scponly', 'shell', 'text', 'text-scp', 'text-scponly', 'scponly-noisy', 'scp-noisy', 'shell-noisy', 'nosub', 'nosub-bad', 'postcmd', 'key-utf8', 'key-cp1251', 'classic-gate', 'secrets', 'pass-store', 'jump-key', 'jump-pass', 'jump-ref', 'socks5', 'socks5-auth', 'socks4', 'socks4a', 'http-proxy', 'http-auth', 'ipv6', 'hostkey', 'netfail', 'php', 'php74'),
     [string]$RemoteBase = '/tmp',
     [switch]$VerboseLog
 )
@@ -78,7 +82,7 @@ $KeyFileUtf8 = Join-Path $Bench 'keys\id_ed25519_utf8'
 $KeyFileCp1251 = Join-Path $Bench 'keys\id_ed25519_cp1251'
 
 $Modes = @($Modes | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
-$knownModes = 'sftp', 'scp', 'scponly', 'shell', 'text', 'text-scp', 'text-scponly', 'nosub', 'nosub-bad', 'postcmd', 'key-utf8', 'key-cp1251', 'classic-gate', 'secrets', 'pass-store', 'jump-key', 'jump-pass', 'jump-ref', 'socks5', 'socks5-auth', 'socks4', 'socks4a', 'http-proxy', 'http-auth', 'ipv6', 'hostkey', 'netfail', 'php', 'php74'
+$knownModes = 'sftp', 'scp', 'scponly', 'shell', 'text', 'text-scp', 'text-scponly', 'scponly-noisy', 'scp-noisy', 'shell-noisy', 'nosub', 'nosub-bad', 'postcmd', 'key-utf8', 'key-cp1251', 'classic-gate', 'secrets', 'pass-store', 'jump-key', 'jump-pass', 'jump-ref', 'socks5', 'socks5-auth', 'socks4', 'socks4a', 'http-proxy', 'http-auth', 'ipv6', 'hostkey', 'netfail', 'php', 'php74'
 foreach ($m in $Modes) { if ($m -notin $knownModes) { throw "Unknown mode '$m'. Known: $($knownModes -join ', ')" } }
 
 # ---------------------------------------------------------------------------
@@ -132,6 +136,14 @@ $overrides = @{
                  server = '127.0.0.1:2223'; sftpservercommand = '/usr/lib/openssh/sftp-server' }
     'text-scp'     = @{ scpfordata = '1'; scponly = '0'; shelltransfer = '0'; shelltransferforce = '0'; unixlinebreaks = '1' }
     'text-scponly' = @{ scpfordata = '1'; scponly = '1'; shelltransfer = '0'; shelltransferforce = '0'; unixlinebreaks = '1' }
+    'scponly-noisy' = @{ scpfordata = '1'; scponly = '1'; shelltransfer = '0'; shelltransferforce = '0'; unixlinebreaks = '0'
+                         user = 'noisy' }
+    # SFTP through a shell cannot carry login-script text at all, so SCP beside
+    # SFTP is tried against internal-sftp.
+    'scp-noisy'     = @{ scpfordata = '1'; scponly = '0'; shelltransfer = '0'; shelltransferforce = '0'; unixlinebreaks = '0'
+                         user = 'noisy'; server = '127.0.0.1:2226' }
+    'shell-noisy'   = @{ scpfordata = '1'; scponly = '1'; shelltransfer = '1'; shelltransferforce = '1'; unixlinebreaks = '0'
+                         user = 'noisy' }
     'nosub-bad'    = @{ scpfordata = '0'; scponly = '0'; shelltransfer = '0'; shelltransferforce = '0'; unixlinebreaks = '0'
                         server = '127.0.0.1:2223'; sftpservercommand = '/nonexistent/sftp-server' }
     postcmd        = @{ scpfordata = '0'; scponly = '0'; shelltransfer = '0'; shelltransferforce = '0'; unixlinebreaks = '0'

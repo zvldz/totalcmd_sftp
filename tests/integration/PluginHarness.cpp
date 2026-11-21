@@ -422,7 +422,8 @@ int wmain(int argc, wchar_t** argv)
     std::wstring remoteBase = argv[4];
     const std::wstring mode = argv[5];
     const bool textChecks = mode.rfind(L"text", 0) == 0;
-    const bool shellMode = mode == L"scponly" || mode == L"shell" || mode == L"text-scponly";
+    const bool shellMode = mode == L"scponly" || mode == L"shell" || mode == L"text-scponly" ||
+                           mode == L"scponly-noisy" || mode == L"shell-noisy";
     // PHP Agent: a transport without Unix permissions, so no chmod checks.
     const bool phpMode = mode.rfind(L"php", 0) == 0;
     g_verbose = EnvIs(L"SFTP_IT_VERBOSE", L"1");
@@ -811,7 +812,7 @@ int wmain(int argc, wchar_t** argv)
     // persistent shell only, nor over PHP Agent.
     {
         const int mask = g_plugin.ServerSupportsChecksumsW((dir + L"\\" + samples[0].name).c_str());
-        const bool expected = !phpMode && mode != L"shell";
+        const bool expected = !phpMode && mode != L"shell" && mode != L"shell-noisy";
         Check(mask == (expected ? FS_CHK_SHA256 : 0),
               "server checksums offered: " + std::to_string(mask));
         // Polls the way Total Commander does until the hash is ready.

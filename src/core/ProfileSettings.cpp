@@ -171,6 +171,7 @@ bool LoadServerSettings(LPCSTR DisplayName, pConnectSettings ConnectResults, LPC
                   ConnectResults->shell_transfer_dd ? 1 : 0,
                   iniFileName) != 0;
     ConnectResults->shell_dd_b64only  = false;
+    ConnectResults->loginNoiseHandling = IniGetInt(DisplayName, "loginnoise", 1, iniFileName) != 0;
     ConnectResults->php_http_mode = IniGetInt(DisplayName, "phphttpmode", 0, iniFileName);
     if (ConnectResults->php_http_mode < 0 || ConnectResults->php_http_mode > 2)
         ConnectResults->php_http_mode = 0;
