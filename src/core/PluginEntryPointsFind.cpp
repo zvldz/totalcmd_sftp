@@ -918,8 +918,9 @@ HANDLE WINAPI FsFindFirstW(LPCWSTR Path, LPWIN32_FIND_DATAW FindData)
         // Plugin-side folder navigation: the path is not a real session but a
         // grouping prefix that contains at least one saved session. Resolver
         // classifies this as PathKind::Folder with a non-empty displayName.
-        // Refresh the in-memory session list first so the resolver sees any
-        // sessions saved since the last enumeration.
+        // Refresh the in-memory session list first so the resolver, and the
+        // connect below (a session saved since, or a URL), see any sessions
+        // saved since the last enumeration.
         LoadServersFromIniW(inifilenameW, s_quickconnect);
         {
             const PathResolution r = ResolvePathKindW(Path);
@@ -933,8 +934,6 @@ HANDLE WINAPI FsFindFirstW(LPCWSTR Path, LPWIN32_FIND_DATAW FindData)
         pConnectSettings new_serverid = nullptr;
         LPVOID sftpdataptr = nullptr;
 
-        // load server list if user connects directly via URL
-        LoadServersFromIniW(inifilenameW, s_quickconnect);
         // Disable reading only within an active server context.
         if (disablereading && IsMainThread()) {
             SetLastError(ERROR_NO_MORE_FILES);
