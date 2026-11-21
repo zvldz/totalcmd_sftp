@@ -436,11 +436,21 @@ int wmain(int argc, wchar_t** argv)
     if (!g_plugin.Load(pluginPath.c_str()))
         return 2;
     g_plugin.InitW(1, OnProgress, OnLog, OnRequest);
+    // The magic-names mode runs the plugin in Russian, on an ini of its own
+    // holding one proxy record.
+    std::wstring iniUsed = iniDir;
+    if (mode == L"magic") {
+        iniUsed = NewTempDir(L"names");
+        iniUsed.pop_back();
+        WriteFileBytes(iniUsed + L"\\sftpplug.ini",
+                       "[Configuration]\r\nLanguage=Russian\r\nDebugLog=1\r\n"
+                       "[proxy]\r\nproxytype=2\r\nproxyserver=127.0.0.1:1080\r\n");
+    }
     FsDefaultParamStruct dps{};
     dps.size = sizeof(dps);
     dps.PluginInterfaceVersionLow = 30;
     dps.PluginInterfaceVersionHi = 2;
-    WideCharToMultiByte(CP_ACP, 0, (iniDir + L"\\fsplugin.ini").c_str(), -1, dps.DefaultIniName, MAX_PATH, nullptr, nullptr);
+    WideCharToMultiByte(CP_ACP, 0, (iniUsed + L"\\fsplugin.ini").c_str(), -1, dps.DefaultIniName, MAX_PATH, nullptr, nullptr);
     g_plugin.SetDefaultParams(&dps);
 
     // Passwords the run keeps in Total Commander's password manager, which
@@ -469,6 +479,47 @@ int wmain(int argc, wchar_t** argv)
     const std::wstring root = L"\\" + session + remoteBase;
     const std::wstring dir = root + L"\\" + runName;
     std::printf("session %s, remote directory %s\n", Narrow(session).c_str(), Narrow(dir).c_str());
+
+    if (mode == L"magic") {
+        // The plugin's own folders and entries show in the language in use;
+        // a path naming a root folder in any shipped language still leads
+        // there, an entry inside a folder only in English or that language.
+        bool ok = false;
+        const auto rootList = ListDir(L"\\", ok);
+        Check(ok && rootList.count(L"[Импорт]") && rootList.count(L"[Прокси]"),
+              "the root shows [Импорт] and [Прокси]");
+        Check(!rootList.count(L"[Imports]") && !rootList.count(L"[Proxies]"),
+              "and not the English names");
+        for (const wchar_t* path : { L"\\[Импорт]", L"\\[Imports]", L"\\[Importe]", L"\\[导入]" }) {
+            const auto sources = ListDir(path, ok);
+            Check(ok && sources.count(L"[PuTTY]"), Narrow(path) + " lists the import sources");
+        }
+        const auto proxies = ListDir(L"\\[Proxies]", ok);
+        Check(ok && proxies.size() == 1, "\\[Proxies] lists the proxy record");
+        const auto putty = ListDir(L"\\[Imports]\\[PuTTY]", ok);
+        Check(ok && putty.count(L"[Обновить]") && !putty.count(L"[Refresh]"),
+              "a source shows [Обновить]");
+
+        // F3 on a pseudo entry gives its help text, which names it in English.
+        const std::wstring local = NewTempDir(L"names");
+        const auto helpOf = [&](const std::wstring& remote) {
+            const std::wstring out = local + L"help.txt";
+            DeleteFileW(out.c_str());
+            RemoteInfoStruct ri{};
+            if (g_plugin.GetFileW(remote.c_str(), const_cast<LPWSTR>(out.c_str()), FS_COPYFLAGS_OVERWRITE, &ri) != FS_FILE_OK)
+                return std::string();
+            std::ifstream in(out, std::ios::binary);
+            return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+        };
+        Check(helpOf(L"\\[Импорт]\\[PuTTY]\\[Обновить]").find("[Refresh] action") != std::string::npos,
+              "[Обновить] is the Refresh action");
+        Check(helpOf(L"\\[Imports]\\[PuTTY]\\[Refresh]").find("[Refresh] action") != std::string::npos,
+              "[Refresh] in English still is");
+        Check(helpOf(L"\\[Imports]\\[PuTTY]\\[Aktualisieren]").find("[Refresh] action") == std::string::npos,
+              "[Aktualisieren], German, is not taken for it inside a folder");
+        std::printf("%d passed, %d failed, %d known\n", g_passed, g_failed, g_known);
+        return g_failed == 0 ? 0 : 1;
+    }
 
     if (mode == L"nosub-bad") {
         // A server without the sftp subsystem and a server command that

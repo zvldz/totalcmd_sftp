@@ -3,7 +3,7 @@
 # Generated from sftpplug.rc
 
 130=F7 - nápověda.txt
-131=Nápověda zásuvného modulu:\r\nF7:\tVytvořit nové připojení (TC zobrazí Nový adresář – zadejte název připojení)\r\nF8/Del:\tOdstranit připojení\r\nEnter:\tPřipojit\r\nOdpojit:\tZevnitř relace, nebo F8 na jejím řádku v [Active Sessions]. Tlačítko na liště ji z kořene pluginu nechá otevřenou.\r\nAlt+Enter:\tZměnit možnosti\r\nF3/F4:\tZobrazit nastavení jako INI (upravit přes Alt+Enter)\r\n\r\nRelace ve složkách:\r\nF7 ve složce:\tVytvoří relaci v této složce\r\nF7 se jménem folder/x:\tVytvoří relaci v uvedené složce\r\nF6 na \\složka\\jméno:\tPřesune relaci do složky\r\nF6 na složce:\tPřejmenuje všechny relace uvnitř; odkazy na jump-hosta se aktualizují\r\nF5 nebo přetažení:\tZkopíruje relaci nebo složku (duplikát)\r\nF8 na složce:\tOdstraní složku a všechny relace v ní\r\n\r\nRežimy přenosu:\r\nSSH (SFTP/SCP):\tVýchozí a nejrychlejší, pokud funguje přístup SSH\r\nPoužít SCP pro data:\tKdyž je SFTP blokováno nebo nestabilní\r\nPouze SCP:\tÚplně zakáže SFTP (staré hostitele)\r\nVynutit přenos shellem:\tVynutí přenos přes shell (dd/base64)\r\nPHP Agent (HTTP):\tBez účtu SSH; používá nahraný sftp.php\r\nPHP Shell (HTTP):\tPseudo-terminál HTTP přes sftp.php
+131=Nápověda zásuvného modulu:\r\nF7:\tVytvořit nové připojení (TC zobrazí Nový adresář – zadejte název připojení)\r\nF8/Del:\tOdstranit připojení\r\nEnter:\tPřipojit\r\nOdpojit:\tZevnitř relace, nebo F8 na jejím řádku v [Aktivní relace]. Tlačítko na liště ji z kořene pluginu nechá otevřenou.\r\nAlt+Enter:\tZměnit možnosti\r\nF3/F4:\tZobrazit nastavení jako INI (upravit přes Alt+Enter)\r\n\r\nRelace ve složkách:\r\nF7 ve složce:\tVytvoří relaci v této složce\r\nF7 se jménem folder/x:\tVytvoří relaci v uvedené složce\r\nF6 na \\složka\\jméno:\tPřesune relaci do složky\r\nF6 na složce:\tPřejmenuje všechny relace uvnitř; odkazy na jump-hosta se aktualizují\r\nF5 nebo přetažení:\tZkopíruje relaci nebo složku (duplikát)\r\nF8 na složce:\tOdstraní složku a všechny relace v ní\r\n\r\nRežimy přenosu:\r\nSSH (SFTP/SCP):\tVýchozí a nejrychlejší, pokud funguje přístup SSH\r\nPoužít SCP pro data:\tKdyž je SFTP blokováno nebo nestabilní\r\nPouze SCP:\tÚplně zakáže SFTP (staré hostitele)\r\nVynutit přenos shellem:\tVynutí přenos přes shell (dd/base64)\r\nPHP Agent (HTTP):\tBez účtu SSH; používá nahraný sftp.php\r\nPHP Shell (HTTP):\tPseudo-terminál HTTP přes sftp.php
 132=Rychlé připojení
 144=Nápověda
 146=Zde můžete nastavit způsob, jakým server odesílá názvy souborů s diakritikou. Pokud zvolíte 'automaticky zjistit', zásuvný modul načte proměnné prostředí (např. LANG) a odešle příkaz 'locale', aby zjistil kódování znaků používané serverem. Toto nemusí fungovat u všech serverů, takže pokud víte, že server používá UTF-8, nebo se názvy souborů zobrazují se špatnými znaky místo diakritiky, vyberte 'ano' ručně.
@@ -316,7 +316,7 @@
 12139=SFTP modul - import proxy
 12140=Nelze importovat proxy: soubor neobsahuje sekci [proxy] s typem a serverem.
 12141=Nelze importovat proxy: zápis do sftpplug.ini selhal.
-12142=Tato proxy už v [Proxies] je (stejný typ, server a uživatel). Nový záznam nebyl vytvořen.
+12142=Tato proxy už v [Proxy] je (stejný typ, server a uživatel). Nový záznam nebyl vytvořen.
 12143=Časový limit relace (min):
 12144=(0 = bez omezení)
 12145=Auto
@@ -339,7 +339,7 @@
 12168=Tato relace používá PHP Agent nebo LAN Pair, které má jen verze extra pluginu (SFTPplug-...-extra.zip). Tato verze se připojuje jen přes SSH.
 12169=Tato relace je nastavena na proxy i na skokový hostitel zároveň. Plugin se ke skokovému hostiteli připojuje přímo, proxy by byla vynechána. Ponechte jen jedno.
 12170=Skoková relace '{}' vede přes proxy. Ke skokovému hostiteli se plugin připojuje přímo, ta proxy by byla vynechána, proto je spojení odmítnuto. Vyberte skokovou relaci bez proxy.
-12171=Relace byla po posledním načtení změněna v programu, ze kterého byla importována (hostitel, uživatel, proxy nebo skokový hostitel). Použijte [Refresh] v její složce a zkuste to znovu.
+12171=Relace byla po posledním načtení změněna v programu, ze kterého byla importována (hostitel, uživatel, proxy nebo skokový hostitel). Použijte [Obnovit] v její složce a zkuste to znovu.
 12172=Tento název nelze dát relaci. Nesmí obsahovat řídicí znaky, zpětné lomítko ani $$, začínat ani končit mezerou, začínat znakem [, být jednou z vlastních sekcí pluginu (Configuration, Imports, proxy) ani ležet uvnitř jiné relace.
 12173=Toto heslo je příliš dlouhé na uložení. Heslo smí mít nejvýše 259 bajtů v UTF-8: 259 latinských písmen, v jiných abecedách méně.
 12174=ProxyJump: nelze přeložit přechodového hostitele {}
@@ -355,6 +355,14 @@
 12184=Kopírovat
 12185=Vložit
 12186=Vybrat vše
+12300=[Importy]
+12301=[Aktivní relace]
+12302=[Proxy]
+12303=[Odpojit vše]
+12304=[Obnovit]
+12305=[Přidat vlastní umístění...]
+12306=[Spravovat vlastní umístění]
+12307=%s nyní nenalezen
 12089=SFTP
 12104=(ručně)
 12105= (chybí)

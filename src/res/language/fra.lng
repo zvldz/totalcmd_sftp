@@ -3,7 +3,7 @@
 # Generated from sftpplug.rc
 
 130=F7 - aide.txt
-131=Aide du plugin:\r\nF7:\tCréer une nouvelle connexion (TC affiche Nouveau Dossier – entrer le nom de la connexion)\r\nF8/Suppr:\tSupprimer la connexion\r\nEntrée:\tConnecter\r\nDéconnecter :\tDepuis la session, ou F8 sur sa ligne dans [Active Sessions]. Le bouton de la barre la laisse ouverte depuis la racine du plugin.\r\nAlt+Entrée:\tModifier les options\r\nF3/F4:\tAfficher les paramètres en INI (modifier via Alt+Entrée)\r\n\r\nSessions dans des dossiers:\r\nF7 dans un dossier:\tCrée la session dans ce dossier\r\nF7 avec le nom folder/x:\tCrée la session dans le dossier indiqué\r\nF6 vers \\dossier\\nom:\tDéplace une session dans un dossier\r\nF6 sur un dossier:\tRenomme toutes les sessions; les références de rebond suivent\r\nF5 ou glisser:\tCopie la session ou le dossier (duplicata)\r\nF8 sur un dossier:\tSupprime le dossier et toutes ses sessions\r\n\r\nModes de transfert:\r\nSSH (SFTP/SCP):\tDéfaut, le plus rapide quand SSH est disponible\r\nUtiliser SCP pour les données:\tUtiliser quand SFTP est bloqué/instable\r\nUtiliser SCP uniquement:\tDésactiver SFTP complètement (hôtes anciens)\r\nForcer transfert shell:\tForcer le transfert par shell (dd/base64)\r\nAgent PHP (HTTP):\tPas de compte SSH nécessaire; utiliser sftp.php téléversé\r\nShell PHP (HTTP):\tPseudo-terminal via HTTP par sftp.php
+131=Aide du plugin:\r\nF7:\tCréer une nouvelle connexion (TC affiche Nouveau Dossier – entrer le nom de la connexion)\r\nF8/Suppr:\tSupprimer la connexion\r\nEntrée:\tConnecter\r\nDéconnecter :\tDepuis la session, ou F8 sur sa ligne dans [Sessions actives]. Le bouton de la barre la laisse ouverte depuis la racine du plugin.\r\nAlt+Entrée:\tModifier les options\r\nF3/F4:\tAfficher les paramètres en INI (modifier via Alt+Entrée)\r\n\r\nSessions dans des dossiers:\r\nF7 dans un dossier:\tCrée la session dans ce dossier\r\nF7 avec le nom folder/x:\tCrée la session dans le dossier indiqué\r\nF6 vers \\dossier\\nom:\tDéplace une session dans un dossier\r\nF6 sur un dossier:\tRenomme toutes les sessions; les références de rebond suivent\r\nF5 ou glisser:\tCopie la session ou le dossier (duplicata)\r\nF8 sur un dossier:\tSupprime le dossier et toutes ses sessions\r\n\r\nModes de transfert:\r\nSSH (SFTP/SCP):\tDéfaut, le plus rapide quand SSH est disponible\r\nUtiliser SCP pour les données:\tUtiliser quand SFTP est bloqué/instable\r\nUtiliser SCP uniquement:\tDésactiver SFTP complètement (hôtes anciens)\r\nForcer transfert shell:\tForcer le transfert par shell (dd/base64)\r\nAgent PHP (HTTP):\tPas de compte SSH nécessaire; utiliser sftp.php téléversé\r\nShell PHP (HTTP):\tPseudo-terminal via HTTP par sftp.php
 132=Connexion rapide
 144=Aide
 146=Ici vous pouvez configurer comment le serveur envoie les noms de fichiers avec des accents. En choisissant 'détection auto', le plugin lira des variables d'environnement (comme LANG) et enverra la commande 'locale' pour déterminer l'encodage de caractères du serveur. Cela peut ne pas fonctionner avec tous les serveurs. Si vous savez que votre serveur utilise UTF-8, ou si les noms de fichiers apparaissent avec des caractères étranges à la place des accents, veuillez choisir 'oui' manuellement.
@@ -317,7 +317,7 @@
 12139=Plugin SFTP - import de proxy
 12140=Import du proxy impossible : le fichier n'a pas de section [proxy] avec un type et un serveur.
 12141=Import du proxy impossible : échec de l'écriture dans sftpplug.ini.
-12142=Ce proxy figure déjà dans [Proxies] (même type, serveur et utilisateur). Aucun nouvel enregistrement n'a été créé.
+12142=Ce proxy figure déjà dans [Proxys] (même type, serveur et utilisateur). Aucun nouvel enregistrement n'a été créé.
 12143=Délai de session (min) :
 12144=(0 = illimité)
 12145=Auto
@@ -340,7 +340,7 @@
 12168=Cette session utilise PHP Agent ou LAN Pair, présents uniquement dans la version extra du plugin (SFTPplug-...-extra.zip). Cette version se connecte uniquement en SSH.
 12169=Cette session est réglée pour passer à la fois par un proxy et par un hôte de rebond. Le plugin joint l'hôte de rebond directement, le proxy serait contourné. Gardez l'un des deux.
 12170=La session de rebond '{}' passe par un proxy. L'hôte de rebond est joint directement, ce proxy serait contourné, la connexion est donc refusée. Choisissez une session de rebond sans proxy.
-12171=Cette session a été modifiée dans le programme d'où elle est importée (hôte, utilisateur, proxy ou hôte de rebond) depuis la dernière analyse. Utilisez [Refresh] dans son dossier, puis réessayez.
+12171=Cette session a été modifiée dans le programme d'où elle est importée (hôte, utilisateur, proxy ou hôte de rebond) depuis la dernière analyse. Utilisez [Actualiser] dans son dossier, puis réessayez.
 12172=Ce nom ne peut pas être donné à une session. Il ne peut contenir ni caractère de contrôle, ni barre oblique inverse, ni $$, ni commencer ou finir par une espace, ni commencer par [, ni être une des sections propres du plugin (Configuration, Imports, proxy), ni se trouver dans une autre session.
 12173=Ce mot de passe est trop long pour être conservé. Un mot de passe peut occuper jusqu'à 259 octets en UTF-8 : 259 lettres latines, moins dans d'autres alphabets.
 12174=ProxyJump : impossible de résoudre l'hôte intermédiaire {}
@@ -356,6 +356,14 @@
 12184=Copier
 12185=Coller
 12186=Tout sélectionner
+12300=[Importations]
+12301=[Sessions actives]
+12302=[Proxys]
+12303=[Tout déconnecter]
+12304=[Actualiser]
+12305=[Ajouter un emplacement...]
+12306=[Gérer les emplacements]
+12307=%s non détecté actuellement
 12089=SFTP
 12104=(manuel)
 12105= (introuvable)

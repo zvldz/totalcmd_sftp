@@ -283,6 +283,13 @@ side works; full operation of the extra build there is not guaranteed.
 
 ### Features
 
+- **The plugin's own folders are translated.** `[Imports]`,
+  `[Active Sessions]`, `[Proxies]`, `[Refresh]`, `[Add custom location...]`,
+  `[Manage custom locations]`, `[Disconnect All]` and the "not currently
+  detected" line show in the plugin's language, as the rest of its texts
+  already did. A path to a root folder saved in another language — a
+  hotlist entry, a tab — still leads there; nothing in `sftpplug.ini`
+  changes. Messages that name these folders name them as shown.
 - **Debug log in every build, switched in `sftpplug.ini`.**
   `[Configuration] DebugLog=1` writes the log to `%TEMP%\sftpplug.log`
   (Double Commander `sftpplug-dc.log`) after Total Commander is restarted;

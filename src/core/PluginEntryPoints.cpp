@@ -798,8 +798,7 @@ static void StatusInfo(const std::string& remoteDir, int InfoStartEnd, int InfoO
         // must auto-connect normally.
         const bool isPutOp = InfoOperation == FS_STATUS_OP_PUT_SINGLE ||
                              InfoOperation == FS_STATUS_OP_PUT_MULTI;
-        const bool destInImports =
-            _strnicmp(RemoteDir, "\\[Imports]\\", 11) == 0;
+        const bool destInImports = IsImportsPath(unicode_util::internal_to_wide(remoteDir).c_str());
         if (InfoOperation == FS_STATUS_OP_RENMOV_MULTI ||
             (isPutOp && destInImports))
         {

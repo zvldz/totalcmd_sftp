@@ -3,7 +3,7 @@
 # Generated from sftpplug.rc
 
 130=F7 - súgó.txt
-131=Beépülő modul súgója:\r\nF7:\tÚj kapcsolat létrehozása (a TC megjeleníti az Új mappát – adja meg a kapcsolat nevét)\r\nF8/Del:\tKapcsolat törlése\r\nEnter:\tCsatlakozás\r\nBontás:\tA munkamenetből, vagy F8 a során az [Active Sessions] alatt. Az eszköztár gombja a bővítmény gyökeréből nyitva hagyja.\r\nAlt+Enter:\tBeállítások módosítása\r\nF3/F4:\tBeállítások megjelenítése INI-ként (szerkesztés: Alt+Enter)\r\n\r\nMunkamenetek mappákban:\r\nF7 mappán belül:\tA munkamenetet abban a mappában hozza létre\r\nF7 folder/x névvel:\tA munkamenetet a megadott mappában hozza létre\r\nF6 \\mappa\\név alakra:\tMappába helyezi a munkamenetet\r\nF6 mappán:\tAz összes munkamenetet átnevezi; a jump-host hivatkozások követik\r\nF5 vagy húzás:\tMásolja a munkamenetet vagy mappát\r\nF8 mappán:\tTörli a mappát és a benne lévő munkameneteket\r\n\r\nÁtviteli módok:\r\nSSH (SFTP/SCP):\tAlapértelmezett és leggyorsabb, ha az SSH-hozzáférés működik\r\nSCP használata adatokhoz:\tHa az SFTP blokkolva vagy instabil\r\nCsak SCP:\tTeljesen letiltja az SFTP-t (régi kiszolgálók)\r\nShell-átvitel kényszerítése:\tShellen keresztüli átvitelt kényszerít (dd/base64)\r\nPHP ügynök (HTTP):\tSSH-fiók nélkül; feltöltött sftp.php-t használ\r\nPHP Shell (HTTP):\tHTTP pszeudo-terminál sftp.php-n keresztül
+131=Beépülő modul súgója:\r\nF7:\tÚj kapcsolat létrehozása (a TC megjeleníti az Új mappát – adja meg a kapcsolat nevét)\r\nF8/Del:\tKapcsolat törlése\r\nEnter:\tCsatlakozás\r\nBontás:\tA munkamenetből, vagy F8 a során az [Aktív munkamenetek] alatt. Az eszköztár gombja a bővítmény gyökeréből nyitva hagyja.\r\nAlt+Enter:\tBeállítások módosítása\r\nF3/F4:\tBeállítások megjelenítése INI-ként (szerkesztés: Alt+Enter)\r\n\r\nMunkamenetek mappákban:\r\nF7 mappán belül:\tA munkamenetet abban a mappában hozza létre\r\nF7 folder/x névvel:\tA munkamenetet a megadott mappában hozza létre\r\nF6 \\mappa\\név alakra:\tMappába helyezi a munkamenetet\r\nF6 mappán:\tAz összes munkamenetet átnevezi; a jump-host hivatkozások követik\r\nF5 vagy húzás:\tMásolja a munkamenetet vagy mappát\r\nF8 mappán:\tTörli a mappát és a benne lévő munkameneteket\r\n\r\nÁtviteli módok:\r\nSSH (SFTP/SCP):\tAlapértelmezett és leggyorsabb, ha az SSH-hozzáférés működik\r\nSCP használata adatokhoz:\tHa az SFTP blokkolva vagy instabil\r\nCsak SCP:\tTeljesen letiltja az SFTP-t (régi kiszolgálók)\r\nShell-átvitel kényszerítése:\tShellen keresztüli átvitelt kényszerít (dd/base64)\r\nPHP ügynök (HTTP):\tSSH-fiók nélkül; feltöltött sftp.php-t használ\r\nPHP Shell (HTTP):\tHTTP pszeudo-terminál sftp.php-n keresztül
 132=Gyors csatlakozás
 144=Súgó
 146=Itt állíthatja be, hogyan küldje a kiszolgáló az ékezetes karaktereket tartalmazó fájlneveket. Ha az 'automatikus észlelés' lehetőséget választja, a beépülő modul beolvassa a környezeti változókat (pl. LANG) és kiadja a 'locale' parancsot, hogy meghatározza a kiszolgáló által használt karakterkódolást. Ez nem feltétlenül működik minden kiszolgálón, ezért ha tudja, hogy a kiszolgáló UTF-8-at használ, vagy a fájlnevek ékezetek helyett rossz karakterekkel jelennek meg, manuálisan válassza az 'igen' lehetőséget.
@@ -316,7 +316,7 @@
 12139=SFTP bővítmény - proxy importálása
 12140=A proxy nem importálható: a fájlban nincs típust és kiszolgálót tartalmazó [proxy] szakasz.
 12141=A proxy nem importálható: az sftpplug.ini írása sikertelen.
-12142=Ez a proxy már szerepel a [Proxies] mappában (azonos típus, kiszolgáló és felhasználó). Új bejegyzés nem jött létre.
+12142=Ez a proxy már szerepel a [Proxyk] mappában (azonos típus, kiszolgáló és felhasználó). Új bejegyzés nem jött létre.
 12143=Munkamenet időkorlátja (perc):
 12144=(0 = korlátlan)
 12145=Auto
@@ -339,7 +339,7 @@
 12168=Ez a munkamenet PHP Agentet vagy LAN Pairt használ, amelyek csak a bővítmény extra változatában vannak meg (SFTPplug-...-extra.zip). Ez a változat csak SSH-n keresztül kapcsolódik.
 12169=Ez a munkamenet egyszerre proxyn és átjáró gépen át van beállítva. A bővítmény közvetlenül éri el az átjáró gépet, a proxy kimaradna. Csak az egyiket tartsa meg.
 12170=A(z) '{}' átjáró munkamenet proxyn keresztül megy. Az átjáró gépet közvetlenül éri el, az a proxy kimaradna, ezért a kapcsolat el lett utasítva. Válasszon proxy nélküli átjáró munkamenetet.
-12171=Ezt a munkamenetet a legutóbbi beolvasás óta megváltoztatták abban a programban, ahonnan importálva lett (gép, felhasználó, proxy vagy átjáró gép). Használja a [Refresh]-t a mappájában, majd próbálja újra.
+12171=Ezt a munkamenetet a legutóbbi beolvasás óta megváltoztatták abban a programban, ahonnan importálva lett (gép, felhasználó, proxy vagy átjáró gép). Használja a [Frissítés]-t a mappájában, majd próbálja újra.
 12172=Ez a név nem adható munkamenetnek. Nem tartalmazhat vezérlőkaraktert, fordított perjelet vagy $$-t, nem kezdődhet és nem végződhet szóközzel, nem kezdődhet [-lel, nem lehet a bővítmény saját szakaszainak egyike (Configuration, Imports, proxy), és nem lehet másik munkamenet belsejében.
 12173=Ez a jelszó túl hosszú a tároláshoz. Egy jelszó legfeljebb 259 bájt lehet UTF-8-ban: 259 latin betű, más ábécékben kevesebb.
 12174=ProxyJump: a(z) {} közvetítő gazdagép neve nem oldható fel
@@ -355,6 +355,14 @@
 12184=Másolás
 12185=Beillesztés
 12186=Összes kijelölése
+12300=[Importálás]
+12301=[Aktív munkamenetek]
+12302=[Proxyk]
+12303=[Összes bontása]
+12304=[Frissítés]
+12305=[Egyéni hely hozzáadása...]
+12306=[Egyéni helyek kezelése]
+12307=%s jelenleg nem található
 12089=SFTP
 12104=(kézi)
 12105= (hiányzik)

@@ -3,7 +3,7 @@
 # Generated from sftpplug.rc
 
 130=F7 - ajutor.txt
-131=Ajutor modul plugin:\r\nF7:\tCreați o nouă conexiune (TC afișează Director nou – introduceți numele conexiunii)\r\nF8/Del:\tȘtergeți conexiunea\r\nEnter:\tConectați\r\nDeconectare:\tDin interiorul sesiunii, sau F8 pe rândul ei din [Active Sessions]. Butonul din bară o lasă deschisă din rădăcina pluginului.\r\nAlt+Enter:\tModificați opțiunile\r\nF3/F4:\tAfișează setările ca INI (modificare cu Alt+Enter)\r\n\r\nSesiuni în foldere:\r\nF7 într-un folder:\tCreează sesiunea în acel folder\r\nF7 cu numele folder/x:\tCreează sesiunea în folderul indicat\r\nF6 în \\folder\\nume:\tMută o sesiune într-un folder\r\nF6 pe un folder:\tRedenumește toate sesiunile; referințele jump host se actualizează\r\nF5 sau tragere:\tCopiază sesiunea sau folderul (duplicat)\r\nF8 pe un folder:\tȘterge folderul și toate sesiunile din el\r\n\r\nModuri de transfer:\r\nSSH (SFTP/SCP):\tImplicit și cel mai rapid când accesul SSH funcționează\r\nFolosire SCP pentru date:\tCând SFTP este blocat sau instabil\r\nNumai SCP:\tDezactivează complet SFTP (gazde vechi)\r\nForțare transfer shell:\tForțează transferul prin shell (dd/base64)\r\nPHP Agent (HTTP):\tFără cont SSH; folosește sftp.php încărcat\r\nPHP Shell (HTTP):\tPseudo-terminal HTTP prin sftp.php
+131=Ajutor modul plugin:\r\nF7:\tCreați o nouă conexiune (TC afișează Director nou – introduceți numele conexiunii)\r\nF8/Del:\tȘtergeți conexiunea\r\nEnter:\tConectați\r\nDeconectare:\tDin interiorul sesiunii, sau F8 pe rândul ei din [Sesiuni active]. Butonul din bară o lasă deschisă din rădăcina pluginului.\r\nAlt+Enter:\tModificați opțiunile\r\nF3/F4:\tAfișează setările ca INI (modificare cu Alt+Enter)\r\n\r\nSesiuni în foldere:\r\nF7 într-un folder:\tCreează sesiunea în acel folder\r\nF7 cu numele folder/x:\tCreează sesiunea în folderul indicat\r\nF6 în \\folder\\nume:\tMută o sesiune într-un folder\r\nF6 pe un folder:\tRedenumește toate sesiunile; referințele jump host se actualizează\r\nF5 sau tragere:\tCopiază sesiunea sau folderul (duplicat)\r\nF8 pe un folder:\tȘterge folderul și toate sesiunile din el\r\n\r\nModuri de transfer:\r\nSSH (SFTP/SCP):\tImplicit și cel mai rapid când accesul SSH funcționează\r\nFolosire SCP pentru date:\tCând SFTP este blocat sau instabil\r\nNumai SCP:\tDezactivează complet SFTP (gazde vechi)\r\nForțare transfer shell:\tForțează transferul prin shell (dd/base64)\r\nPHP Agent (HTTP):\tFără cont SSH; folosește sftp.php încărcat\r\nPHP Shell (HTTP):\tPseudo-terminal HTTP prin sftp.php
 132=Conexiune rapidă
 144=Ajutor
 146=Aici puteți configura modul în care serverul trimite numele fișierelor cu caractere accentuate. Dacă alegeți 'detectare automată', pluginul va citi variabilele de mediu (de ex. LANG) și va trimite comanda 'locale' pentru a determina codificarea caracterelor folosită de server. Este posibil să nu funcționeze cu toate serverele, deci dacă știți că serverul folosește UTF-8 sau numele fișierelor se afișează cu caractere greșite în loc de accente, selectați 'da' manual.
@@ -316,7 +316,7 @@
 12139=Plugin SFTP - import proxy
 12140=Nu se poate importa proxy-ul: fișierul nu are o secțiune [proxy] cu tip și server.
 12141=Nu se poate importa proxy-ul: scrierea în sftpplug.ini a eșuat.
-12142=Acest proxy există deja în [Proxies] (același tip, server și utilizator). Nu a fost creată nicio înregistrare nouă.
+12142=Acest proxy există deja în [Proxy-uri] (același tip, server și utilizator). Nu a fost creată nicio înregistrare nouă.
 12143=Limită de timp sesiune (min):
 12144=(0 = fără limită)
 12145=Auto
@@ -339,7 +339,7 @@
 12168=Această sesiune folosește PHP Agent sau LAN Pair, care există doar în versiunea extra a pluginului (SFTPplug-...-extra.zip). Această versiune se conectează doar prin SSH.
 12169=Această sesiune este setată să treacă atât printr-un proxy, cât și printr-o gazdă intermediară. Pluginul ajunge direct la gazda intermediară, proxy-ul ar fi ocolit. Păstrați doar una dintre ele.
 12170=Sesiunea intermediară '{}' trece printr-un proxy. Gazda intermediară este accesată direct, acel proxy ar fi ocolit, așa că conexiunea este refuzată. Alegeți o sesiune intermediară fără proxy.
-12171=Această sesiune a fost modificată în programul din care a fost importată (gazdă, utilizator, proxy sau gazdă intermediară) după ultima scanare. Folosiți [Refresh] în dosarul ei, apoi încercați din nou.
+12171=Această sesiune a fost modificată în programul din care a fost importată (gazdă, utilizator, proxy sau gazdă intermediară) după ultima scanare. Folosiți [Reîmprospătare] în dosarul ei, apoi încercați din nou.
 12172=Acest nume nu poate fi dat unei sesiuni. Nu poate conține caractere de control, bară inversă sau $$, începe ori se termina cu un spațiu, începe cu [, fi una dintre secțiunile proprii ale pluginului (Configuration, Imports, proxy) sau afla în interiorul altei sesiuni.
 12173=Această parolă este prea lungă pentru a fi păstrată. O parolă poate ocupa cel mult 259 de octeți în UTF-8: 259 de litere latine, mai puține în alte alfabete.
 12174=ProxyJump: numele gazdei intermediare {} nu poate fi rezolvat
@@ -355,6 +355,14 @@
 12184=Copiere
 12185=Lipire
 12186=Selectare totală
+12300=[Importuri]
+12301=[Sesiuni active]
+12302=[Proxy-uri]
+12303=[Deconectează tot]
+12304=[Reîmprospătare]
+12305=[Adaugă locație proprie...]
+12306=[Gestionează locațiile proprii]
+12307=%s nu este detectat acum
 12089=SFTP
 12104=(manual)
 12105= (lipsește)

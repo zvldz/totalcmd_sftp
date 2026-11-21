@@ -78,7 +78,6 @@ std::string LanRemotePathToUtf8(LPCWSTR remotedir);
 // session is connected. Entering it lists every active session; F8 on a row
 // disconnects that session; F8 on `kDisconnectAllEntry` disconnects all.
 inline constexpr const char*    kActiveSessionsFolder  = "[Active Sessions]";
-inline constexpr const wchar_t* kActiveSessionsFolderW = L"[Active Sessions]";
 inline constexpr const char*    kDisconnectAllEntry    = "[Disconnect All]";
 
 // Path classifier for the [Active Sessions] magic folder. Returns true if
@@ -96,7 +95,6 @@ bool IsActiveSessionsPath(LPCWSTR path, std::string* outEntry = nullptr);
 // its dropdown, which begins with the record's number. Enter edits a record,
 // F8 deletes one.
 inline constexpr const char*    kProxiesFolder  = "[Proxies]";
-inline constexpr const wchar_t* kProxiesFolderW = L"[Proxies]";
 
 // Path classifier for [Proxies], shaped like IsActiveSessionsPath: true for
 // the folder itself, with `outEntry` cleared, or for a row inside it, with the
@@ -115,10 +113,15 @@ int ProxyNrFromRowName(const std::string& rowName);
 // [Imports]\<Source>\ is served from ImportCache (persistent snapshot) plus
 // adapter-driven pseudo entries.
 inline constexpr const char*    kImportsFolder      = "[Imports]";
-inline constexpr const wchar_t* kImportsFolderW     = L"[Imports]";
 inline constexpr const char*    kRefreshEntry       = "[Refresh]";
 inline constexpr const char*    kAddCustomEntry     = "[Add custom location...]";
 inline constexpr const char*    kManageCustomFolder = "[Manage custom locations]";
+
+// The k*Folder / k*Entry names above are what the code compares with: the
+// classifiers below hand back these English names whatever language a path
+// is in. On screen each shows translated (resources IDS_MAGIC_*); this gives
+// that name, an internal string, for one of the constants above.
+std::string MagicDisplayName(const char* identity);
 
 // Path classifier for the [Imports] magic folder tree. Each variant tells
 // callers unambiguously what part of the tree `path` addresses, one enum

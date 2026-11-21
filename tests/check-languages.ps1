@@ -66,6 +66,18 @@ foreach ($file in $files) {
     foreach ($num in $table.Keys | Sort-Object) {
         if (-not $english.ContainsKey($num)) { $problems += "$($file.Name): $num is not a string of the plugin" }
     }
+    # The magic folders and pseudo entries are file names in a panel and are
+    # told from session names by their brackets: a translation must keep the
+    # brackets and hold no character a file name cannot.
+    foreach ($name in 'IDS_MAGIC_IMPORTS', 'IDS_MAGIC_ACTIVE_SESSIONS', 'IDS_MAGIC_PROXIES',
+                      'IDS_MAGIC_DISCONNECT_ALL', 'IDS_MAGIC_REFRESH', 'IDS_MAGIC_ADD_CUSTOM',
+                      'IDS_MAGIC_MANAGE_CUSTOM') {
+        $num = $ids[$name]
+        if (-not $table.ContainsKey($num)) { continue }
+        if ($table[$num] -notmatch '^\[[^\\/:*?"<>|\x00-\x1F]+\]$') {
+            $problems += "$($file.Name): $num must be '[name]' without \ / : * ? `" < > |"
+        }
+    }
 }
 
 if ($problems.Count) {

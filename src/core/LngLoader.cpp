@@ -243,6 +243,44 @@ void LngLoadByCode(const char* code, HINSTANCE hPluginInst) noexcept
     PublishLanguage(LngPathForCode(code, hPluginInst));
 }
 
+std::vector<std::string> LngAllTranslations(UINT id, HINSTANCE hPluginInst) noexcept
+{
+    // Every .lng beside the plugin, read once: shipped and custom files
+    // alike, whatever the language in use.
+    static std::once_flag once;
+    static std::vector<LngMap> all;
+    std::call_once(once, [&]() noexcept {
+        try {
+            const std::wstring dir = GetPluginLangDir(hPluginInst);
+            if (dir.empty())
+                return;
+            WIN32_FIND_DATAW fd{};
+            HANDLE h = FindFirstFileW((dir + L"*.lng").c_str(), &fd);
+            if (h == INVALID_HANDLE_VALUE)
+                return;
+            do {
+                if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+                    continue;
+                LngMap map;
+                LoadLngFromPath(dir + fd.cFileName, map);
+                all.push_back(std::move(map));
+            } while (FindNextFileW(h, &fd));
+            FindClose(h);
+        } catch (...) {
+        }
+    });
+    std::vector<std::string> out;
+    try {
+        for (const LngMap& map : all) {
+            const auto it = map.find(id);
+            if (it != map.end())
+                out.push_back(it->second);
+        }
+    } catch (...) {
+    }
+    return out;
+}
+
 const char* LngGetString(UINT id) noexcept
 {
     const LngMap* map = g_lngMap.load();

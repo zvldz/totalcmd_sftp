@@ -411,7 +411,7 @@ static HANDLE BuildPluginFolderListing(const std::string& folderPrefix,
     // can see and disconnect open sessions without tab-juggling.
     if (isRoot && hasActiveSession) {
         PluginFolderEntry active;
-        active.name = kActiveSessionsFolder;
+        active.name = MagicDisplayName(kActiveSessionsFolder);
         active.kind = PluginFolderEntry::Kind::Folder;
         state->entries.push_back(std::move(active));
     }
@@ -423,7 +423,7 @@ static HANDLE BuildPluginFolderListing(const std::string& folderPrefix,
     // is not currently installed.
     if (isRoot) {
         PluginFolderEntry imports;
-        imports.name = kImportsFolder;
+        imports.name = MagicDisplayName(kImportsFolder);
         imports.kind = PluginFolderEntry::Kind::ImportsUmbrella;
         state->entries.push_back(std::move(imports));
     }
@@ -434,7 +434,7 @@ static HANDLE BuildPluginFolderListing(const std::string& folderPrefix,
     // make one.
     if (isRoot) {
         PluginFolderEntry proxies;
-        proxies.name = kProxiesFolder;
+        proxies.name = MagicDisplayName(kProxiesFolder);
         proxies.kind = PluginFolderEntry::Kind::ProxiesUmbrella;
         state->entries.push_back(std::move(proxies));
     }
@@ -490,7 +490,7 @@ static HANDLE BuildActiveSessionsListing(WIN32_FIND_DATAW* FindData)
     }
     if (!state->entries.empty()) {
         PluginFolderEntry bulk;
-        bulk.name = kDisconnectAllEntry;
+        bulk.name = MagicDisplayName(kDisconnectAllEntry);
         bulk.kind = PluginFolderEntry::Kind::ActiveBulkOp;
         state->entries.insert(state->entries.begin(), std::move(bulk));
     }
@@ -563,14 +563,21 @@ static HANDLE BuildImportsSourceListing(const std::string& sourceId,
         // nothing; F8 also does nothing (delete guard blocks pseudos).
         if (adapter && !adapter->DetectStandard()) {
             PluginFolderEntry hint;
-            hint.name = std::string(adapter->FolderName()) + " not currently detected";
+            std::string text = unicode_util::utf8_to_internal(
+                LngStrU8(IDS_MAGIC_NOT_DETECTED, "%s not currently detected"));
+            const size_t at = text.find("%s");
+            if (at == std::string::npos)
+                text = std::string(adapter->FolderName()) + " " + text;
+            else
+                text.replace(at, 2, adapter->FolderName());
+            hint.name = text;
             hint.kind = PluginFolderEntry::Kind::ImportPseudo;
             hint.pseudoAsFolder = false;
             state->entries.push_back(std::move(hint));
         }
 
         PluginFolderEntry refresh;
-        refresh.name = kRefreshEntry;
+        refresh.name = MagicDisplayName(kRefreshEntry);
         refresh.kind = PluginFolderEntry::Kind::ImportPseudo;
         refresh.pseudoAsFolder = false;
         state->entries.push_back(std::move(refresh));
@@ -582,7 +589,7 @@ static HANDLE BuildImportsSourceListing(const std::string& sourceId,
             adapter->CustomPathPicker() != sftp::CustomPathPickerKind::None;
         if (hasCustomPicker) {
             PluginFolderEntry addCustom;
-            addCustom.name = kAddCustomEntry;
+            addCustom.name = MagicDisplayName(kAddCustomEntry);
             addCustom.kind = PluginFolderEntry::Kind::ImportPseudo;
             addCustom.pseudoAsFolder = false;
             state->entries.push_back(std::move(addCustom));
@@ -597,7 +604,7 @@ static HANDLE BuildImportsSourceListing(const std::string& sourceId,
             : std::vector<std::string>{};
         if (!customPaths.empty()) {
             PluginFolderEntry manage;
-            manage.name = kManageCustomFolder;
+            manage.name = MagicDisplayName(kManageCustomFolder);
             manage.kind = PluginFolderEntry::Kind::ImportPseudo;
             manage.pseudoAsFolder = true;   // sub-folder — Enter navigates in
             state->entries.push_back(std::move(manage));
@@ -704,27 +711,129 @@ static HANDLE BuildImportsUmbrellaListing(WIN32_FIND_DATAW* FindData)
     return static_cast<HANDLE>(lf.release());
 }
 
+namespace {
+
+// The magic folders and pseudo entries: the English name, which the code
+// works with, and the string shown in its place. The folders of the plugin
+// root are also recognised under every shipped translation, so a path saved
+// in one language still leads there after a switch; no session name can
+// take one, as session names cannot start with '['. The entries inside
+// folders sit beside imported sessions, whose names can, so they are
+// recognised in English and in the language in use only.
+struct MagicName {
+    const char* identity;
+    UINT        resId;
+    bool        everyLanguage;
+};
+
+constexpr MagicName kMagicNames[] = {
+    { kImportsFolder,        IDS_MAGIC_IMPORTS,         true  },
+    { kActiveSessionsFolder, IDS_MAGIC_ACTIVE_SESSIONS, true  },
+    { kProxiesFolder,        IDS_MAGIC_PROXIES,         true  },
+    { kDisconnectAllEntry,   IDS_MAGIC_DISCONNECT_ALL,  false },
+    { kRefreshEntry,         IDS_MAGIC_REFRESH,         false },
+    { kAddCustomEntry,       IDS_MAGIC_ADD_CUSTOM,      false },
+    { kManageCustomFolder,   IDS_MAGIC_MANAGE_CUSTOM,   false },
+};
+
+const MagicName* FindMagicName(const char* identity)
+{
+    for (const MagicName& m : kMagicNames)
+        if (strcmp(m.identity, identity) == 0)
+            return &m;
+    return nullptr;
+}
+
+// A translation is taken only in the shape every one must have: in square
+// brackets, and a valid file name.
+bool HasMagicShape(std::string_view s)
+{
+    if (s.size() < 3 || s.front() != '[' || s.back() != ']')
+        return false;
+    for (const char c : s)
+        if (static_cast<unsigned char>(c) < 0x20 || strchr("\\/:*?\"<>|", c))
+            return false;
+    return true;
+}
+
+std::string ShownMagicName(const MagicName& m)
+{
+    const std::string shown = unicode_util::utf8_to_internal(LngStrU8(m.resId, m.identity));
+    return HasMagicShape(shown) ? shown : std::string(m.identity);
+}
+
+bool SameNameW(std::wstring_view a, std::wstring_view b)
+{
+    return a.size() == b.size() &&
+           CompareStringOrdinal(a.data(), static_cast<int>(a.size()),
+                                b.data(), static_cast<int>(b.size()), TRUE) == CSTR_EQUAL;
+}
+
+// Whether `segment` (one path component) names `m`.
+bool NamesMagic(std::wstring_view segment, const MagicName& m)
+{
+    if (SameNameW(segment, unicode_util::internal_to_wide(m.identity)) ||
+        SameNameW(segment, unicode_util::internal_to_wide(ShownMagicName(m))))
+        return true;
+    if (m.everyLanguage) {
+        for (const std::string& t : LngAllTranslations(m.resId, hinst))
+            if (HasMagicShape(t) && SameNameW(segment, unicode_util::internal_to_wide(unicode_util::utf8_to_internal(t))))
+                return true;
+    }
+    return false;
+}
+
+// The first component of `view`, up to a '\' or '/'.
+std::wstring_view FirstSegment(std::wstring_view view)
+{
+    return view.substr(0, view.find_first_of(L"\\/"));
+}
+
+// `entry` (folders joined by '/') with a first component that names one of
+// `pseudo` (the entries of that folder) put back to its English name.
+void CanonicalisePseudoEntry(std::string& entry, std::initializer_list<const char*> pseudo)
+{
+    const size_t slash = entry.find('/');
+    const std::wstring first = unicode_util::internal_to_wide(entry.substr(0, slash));
+    for (const char* identity : pseudo) {
+        const MagicName* m = FindMagicName(identity);
+        if (!m || !NamesMagic(first, *m))
+            continue;
+        entry = std::string(m->identity) + (slash == std::string::npos ? std::string() : entry.substr(slash));
+        return;
+    }
+}
+
+}  // namespace
+
+std::string MagicDisplayName(const char* identity)
+{
+    const MagicName* m = FindMagicName(identity);
+    return m ? ShownMagicName(*m) : std::string(identity);
+}
+
 // Shared body of the magic-folder path classifiers: they differ only in
-// which folder name they match.
-static bool IsMagicFolderPath(LPCWSTR path, const wchar_t* folderNameW, std::string* outEntry)
+// which folder they match.
+static bool IsMagicFolderPath(LPCWSTR path, const char* identity, std::string* outEntry,
+                              std::initializer_list<const char*> pseudo)
 {
     if (!path || path[0] != L'\\') return false;
     const std::wstring_view view(path + 1);  // strip leading '\\'
-    const std::wstring_view magic(folderNameW);
-    if (view.size() < magic.size()) return false;
-    if (_wcsnicmp(view.data(), magic.data(), magic.size()) != 0) return false;
-    const std::wstring_view after = view.substr(magic.size());
+    const MagicName* magic = FindMagicName(identity);
+    const std::wstring_view segment = FirstSegment(view);
+    if (!magic || !NamesMagic(segment, *magic)) return false;
+    const std::wstring_view after = view.substr(segment.size());
     if (after.empty() || (after.size() == 1 && (after[0] == L'\\' || after[0] == L'/'))) {
         if (outEntry) outEntry->clear();
         return true;
     }
-    if (after[0] != L'\\' && after[0] != L'/') return false;
     if (outEntry) {
         std::wstring_view trail = after.substr(1);
         // Internal string with any '\' replaced by '/' so folder-nested
         // DisplayNames round-trip cleanly.
         *outEntry = unicode_util::wide_to_internal(trail);
         std::replace(outEntry->begin(), outEntry->end(), '\\', '/');
+        CanonicalisePseudoEntry(*outEntry, pseudo);
     }
     return true;
 }
@@ -732,12 +841,12 @@ static bool IsMagicFolderPath(LPCWSTR path, const wchar_t* folderNameW, std::str
 // See PluginEntryPointsInternal.h for the contracts.
 bool IsActiveSessionsPath(LPCWSTR path, std::string* outEntry)
 {
-    return IsMagicFolderPath(path, kActiveSessionsFolderW, outEntry);
+    return IsMagicFolderPath(path, kActiveSessionsFolder, outEntry, { kDisconnectAllEntry });
 }
 
 bool IsProxiesPath(LPCWSTR path, std::string* outEntry)
 {
-    return IsMagicFolderPath(path, kProxiesFolderW, outEntry);
+    return IsMagicFolderPath(path, kProxiesFolder, outEntry, {});
 }
 
 int ProxyNrFromRowName(const std::string& rowName)
@@ -805,9 +914,8 @@ ImportsPathKind ClassifyImportsPath(LPCWSTR path,
 
     if (!path || path[0] != L'\\') return ImportsPathKind::NotImports;
     const std::wstring_view view(path + 1);  // strip leading '\\'
-    const std::wstring_view umbrella(kImportsFolderW);
-    if (view.size() < umbrella.size()) return ImportsPathKind::NotImports;
-    if (_wcsnicmp(view.data(), umbrella.data(), umbrella.size()) != 0)
+    const std::wstring_view umbrella = FirstSegment(view);
+    if (!NamesMagic(umbrella, *FindMagicName(kImportsFolder)))
         return ImportsPathKind::NotImports;
 
     const std::wstring_view after = view.substr(umbrella.size());
@@ -842,8 +950,10 @@ ImportsPathKind ClassifyImportsPath(LPCWSTR path,
         const std::wstring_view trail = rest.substr(seg_end + 1);
         if (trail.empty())
             return ImportsPathKind::SourceRoot;  // "\[Imports]\<Source>\" trailing slash
-        if (outSubPath)
+        if (outSubPath) {
             WideRangeToNarrowSlash(trail, *outSubPath);
+            CanonicalisePseudoEntry(*outSubPath, { kRefreshEntry, kAddCustomEntry, kManageCustomFolder });
+        }
         return ImportsPathKind::SourceSubPath;
     }
 

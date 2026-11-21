@@ -545,6 +545,18 @@
 #define IDS_PHPSHELL_PASTE           12185
 #define IDS_PHPSHELL_SELECT_ALL      12186
 
+// Magic folders and pseudo entries as shown; each translation starts with
+// '[' and ends with ']' (no session name can), the English one is the
+// identity the code works with.
+#define IDS_MAGIC_IMPORTS            12300
+#define IDS_MAGIC_ACTIVE_SESSIONS    12301
+#define IDS_MAGIC_PROXIES            12302
+#define IDS_MAGIC_DISCONNECT_ALL     12303
+#define IDS_MAGIC_REFRESH            12304
+#define IDS_MAGIC_ADD_CUSTOM         12305
+#define IDS_MAGIC_MANAGE_CUSTOM      12306
+#define IDS_MAGIC_NOT_DETECTED       12307
+
 // Next default values for new objects
 //
 #ifdef APSTUDIO_INVOKED

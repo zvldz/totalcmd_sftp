@@ -3,7 +3,7 @@
 # Generated from sftpplug.rc
 
 130=F7 - ayuda.txt
-131=Ayuda del plugin:\r\nF7:\tCrear nueva conexión (TC muestra Nueva Carpeta – introducir nombre de conexión)\r\nF8/Supr:\tEliminar conexión\r\nIntro:\tConectar\r\nDesconectar:\tDesde dentro de la sesión, o F8 en su fila de [Active Sessions]. El botón de la barra la deja abierta desde la raíz del plugin.\r\nAlt+Intro:\tCambiar opciones\r\nF3/F4:\tMostrar ajustes como INI (editar con Alt+Intro)\r\n\r\nSesiones en carpetas:\r\nF7 dentro de una carpeta:\tCrea la sesión en esa carpeta\r\nF7 con nombre folder/x:\tCrea la sesión en la carpeta indicada\r\nF6 a \\carpeta\\nombre:\tMueve una sesión a una carpeta\r\nF6 en una carpeta:\tRenombra todas las sesiones; las referencias de salto se actualizan\r\nF5 o arrastrar:\tCopia la sesión o la carpeta (duplicado)\r\nF8 en una carpeta:\tElimina la carpeta y todas sus sesiones\r\n\r\nModos de transferencia:\r\nSSH (SFTP/SCP):\tPredeterminado, más rápido cuando SSH está disponible\r\nUsar SCP para datos:\tUsar cuando SFTP está bloqueado/inestable\r\nUsar solo SCP:\tDesactivar SFTP completamente (hosts heredados)\r\nForzar transferencia shell:\tForzar transferencia basada en shell (dd/base64)\r\nAgente PHP (HTTP):\tNo se necesita cuenta SSH; usar sftp.php subido\r\nShell PHP (HTTP):\tPseudoterminal sobre HTTP via sftp.php
+131=Ayuda del plugin:\r\nF7:\tCrear nueva conexión (TC muestra Nueva Carpeta – introducir nombre de conexión)\r\nF8/Supr:\tEliminar conexión\r\nIntro:\tConectar\r\nDesconectar:\tDesde dentro de la sesión, o F8 en su fila de [Sesiones activas]. El botón de la barra la deja abierta desde la raíz del plugin.\r\nAlt+Intro:\tCambiar opciones\r\nF3/F4:\tMostrar ajustes como INI (editar con Alt+Intro)\r\n\r\nSesiones en carpetas:\r\nF7 dentro de una carpeta:\tCrea la sesión en esa carpeta\r\nF7 con nombre folder/x:\tCrea la sesión en la carpeta indicada\r\nF6 a \\carpeta\\nombre:\tMueve una sesión a una carpeta\r\nF6 en una carpeta:\tRenombra todas las sesiones; las referencias de salto se actualizan\r\nF5 o arrastrar:\tCopia la sesión o la carpeta (duplicado)\r\nF8 en una carpeta:\tElimina la carpeta y todas sus sesiones\r\n\r\nModos de transferencia:\r\nSSH (SFTP/SCP):\tPredeterminado, más rápido cuando SSH está disponible\r\nUsar SCP para datos:\tUsar cuando SFTP está bloqueado/inestable\r\nUsar solo SCP:\tDesactivar SFTP completamente (hosts heredados)\r\nForzar transferencia shell:\tForzar transferencia basada en shell (dd/base64)\r\nAgente PHP (HTTP):\tNo se necesita cuenta SSH; usar sftp.php subido\r\nShell PHP (HTTP):\tPseudoterminal sobre HTTP via sftp.php
 132=Conexión rápida
 144=Ayuda
 146=Aquí puede configurar cómo el servidor envía nombres de archivo con acentos. Al elegir 'detección automática', el plugin obtendrá variables de entorno (como LANG) y enviará el comando 'locale' para determinar la codificación de caracteres del servidor. Esto puede no funcionar con todos los servidores, por lo que si sabe que su servidor usa UTF-8, o los nombres de archivo aparecen con caracteres extraños en lugar de acentos, seleccione 'sí' manualmente.
@@ -340,7 +340,7 @@
 12168=Esta sesión usa PHP Agent o LAN Pair, que solo tiene la versión extra del plugin (SFTPplug-...-extra.zip). Esta versión solo se conecta por SSH.
 12169=Esta sesión está configurada para pasar a la vez por un proxy y por un host de salto. El plugin llega al host de salto directamente, el proxy se omitiría. Deje solo uno de los dos.
 12170=La sesión de salto '{}' pasa por un proxy. Al host de salto se llega directamente, ese proxy se omitiría, así que se rechaza la conexión. Elija una sesión de salto sin proxy.
-12171=Esta sesión se ha cambiado en el programa del que se importó (host, usuario, proxy o host de salto) después del último análisis. Use [Refresh] en su carpeta y vuelva a intentarlo.
+12171=Esta sesión se ha cambiado en el programa del que se importó (host, usuario, proxy o host de salto) después del último análisis. Use [Actualizar] en su carpeta y vuelva a intentarlo.
 12172=Este nombre no se puede dar a una sesión. No puede contener caracteres de control, barra invertida ni $$, empezar ni terminar con un espacio, empezar por [, ser una de las secciones propias del plugin (Configuration, Imports, proxy) ni estar dentro de otra sesión.
 12173=Esta contraseña es demasiado larga para guardarla. Una contraseña puede ocupar hasta 259 bytes en UTF-8: 259 letras latinas, menos en otros alfabetos.
 12174=ProxyJump: no se puede resolver el host intermediario {}
@@ -356,6 +356,14 @@
 12184=Copiar
 12185=Pegar
 12186=Seleccionar todo
+12300=[Importaciones]
+12301=[Sesiones activas]
+12302=[Proxies]
+12303=[Desconectar todo]
+12304=[Actualizar]
+12305=[Añadir ubicación personalizada...]
+12306=[Administrar ubicaciones personalizadas]
+12307=%s no detectado actualmente
 12089=SFTP
 12104=(manual)
 12105= (no encontrada)

@@ -3,7 +3,7 @@
 # Generated from sftpplug.rc
 
 130=F7 - help.txt
-131=Help plug-in:\r\nF7:\tNieuwe verbinding maken (TC toont Nieuwe map – typ de naam van de verbinding)\r\nF8/Del:\tVerbinding verwijderen\r\nEnter:\tVerbinden\r\nVerbreken:\tVanuit de sessie, of F8 op de regel in [Active Sessions]. De knop op de werkbalk laat hem open vanaf de plug-inhoofdmap.\r\nAlt+Enter:\tOpties wijzigen\r\nF3/F4:\tInstellingen als INI tonen (bewerken met Alt+Enter)\r\n\r\nSessies in mappen:\r\nF7 in een map:\tMaakt de sessie in die map\r\nF7 met naam folder/x:\tMaakt de sessie in de opgegeven map\r\nF6 naar \\map\\naam:\tVerplaatst een sessie naar een map\r\nF6 op een map:\tHernoemt alle sessies erin; jump-hostverwijzingen volgen\r\nF5 of slepen:\tKopieert sessie of map (duplicaat)\r\nF8 op een map:\tVerwijdert de map en alle sessies erin\r\n\r\nOverdrachtswijzen:\r\nSSH (SFTP/SCP):\tStandaard en snelst wanneer SSH-toegang werkt\r\nSCP gebruiken voor gegevens:\tWanneer SFTP geblokkeerd of instabiel is\r\nAlleen SCP:\tSFTP volledig uitschakelen (oude hosts)\r\nShell-overdracht forceren:\tOverdracht via shell forceren (dd/base64)\r\nPHP-agent (HTTP):\tZonder SSH-account; gebruikt geüploade sftp.php\r\nPHP Shell (HTTP):\tHTTP-pseudoterminal via sftp.php
+131=Help plug-in:\r\nF7:\tNieuwe verbinding maken (TC toont Nieuwe map – typ de naam van de verbinding)\r\nF8/Del:\tVerbinding verwijderen\r\nEnter:\tVerbinden\r\nVerbreken:\tVanuit de sessie, of F8 op de regel in [Actieve sessies]. De knop op de werkbalk laat hem open vanaf de plug-inhoofdmap.\r\nAlt+Enter:\tOpties wijzigen\r\nF3/F4:\tInstellingen als INI tonen (bewerken met Alt+Enter)\r\n\r\nSessies in mappen:\r\nF7 in een map:\tMaakt de sessie in die map\r\nF7 met naam folder/x:\tMaakt de sessie in de opgegeven map\r\nF6 naar \\map\\naam:\tVerplaatst een sessie naar een map\r\nF6 op een map:\tHernoemt alle sessies erin; jump-hostverwijzingen volgen\r\nF5 of slepen:\tKopieert sessie of map (duplicaat)\r\nF8 op een map:\tVerwijdert de map en alle sessies erin\r\n\r\nOverdrachtswijzen:\r\nSSH (SFTP/SCP):\tStandaard en snelst wanneer SSH-toegang werkt\r\nSCP gebruiken voor gegevens:\tWanneer SFTP geblokkeerd of instabiel is\r\nAlleen SCP:\tSFTP volledig uitschakelen (oude hosts)\r\nShell-overdracht forceren:\tOverdracht via shell forceren (dd/base64)\r\nPHP-agent (HTTP):\tZonder SSH-account; gebruikt geüploade sftp.php\r\nPHP Shell (HTTP):\tHTTP-pseudoterminal via sftp.php
 132=Snelle verbinding
 144=Help
 146=Hier kunt u instellen hoe de server bestandsnamen met accenttekens verzendt. Als u 'automatisch detecteren' kiest, leest de plug-in omgevingsvariabelen (bijv. LANG) en stuurt het commando 'locale' om de tekencodering van de server te bepalen. Dit werkt mogelijk niet bij alle servers. Als u weet dat de server UTF-8 gebruikt, of als bestandsnamen verkeerde tekens tonen in plaats van accenten, selecteer dan handmatig 'ja'.
@@ -316,7 +316,7 @@
 12139=SFTP-plug-in - proxy-import
 12140=Kan proxy niet importeren: het bestand heeft geen sectie [proxy] met type en server.
 12141=Kan proxy niet importeren: schrijven naar sftpplug.ini is mislukt.
-12142=Deze proxy staat al in [Proxies] (zelfde type, server en gebruiker). Er is geen nieuwe record gemaakt.
+12142=Deze proxy staat al in [Proxy's] (zelfde type, server en gebruiker). Er is geen nieuwe record gemaakt.
 12143=Sessietime-out (min):
 12144=(0 = geen limiet)
 12145=Auto
@@ -339,7 +339,7 @@
 12168=Deze sessie gebruikt PHP Agent of LAN Pair, die alleen de extra-versie van de plug-in heeft (SFTPplug-...-extra.zip). Deze versie maakt alleen verbinding via SSH.
 12169=Deze sessie is ingesteld om zowel via een proxy als via een jump-host te gaan. De plugin bereikt een jump-host direct, de proxy zou worden overgeslagen. Houd een van beide.
 12170=De jump-sessie '{}' gaat via een proxy. Een jump-host wordt direct bereikt, die proxy zou worden overgeslagen, dus de verbinding wordt geweigerd. Kies een jump-sessie zonder proxy.
-12171=Deze sessie is na de laatste scan gewijzigd in het programma waaruit ze is geïmporteerd (host, gebruiker, proxy of jump-host). Gebruik [Refresh] in haar map en probeer het opnieuw.
+12171=Deze sessie is na de laatste scan gewijzigd in het programma waaruit ze is geïmporteerd (host, gebruiker, proxy of jump-host). Gebruik [Vernieuwen] in haar map en probeer het opnieuw.
 12172=Deze naam kan niet aan een sessie worden gegeven. Hij mag geen stuurtekens, backslash of $$ bevatten, niet met een spatie beginnen of eindigen, niet met [ beginnen, geen van de eigen secties van de plugin zijn (Configuration, Imports, proxy) en niet binnen een andere sessie liggen.
 12173=Dit wachtwoord is te lang om te bewaren. Een wachtwoord mag in UTF-8 maximaal 259 bytes beslaan: 259 Latijnse letters, minder in andere alfabetten.
 12174=ProxyJump: tussenliggende host {} kan niet worden opgezocht
@@ -355,6 +355,14 @@
 12184=Kopiëren
 12185=Plakken
 12186=Alles selecteren
+12300=[Importeren]
+12301=[Actieve sessies]
+12302=[Proxy's]
+12303=[Alles verbreken]
+12304=[Vernieuwen]
+12305=[Eigen locatie toevoegen...]
+12306=[Eigen locaties beheren]
+12307=%s momenteel niet gevonden
 12089=SFTP
 12104=(handmatig)
 12105= (ontbreekt)

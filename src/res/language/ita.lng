@@ -3,7 +3,7 @@
 # Generated from sftpplug.rc
 
 130=F7 - aiuto.txt
-131=Guida plugin:\r\nF7:\tCrea nuova connessione (TC mostra Nuova cartella - inserisci il nome)\r\nF8/Canc:\tElimina connessione\r\nInvio:\tConnetti\r\nDisconnetti:\tDall'interno della sessione, o F8 sulla sua riga in [Active Sessions]. Il pulsante della barra la lascia aperta dalla radice del plugin.\r\nAlt+Invio:\tModifica opzioni\r\nF3/F4:\tMostra le impostazioni come INI (modifica con Alt+Invio)\r\n\r\nSessioni nelle cartelle:\r\nF7 dentro una cartella:\tCrea la sessione in quella cartella\r\nF7 con nome folder/x:\tCrea la sessione nella cartella indicata\r\nF6 in \\cartella\\nome:\tSposta una sessione in una cartella\r\nF6 su una cartella:\tRinomina tutte le sessioni; i riferimenti al jump host seguono\r\nF5 o trascinamento:\tCopia la sessione o la cartella (duplicato)\r\nF8 su una cartella:\tElimina la cartella e tutte le sessioni in essa\r\n\r\nModalità trasferimento:\r\nSSH (SFTP/SCP):\tPredefinita, più veloce con accesso SSH\r\nUsa SCP per dati:\tUsare quando SFTP è bloccato/instabile\r\nSolo SCP:\tDisabilita SFTP (host legacy)\r\nForza shell transfer:\tTrasferimento via shell (dd/base64)\r\nPHP Agent (HTTP):\tSenza account SSH; usa sftp.php caricato\r\nPHP Shell (HTTP):\tPseudo-terminale HTTP via sftp.php
+131=Guida plugin:\r\nF7:\tCrea nuova connessione (TC mostra Nuova cartella - inserisci il nome)\r\nF8/Canc:\tElimina connessione\r\nInvio:\tConnetti\r\nDisconnetti:\tDall'interno della sessione, o F8 sulla sua riga in [Sessioni attive]. Il pulsante della barra la lascia aperta dalla radice del plugin.\r\nAlt+Invio:\tModifica opzioni\r\nF3/F4:\tMostra le impostazioni come INI (modifica con Alt+Invio)\r\n\r\nSessioni nelle cartelle:\r\nF7 dentro una cartella:\tCrea la sessione in quella cartella\r\nF7 con nome folder/x:\tCrea la sessione nella cartella indicata\r\nF6 in \\cartella\\nome:\tSposta una sessione in una cartella\r\nF6 su una cartella:\tRinomina tutte le sessioni; i riferimenti al jump host seguono\r\nF5 o trascinamento:\tCopia la sessione o la cartella (duplicato)\r\nF8 su una cartella:\tElimina la cartella e tutte le sessioni in essa\r\n\r\nModalità trasferimento:\r\nSSH (SFTP/SCP):\tPredefinita, più veloce con accesso SSH\r\nUsa SCP per dati:\tUsare quando SFTP è bloccato/instabile\r\nSolo SCP:\tDisabilita SFTP (host legacy)\r\nForza shell transfer:\tTrasferimento via shell (dd/base64)\r\nPHP Agent (HTTP):\tSenza account SSH; usa sftp.php caricato\r\nPHP Shell (HTTP):\tPseudo-terminale HTTP via sftp.php
 132=Connessione rapida
 144=Aiuto
 146=Qui puoi configurare il modo in cui il server invia i nomi dei file con caratteri accentati. Scegliendo 'rilevamento automatico', il plugin leggerà alcune variabili d'ambiente (come LANG) ed eseguirà il comando 'locale' per determinare la codifica usata dal server. Se l'auto-rilevamento non funziona o i nomi dei file vengono visualizzati con caratteri errati, seleziona 'sì' manualmente.
@@ -316,7 +316,7 @@
 12139=Plugin SFTP - importazione proxy
 12140=Impossibile importare il proxy: il file non ha una sezione [proxy] con tipo e server.
 12141=Impossibile importare il proxy: scrittura su sftpplug.ini non riuscita.
-12142=Questo proxy è già in [Proxies] (stesso tipo, server e utente). Non è stato creato alcun nuovo record.
+12142=Questo proxy è già in [Proxy] (stesso tipo, server e utente). Non è stato creato alcun nuovo record.
 12143=Timeout sessione (min):
 12144=(0 = nessun limite)
 12145=Auto
@@ -339,7 +339,7 @@
 12168=Questa sessione usa PHP Agent o LAN Pair, presenti solo nella versione extra del plugin (SFTPplug-...-extra.zip). Questa versione si connette solo via SSH.
 12169=Questa sessione è impostata per passare sia da un proxy sia da un jump host. Il plugin raggiunge il jump host direttamente, il proxy verrebbe scavalcato. Tenga uno dei due.
 12170=La sessione jump '{}' passa da un proxy. Il jump host viene raggiunto direttamente, quel proxy verrebbe scavalcato, perciò la connessione è rifiutata. Scelga una sessione jump senza proxy.
-12171=Questa sessione è stata modificata nel programma da cui è importata (host, utente, proxy o jump host) dopo l'ultima scansione. Usi [Refresh] nella sua cartella e riprovi.
+12171=Questa sessione è stata modificata nel programma da cui è importata (host, utente, proxy o jump host) dopo l'ultima scansione. Usi [Aggiorna] nella sua cartella e riprovi.
 12172=Questo nome non può essere dato a una sessione. Non può contenere caratteri di controllo, barra rovesciata o $$, iniziare o finire con uno spazio, iniziare con [, essere una delle sezioni proprie del plugin (Configuration, Imports, proxy) né trovarsi dentro un'altra sessione.
 12173=Questa password è troppo lunga per essere conservata. Una password può occupare fino a 259 byte in UTF-8: 259 lettere latine, meno in altri alfabeti.
 12174=ProxyJump: impossibile risolvere l'host intermediario {}
@@ -355,6 +355,14 @@
 12184=Copia
 12185=Incolla
 12186=Seleziona tutto
+12300=[Importazioni]
+12301=[Sessioni attive]
+12302=[Proxy]
+12303=[Disconnetti tutto]
+12304=[Aggiorna]
+12305=[Aggiungi percorso personalizzato...]
+12306=[Gestisci percorsi personalizzati]
+12307=%s non rilevato al momento
 12089=SFTP
 12104=(manuale)
 12105= (mancante)

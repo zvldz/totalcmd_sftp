@@ -3,7 +3,7 @@
 # Generated from sftpplug.rc
 
 130=F7 - pomoc.txt
-131=Pomoc wtyczki:\r\nF7:\tUtwórz nowe połączenie (TC pokazuje Nowy katalog - wpisz nazwę połączenia)\r\nF8/Del:\tUsuń połączenie\r\nEnter:\tPołącz\r\nRozłącz:\tZ wnętrza sesji albo F8 na jej wierszu w [Active Sessions]. Przycisk paska pozostawia ją otwartą z katalogu głównego wtyczki.\r\nAlt+Enter:\tZmień opcje\r\nF3/F4:\tPokaż ustawienia jako INI (edycja przez Alt+Enter)\r\n\r\nSesje w folderach:\r\nF7 w folderze:\tTworzy sesję w tym folderze\r\nF7 z nazwą folder/x:\tTworzy sesję we wskazanym folderze\r\nF6 na \\folder\\nazwa:\tPrzenosi sesję do folderu\r\nF6 na folderze:\tZmienia nazwy wszystkich sesji; odwołania jump-host również\r\nF5 lub przeciągnięcie:\tKopiuje sesję lub folder (duplikat)\r\nF8 na folderze:\tUsuwa folder i wszystkie sesje w nim\r\n\r\nTryby transferu:\r\nSSH (SFTP/SCP):\tDomyślny i najszybszy, gdy działa dostęp SSH\r\nUżyj SCP do danych:\tGdy SFTP jest blokowane lub niestabilne\r\nTylko SCP:\tCałkowicie wyłącza SFTP (stare hosty)\r\nWymuś transfer shell:\tWymusza transfer przez shell (dd/base64)\r\nPHP Agent (HTTP):\tBez konta SSH; używa wgranego sftp.php\r\nPHP Shell (HTTP):\tPseudo-terminal HTTP przez sftp.php
+131=Pomoc wtyczki:\r\nF7:\tUtwórz nowe połączenie (TC pokazuje Nowy katalog - wpisz nazwę połączenia)\r\nF8/Del:\tUsuń połączenie\r\nEnter:\tPołącz\r\nRozłącz:\tZ wnętrza sesji albo F8 na jej wierszu w [Aktywne sesje]. Przycisk paska pozostawia ją otwartą z katalogu głównego wtyczki.\r\nAlt+Enter:\tZmień opcje\r\nF3/F4:\tPokaż ustawienia jako INI (edycja przez Alt+Enter)\r\n\r\nSesje w folderach:\r\nF7 w folderze:\tTworzy sesję w tym folderze\r\nF7 z nazwą folder/x:\tTworzy sesję we wskazanym folderze\r\nF6 na \\folder\\nazwa:\tPrzenosi sesję do folderu\r\nF6 na folderze:\tZmienia nazwy wszystkich sesji; odwołania jump-host również\r\nF5 lub przeciągnięcie:\tKopiuje sesję lub folder (duplikat)\r\nF8 na folderze:\tUsuwa folder i wszystkie sesje w nim\r\n\r\nTryby transferu:\r\nSSH (SFTP/SCP):\tDomyślny i najszybszy, gdy działa dostęp SSH\r\nUżyj SCP do danych:\tGdy SFTP jest blokowane lub niestabilne\r\nTylko SCP:\tCałkowicie wyłącza SFTP (stare hosty)\r\nWymuś transfer shell:\tWymusza transfer przez shell (dd/base64)\r\nPHP Agent (HTTP):\tBez konta SSH; używa wgranego sftp.php\r\nPHP Shell (HTTP):\tPseudo-terminal HTTP przez sftp.php
 132=Szybkie połączenie
 144=Pomoc
 146=Tutaj możesz skonfigurować sposób, w jaki serwer wysyła nazwy plików z akcentami. Gdy wybierzesz 'wykryj automatycznie', wtyczka pobierze zmienne środowiskowe (np. LANG) i wyśle polecenie 'locale', aby określić kodowanie znaków używane przez serwer. Może to nie działać ze wszystkimi serwerami, więc jeśli wiesz, że serwer używa UTF-8, lub nazwy plików wyświetlają się ze złymi znakami zamiast akcentów, wybierz 'tak' ręcznie.
@@ -306,7 +306,7 @@
 12139=Wtyczka SFTP - import proxy
 12140=Nie można zaimportować proxy: plik nie zawiera sekcji [proxy] z typem i serwerem.
 12141=Nie można zaimportować proxy: zapis do sftpplug.ini nie powiódł się.
-12142=To proxy jest już w [Proxies] (ten sam typ, serwer i użytkownik). Nie utworzono nowego wpisu.
+12142=To proxy jest już w [Proxy] (ten sam typ, serwer i użytkownik). Nie utworzono nowego wpisu.
 12143=Limit czasu sesji (min):
 12144=(0 = bez limitu)
 12145=Auto
@@ -329,7 +329,7 @@
 12168=Ta sesja używa PHP Agent lub LAN Pair, które ma tylko wersja extra wtyczki (SFTPplug-...-extra.zip). Ta wersja łączy się tylko przez SSH.
 12169=Ta sesja jest ustawiona jednocześnie na proxy i na host pośredni. Wtyczka łączy się z hostem pośrednim bezpośrednio, proxy zostałoby pominięte. Zostaw jedno z nich.
 12170=Sesja pośrednia '{}' przechodzi przez proxy. Z hostem pośrednim wtyczka łączy się bezpośrednio, to proxy zostałoby pominięte, więc połączenie odrzucono. Wybierz sesję pośrednią bez proxy.
-12171=Ta sesja została zmieniona w programie, z którego ją zaimportowano (host, użytkownik, proxy lub host pośredni), po ostatnim skanowaniu. Użyj [Refresh] w jej folderze i spróbuj ponownie.
+12171=Ta sesja została zmieniona w programie, z którego ją zaimportowano (host, użytkownik, proxy lub host pośredni), po ostatnim skanowaniu. Użyj [Odśwież] w jej folderze i spróbuj ponownie.
 12172=Tej nazwy nie można nadać sesji. Nie może zawierać znaków sterujących, ukośnika wstecznego ani $$, zaczynać się ani kończyć spacją, zaczynać się od [, być jedną z własnych sekcji wtyczki (Configuration, Imports, proxy) ani leżeć wewnątrz innej sesji.
 12173=To hasło jest za długie, aby je zapisać. Hasło może zajmować do 259 bajtów w UTF-8: 259 liter łacińskich, mniej w innych alfabetach.
 12174=ProxyJump: nie można rozwiązać nazwy hosta pośredniego {}
@@ -345,6 +345,14 @@
 12184=Kopiuj
 12185=Wklej
 12186=Zaznacz wszystko
+12300=[Importy]
+12301=[Aktywne sesje]
+12302=[Proxy]
+12303=[Rozłącz wszystkie]
+12304=[Odśwież]
+12305=[Dodaj własną lokalizację...]
+12306=[Zarządzaj własnymi lokalizacjami]
+12307=%s — obecnie nie wykryto
 12089=SFTP
 12090=Szukam peera LAN Pair w sieci lokalnej...
 12091={} s

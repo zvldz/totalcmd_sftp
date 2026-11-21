@@ -2,6 +2,7 @@
 
 #include <windows.h>
 #include <string>
+#include <vector>
 
 // Load a lang_XX.lng file matching langId from the directory that contains
 // the plugin DLL.  Call this once in FsInitW after the language is resolved.
@@ -15,6 +16,10 @@ void LngLoadByCode(const char* code, HINSTANCE hPluginInst) noexcept;
 // Return the translated string for id, or nullptr if no .lng override exists.
 // The returned pointer is valid for the lifetime of the process.
 const char* LngGetString(UINT id) noexcept;
+
+// The text of `id` in every .lng file beside the plugin (UTF-8), whatever
+// language is in use; the files are read on the first call.
+std::vector<std::string> LngAllTranslations(UINT id, HINSTANCE hPluginInst) noexcept;
 
 // Load a wide string: tries .lng (UTF-8) first, falls back to LoadStringW.
 bool LngLoadStringW(HINSTANCE hInst, UINT id, WCHAR* buf, int bufLen) noexcept;

@@ -1022,7 +1022,7 @@ int WINAPI FsExecuteFileW(HWND MainWin, LPWSTR RemoteName, LPCWSTR Verb)
                         if (adapter) {
                             std::wstring target;
                             target += L'\\';
-                            target += kImportsFolderW;
+                            target += unicode_util::internal_to_wide(MagicDisplayName(kImportsFolder));
                             target += L'\\';
                             target += unicode_util::internal_to_wide(adapter->FolderName());
                             wcslcpy(RemoteName, target.c_str(), wdirtypemax - 1);
@@ -1081,7 +1081,7 @@ int WINAPI FsExecuteFileW(HWND MainWin, LPWSTR RemoteName, LPCWSTR Verb)
                         // Symlink back to `[Imports]\<Source>\`.
                         std::wstring target;
                         target += L'\\';
-                        target += kImportsFolderW;
+                        target += unicode_util::internal_to_wide(MagicDisplayName(kImportsFolder));
                         target += L'\\';
                         target += unicode_util::internal_to_wide(adapter->FolderName());
                         wcslcpy(RemoteName, target.c_str(), wdirtypemax - 1);
