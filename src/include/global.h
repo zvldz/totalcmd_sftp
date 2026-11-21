@@ -83,7 +83,7 @@ constexpr size_t wdirtypemax = 1024;
 #define LOG_ENABLED  1                              // Master switch: 0 = off, 1 = on
 #endif
 #define LOG_TO_FILE  1                            // 0 = OutputDebugString only, 1 = + file
-#define LOG_FILE_NAME L"sftpplug.log"              // File name inside %TEMP%
+#define LOG_FILE_NAME L"sftpplug.log"              // File name inside %TEMP% under Total Commander
 
 // Internal aliases — do not edit below this line.
 #define SFTP_DEBUG_ENABLED  LOG_ENABLED
@@ -91,28 +91,59 @@ constexpr size_t wdirtypemax = 1024;
 #define SFTP_DEBUG_LEVEL    (LOG_ENABLED ? 2 : 0)
 
 #if SFTP_DEBUG_ENABLED
+#if SFTP_DEBUG_TO_FILE
+// The log file of this process, chosen once from the host executable so that
+// two hosts never mix their lines: Total Commander writes LOG_FILE_NAME,
+// Double Commander sftpplug-dc.log, any other host (the test harness, the
+// unit tests) sftpplug-<exe name>.log.
+inline const wchar_t* sftp_debug_log_file_name() noexcept
+{
+    static const auto name = []() noexcept {
+        static wchar_t buf[96] = {};
+        wchar_t exe[MAX_PATH] = {};
+        const DWORD len = GetModuleFileNameW(nullptr, exe, MAX_PATH);
+        const wchar_t* base = exe;
+        for (DWORD i = 0; i < len; ++i)
+            if (exe[i] == L'\\' || exe[i] == L'/')
+                base = exe + i + 1;
+        wchar_t stem[64] = {};
+        wcsncpy_s(stem, base, _TRUNCATE);
+        if (wchar_t* dot = wcsrchr(stem, L'.'))
+            *dot = 0;
+        if (len == 0 || stem[0] == 0 || _wcsnicmp(stem, L"totalcmd", 8) == 0)
+            wcsncpy_s(buf, LOG_FILE_NAME, _TRUNCATE);
+        else if (_wcsnicmp(stem, L"doublecmd", 9) == 0)
+            wcsncpy_s(buf, L"sftpplug-dc.log", _TRUNCATE);
+        else
+            swprintf_s(buf, L"sftpplug-%s.log", stem);
+        return static_cast<const wchar_t*>(buf);
+    }();
+    return name;
+}
+#endif
+
 inline void sftp_debug_emit_line(const char* line) noexcept
 {
     if (!line) return;
     OutputDebugStringA(line);
     OutputDebugStringA("\n");
 #if SFTP_DEBUG_TO_FILE
-    wchar_t logPath[MAX_PATH + 32] = {};
+    wchar_t logPath[MAX_PATH + 96] = {};
     const DWORD n = GetTempPathW(MAX_PATH + 1, logPath);
     if (n == 0 || n > MAX_PATH)
         return;
-    wcsncat_s(logPath, LOG_FILE_NAME, _TRUNCATE);
+    wcsncat_s(logPath, sftp_debug_log_file_name(), _TRUNCATE);
 
     // Shared for writing: background transfers log at the same time, and an
     // append-only handle adds each line whole at the end. Past 20 MB the log
-    // moves to sftpplug.log.old and starts again.
+    // moves to <name>.old and starts again.
     const DWORD share = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
     HANDLE hf = CreateFileW(logPath, FILE_APPEND_DATA, share, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (hf != INVALID_HANDLE_VALUE) {
         LARGE_INTEGER size{};
         if (GetFileSizeEx(hf, &size) && size.QuadPart > 20LL * 1024 * 1024) {
             CloseHandle(hf);
-            wchar_t oldPath[MAX_PATH + 40] = {};
+            wchar_t oldPath[MAX_PATH + 104] = {};
             wcsncpy_s(oldPath, logPath, _TRUNCATE);
             wcsncat_s(oldPath, L".old", _TRUNCATE);
             MoveFileExW(logPath, oldPath, MOVEFILE_REPLACE_EXISTING);

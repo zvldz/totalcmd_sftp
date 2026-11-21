@@ -923,6 +923,10 @@ side works; full operation of the extra build there is not guaranteed.
     that could not be built is never replaced by an old one.
   - The debug log of a test build keeps lines from parallel transfers and
     starts over past 20 MB (the old one is kept as `sftpplug.log.old`).
+  - Each host writes its own debug log: Total Commander `sftpplug.log`,
+    Double Commander `sftpplug-dc.log`, the tests
+    `sftpplug-plugin_harness.log` and `sftpplug-unit_tests.log`, so a test
+    run neither mixes its lines into Total Commander's log nor rotates it.
   - A crash report no longer loads symbols for every module of Total
     Commander nor shows a "no disk" box for a missing drive.
   - dbghelp.dll and version.dll come from System32 on every Windows
