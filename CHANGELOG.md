@@ -335,6 +335,12 @@ side works; full operation of the extra build there is not guaranteed.
 
 ### Fixes
 
+- **Total Commander's language is followed in every plugin folder.** A
+  language changed in Total Commander was picked up only on the plugin's
+  root; inside `[Imports]`, `[Active Sessions]` or a session folder the
+  plugin kept the old one until the root was opened again. Any listing,
+  a Ctrl+R included, now takes the new language, and dialogs opened
+  after it follow. No restart is needed.
 - **An imported session is listed by its name in `[Active Sessions]`.**
   A connected session from `[Imports]` showed there as
   `__vimp_securecrt_95c721482a083beb`; it now reads like

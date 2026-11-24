@@ -1014,8 +1014,13 @@ HANDLE WINAPI FsFindFirstW(LPCWSTR Path, LPWIN32_FIND_DATAW FindData)
         std::array<char, wdirtypemax> displayName{};
         std::array<char, wdirtypemax> pathA{};
 
-        if (wcscmp(Path, L"\\") == 0) {  // in the root.
+        // TC writes its language to wincmd.ini as soon as it is changed, so
+        // every listing follows it. Background transfers list folders too;
+        // they leave the translation table alone while other threads read it.
+        if (IsMainThread())
             ApplyTcLanguageToPluginResources(g_wincmdIniPath);
+
+        if (wcscmp(Path, L"\\") == 0) {  // in the root.
             LoadServersFromIniW(inifilenameW, s_quickconnect);
             *FindData = {};
             return BuildPluginFolderListing(std::string{}, FindData);
