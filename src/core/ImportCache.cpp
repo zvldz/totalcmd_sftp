@@ -224,6 +224,14 @@ std::string ImportCache::SectionName(const std::string& sourceId,
            ChannelTag(channel) + "." + displayName;
 }
 
+bool ImportCache::SplitSectionName(const std::string& section,
+                                   std::string& outSourceId,
+                                   std::string& outDisplayName)
+{
+    std::string channelTag;
+    return ParseSectionName(section, outSourceId, channelTag, outDisplayName);
+}
+
 std::string ImportCache::SectionNameForConnect(const std::string& sourceId,
                                                 const std::string& displayName) const
 {

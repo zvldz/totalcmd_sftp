@@ -161,3 +161,35 @@ inline bool IsImportsPath(LPCWSTR path,
     return ClassifyImportsPath(path, outSourceId, outSubPath) !=
            ImportsPathKind::NotImports;
 }
+
+// An imported session keeps its place in the [Imports] tree while connected:
+// TC's path reads "\[Imports]\<Source>\<session>[\<path on the server>]".
+// The connection itself is registered under the session's alias
+// (VirtualSessionRegistry.h), so the entry points translate the path to
+// "\<alias>[\<path on the server>]" first, and every path handed back to TC
+// the other way.
+//
+// Translates `path` when it names a cached session, and registers the alias
+// so the connection can be made from the path alone (a tab or a hotlist
+// entry after a restart). `leafToo`: whether the session's own path, with
+// nothing after it, is translated too — entering, disconnecting and status
+// take it as the connection; every other operation (F5, F3, F8) as the row
+// in the listing, which stays an [Imports] path. Returns false and leaves
+// `out` alone otherwise. Implementation in PluginEntryPointsFind.cpp.
+bool ImportedSessionToAliasPathW(LPCWSTR path, bool leafToo, std::wstring& out);
+
+// Points `path` at its translation when there is one; `buf` holds the text
+// for the rest of the call.
+inline void UseAliasPath(LPCWSTR& path, std::wstring& buf, bool leafToo = false)
+{
+    if (ImportedSessionToAliasPathW(path, leafToo, buf))
+        path = buf.c_str();
+}
+
+// "\[Imports]\<Source>\<session>" (internal string, the plugin's language)
+// for a registered alias; empty when `alias` is not one.
+std::string ImportedSessionPathForAlias(const std::string& alias);
+
+// "\<alias>[\rest]" → "\[Imports]\<Source>\<session>[\rest]". Returns false
+// and leaves `out` alone when the first segment is not a registered alias.
+bool AliasToImportedSessionPathW(LPCWSTR path, std::wstring& out);

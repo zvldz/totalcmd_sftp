@@ -8,7 +8,7 @@
 //   remote-base  existing writable remote directory, e.g. /tmp
 //   mode         the transfer mode the session is set up for (sftp, scp,
 //                scponly, shell, text, text-scp, text-scponly, nosub,
-//                nosub-bad, postcmd, key-*, classic-gate, secrets, jump-*,
+//                nosub-bad, postcmd, key-*, classic-gate, secrets, magic, imports, jump-*,
 //                pass-store, socks5*, socks4*, http-*, ipv6, hostkey, netfail,
 //                php*); the
 //                text* modes also run the text-mode (CRLF <-> LF) checks; php*
@@ -439,6 +439,18 @@ int wmain(int argc, wchar_t** argv)
     // The magic-names mode runs the plugin in Russian, on an ini of its own
     // holding one proxy record.
     std::wstring iniUsed = iniDir;
+    // The imports mode: an ini of its own naming a portable WinSCP.ini, which
+    // holds one session on the bench in a folder.
+    if (mode == L"imports") {
+        iniUsed = NewTempDir(L"imports");
+        iniUsed.pop_back();
+        const std::string winscpIni = Narrow(iniUsed + L"\\WinSCP.ini");
+        WriteFileBytes(iniUsed + L"\\WinSCP.ini",
+                       "[Sessions\\it/bench]\r\nHostName=127.0.0.1\r\nPortNumber=2222\r\nUserName=tester\r\n"
+                       "PublicKeyFile=" + Narrow(EnvString(L"SFTP_IT_IMPORT_KEY")) + "\r\nTryAgent=0\r\nFSProtocol=2\r\n");
+        WriteFileBytes(iniUsed + L"\\sftpplug.ini",
+                       "[Configuration]\r\nDebugLog=1\r\n[Imports]\r\nwinscp.custom_paths=" + winscpIni + "\r\n");
+    }
     if (mode == L"magic") {
         iniUsed = NewTempDir(L"names");
         iniUsed.pop_back();
@@ -517,6 +529,86 @@ int wmain(int argc, wchar_t** argv)
               "[Refresh] in English still is");
         Check(helpOf(L"\\[Imports]\\[PuTTY]\\[Aktualisieren]").find("[Refresh] action") == std::string::npos,
               "[Aktualisieren], German, is not taken for it inside a folder");
+        std::printf("%d passed, %d failed, %d known\n", g_passed, g_failed, g_known);
+        return g_failed == 0 ? 0 : 1;
+    }
+
+    if (mode == L"imports") {
+        // A connected imported session keeps its [Imports] path: every path
+        // the plugin hands back names it there, never by its internal alias.
+        const auto noAlias = [](const std::wstring& s) {
+            return s.find(L"__vimp") == std::wstring::npos && s.find(L"__import.") == std::wstring::npos;
+        };
+        const std::wstring source = L"\\[Imports]\\[WinSCP]";
+        const std::wstring sessionPath = source + L"\\it\\bench";
+        bool ok = false;
+
+        std::wstring refresh = source + L"\\[Refresh]";
+        refresh.resize(MAX_PATH);
+        g_plugin.ExecuteFileW(nullptr, refresh.data(), L"open");
+        const auto folder = ListDir(source + L"\\it", ok);
+        Check(ok && folder.count(L"bench"), "the WinSCP.ini session is listed in its folder");
+
+        // Straight to a path inside the session, as a tab or a hotlist entry
+        // after a restart would go: no Enter on the row first.
+        const auto top = ListDir(sessionPath + remoteBase, ok);
+        Check(ok, "a path inside the session connects on its own");
+        int connects = 0;
+        bool connectClean = true;
+        {
+            std::lock_guard<std::mutex> lock(g_logMutex);
+            for (const auto& line : g_logLines) {
+                if (line.rfind(L"CONNECT ", 0) != 0)
+                    continue;
+                ++connects;
+                connectClean = connectClean && line == L"CONNECT " + sessionPath;
+            }
+        }
+        Check(connects == 1 && connectClean, "the connection is announced as " + Narrow(sessionPath));
+
+        // Enter on the row leads into the session at the same path.
+        std::wstring enter = sessionPath;
+        enter.resize(MAX_PATH);
+        const int rc = g_plugin.ExecuteFileW(nullptr, enter.data(), L"open");
+        enter.resize(wcslen(enter.c_str()));
+        Check(rc == FS_EXEC_SYMLINK && _wcsicmp(enter.c_str(), sessionPath.c_str()) == 0,
+              "Enter on the row leads to " + Narrow(enter));
+
+        // Files inside the session.
+        const std::wstring dir = sessionPath + remoteBase + L"\\" + runName;
+        Check(g_plugin.MkDirW(dir.c_str()) != FALSE, "a folder is made inside the session");
+        const std::wstring local = NewTempDir(L"imports");
+        const std::string payload = RandomBytes(100000, 7);
+        WriteFileBytes(local + L"up.bin", payload);
+        Check(g_plugin.PutFileW((local + L"up.bin").c_str(), (dir + L"\\up.bin").c_str(), 0) == FS_FILE_OK,
+              "a file is uploaded into it");
+        Check(g_plugin.RenMovFileW((dir + L"\\up.bin").c_str(), (dir + L"\\moved.bin").c_str(), TRUE, FALSE, nullptr) == FS_FILE_OK,
+              "and renamed there");
+        RemoteInfoStruct ri = InfoFor(dir, L"moved.bin");
+        const std::wstring down = local + L"down.bin";
+        DeleteFileW(down.c_str());
+        Check(g_plugin.GetFileW((dir + L"\\moved.bin").c_str(), const_cast<LPWSTR>(down.c_str()), 0, &ri) == FS_FILE_OK &&
+              Sha256File(down) == Sha256File(local + L"up.bin"),
+              "and downloaded back unchanged");
+        Check(g_plugin.DeleteFileW((dir + L"\\moved.bin").c_str()) != FALSE, "and deleted");
+        Check(g_plugin.RemoveDirW(dir.c_str()) != FALSE, "the folder is removed");
+
+        // [Active Sessions] names it by its source and name.
+        const auto active = ListDir(L"\\[Active Sessions]", ok);
+        Check(ok && active.count(L"[WinSCP] it/bench"), "[Active Sessions] lists [WinSCP] it/bench");
+
+        // Disconnecting by the announced root closes the connection.
+        Check(g_plugin.Disconnect(Narrow(sessionPath).c_str()) != FALSE, "disconnecting by its path succeeds");
+        const auto after = ListDir(L"\\[Active Sessions]", ok);
+        Check(!after.count(L"[WinSCP] it/bench"), "and it is gone from [Active Sessions]");
+
+        bool logClean = true;
+        {
+            std::lock_guard<std::mutex> lock(g_logMutex);
+            for (const auto& line : g_logLines)
+                logClean = logClean && noAlias(line);
+        }
+        Check(logClean, "no line in TC's log names the internal alias or cache section");
         std::printf("%d passed, %d failed, %d known\n", g_passed, g_failed, g_known);
         return g_failed == 0 ? 0 : 1;
     }

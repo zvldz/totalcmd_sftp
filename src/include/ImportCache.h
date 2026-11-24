@@ -49,6 +49,12 @@ public:
                                    const std::string& channel,
                                    const std::string& displayName) noexcept;
 
+    // The source and the session's name inside it, read back from a section
+    // name made by SectionName. False for any other name.
+    static bool SplitSectionName(const std::string& section,
+                                 std::string& outSourceId,
+                                 std::string& outDisplayName);
+
     // Full on-disk INI section name of a channel that caches the (sourceId,
     // displayName), for callers that read a session's fields (virtual
     // connect / F5 materialise / F5 export) without knowing which channel

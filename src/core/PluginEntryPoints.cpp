@@ -31,6 +31,7 @@
 #include "PluginEntryPointsInternal.h"
 #include "DownloadErrorBatch.h"
 #include "ImportCache.h"
+#include "ImportSourceRegistry.h"
 #include "IniFile.h"
 #include "VirtualSessionRegistry.h"
 
@@ -389,12 +390,19 @@ namespace {
 thread_local const tConnectSettings* g_currentSession = nullptr;
 
 // Pick the user-recognisable identifier for the session, "[name] ".
-// Preference order: saved name (DisplayName) → server/host → empty.
+// Preference order: saved name (DisplayName) → server/host → empty. A
+// session from [Imports] carries its cache section as DisplayName and reads
+// "[<Source>] <name>: ", as [Active Sessions] lists it.
 std::wstring SessionPrefixW(const tConnectSettings* cs)
 {
     if (!cs) return {};
     const std::string& name = !cs->DisplayName.empty() ? cs->DisplayName : cs->server;
     if (name.empty()) return {};
+    std::string sourceId, shown;
+    if (sftp::ImportCache::SplitSectionName(name, sourceId, shown)) {
+        if (const auto* adapter = sftp::GetImportSourceRegistry().Find(sourceId.c_str()))
+            return unicode_util::internal_to_wide(std::string(adapter->FolderName()) + " " + shown + ": ");
+    }
     return L"[" + unicode_util::internal_to_wide(name) + L"] ";
 }
 } // namespace
@@ -709,9 +717,16 @@ BOOL DisconnectSessionPath(const std::string& root)
     SFTP_LOG("DISCONNECT", "FsDisconnect ENTRY path='%s' tid=%lu",
              root.c_str(), GetCurrentThreadId());
     {
+        // An imported session is disconnected by its [Imports] path, the
+        // root its connection was announced with.
+        std::string sessionPath = root;
+        std::wstring aliasPath;
+        if (ImportedSessionToAliasPathW(unicode_util::internal_to_wide(root).c_str(), true, aliasPath))
+            sessionPath = unicode_util::wide_to_internal(aliasPath);
+
         std::string displayName;
         displayName.resize(wdirtypemax);
-        GetDisplayNameFromPath(root.c_str(), displayName.data(), displayName.size() - 1);
+        GetDisplayNameFromPath(sessionPath.c_str(), displayName.data(), displayName.size() - 1);
         displayName.resize(strlen(displayName.data()));
         SFTP_LOG("DISCONNECT", "  displayName='%s'", displayName.c_str());
 
@@ -729,8 +744,9 @@ BOOL DisconnectSessionPath(const std::string& root)
         // and drops every registry row referencing this name regardless
         // of thread. Safe to call for background-thread invocations;
         // idempotent for a double-close (removed==0).
-        std::string connBuf = "DISCONNECT \\";
-        connBuf += displayName;
+        const std::string importedPath = ImportedSessionPathForAlias(displayName);
+        std::string connBuf = "DISCONNECT ";
+        connBuf += importedPath.empty() ? "\\" + displayName : importedPath;
         LogProcI(PluginNumber, MSGTYPE_DISCONNECT, connBuf.c_str());
 
         const size_t removed = DisconnectServerByName(displayName.c_str());
@@ -768,8 +784,13 @@ BOOL WINAPI FsDisconnect(LPCSTR DisconnectRoot)
 static thread_local int t_backgroundTransfers = 0;
 
 // Body of FsStatusInfoW / FsStatusInfo; `remoteDir` is an internal string.
-static void StatusInfo(const std::string& remoteDir, int InfoStartEnd, int InfoOperation)
+static void StatusInfo(const std::string& tcDir, int InfoStartEnd, int InfoOperation)
 {
+    // An operation inside an imported session runs on its alias.
+    std::string remoteDir = tcDir;
+    std::wstring aliasPath;
+    if (ImportedSessionToAliasPathW(unicode_util::internal_to_wide(tcDir).c_str(), true, aliasPath))
+        remoteDir = unicode_util::wide_to_internal(aliasPath);
     const char* RemoteDir = remoteDir.c_str();
     {
         SFTP_LOG("STATUS", "FsStatusInfo op=%d %s dir='%s' tid=%lu main=%lu",
@@ -1210,6 +1231,8 @@ int WINAPI FsExtractCustomIconW(LPCWSTR RemoteName, int ExtractFlags, HICON * Th
 {
     sftp::DllExceptionBarrier _barrier;
     return sftp::dll_invoke(_barrier, FS_ICON_USEDEFAULT, [&]() -> int {
+        std::wstring aliasPath;
+        UseAliasPath(RemoteName, aliasPath);
         return ExtractCustomIcon(RemoteName, ExtractFlags, TheIcon);
     });
 }
@@ -1278,15 +1301,18 @@ int WINAPI FsContentGetValueW(WCHAR* FileName, int FieldIndex, int UnitIndex, vo
         // asks from a thread of its own, which has none; the panel's
         // listing is then read through the registry. Total Commander never
         // takes that second path.
+        LPCWSTR path = FileName;
+        std::wstring aliasPath;
+        UseAliasPath(path, aliasPath);
         ListingExtra extraValue;
         bool listed = false;
         std::array<WCHAR, wdirtypemax> relative{};
-        if (pConnectSettings serverid = GetServerIdAndRelativePathFromPathW(FileName, relative.data(), relative.size() - 1)) {
+        if (pConnectSettings serverid = GetServerIdAndRelativePathFromPathW(path, relative.data(), relative.size() - 1)) {
             listed = CopyListingExtra(serverid, relative.data(), extraValue);
         } else if (!hostIsTotalCommander && GetCurrentThreadId() != mainthreadid) {
-            const PathResolution r = ResolvePathKindW(FileName);
+            const PathResolution r = ResolvePathKindW(path);
             if (r.kind == PathKind::SessionWithSubpath)
-                listed = CopyMainThreadListingExtra(r.displayName.c_str(), RelativePathW(FileName, r), extraValue);
+                listed = CopyMainThreadListingExtra(r.displayName.c_str(), RelativePathW(path, r), extraValue);
         }
         if (!listed)
             return ft_fieldempty;
@@ -1354,6 +1380,8 @@ int WINAPI FsServerSupportsChecksumsW(LPCWSTR RemoteName)
 {
     sftp::DllExceptionBarrier _barrier;
     return sftp::dll_invoke(_barrier, 0, [&]() -> int {
+        std::wstring aliasPath;
+        UseAliasPath(RemoteName, aliasPath);
         std::array<WCHAR, wdirtypemax> remotedir{};
         pConnectSettings serverid = GetServerIdAndRelativePathFromPathW(RemoteName, remotedir.data(), remotedir.size() - 1);
         if (serverid == nullptr)
@@ -1376,6 +1404,8 @@ HANDLE WINAPI FsStartFileChecksumW(int ChecksumType, LPCWSTR RemoteName)
 {
     sftp::DllExceptionBarrier _barrier;
     return sftp::dll_invoke(_barrier, nullptr, [&]() -> HANDLE {
+        std::wstring aliasPath;
+        UseAliasPath(RemoteName, aliasPath);
         std::array<WCHAR, wdirtypemax> remotedir{};
         pConnectSettings serverid = GetServerIdAndRelativePathFromPathW(RemoteName, remotedir.data(), remotedir.size() - 1);
         if (serverid == nullptr)
@@ -1399,6 +1429,8 @@ int WINAPI FsGetFileChecksumResultW(BOOL WantResult, HANDLE ChecksumHandle, LPCW
 {
     sftp::DllExceptionBarrier _barrier;
     return sftp::dll_invoke(_barrier, 0, [&]() -> int {
+        std::wstring aliasPath;
+        UseAliasPath(RemoteName, aliasPath);
         std::array<WCHAR, wdirtypemax> remotedir{};
         pConnectSettings serverid = GetServerIdAndRelativePathFromPathW(RemoteName, remotedir.data(), remotedir.size() - 1);
         if (serverid == nullptr)

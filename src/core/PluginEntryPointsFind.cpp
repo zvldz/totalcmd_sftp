@@ -1005,6 +1005,78 @@ ImportsPathKind ClassifyImportsPath(LPCWSTR path,
     return ImportsPathKind::UnknownSource;
 }
 
+// See PluginEntryPointsInternal.h for the contract.
+bool ImportedSessionToAliasPathW(LPCWSTR path, bool leafToo, std::wstring& out)
+{
+    std::string sourceId, subPath;
+    if (ClassifyImportsPath(path, &sourceId, &subPath) != ImportsPathKind::SourceSubPath)
+        return false;
+    while (!subPath.empty() && subPath.back() == '/')
+        subPath.pop_back();
+
+    // The longest leading part that names a cached session is the session;
+    // what follows it is the path on the server, as for a saved session in
+    // a folder.
+    std::string session = subPath;
+    std::string section;
+    while (!session.empty()) {
+        section = sftp::GetImportCache().SectionNameForConnect(sourceId, session);
+        if (!section.empty())
+            break;
+        const size_t slash = session.find_last_of('/');
+        if (slash == std::string::npos)
+            return false;
+        session.resize(slash);
+    }
+    if (section.empty())
+        return false;
+
+    std::string remote = subPath.substr(session.size());
+    if (remote.empty() && !leafToo)
+        return false;
+    std::replace(remote.begin(), remote.end(), '/', '\\');
+
+    const std::string alias = sftp::MakeVirtualSessionAlias(sourceId, section);
+    sftp::RegisterVirtualSession(alias, {sourceId, section, session});
+
+    out = L"\\";
+    out += unicode_util::internal_to_wide(alias + remote);
+    return true;
+}
+
+// See PluginEntryPointsInternal.h for the contract.
+std::string ImportedSessionPathForAlias(const std::string& alias)
+{
+    if (!sftp::IsVirtualSessionAlias(alias.c_str()))
+        return {};
+    const auto info = sftp::LookupVirtualSession(alias);
+    if (!info)
+        return {};
+    const auto* adapter = sftp::GetImportSourceRegistry().Find(info->sourceId.c_str());
+    if (!adapter)
+        return {};
+    std::string out = "\\" + MagicDisplayName(kImportsFolder) + "\\" + adapter->FolderName() + "\\" + info->displayName;
+    std::replace(out.begin(), out.end(), '/', '\\');
+    return out;
+}
+
+// See PluginEntryPointsInternal.h for the contract.
+bool AliasToImportedSessionPathW(LPCWSTR path, std::wstring& out)
+{
+    if (!path || path[0] != L'\\')
+        return false;
+    const std::wstring_view view(path + 1);
+    const size_t end = view.find_first_of(L"\\/");
+    const std::string alias = unicode_util::wide_to_internal(view.substr(0, end));
+    const std::string shown = ImportedSessionPathForAlias(alias);
+    if (shown.empty())
+        return false;
+    out = unicode_util::internal_to_wide(shown);
+    if (end != std::wstring_view::npos)
+        out += view.substr(end);
+    return true;
+}
+
 HANDLE WINAPI FsFindFirstW(LPCWSTR Path, LPWIN32_FIND_DATAW FindData)
 {
     sftp::DllExceptionBarrier _barrier;
@@ -1019,6 +1091,9 @@ HANDLE WINAPI FsFindFirstW(LPCWSTR Path, LPWIN32_FIND_DATAW FindData)
         // they leave the translation table alone while other threads read it.
         if (IsMainThread())
             ApplyTcLanguageToPluginResources(g_wincmdIniPath);
+
+        std::wstring aliasPath;
+        UseAliasPath(Path, aliasPath, true);
 
         if (wcscmp(Path, L"\\") == 0) {  // in the root.
             LoadServersFromIniW(inifilenameW, s_quickconnect);
@@ -1379,6 +1454,9 @@ BOOL WINAPI FsMkDirW(LPCWSTR Path)
 {
     sftp::DllExceptionBarrier _barrier;
     return sftp::dll_invoke(_barrier, FALSE, [&]() -> BOOL {
+        std::wstring aliasPath;
+        UseAliasPath(Path, aliasPath);
+
         const std::wstring_view pathView = Path ? std::wstring_view(Path) : std::wstring_view{};
         if (pathView.size() < 2)
             return false;

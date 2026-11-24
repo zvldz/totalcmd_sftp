@@ -341,6 +341,14 @@ side works; full operation of the extra build there is not guaranteed.
   plugin kept the old one until the root was opened again. Any listing,
   a Ctrl+R included, now takes the new language, and dialogs opened
   after it follow. No restart is needed.
+- **An imported session stays in `[Imports]` while connected.** Enter on
+  a session there took Total Commander to `\__vimp_securecrt_95c7…` in the
+  plugin root, and the tab and the path bar showed that name. The path now
+  stays `\[Imports]\[SecureCRT]\my\ha1_remote\…`: `..` from the server's
+  root leads back to the source folder, and Disconnect works on it. A
+  hotlist entry or a typed path inside such a session connects by itself,
+  even after a restart, where `\__vimp…` was not found. TC's log names the session as
+  `[SecureCRT] my/ha1_remote`, not by its cache section.
 - **An imported session is listed by its name in `[Active Sessions]`.**
   A connected session from `[Imports]` showed there as
   `__vimp_securecrt_95c721482a083beb`; it now reads like

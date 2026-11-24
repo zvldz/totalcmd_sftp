@@ -25,7 +25,7 @@ Everything a run creates on the server lives in one directory under
 .PARAMETER Modes
 sftp, scp, scponly, shell, text, text-scp, text-scponly, scponly-noisy,
 scp-noisy, shell-noisy, nosub, nosub-bad, postcmd, key-utf8, key-cp1251,
-classic-gate, secrets, magic, pass-store, jump-key, jump-pass, jump-ref, socks5,
+classic-gate, secrets, magic, imports, pass-store, jump-key, jump-pass, jump-ref, socks5,
 socks5-auth, socks4, socks4a, http-proxy, http-auth, ipv6, hostkey, netfail,
 php, php74 (default: all).
   text*      text mode (CRLF <-> LF) over SFTP, SCP and SCP-only
@@ -41,6 +41,8 @@ php, php74 (default: all).
              than connecting over SSH
   magic      no server: the plugin in Russian; its own folders show translated
              and a path naming one in another language still leads there
+  imports    a WinSCP.ini session in [Imports]: connected, used and disconnected
+             by its [Imports] path, never by the internal alias
   secrets    no server: where passwords end up when sessions are copied in,
              out, renamed and deleted, with an in-memory password manager
   key-*      a key whose passphrase is a Cyrillic word, stored as UTF-8 or
@@ -70,7 +72,7 @@ php, php74 (default: all).
 #>
 param(
     [ValidateSet('x64', 'x86', 'both')] [string]$Arch = 'both',
-    [string[]]$Modes = @('sftp', 'scp', 'scponly', 'shell', 'text', 'text-scp', 'text-scponly', 'scponly-noisy', 'scp-noisy', 'shell-noisy', 'nosub', 'nosub-bad', 'postcmd', 'key-utf8', 'key-cp1251', 'classic-gate', 'secrets', 'magic', 'pass-store', 'jump-key', 'jump-pass', 'jump-ref', 'socks5', 'socks5-auth', 'socks4', 'socks4a', 'http-proxy', 'http-auth', 'ipv6', 'hostkey', 'netfail', 'php', 'php74'),
+    [string[]]$Modes = @('sftp', 'scp', 'scponly', 'shell', 'text', 'text-scp', 'text-scponly', 'scponly-noisy', 'scp-noisy', 'shell-noisy', 'nosub', 'nosub-bad', 'postcmd', 'key-utf8', 'key-cp1251', 'classic-gate', 'secrets', 'magic', 'imports', 'pass-store', 'jump-key', 'jump-pass', 'jump-ref', 'socks5', 'socks5-auth', 'socks4', 'socks4a', 'http-proxy', 'http-auth', 'ipv6', 'hostkey', 'netfail', 'php', 'php74'),
     [string]$RemoteBase = '/tmp',
     [switch]$VerboseLog
 )
@@ -84,7 +86,7 @@ $KeyFileUtf8 = Join-Path $Bench 'keys\id_ed25519_utf8'
 $KeyFileCp1251 = Join-Path $Bench 'keys\id_ed25519_cp1251'
 
 $Modes = @($Modes | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
-$knownModes = 'sftp', 'scp', 'scponly', 'shell', 'text', 'text-scp', 'text-scponly', 'scponly-noisy', 'scp-noisy', 'shell-noisy', 'nosub', 'nosub-bad', 'postcmd', 'key-utf8', 'key-cp1251', 'classic-gate', 'secrets', 'magic', 'pass-store', 'jump-key', 'jump-pass', 'jump-ref', 'socks5', 'socks5-auth', 'socks4', 'socks4a', 'http-proxy', 'http-auth', 'ipv6', 'hostkey', 'netfail', 'php', 'php74'
+$knownModes = 'sftp', 'scp', 'scponly', 'shell', 'text', 'text-scp', 'text-scponly', 'scponly-noisy', 'scp-noisy', 'shell-noisy', 'nosub', 'nosub-bad', 'postcmd', 'key-utf8', 'key-cp1251', 'classic-gate', 'secrets', 'magic', 'imports', 'pass-store', 'jump-key', 'jump-pass', 'jump-ref', 'socks5', 'socks5-auth', 'socks4', 'socks4a', 'http-proxy', 'http-auth', 'ipv6', 'hostkey', 'netfail', 'php', 'php74'
 foreach ($m in $Modes) { if ($m -notin $knownModes) { throw "Unknown mode '$m'. Known: $($knownModes -join ', ')" } }
 
 # ---------------------------------------------------------------------------
@@ -158,6 +160,7 @@ $overrides = @{
                       privkeyfile = $KeyFileCp1251 }
     secrets      = @{}
     magic        = @{}
+    imports      = @{}
     'pass-store' = @{ scpfordata = '0'; scponly = '0'; shelltransfer = '0'; shelltransferforce = '0'; unixlinebreaks = '0'
                       privkeyfile = ''; password = '!' }
     # The jump host is the bench itself; the target, as the bastion sees it,
@@ -207,6 +210,8 @@ $stores = @{
 # The passphrase is typed the same way for both keys; the plugin has to
 # find the bytes the key was protected with. Built from code points so the
 # script stays ASCII, which Windows PowerShell would read as ANSI.
+# The key the imports mode's WinSCP.ini names for its session.
+$env:SFTP_IT_IMPORT_KEY = $KeyFile
 $env:SFTP_IT_PASSPHRASE = -join [char[]](0x43F, 0x430, 0x440, 0x43E, 0x43B, 0x44C)
 
 $iniDir = Join-Path ([System.IO.Path]::GetTempPath()) "sftpplug-it-ini-$PID"
@@ -377,7 +382,7 @@ try {
     Remove-Item -LiteralPath $iniDir -Recurse -Force -ErrorAction SilentlyContinue
     # Local working folders the harness creates per mode (NewTempDir).
     Get-ChildItem -LiteralPath ([System.IO.Path]::GetTempPath()) -Directory -Filter 'sftpplug-it-*' -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -match '^sftpplug-it-(src|dst|secrets|names)-\d+$' } |
+        Where-Object { $_.Name -match '^sftpplug-it-(src|dst|secrets|names|imports)-\d+$' } |
         Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 }
 

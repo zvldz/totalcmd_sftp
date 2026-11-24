@@ -3427,14 +3427,21 @@ pConnectSettings SftpConnectToServer(LPCSTR DisplayName, LPCSTR inifilename,
             //     GetDisplayNameFromPath goes through NormaliseTcPath which
             //     converts `\` back to `/`, so registry lookup on disconnect
             //     still finds the session.
-            //   * virtual (Imports-cache) sessions pass loggingAliasName —
-            //     a `__vimp_<sourceId>_<hash>` alias with no dots, brackets
-            //     or slashes, which TC also handles cleanly.
-            const char* announceName = loggingAliasName ? loggingAliasName : DisplayName;
-            std::string connbuf = "CONNECT \\";
-            connbuf.append(announceName);
-            if (!loggingAliasName)
-                std::replace(connbuf.begin(), connbuf.end(), '/', '\\');
+            //   * virtual (Imports-cache) sessions pass loggingAliasName and
+            //     are announced by the path TC shows them at,
+            //     "\[Imports]\<Source>\<session>"; FsDisconnect translates it
+            //     back to the alias.
+            const std::string importedPath =
+                loggingAliasName ? ImportedSessionPathForAlias(loggingAliasName) : std::string();
+            std::string connbuf = "CONNECT ";
+            if (!importedPath.empty()) {
+                connbuf += importedPath;
+            } else {
+                connbuf += '\\';
+                connbuf.append(loggingAliasName ? loggingAliasName : DisplayName);
+                if (!loggingAliasName)
+                    std::replace(connbuf.begin(), connbuf.end(), '/', '\\');
+            }
             LogProcI(PluginNumber, MSGTYPE_CONNECT, connbuf.c_str());
 
             // Move the connected settings to the heap: unique_ptrs transfer ownership.

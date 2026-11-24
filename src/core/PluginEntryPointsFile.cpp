@@ -924,7 +924,7 @@ static size_t SessionPrefixWideLen(const std::string& displayName) noexcept
     return unicode_util::internal_to_wide(displayName).size();
 }
 
-int WINAPI FsExecuteFileW(HWND MainWin, LPWSTR RemoteName, LPCWSTR Verb)
+static int ExecuteFileOnPathW(HWND MainWin, LPWSTR RemoteName, LPCWSTR Verb)
 {
     sftp::DllExceptionBarrier _barrier;
     return sftp::dll_invoke(_barrier, FS_EXEC_ERROR, [&]() -> int {
@@ -1110,8 +1110,9 @@ int WINAPI FsExecuteFileW(HWND MainWin, LPWSTR RemoteName, LPCWSTR Verb)
                     // We do NOT connect here — we only pre-register the
                     // alias so the follow-up FsFindFirstW knows which cache
                     // section to load, then redirect TC via FS_EXEC_SYMLINK
-                    // to the alias path. The SSH connect happens inside
-                    // that FsFindFirstW, which TC treats as an in-flight
+                    // to the alias path, which FsExecuteFileW hands to TC as
+                    // the session's own [Imports] path. The SSH connect
+                    // happens inside that FsFindFirstW, which TC treats as an in-flight
                     // navigation and decorates with its native progress UI
                     // — the same UI real sessions get on Enter. Connecting
                     // here would hide the handshake from TC's UI accounting
@@ -1126,10 +1127,8 @@ int WINAPI FsExecuteFileW(HWND MainWin, LPWSTR RemoteName, LPCWSTR Verb)
                     if (RefuseIfDependencyBlocks(cacheSection))
                         return FS_EXEC_OK;
 
-                    // TC-safe alias: no dots, brackets, slashes — TC treats
-                    // it as a single-segment session name, so its toolbar
-                    // Disconnect button works normally instead of forcing a
-                    // fallback to the real filesystem on click. The
+                    // The alias is the connection's name in the registry:
+                    // one segment with no dots, brackets or slashes. The
                     // BuildPluginFolderListing filter hides names starting
                     // with the alias prefix from the plugin root view.
                     const std::string aliasName =
@@ -1349,6 +1348,32 @@ int WINAPI FsExecuteFileW(HWND MainWin, LPWSTR RemoteName, LPCWSTR Verb)
     });
 }
 
+int WINAPI FsExecuteFileW(HWND MainWin, LPWSTR RemoteName, LPCWSTR Verb)
+{
+    sftp::DllExceptionBarrier _barrier;
+    return sftp::dll_invoke(_barrier, FS_EXEC_ERROR, [&]() -> int {
+        // A path inside a connected imported session runs on its alias; a
+        // symlink target comes back to TC as an [Imports] path, whichever
+        // session it leads into, and any other answer leaves TC's path as
+        // it was.
+        if (!RemoteName || !Verb)
+            return FS_EXEC_ERROR;
+        std::wstring aliasPath;
+        const std::wstring tcPath = RemoteName;
+        if (ImportedSessionToAliasPathW(RemoteName, false, aliasPath))
+            wcslcpy(RemoteName, aliasPath.c_str(), wdirtypemax - 1);
+        const int rc = ExecuteFileOnPathW(MainWin, RemoteName, Verb);
+        std::wstring shown;
+        if (rc == FS_EXEC_SYMLINK) {
+            if (AliasToImportedSessionPathW(RemoteName, shown))
+                wcslcpy(RemoteName, shown.c_str(), wdirtypemax - 1);
+        } else if (!aliasPath.empty()) {
+            wcslcpy(RemoteName, tcPath.c_str(), wdirtypemax - 1);
+        }
+        return rc;
+    });
+}
+
 int WINAPI FsExecuteFile(HWND MainWin, LPSTR RemoteName, LPCSTR Verb)
 {
     sftp::DllExceptionBarrier _barrier;
@@ -1507,7 +1532,10 @@ static bool SameRemoteFile(pConnectSettings a, const std::wstring& aPath,
     return portA == portB && _stricmp(hostA.data(), hostB.data()) == 0;
 }
 
+// `shownOld` / `shownNew`: the same two paths as TC knows them, for its
+// progress window.
 static int CopyBetweenSessions(LPCWSTR OldName, LPCWSTR NewName,
+                               LPCWSTR shownOld, LPCWSTR shownNew,
                                bool Move, bool OverWrite, RemoteInfoStruct* ri)
 {
     if (ri && (ri->Attr & FILE_ATTRIBUTE_DIRECTORY))
@@ -1564,7 +1592,7 @@ static int CopyBetweenSessions(LPCWSTR OldName, LPCWSTR NewName,
     // report the two remote names so the temporary file never shows up.
     int rc = 0;
     {
-        ProgressSlice _slice(src, 0, 50, OldName, NewName);
+        ProgressSlice _slice(src, 0, 50, shownOld, shownNew);
         rc = SftpDownloadFileW(src, srcRel.c_str(), tempFile.data(),
                                ri ? ri->Size64 : 0,
                                ri ? &ri->LastWriteTime : nullptr, false, true);
@@ -1579,7 +1607,7 @@ static int CopyBetweenSessions(LPCWSTR OldName, LPCWSTR NewName,
         // The upload runs against the other session, so its status lines and
         // progress belong to that one.
         SessionContextGuard _dstGuard(dst);
-        ProgressSlice _slice(dst, 50, 50, OldName, NewName);
+        ProgressSlice _slice(dst, 50, 50, shownOld, shownNew);
         rc = SftpUploadFileW(dst, tempFile.data(), dstRel.c_str(), false, true, true);
     }
     SFTP_LOG("ENTRY", "CopyBetweenSessions upload rc=%d", rc);
@@ -1609,6 +1637,11 @@ int WINAPI FsRenMovFileW(LPCWSTR OldName, LPCWSTR NewName, BOOL Move, BOOL OverW
 {
     sftp::DllExceptionBarrier _barrier;
     return sftp::dll_invoke(_barrier, FS_FILE_WRITEERROR, [&]() -> int {
+        const LPCWSTR shownOld = OldName;
+        const LPCWSTR shownNew = NewName;
+        std::wstring oldAlias, newAlias;
+        UseAliasPath(OldName, oldAlias);
+        UseAliasPath(NewName, newAlias);
         SFTP_LOG("ENTRY", "FsRenMovFileW start old='%s' new='%s' move=%d overwrite=%d",
                  unicode_util::wstring_to_utf8(OldName ? OldName : L"(null)").c_str(), unicode_util::wstring_to_utf8(NewName ? NewName : L"(null)").c_str(),
                  Move ? 1 : 0, OverWrite ? 1 : 0);
@@ -1783,7 +1816,7 @@ int WINAPI FsRenMovFileW(LPCWSTR OldName, LPCWSTR NewName, BOOL Move, BOOL OverW
         // progress, cancellation, resume and every transport the plugin
         // speaks.
         if (_stricmp(rOldFile.displayName.c_str(), rNewFile.displayName.c_str()) != 0)
-            return CopyBetweenSessions(OldName, NewName, !!Move, !!OverWrite, ri);
+            return CopyBetweenSessions(OldName, NewName, shownOld, shownNew, !!Move, !!OverWrite, ri);
 
         std::wstring olddir(wdirtypemax, L'\0');
         std::wstring newdir(wdirtypemax, L'\0');
@@ -1809,7 +1842,7 @@ int WINAPI FsRenMovFileW(LPCWSTR OldName, LPCWSTR NewName, BOOL Move, BOOL OverW
             if (IsLanPairTransport(serverid1))
                 return FS_FILE_NOTSUPPORTED;
             if (!serverid1->scponly)
-                return CopyBetweenSessions(OldName, NewName, false, !!OverWrite, ri);
+                return CopyBetweenSessions(OldName, NewName, shownOld, shownNew, false, !!OverWrite, ri);
         }
 
 #if SFTP_EXTRA
@@ -1950,6 +1983,10 @@ int WINAPI FsGetFileW(LPCWSTR RemoteName, LPWSTR LocalName, int CopyFlags, Remot
                  CopyFlags, OverWrite ? 1 : 0, Resume ? 1 : 0, Move ? 1 : 0,
                  (GetAsyncKeyState(VK_SHIFT) & 0x8000) ? 1 : 0);
 
+        // TC's progress window shows the path TC knows.
+        const LPCWSTR shownRemote = RemoteName;
+        std::wstring aliasPath;
+        UseAliasPath(RemoteName, aliasPath);
         const std::wstring_view remoteView = RemoteName ? std::wstring_view(RemoteName) : std::wstring_view{};
         if (remoteView.size() < 3 || !LocalName || !ri)
             return FS_FILE_NOTFOUND;
@@ -2156,7 +2193,7 @@ int WINAPI FsGetFileW(LPCWSTR RemoteName, LPWSTR LocalName, int CopyFlags, Remot
 
         serverid->lastpercent = startPct;
 
-        int err = ProgressProcT(PluginNumber, RemoteName, LocalName, startPct);
+        int err = ProgressProcT(PluginNumber, shownRemote, LocalName, startPct);
         if (err)
             return FS_FILE_USERABORT;
         if (!OverWrite && !Resume && FileExistsT(LocalName)) {
@@ -2292,6 +2329,10 @@ int WINAPI FsPutFileW(LPCWSTR LocalName, LPCWSTR RemoteName, int CopyFlags)
                  CopyFlags, OverWrite ? 1 : 0, Resume ? 1 : 0, Move ? 1 : 0,
                  (GetAsyncKeyState(VK_SHIFT) & 0x8000) ? 1 : 0);
 
+        // TC's progress window shows the path TC knows.
+        const LPCWSTR shownRemote = RemoteName;
+        std::wstring aliasPath;
+        UseAliasPath(RemoteName, aliasPath);
         const std::wstring_view localView = LocalName ? std::wstring_view(LocalName) : std::wstring_view{};
         const std::wstring_view remoteView = RemoteName ? std::wstring_view(RemoteName) : std::wstring_view{};
 
@@ -2328,7 +2369,7 @@ int WINAPI FsPutFileW(LPCWSTR LocalName, LPCWSTR RemoteName, int CopyFlags)
         if (const auto rc = TryImportSessionFromUpload(LocalName, RemoteName, OverWrite))
             return *rc;
 
-        int err = ProgressProcT(PluginNumber, LocalName, RemoteName, 0);
+        int err = ProgressProcT(PluginNumber, LocalName, shownRemote, 0);
         if (err)
             return FS_FILE_USERABORT;
 
@@ -2438,6 +2479,8 @@ BOOL WINAPI FsDeleteFileW(LPCWSTR RemoteName)
 {
     sftp::DllExceptionBarrier _barrier;
     return sftp::dll_invoke(_barrier, FALSE, [&]() -> BOOL {
+        std::wstring aliasPath;
+        UseAliasPath(RemoteName, aliasPath);
         const std::wstring_view remoteView = RemoteName ? std::wstring_view(RemoteName) : std::wstring_view{};
         if (remoteView.size() < 2)
             return false;
@@ -2622,6 +2665,8 @@ BOOL WINAPI FsRemoveDirW(LPCWSTR RemoteName)
     return sftp::dll_invoke(_barrier, FALSE, [&]() -> BOOL {
         if (!RemoteName || !RemoteName[0])
             return false;
+        std::wstring aliasPath;
+        UseAliasPath(RemoteName, aliasPath);
         const PathResolution r = ResolvePathKindW(RemoteName);
 
         // Real directory inside a session → server-side rmdir.
@@ -2702,6 +2747,8 @@ BOOL WINAPI FsSetAttrW(LPCWSTR RemoteName, int NewAttr)
     return sftp::dll_invoke(_barrier, FALSE, [&]() -> BOOL {
         if (!RemoteName || !RemoteName[0])
             return false;
+        std::wstring aliasPath;
+        UseAliasPath(RemoteName, aliasPath);
         std::wstring remotedirW(wdirtypemax, L'\0');
         pConnectSettings serverid = GetServerIdAndRelativePathFromPathW(RemoteName, remotedirW.data(), remotedirW.size() - 1);
         remotedirW.resize(wcslen(remotedirW.data()));
@@ -2730,6 +2777,8 @@ BOOL WINAPI FsSetTimeW(LPCWSTR RemoteName, LPFILETIME CreationTime, LPFILETIME L
 {
     sftp::DllExceptionBarrier _barrier;
     return sftp::dll_invoke(_barrier, FALSE, [&]() -> BOOL {
+        std::wstring aliasPath;
+        UseAliasPath(RemoteName, aliasPath);
         const std::wstring_view remoteView = RemoteName ? std::wstring_view(RemoteName) : std::wstring_view{};
         if (remoteView.size() < 3 || !LastWriteTime)
             return false;
