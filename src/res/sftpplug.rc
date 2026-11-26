@@ -790,6 +790,8 @@ BEGIN
     IDS_MAGIC_ADD_CUSTOM      "[Add custom location...]"
     IDS_MAGIC_MANAGE_CUSTOM   "[Manage custom locations]"
     IDS_MAGIC_NOT_DETECTED    "%s not currently detected"
+    IDS_ERR_DIR_EXISTS        "This folder already exists:\n%s"
+    IDS_ERR_DIR_NOT_CREATED   "The folder could not be created:\n%s\n\nThe server refused it; its answer is in the log window."
     IDS_DLG_LANPAIR_GROUP   " LAN Pair Session: "
     IDS_DLG_FILEMOD         "New files (Upload):"
     IDS_DLG_DIRMOD          "New folders:"

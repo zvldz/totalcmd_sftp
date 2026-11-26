@@ -353,6 +353,8 @@
 12305=[Dodaj własną lokalizację...]
 12306=[Zarządzaj własnymi lokalizacjami]
 12307=%s — obecnie nie wykryto
+12310=Ten folder już istnieje:\n%s
+12311=Nie można utworzyć folderu:\n%s\n\nSerwer odmówił; jego odpowiedź jest w oknie dziennika.
 12089=SFTP
 12090=Szukam peera LAN Pair w sieci lokalnej...
 12091={} s

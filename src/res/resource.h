@@ -556,6 +556,8 @@
 #define IDS_MAGIC_ADD_CUSTOM         12305
 #define IDS_MAGIC_MANAGE_CUSTOM      12306
 #define IDS_MAGIC_NOT_DETECTED       12307
+#define IDS_ERR_DIR_EXISTS           12310
+#define IDS_ERR_DIR_NOT_CREATED      12311
 
 // Next default values for new objects
 //

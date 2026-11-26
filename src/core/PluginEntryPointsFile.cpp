@@ -1434,35 +1434,36 @@ int CopyMoveSavedSession(const std::string& oldName, const std::string& newName,
     return FS_FILE_OK;
 }
 
-// Whether the session may already hold that file. Only a server that clearly
-// answers "no such file" makes it absent; anything it could not answer counts
-// as present, so Total Commander asks before the upload overwrites rather
-// than the upload overwriting on a guess.
-static bool RemoteFileExists(pConnectSettings cs, LPCWSTR remoteRelative)
+// What the server says about the path: there, not there, or no clear answer.
+RemotePathState QueryRemotePath(pConnectSettings cs, LPCWSTR remoteRelative)
 {
     if (!cs || !remoteRelative || !remoteRelative[0])
-        return false;
+        return RemotePathState::Missing;
 
 #if SFTP_EXTRA
     if (IsPhpAgentTransport(cs))
-        return PhpAgentPathMayExist(cs, remoteRelative);
+        return PhpAgentPathMayExist(cs, remoteRelative) ? RemotePathState::Unknown : RemotePathState::Missing;
 #endif
 
     if (cs->scponly) {
         // The wide path goes to the shell helper, which applies the session's
         // encoding once; a narrow, already converted one would be converted
-        // again and name a file that does not exist. `test -e` answers 1 for
-        // a missing path — any other answer leaves the question open.
+        // again and name a file that does not exist. `test -e` answers 0 for
+        // a path that is there and 1 for a missing one — any other answer
+        // leaves the question open.
         std::wstring pathW(remoteRelative);
         std::replace(pathW.begin(), pathW.end(), L'\\', L'/');
         const std::wstring cmdW = L"test -e '" + string_util::ShellQuoteSingleW(pathW.c_str()) + L"'";
-        return SftpQuoteCommand2W(cs, nullptr, cmdW.c_str(), nullptr, 0) != 1;
+        const int status = SftpQuoteCommand2W(cs, nullptr, cmdW.c_str(), nullptr, 0);
+        return status == 0 ? RemotePathState::Present
+             : status == 1 ? RemotePathState::Missing
+                           : RemotePathState::Unknown;
     }
 
     if (cs->sftpsession) {
         const std::string pathA = ToRemotePathA(cs, remoteRelative);
         if (pathA.empty())
-            return true;
+            return RemotePathState::Unknown;
         LIBSSH2_SFTP_ATTRIBUTES attr{};
         int rc = 0;
         do {
@@ -1471,12 +1472,23 @@ static bool RemoteFileExists(pConnectSettings cs, LPCWSTR remoteRelative)
                 WaitForSshIo(cs);
         } while (rc == LIBSSH2_ERROR_EAGAIN);
         if (rc >= 0)
-            return true;
+            return RemotePathState::Present;
         const unsigned long fx =
             (rc == LIBSSH2_ERROR_SFTP_PROTOCOL) ? cs->sftpsession->lastError() : 0;
-        return fx != LIBSSH2_FX_NO_SUCH_FILE && fx != LIBSSH2_FX_NO_SUCH_PATH;
+        return (fx == LIBSSH2_FX_NO_SUCH_FILE || fx == LIBSSH2_FX_NO_SUCH_PATH)
+            ? RemotePathState::Missing : RemotePathState::Unknown;
     }
-    return true;
+    return RemotePathState::Unknown;
+}
+
+// Whether the session may already hold that file. Only a server that clearly
+// answers "no such file" makes it absent; anything it could not answer counts
+// as present, so Total Commander asks before the upload overwrites rather
+// than the upload overwriting on a guess.
+static bool RemoteFileExists(pConnectSettings cs, LPCWSTR remoteRelative)
+{
+    return cs && remoteRelative && remoteRelative[0] &&
+           QueryRemotePath(cs, remoteRelative) != RemotePathState::Missing;
 }
 
 // Copy one file from one session to another, which no single SFTP operation

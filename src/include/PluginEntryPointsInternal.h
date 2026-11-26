@@ -70,6 +70,21 @@ void  ApplyTcLanguageToPluginResources(const char* tcIniPath) noexcept;
 void  ShowPluginMessage(UINT messageId, const char* messageFallback,
                         UINT titleId,   const char* titleFallback,
                         UINT icon = MB_ICONWARNING);
+// The same, with `argument` put in place of the message's "%s".
+void  ShowPluginMessageWith(UINT messageId, const char* messageFallback, LPCWSTR argument,
+                            UINT titleId,   const char* titleFallback,
+                            UINT icon = MB_ICONWARNING);
+
+// True on the thread running Total Commander's F7 (between the status
+// calls around it), so a folder that cannot be made is reported there and
+// not while TC creates the folders of a copied tree. Implementation in
+// PluginEntryPoints.cpp.
+bool  MkDirAskedByUser() noexcept;
+
+// What the server says about a path in the session. Implementation in
+// PluginEntryPointsFile.cpp.
+enum class RemotePathState { Present, Missing, Unknown };
+RemotePathState QueryRemotePath(pConnectSettings cs, LPCWSTR remoteRelative);
 
 // LAN path conversion — defined in PluginEntryPointsFind.cpp, also used by PluginEntryPointsFile.cpp.
 std::string LanRemotePathToUtf8(LPCWSTR remotedir);

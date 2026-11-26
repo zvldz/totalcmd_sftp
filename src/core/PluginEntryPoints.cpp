@@ -275,8 +275,20 @@ void ShowPluginMessage(UINT messageId, const char* messageFallback,
                        UINT titleId,   const char* titleFallback,
                        UINT icon)
 {
-    const std::wstring message = unicode_util::utf8_to_wstring(
+    ShowPluginMessageWith(messageId, messageFallback, nullptr, titleId, titleFallback, icon);
+}
+
+void ShowPluginMessageWith(UINT messageId, const char* messageFallback, LPCWSTR argument,
+                           UINT titleId,   const char* titleFallback,
+                           UINT icon)
+{
+    std::wstring message = unicode_util::utf8_to_wstring(
         LngStrU8(messageId, messageFallback ? messageFallback : ""));
+    if (argument) {
+        const size_t at = message.find(L"%s");
+        if (at != std::wstring::npos)
+            message.replace(at, 2, argument);
+    }
     const std::wstring title = unicode_util::utf8_to_wstring(
         LngStrU8(titleId, titleFallback ? titleFallback : "SFTP"));
 
@@ -783,9 +795,20 @@ BOOL WINAPI FsDisconnect(LPCSTR DisconnectRoot)
 // belong to it and are closed when it ends.
 static thread_local int t_backgroundTransfers = 0;
 
-// Body of FsStatusInfoW / FsStatusInfo; `remoteDir` is an internal string.
+// Set between the status calls TC wraps its F7 in; see MkDirAskedByUser.
+static thread_local bool t_mkDirByUser = false;
+
+bool MkDirAskedByUser() noexcept
+{
+    return t_mkDirByUser;
+}
+
+// Body of FsStatusInfoW / FsStatusInfo; `tcDir` is an internal string.
 static void StatusInfo(const std::string& tcDir, int InfoStartEnd, int InfoOperation)
 {
+    if (InfoOperation == FS_STATUS_OP_MKDIR)
+        t_mkDirByUser = InfoStartEnd == FS_STATUS_START;
+
     // An operation inside an imported session runs on its alias.
     std::string remoteDir = tcDir;
     std::wstring aliasPath;

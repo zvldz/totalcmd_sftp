@@ -1505,7 +1505,26 @@ BOOL WINAPI FsMkDirW(LPCWSTR Path)
             // folder of a copied tree would otherwise never appear. Unpacking
             // into a folder that already exists is harmless.
             int rc = SftpCreateDirectoryW(serverid, remotedir.data());
-            return (rc == SFTP_OK) ? true : false;
+            if (rc == SFTP_OK)
+                return true;
+            // TC says nothing when F7 fails, so the plugin does — only for
+            // F7 itself: while a copied tree is created, a folder that is
+            // already there is no news. The server's "failure" does not say
+            // why, so an existing name is asked for separately; only a clear
+            // "it is there" says so, anything else reads as a refusal.
+            if (MkDirAskedByUser() && rc != SFTP_ABORT) {
+                std::wstring shown = remotedir;
+                std::replace(shown.begin(), shown.end(), L'\\', L'/');
+                if (QueryRemotePath(serverid, remotedir.c_str()) == RemotePathState::Present)
+                    ShowPluginMessageWith(IDS_ERR_DIR_EXISTS, "This folder already exists:\n%s",
+                                          shown.c_str(), IDS_TITLE_SFTP, "SFTP");
+                else
+                    ShowPluginMessageWith(IDS_ERR_DIR_NOT_CREATED,
+                                          "The folder could not be created:\n%s\n\n"
+                                          "The server refused it; its answer is in the log window.",
+                                          shown.c_str(), IDS_TITLE_SFTP, "SFTP");
+            }
+            return false;
         }
 
         if (r.kind == PathKind::SessionLeaf || r.kind == PathKind::Folder) {

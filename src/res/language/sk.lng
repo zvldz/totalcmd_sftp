@@ -363,6 +363,8 @@
 12305=[Pridať vlastné umiestnenie...]
 12306=[Spravovať vlastné umiestnenia]
 12307=%s momentálne nenájdený
+12310=Tento priečinok už existuje:\n%s
+12311=Priečinok sa nepodarilo vytvoriť:\n%s\n\nServer ho odmietol; jeho odpoveď je v okne denníka.
 12089=SFTP
 12104=(ručne)
 12105= (chýba)

@@ -363,6 +363,8 @@
 12305=[Aggiungi percorso personalizzato...]
 12306=[Gestisci percorsi personalizzati]
 12307=%s non rilevato al momento
+12310=Questa cartella esiste già:\n%s
+12311=Impossibile creare la cartella:\n%s\n\nIl server l'ha rifiutata; la sua risposta è nella finestra del registro.
 12089=SFTP
 12104=(manuale)
 12105= (mancante)

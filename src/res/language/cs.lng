@@ -363,6 +363,8 @@
 12305=[Přidat vlastní umístění...]
 12306=[Spravovat vlastní umístění]
 12307=%s nyní nenalezen
+12310=Tato složka již existuje:\n%s
+12311=Složku nelze vytvořit:\n%s\n\nServer ji odmítl; jeho odpověď je v okně protokolu.
 12089=SFTP
 12104=(ručně)
 12105= (chybí)

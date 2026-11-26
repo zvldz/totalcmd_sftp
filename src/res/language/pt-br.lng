@@ -363,6 +363,8 @@
 12305=[Adicionar local personalizado...]
 12306=[Gerenciar locais personalizados]
 12307=%s não detectado no momento
+12310=Esta pasta já existe:\n%s
+12311=Não foi possível criar a pasta:\n%s\n\nO servidor recusou; a resposta dele está na janela de log.
 12089=SFTP
 12104=(manual)
 12105= (ausente)

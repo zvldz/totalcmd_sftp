@@ -364,6 +364,8 @@
 12305=[Añadir ubicación personalizada...]
 12306=[Administrar ubicaciones personalizadas]
 12307=%s no detectado actualmente
+12310=Esta carpeta ya existe:\n%s
+12311=No se pudo crear la carpeta:\n%s\n\nEl servidor la rechazó; su respuesta está en la ventana de registro.
 12089=SFTP
 12104=(manual)
 12105= (no encontrada)

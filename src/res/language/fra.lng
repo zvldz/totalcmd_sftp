@@ -364,6 +364,8 @@
 12305=[Ajouter un emplacement...]
 12306=[Gérer les emplacements]
 12307=%s non détecté actuellement
+12310=Ce dossier existe déjà :\n%s
+12311=Impossible de créer le dossier :\n%s\n\nLe serveur l'a refusé ; sa réponse est dans la fenêtre du journal.
 12089=SFTP
 12104=(manuel)
 12105= (introuvable)

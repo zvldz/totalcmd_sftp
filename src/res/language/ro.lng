@@ -363,6 +363,8 @@
 12305=[Adaugă locație proprie...]
 12306=[Gestionează locațiile proprii]
 12307=%s nu este detectat acum
+12310=Acest dosar există deja:\n%s
+12311=Dosarul nu a putut fi creat:\n%s\n\nServerul a refuzat; răspunsul său este în fereastra jurnalului.
 12089=SFTP
 12104=(manual)
 12105= (lipsește)

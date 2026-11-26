@@ -363,6 +363,8 @@
 12305=[Egyéni hely hozzáadása...]
 12306=[Egyéni helyek kezelése]
 12307=%s jelenleg nem található
+12310=Ez a mappa már létezik:\n%s
+12311=A mappa nem hozható létre:\n%s\n\nA kiszolgáló elutasította; a válasza a naplóablakban látható.
 12089=SFTP
 12104=(kézi)
 12105= (hiányzik)

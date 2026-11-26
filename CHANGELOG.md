@@ -335,6 +335,13 @@ side works; full operation of the extra build there is not guaranteed.
 
 ### Fixes
 
+- **F7 says why no folder was made.** On a server, F7 with the name of a
+  folder that is already there, or in a folder the server does not let
+  you write to, did nothing at all: Total Commander shows no message of
+  its own, and the server's answer went only to the log window. Now F7
+  says "This folder already exists" or "The folder could not be created".
+  Folders Total Commander makes while copying a tree stay silent, as an
+  existing one there is expected.
 - **Total Commander's language is followed in every plugin folder.** A
   language changed in Total Commander was picked up only on the plugin's
   root; inside `[Imports]`, `[Active Sessions]` or a session folder the

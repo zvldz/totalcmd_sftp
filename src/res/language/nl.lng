@@ -363,6 +363,8 @@
 12305=[Eigen locatie toevoegen...]
 12306=[Eigen locaties beheren]
 12307=%s momenteel niet gevonden
+12310=Deze map bestaat al:\n%s
+12311=De map kon niet worden gemaakt:\n%s\n\nDe server weigerde; het antwoord staat in het logvenster.
 12089=SFTP
 12104=(handmatig)
 12105= (ontbreekt)

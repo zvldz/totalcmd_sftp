@@ -364,6 +364,8 @@
 12305=[Eigenen Speicherort hinzufügen...]
 12306=[Eigene Speicherorte verwalten]
 12307=%s derzeit nicht gefunden
+12310=Dieser Ordner existiert bereits:\n%s
+12311=Der Ordner konnte nicht erstellt werden:\n%s\n\nDer Server hat abgelehnt; seine Antwort steht im Protokollfenster.
 12089=SFTP
 12104=(manuell)
 12105= (fehlt)

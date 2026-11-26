@@ -915,6 +915,27 @@ int wmain(int argc, wchar_t** argv)
     if (!Check(g_plugin.MkDirW(dir.c_str()) == TRUE, "create the run directory"))
         return 1;
 
+    // F7 on a folder that is already there: TC shows nothing of its own, so
+    // the plugin says so. The same folder made while TC creates a copied
+    // tree is no news and says nothing.
+    if (!phpMode) {
+        const int before = g_messages;
+        g_plugin.StatusInfoW(root.c_str(), FS_STATUS_START, FS_STATUS_OP_MKDIR);
+        const BOOL again = g_plugin.MkDirW(dir.c_str());
+        g_plugin.StatusInfoW(root.c_str(), FS_STATUS_END, FS_STATUS_OP_MKDIR);
+        Check(!again && g_messages == before + 1 && g_lastMessage.find(L"already exists") != std::wstring::npos,
+              "F7 on an existing folder says it exists");
+        const BOOL inCopy = g_plugin.MkDirW(dir.c_str());
+        Check(!inCopy && g_messages == before + 1, "the same outside F7 says nothing");
+        // A folder the server refuses: /usr is readable, not writable.
+        const std::wstring denied = L"\\" + session + L"\\usr\\" + runName;
+        g_plugin.StatusInfoW(root.c_str(), FS_STATUS_START, FS_STATUS_OP_MKDIR);
+        const BOOL refused = g_plugin.MkDirW(denied.c_str());
+        g_plugin.StatusInfoW(root.c_str(), FS_STATUS_END, FS_STATUS_OP_MKDIR);
+        Check(!refused && g_messages == before + 2 && g_lastMessage.find(L"could not be created") != std::wstring::npos,
+              "F7 refused by the server says it was not created");
+    }
+
     const std::wstring local = NewTempDir(L"src");
     const std::wstring back = NewTempDir(L"dst");
 
