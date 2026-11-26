@@ -38,6 +38,9 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
         with:
           submodules: true
+          # Full history, tags too: build-deps.ps1 applies the patches only
+          # on a submodule that `git describe` finds on its expected tag.
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Install NASM
